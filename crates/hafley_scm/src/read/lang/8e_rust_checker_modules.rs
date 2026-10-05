@@ -22,16 +22,44 @@ pub struct ModulePlace {
 
 /// The fast tier's warm host, plus the texts this tree laid over the disk.
 pub struct RustModuleTree {
+    /// Cargo manifest selected for the source, retained for ownership abstains.
+    pub manifest: PathBuf,
     workspace: Arc<Mutex<CheckerWorkspace>>,
     /// Absolute path -> the text the host holds in place of the disk's.
     staged: Mutex<HashMap<PathBuf, String>>,
 }
 
-/// The module tree of the Cargo workspace at `root`; an unloadable workspace
-/// is the error, never a layout guess.
-pub fn module_tree(root: &Path, budget: Duration) -> Result<RustModuleTree, CheckerError> {
+/// Cargo selects the source's workspace from its directory; rust-analyzer
+/// supplies module ownership from that workspace's def maps.
+pub fn module_tree(source: &Path, budget: Duration) -> Result<RustModuleTree, CheckerError> {
+    let directory = source.parent().ok_or_else(|| CheckerError::NoWorkspace(
+        format!("{} has no directory to search for Cargo.toml", source.display()),
+    ))?;
+    let located = std::process::Command::new("cargo")
+        .args(["locate-project", "--message-format", "json"])
+        .current_dir(crate::read::io_path(directory))
+        .output()
+        .map_err(|error| CheckerError::NoWorkspace(error.to_string()))?;
+    if !located.status.success() {
+        return Err(CheckerError::NoWorkspace(format!(
+            "Cargo.toml searched from {}: {}", directory.display(),
+            String::from_utf8_lossy(&located.stderr).trim(),
+        )));
+    }
+    let located: serde_json::Value = serde_json::from_slice(&located.stdout)
+        .map_err(|error| CheckerError::NoWorkspace(error.to_string()))?;
+    let manifest = PathBuf::from(located["root"].as_str().ok_or_else(||
+        CheckerError::NoWorkspace("cargo locate-project returned no manifest".to_string()))?);
+    let metadata = cargo_metadata::MetadataCommand::new()
+        .manifest_path(&manifest)
+        .no_deps()
+        .other_options(vec!["--offline".to_string()])
+        .exec()
+        .map_err(|error| CheckerError::NoWorkspace(format!("{}: {error}", manifest.display())))?;
+    let root = metadata.workspace_root.as_std_path();
     let (workspace, _) = checker_workspace(root, super::super::rust_checker::Tier::Names, &[], budget)?;
     Ok(RustModuleTree {
+        manifest,
         workspace,
         staged: Mutex::new(HashMap::new()),
     })

@@ -777,8 +777,8 @@ impl Plan {
             }
             if sprefa_extract::edit::rust_module_tree::places(&cx, &src)?.is_empty() {
                 return Err(format!(
-                    "cleave source {src} is in no module of the Cargo workspace rust-analyzer loaded at {}",
-                    cx.root().display()
+                    "cleave source {src} is in no module of the Cargo workspace rust-analyzer loaded from {}",
+                    sprefa_extract::edit::rust_module_tree::searched_manifest(&cx, &src)?.display()
                 ));
             }
             if sprefa_extract::edit::rust_module_tree::places(&cx, &dest)?.is_empty() {

@@ -44,7 +44,7 @@ pub struct MoveCx {
     /// never staged, dropped when the overlay takes the path.
     planned: BTreeMap<String, String>,
     #[cfg(feature = "rust-checker")]
-    pub(crate) rust_modules: std::sync::Arc<OnceLock<Result<hafley_scm::read::lang::rust_checker::RustModuleTree, String>>>,
+    pub(crate) rust_modules: std::sync::Arc<std::sync::Mutex<BTreeMap<PathBuf, std::sync::Arc<hafley_scm::read::lang::rust_checker::RustModuleTree>>>>,
     pub(crate) relocate_plan: OnceLock<crate::edit::rust_rehome::RelocatePlan>,
     pub(crate) crate_roots: OnceLock<BTreeSet<String>>,
     pub(crate) ts_packages: OnceLock<Vec<crate::edit::ts_rehome::cross::TsPackage>>,
