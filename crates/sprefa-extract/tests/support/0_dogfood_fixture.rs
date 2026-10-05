@@ -20,7 +20,7 @@ impl Fixture {
         }
         let output = Command::new("git").args(["init", "-q"]).current_dir(&root).output().unwrap();
         assert!(output.status.success());
-        Self { root, _directory: directory }
+        Self { root: root.canonicalize().unwrap(), _directory: directory }
     }
 
     pub fn run(&self, directory: &Path, args: &[&str]) -> Output {
@@ -28,7 +28,7 @@ impl Fixture {
             .current_dir(directory).args(args)
             .args(["--root", self.root.to_str().unwrap(), "--state"])
             .arg(self._directory.path().join("state"))
-            .env("KACHE_DISABLED", "1").output().unwrap()
+            .env("KACHE_DISABLED", "1").env("RUST_LOG", "off").output().unwrap()
     }
 
     pub fn read(&self, path: &str) -> String {
