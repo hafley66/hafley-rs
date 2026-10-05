@@ -625,7 +625,11 @@ fn resolve_project_inputs(
     }
 
     let emit_stage = stage_span("project_facts").entered();
-    let mut facts = Vec::new();
+    let mut facts = cx.indexes.rust_modules.get()
+        .into_iter().flat_map(|index| index.context_failures.iter())
+        .map(|(path, manifest, reason)| FlatFact::FileUnresolvedRow {
+            src_path: path.clone(), module: manifest.clone(), reason: reason.clone(),
+        }).collect::<Vec<_>>();
     let mut trail = LegTrail {
         on: request.witness,
         ..LegTrail::default()

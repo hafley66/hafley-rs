@@ -23,7 +23,7 @@ fn bounded_rust_callers_keep_same_file_path_modules_globs_and_self() {
 
     {"record":"graph_edge","from_path":"tests/fixtures/dogfood_callers/src/0_calls.rs","from_name":"run","to_path":"tests/fixtures/dogfood_callers/src/0_calls.rs","to_name":"method","kind":"name_resolve","grade":"~","from_line":6,"to_line":5}
 
-    {"record":"graph_edge","from_path":"tests/fixtures/dogfood_callers/src/0_calls.rs","from_name":"nested","to_path":"tests/fixtures/dogfood_callers/src/1_child.rs","to_name":"child","kind":"import_resolve","grade":"+","from_line":10,"to_line":2}
+    {"record":"graph_edge","from_path":"tests/fixtures/dogfood_callers/src/0_calls.rs","from_name":"nested","to_path":"tests/fixtures/dogfood_callers/src/1_child.rs","to_name":"child","kind":"name_resolve","grade":"+","from_line":10,"to_line":2}
     "#);
 }
 
@@ -40,5 +40,7 @@ fn invalid_cargo_manifest_abstains_with_manifest_and_error() {
         &std::fs::canonicalize(env!("CARGO_MANIFEST_DIR")).unwrap().display().to_string(),
         "$CRATE",
     );
-    insta::assert_snapshot!(stdout, @r#"Cargo manifest failure must produce an abstain row"#);
+    insta::assert_snapshot!(stdout, @r#"
+    {"record":"file_unresolved","src_path":"tests/fixtures/dogfood_invalid_manifest/src/lib.rs","module":"$CRATE/tests/fixtures/dogfood_invalid_manifest/Cargo.toml","reason":"`cargo metadata` exited with an error: error: unclosed table, expected `]`\n --> tests/fixtures/dogfood_invalid_manifest/Cargo.toml:1:9\n  |\n1 | [package\n  |         ^\n"}
+    "#);
 }

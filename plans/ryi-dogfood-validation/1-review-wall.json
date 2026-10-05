@@ -1,0 +1,11 @@
+{
+  "command": "ryii graph --callers tests/fixtures/dogfood_callers/src/0_calls.rs#objects --root tests/fixtures/dogfood_callers tests/fixtures/dogfood_callers/src/0_calls.rs tests/fixtures/dogfood_callers/src/1_child.rs",
+  "before_sha": "9d4f0dc6",
+  "before_rows": 0,
+  "before_wall_seconds": 1.35132325,
+  "before_wall_source": "exec_command single run at 2026-10-05T20:21:23Z",
+  "after_rows": 2,
+  "after_wall_seconds": 0.1301662080004462,
+  "after_stdout": "{\"record\":\"graph_edge\",\"from_path\":\"tests/fixtures/dogfood_callers/src/0_calls.rs\",\"from_name\":\"local\",\"to_path\":\"tests/fixtures/dogfood_callers/src/0_calls.rs\",\"to_name\":\"objects\",\"kind\":\"name_resolve\",\"grade\":\"~\",\"from_line\":2,\"to_line\":1}\n{\"record\":\"graph_edge\",\"from_path\":\"tests/fixtures/dogfood_callers/src/1_child.rs\",\"from_name\":\"child\",\"to_path\":\"tests/fixtures/dogfood_callers/src/0_calls.rs\",\"to_name\":\"objects\",\"kind\":\"import_resolve\",\"grade\":\"+\",\"from_line\":2,\"to_line\":1}\n",
+  "after_stderr": "2026-10-05T20:48:19.001048Z  INFO extract_file{path=\"tests/fixtures/dogfood_callers/src/1_child.rs\" lang=\"rust\" bytes=44}: sprefa_extract: close time.busy=23.4ms time.idle=49.7\u00b5s\n2026-10-05T20:48:19.001695Z  INFO extract_file{path=\"tests/fixtures/dogfood_callers/src/0_calls.rs\" lang=\"rust\" bytes=224}: sprefa_extract: close time.busy=24.1ms time.idle=1.88\u00b5s\n2 edges: 1 +, 1 ~, 0 -\n"
+}

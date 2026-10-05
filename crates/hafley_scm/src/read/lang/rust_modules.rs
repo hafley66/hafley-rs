@@ -828,6 +828,7 @@ pub enum ModuleCallTarget {
 /// THE corpus Rust module plane, built ONCE per refresh in `resolve_project`.
 #[derive(Default)]
 pub struct RustModuleIndex {
+    pub context_failures: Vec<(String, String, String)>,
     facts: HashMap<String, RustModuleFacts>,
     blobs: HashMap<String, ContentId>,
     paths: HashMap<ContentId, String>,
@@ -972,7 +973,10 @@ fn nearest_crate_dirs(corpus: &[(String, ContentId)]) -> HashMap<String, String>
                         let text =
                             std::fs::read_to_string(crate::read::io_path(&dir.join("Cargo.toml")))
                                 .ok()?;
-                        let manifest: serde_json::Value = basic_toml::from_str(&text).ok()?;
+                        let manifest: serde_json::Value = match basic_toml::from_str(&text) {
+                            Ok(manifest) => manifest,
+                            Err(_) => return Some(lexical(dir)),
+                        };
                         manifest.get("package").map(|_| lexical(dir))
                     })
                     .clone()
@@ -1094,7 +1098,7 @@ impl RustModuleIndex {
         def_index: &DefIndex,
     ) -> RustModuleIndex {
         let mut corpus = corpus.to_vec();
-        let target_scopes = context::load(&mut files, &mut corpus);
+        let (target_scopes, context_failures) = context::load(&mut files, &mut corpus);
         let corpus = corpus.as_slice();
         let crate_roots = nearest_crate_dirs(corpus);
         let crate_dirs = crate_dirs_of(&crate_roots, &target_scopes);
@@ -1119,6 +1123,7 @@ impl RustModuleIndex {
             crate_dirs,
             crate_module_roots,
             target_scopes,
+            context_failures,
             known_crate_idents,
             ..RustModuleIndex::default()
         };
@@ -1964,7 +1969,23 @@ impl RustModuleIndex {
         let Some(facts) = self.facts.get(path) else {
             return (public, complete);
         };
+        if stack.iter().any(|open| open == path) {
+            return (public, false);
+        }
+        stack.push(path.to_string());
         let mut table = (*public).clone();
+        for binding in facts.uses.iter().filter(|binding| !binding.reexport) {
+            if table.contains_key(&binding.local) {
+                continue;
+            }
+            let (resolution, sub_complete) = self.resolve_qualified(
+                path, &binding.qualifier, &binding.asked, stack, &mut Vec::new(),
+            );
+            complete &= sub_complete;
+            if let Some(found) = resolution.promoted_option(ResolvedImportKind::Indirect) {
+                table.insert(binding.local.clone(), found);
+            }
+        }
         let starred = self.star_contributions(
             path,
             facts.stars.iter().filter(|star| !star.reexport),
@@ -1975,6 +1996,7 @@ impl RustModuleIndex {
         for (name, resolution) in starred {
             table.entry(name).or_insert(resolution);
         }
+        stack.pop();
         let table = std::sync::Arc::new(table);
         if complete {
             self.scope_tables
@@ -2207,7 +2229,7 @@ impl RustModuleIndex {
         if !declared {
             return None;
         }
-        let mut full = module_segments(from);
+        let mut full = self.module_paths.get(from)?.clone();
         full.extend(qualifier.iter().cloned());
         Some(self.exact_module(from, &full))
     }
@@ -2245,7 +2267,7 @@ impl RustModuleIndex {
                 if qualifier.len() == 1 {
                     HomeFile::Unique(file)
                 } else {
-                    let mut full = module_segments(&file);
+                    let mut full = self.module_paths.get(&file)?.clone();
                     full.extend(qualifier[1..].iter().cloned());
                     self.exact_module(from, &full)
                 }
@@ -2409,7 +2431,14 @@ impl RustModuleIndex {
             else {
                 continue;
             };
-            let (sub_table, sub_complete) = self.export_table(&target, stack);
+            let descendant = self.module_paths.get(file).zip(self.module_paths.get(&target))
+                .is_some_and(|(from, parent)| from.starts_with(parent))
+                && self.crate_dirs.get(file) == self.crate_dirs.get(&target);
+            let (sub_table, sub_complete) = if descendant {
+                self.local_scope_table(&target, stack)
+            } else {
+                self.export_table(&target, stack)
+            };
             *complete &= sub_complete;
             for (name, resolution) in sub_table.iter() {
                 if existing.contains_key(name) {

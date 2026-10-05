@@ -8,11 +8,12 @@ use std::path::Path;
 pub(super) fn load(
     files: &mut Vec<(String, RustModuleFacts)>,
     corpus: &mut Vec<(String, ContentId)>,
-) -> HashMap<String, HashSet<TargetScope>> {
+) -> (HashMap<String, HashSet<TargetScope>>, Vec<(String, String, String)>) {
     let nearest = nearest_crate_dirs(corpus);
     let wanted: HashSet<String> = corpus.iter().map(|(path, _)| path.clone()).collect();
     let mut facts: HashMap<String, RustModuleFacts> = files.iter().cloned().collect();
     let mut retained = HashSet::new();
+    let mut failures = Vec::new();
     let mut scopes: HashMap<String, HashSet<TargetScope>> = HashMap::new();
     for package_root in nearest.values().collect::<BTreeSet<_>>() {
         let manifest = crate::read::io_path(&Path::new(package_root).join("Cargo.toml"));
@@ -27,7 +28,11 @@ pub(super) fn load(
         {
             Ok(metadata) => metadata,
             Err(error) => {
-                tracing::warn!(manifest = %manifest.display(), %error, "Rust module context unavailable");
+                for (path, root) in &nearest {
+                    if root == package_root {
+                        failures.push((path.clone(), lexical(&manifest), error.to_string()));
+                    }
+                }
                 continue;
             }
         };
@@ -64,7 +69,7 @@ pub(super) fn load(
             } else {
                 TargetKind::Normal
             };
-            walk(
+            retain_module_ancestry(
                 &root,
                 &TargetScope {
                     root: root.clone(),
@@ -101,10 +106,10 @@ pub(super) fn load(
             },
         ));
     }
-    scopes
+    (scopes, failures)
 }
 
-fn walk(
+fn retain_module_ancestry(
     path: &str,
     scope: &TargetScope,
     wanted: &HashSet<String>,
@@ -142,7 +147,7 @@ fn walk(
         if let Some(child) = candidates.into_iter().find(|child| {
             facts.contains_key(child) || crate::read::io_path(Path::new(child)).is_file()
         }) {
-            needed |= walk(&child, scope, wanted, facts, retained, scopes, visiting);
+            needed |= retain_module_ancestry(&child, scope, wanted, facts, retained, scopes, visiting);
         }
     }
     visiting.remove(path);

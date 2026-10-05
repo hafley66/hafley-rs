@@ -41,7 +41,6 @@ crates/hafley_scm/src/lang/rust/9_type_candidate_rows.rs	fn::collect	1
 crates/hafley_scm/src/lib.rs	fn::run	1
 crates/hafley_scm/src/read/2_slow.rs	fn::span_of	1
 crates/hafley_scm/src/read/cargo_metadata.rs	fn::packages	1
-crates/hafley_scm/src/read/lang/0_rust_module_context.rs	fn::walk	1
 crates/hafley_scm/src/read/lang/7_scm_rows.rs	fn::ingest	1
 crates/hafley_scm/src/read/lang/commonlisp/_0_source.rs	fn::parse	1
 crates/hafley_scm/src/read/lang/commonlisp/_0_source.rs	fn::project_cst	1
