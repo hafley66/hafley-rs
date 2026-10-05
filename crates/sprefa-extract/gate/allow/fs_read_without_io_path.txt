@@ -4,8 +4,9 @@ crates/hafley_scm/src/read/2_slow.rs	fn::project_index	1
 crates/hafley_scm/src/read/cargo_metadata.rs	fn::fingerprint	1
 crates/hafley_scm/src/read/lang/0_rust_module_context.rs	fn::load	1
 crates/hafley_scm/src/read/lang/0_rust_module_context.rs	fn::retain_module_ancestry	1
+crates/hafley_scm/src/read/lang/0_rust_workspace.rs	fn::manifest_key	1
 crates/hafley_scm/src/read/lang/7_scm_rows.rs	fn::file_captures	1
-crates/hafley_scm/src/read/lang/8_rust_checker_session.rs	fn::checker_workspace	1
+crates/hafley_scm/src/read/lang/8_rust_checker_session.rs	fn::checker_workspace_loaded	1
 crates/hafley_scm/src/read/lang/8e_rust_checker_modules.rs	fn::sync	1
 crates/hafley_scm/src/read/lang/go.rs	fn::go_parse_file_facts	1
 crates/hafley_scm/src/read/lang/rust_modules.rs	fn::tree_module_facts_match_syn_across_pinned_rust_fixtures	1

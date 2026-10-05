@@ -6,10 +6,13 @@ use std::time::{Duration, Instant};
 use ra_ap_ide::{AnalysisHost, RootDatabase};
 use ra_ap_ide_db::ChangeWithProcMacros;
 use ra_ap_load_cargo::{LoadCargoConfig, ProcMacroServerChoice, ProjectFolders, SourceRootConfig};
-use ra_ap_project_model::{CargoConfig, CargoFeatures, ProjectManifest, ProjectWorkspace, RustLibSource};
+use ra_ap_project_model::{
+    CargoConfig, CargoFeatures, ProjectManifest, ProjectWorkspace, RustLibSource,
+};
 use ra_ap_vfs::{Change as VfsChange, Vfs, VfsPath};
 
-use super::rust_checker::{CheckerError, Tier};
+use super::rust_checker::{CheckerError, LoadMode};
+use super::rust_workspace::{ManifestKey, RustWorkspace};
 
 pub(super) struct CheckerWorkspace {
     pub(super) host: AnalysisHost,
@@ -26,37 +29,79 @@ fn unloaded(vfs: &Vfs, files: &[(String, PathBuf)]) -> HashSet<PathBuf> {
     files
         .iter()
         .map(|(_, file)| std::fs::canonicalize(file).unwrap_or_else(|_| file.clone()))
-        .filter(|file| vfs.file_id(&VfsPath::new_real_path(file.to_string_lossy().into_owned())).is_none())
+        .filter(|file| {
+            vfs.file_id(&VfsPath::new_real_path(file.to_string_lossy().into_owned()))
+                .is_none()
+        })
         .collect()
 }
 
-type SessionKey = (PathBuf, Tier);
+type SessionKey = (PathBuf, LoadMode, ManifestKey);
 
 static CHECKER_WORKSPACES: OnceLock<Mutex<HashMap<SessionKey, Arc<Mutex<CheckerWorkspace>>>>> =
     OnceLock::new();
 
-pub fn warm_workspace_available(root: &Path, tier: Tier) -> bool {
-    let root = std::fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
-    CHECKER_WORKSPACES
-        .get()
-        .is_some_and(|workspaces| workspaces.lock().unwrap().contains_key(&(root, tier)))
+pub fn warm_workspace_available(root: &Path, tier: LoadMode) -> bool {
+    let Ok(discovered) = super::rust_workspace::discover(root) else {
+        return false;
+    };
+    let Ok(manifests) = discovered.manifest_key() else {
+        return false;
+    };
+    let root = discovered
+        .metadata
+        .workspace_root
+        .as_std_path()
+        .to_path_buf();
+    CHECKER_WORKSPACES.get().is_some_and(|workspaces| {
+        workspaces
+            .lock()
+            .unwrap()
+            .contains_key(&(root, tier, manifests))
+    })
 }
 
 pub(super) fn checker_workspace(
     root: &Path,
-    tier: Tier,
+    tier: LoadMode,
     files: &[(String, PathBuf)],
     budget: Duration,
 ) -> Result<(Arc<Mutex<CheckerWorkspace>>, Duration), CheckerError> {
-    let root = std::fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
-    let key = (root.clone(), tier);
+    let discovered = super::rust_workspace::discover(root).map_err(CheckerError::NoWorkspace)?;
+    checker_workspace_loaded(&discovered, tier, files, budget)
+}
+
+pub(super) fn checker_workspace_loaded(
+    discovered: &RustWorkspace,
+    tier: LoadMode,
+    files: &[(String, PathBuf)],
+    budget: Duration,
+) -> Result<(Arc<Mutex<CheckerWorkspace>>, Duration), CheckerError> {
+    let root = discovered
+        .metadata
+        .workspace_root
+        .as_std_path()
+        .to_path_buf();
+    let mut key = (
+        root.clone(),
+        tier,
+        discovered
+            .manifest_key()
+            .map_err(CheckerError::NoWorkspace)?,
+    );
     let workspaces = CHECKER_WORKSPACES.get_or_init(|| Mutex::new(HashMap::new()));
     let mut all = workspaces.lock().unwrap();
+    // Evict a changed manifest identity before loading its replacement.
+    all.retain(|(cached_root, _, cached_key), _| cached_root != &root || cached_key == &key.2);
     let mut load = Duration::ZERO;
     let fresh = !all.contains_key(&key);
     if fresh {
-        let (db, vfs, roots, elapsed) = load_checker_workspace(&root, tier, budget)?;
+        let (db, vfs, roots, elapsed) =
+            load_checker_workspace(&root, tier, budget, &discovered.metadata)?;
         load = elapsed;
+        key.2 = discovered
+            .manifest_key()
+            .map_err(CheckerError::NoWorkspace)?;
         all.insert(
             key.clone(),
             Arc::new(Mutex::new(CheckerWorkspace {
@@ -70,21 +115,35 @@ pub(super) fn checker_workspace(
     let handle = all.get(&key).unwrap().clone();
     drop(all);
     let mut workspace = handle.lock().unwrap();
-    if !fresh && !unloaded(&workspace.vfs, files).is_subset(&workspace.outside) {
-        let (db, vfs, roots, elapsed) = load_checker_workspace(&root, tier, budget)?;
+    if tier == LoadMode::Types
+        && !fresh
+        && !unloaded(&workspace.vfs, files).is_subset(&workspace.outside)
+    {
+        let (db, vfs, roots, elapsed) =
+            load_checker_workspace(&root, tier, budget, &discovered.metadata)?;
         workspace.host = AnalysisHost::with_database(db);
         workspace.outside = unloaded(&vfs, files);
         workspace.vfs = vfs;
         workspace.roots = roots;
         load = elapsed;
     }
-    for (_, file) in files {
-        let file = std::fs::canonicalize(file).unwrap_or_else(|_| file.clone());
+    let refresh: HashSet<PathBuf> = files
+        .iter()
+        .map(|(_, file)| file.clone())
+        .chain(workspace.vfs.iter().filter_map(|(_, path)| {
+            let path = PathBuf::from(path.as_path()?.to_string());
+            ((tier == LoadMode::Names || path.starts_with(&root))
+                && path.extension().is_some_and(|extension| extension == "rs"))
+            .then_some(path)
+        }))
+        .collect();
+    for file in refresh {
+        let file = std::fs::canonicalize(&file).unwrap_or(file);
         let path = VfsPath::new_real_path(file.to_string_lossy().into_owned());
-        if workspace.vfs.file_id(&path).is_none() {
+        if tier == LoadMode::Types && workspace.vfs.file_id(&path).is_none() {
             continue;
         }
-        let contents = match std::fs::read(&file) {
+        let contents = match std::fs::read(crate::read::io_path(&file)) {
             Ok(contents) => Some(contents),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
             Err(error) => return Err(CheckerError::NoWorkspace(error.to_string())),
@@ -109,12 +168,10 @@ impl CheckerWorkspace {
         for (file, changed) in changed {
             created |= matches!(changed.change, VfsChange::Create(..));
             let text = match changed.change {
-                VfsChange::Create(contents, _) | VfsChange::Modify(contents, _) => {
-                    Some(
-                        String::from_utf8(contents)
-                            .map_err(|error| CheckerError::NoWorkspace(error.to_string()))?,
-                    )
-                }
+                VfsChange::Create(contents, _) | VfsChange::Modify(contents, _) => Some(
+                    String::from_utf8(contents)
+                        .map_err(|error| CheckerError::NoWorkspace(error.to_string()))?,
+                ),
                 VfsChange::Delete => None,
             };
             change.change_file(ra_ap_ide::FileId::from_raw(file.index()), text);
@@ -163,12 +220,11 @@ mod warm_workspace_tests {
         );
         std::fs::write(&source, changed).unwrap();
         let warm = field_reads(&root, &source, &files, &probes, budget).unwrap();
-        CHECKER_WORKSPACES
-            .get()
-            .unwrap()
-            .lock()
-            .unwrap()
-            .remove(&(root.clone(), Tier::Slow));
+        CHECKER_WORKSPACES.get().unwrap().lock().unwrap().retain(
+            |(cached_root, cached_mode, _), _| {
+                cached_root != &root || *cached_mode != LoadMode::Types
+            },
+        );
         let fresh = field_reads(&root, &source, &files, &probes, budget).unwrap();
         let sites = |reads: Vec<FieldRead>| {
             reads
@@ -179,30 +235,29 @@ mod warm_workspace_tests {
         assert!(warm.len() > cold.len());
         assert_eq!(sites(warm), sites(fresh));
         let warm_graph = answer(&root, &files, budget, true).unwrap();
-        CHECKER_WORKSPACES
-            .get()
-            .unwrap()
-            .lock()
-            .unwrap()
-            .remove(&(root.clone(), Tier::Slow));
+        CHECKER_WORKSPACES.get().unwrap().lock().unwrap().retain(
+            |(cached_root, cached_mode, _), _| {
+                cached_root != &root || *cached_mode != LoadMode::Types
+            },
+        );
         let cold_graph = answer(&root, &files, budget, true).unwrap();
         assert_eq!(
             serde_json::to_value(warm_graph.tsi).unwrap(),
             serde_json::to_value(cold_graph.tsi).unwrap()
         );
-        CHECKER_WORKSPACES
-            .get()
-            .unwrap()
-            .lock()
-            .unwrap()
-            .remove(&(root.clone(), Tier::Slow));
+        CHECKER_WORKSPACES.get().unwrap().lock().unwrap().retain(
+            |(cached_root, cached_mode, _), _| {
+                cached_root != &root || *cached_mode != LoadMode::Types
+            },
+        );
     }
 }
 
 fn load_checker_workspace(
     root: &Path,
-    tier: Tier,
+    tier: LoadMode,
     budget: Duration,
+    metadata: &cargo_metadata::Metadata,
 ) -> Result<(RootDatabase, ra_ap_vfs::Vfs, SourceRootConfig, Duration), CheckerError> {
     let load_config = LoadCargoConfig {
         load_out_dirs_from_check: false,
@@ -212,18 +267,19 @@ fn load_checker_workspace(
         proc_macro_processes: 0,
     };
     let started = Instant::now();
-    let _load_span = crate::read::trace::tracked(tracing::info_span!("rust_analyzer.load")).entered();
+    let _load_span =
+        crate::read::trace::tracked(tracing::info_span!("rust_analyzer.load")).entered();
     fn no_workspace(error: impl std::fmt::Display) -> CheckerError {
         CheckerError::NoWorkspace(error.to_string())
     }
     let workspace = match tier {
-        Tier::Fast | Tier::Names => {
-            let project = super::rust_checker_project::fast_project(root, tier == Tier::Fast)?;
+        LoadMode::Names => {
+            let project = super::rust_checker_project::names_project(root, metadata)?;
             ProjectWorkspace::load_inline(project, &CargoConfig::default(), &|_| {})
         }
         // `set_test` puts `#[cfg(test)]` bodies in the tree; every feature keeps
         // `cfg`-gated modules in the crate graph.
-        Tier::Slow => {
+        LoadMode::Types => {
             let cargo_config = CargoConfig {
                 sysroot: Some(RustLibSource::Discover),
                 set_test: true,
@@ -245,28 +301,4 @@ fn load_checker_workspace(
         return Err(CheckerError::Budget(budget));
     }
     Ok((db, vfs, roots, load))
-}
-
-#[cfg(test)]
-mod fast_tier_tests {
-    use super::*;
-    use ra_ap_ide_db::base_db;
-
-    #[test]
-    fn fast_loads_workspace_crates_with_features_and_std_shim() {
-        let root = std::fs::canonicalize(Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")).unwrap();
-        let (db, vfs, _, _) = load_checker_workspace(&root, Tier::Fast, Duration::from_secs(120)).unwrap();
-        let names: Vec<String> = base_db::all_crates(&db)
-            .iter()
-            .filter_map(|krate| krate.extra_data(&db).display_name.as_ref().map(|name| name.to_string()))
-            .collect();
-        assert!(names.iter().any(|name| name == "hafley_scm"));
-        assert!(names.iter().any(|name| name == "core"));
-        assert!(names.iter().any(|name| name == "std"));
-        assert!(!names.iter().any(|name| name == "alloc"));
-        assert!(!names.iter().any(|name| name == "serde_json"));
-        let trace = VfsPath::new_real_path(root.join("crates/hafley_scm/src/read/trace.rs").to_string_lossy().into_owned());
-        let trace = ra_ap_ide::FileId::from_raw(vfs.file_id(&trace).unwrap().0.index());
-        assert!(!base_db::relevant_crates(&db, trace).is_empty());
-    }
 }

@@ -59,10 +59,14 @@ pub struct WalkSession {
 }
 
 impl WalkSession {
-    pub fn open(root: &Path, files: &[(String, PathBuf)], budget: Duration) -> Result<WalkSession, CheckerError> {
+    pub fn open(
+        root: &Path,
+        files: &[(String, PathBuf)],
+        budget: Duration,
+    ) -> Result<WalkSession, CheckerError> {
         let (workspace, load) = super::super::rust_checker_session::checker_workspace(
             root,
-            super::super::rust_checker::Tier::Slow,
+            super::super::rust_checker::LoadMode::Types,
             files,
             budget,
         )?;
@@ -81,7 +85,10 @@ impl WalkSession {
             let text = absolute.to_string();
             let key = std::fs::canonicalize(&text).unwrap_or_else(|_| PathBuf::from(&text));
             if let Some(path) = wanted.get(&key) {
-                supplied.insert(ra_ap_ide::FileId::from_raw(vfs_id.index()), (*path).to_string());
+                supplied.insert(
+                    ra_ap_ide::FileId::from_raw(vfs_id.index()),
+                    (*path).to_string(),
+                );
             }
         }
         Ok(WalkSession {
@@ -96,8 +103,11 @@ impl WalkSession {
     /// rather than on the first body's thread.
     pub fn prime(&self, paths: &[&str]) {
         let workspace = self.workspace.lock().unwrap();
-        let ids: HashMap<String, ra_ap_ide::FileId> =
-            self.supplied.iter().map(|(id, path)| (path.clone(), *id)).collect();
+        let ids: HashMap<String, ra_ap_ide::FileId> = self
+            .supplied
+            .iter()
+            .map(|(id, path)| (path.clone(), *id))
+            .collect();
         super::target::prime_crate_closure(
             workspace.host.raw_database(),
             &ids,
@@ -110,7 +120,11 @@ impl WalkSession {
     /// Every function named `name` the file's own syntax declares; `None` when
     /// the file is unsupplied or owns no module in the crate graph.
     pub fn seeds(&self, path: &str, name: &str) -> Option<Vec<DefWithBody>> {
-        let file = *self.supplied.iter().find(|(_, supplied)| supplied.as_str() == path)?.0;
+        let file = *self
+            .supplied
+            .iter()
+            .find(|(_, supplied)| supplied.as_str() == path)?
+            .0;
         self.with_sema(|sema| {
             sema.file_to_module_defs(file).next()?;
             Some(
@@ -141,7 +155,10 @@ impl WalkSession {
             let root = body_syntax(sema, body)?;
             let _span = tracing::debug_span!("rust_walk.body").entered();
             resolve.sites(&root);
-            Some(BodyEdges { from, edges: resolve.edges })
+            Some(BodyEdges {
+                from,
+                edges: resolve.edges,
+            })
         })
     }
 
@@ -162,12 +179,17 @@ fn module_def(body: DefWithBody) -> ModuleDef {
 }
 
 /// The body's own syntax, rooted in the semantics cache so its sites resolve.
-fn body_syntax(sema: &Semantics<'_, RootDatabase>, body: DefWithBody) -> Option<ra_ap_syntax::SyntaxNode> {
+fn body_syntax(
+    sema: &Semantics<'_, RootDatabase>,
+    body: DefWithBody,
+) -> Option<ra_ap_syntax::SyntaxNode> {
     match body {
         DefWithBody::Function(item) => Some(sema.source(item)?.value.body()?.syntax().clone()),
         DefWithBody::Static(item) => Some(sema.source(item)?.value.body()?.syntax().clone()),
         DefWithBody::Const(item) => Some(sema.source(item)?.value.body()?.syntax().clone()),
-        DefWithBody::EnumVariant(item) => Some(sema.source(item)?.value.const_arg()?.syntax().clone()),
+        DefWithBody::EnumVariant(item) => {
+            Some(sema.source(item)?.value.const_arg()?.syntax().clone())
+        }
     }
 }
 
@@ -202,7 +224,9 @@ impl Resolve<'_, '_> {
     /// Declared in a supplied file of a workspace-member crate.
     fn in_project(&mut self, def: ModuleDef) -> bool {
         let db = self.sema.db;
-        let local = def.module(db).is_some_and(|module| module.krate(db).origin(db).is_local());
+        let local = def
+            .module(db)
+            .is_some_and(|module| module.krate(db).origin(db).is_local());
         local && self.node(def).is_some_and(|node| !node.path.is_empty())
     }
 
@@ -237,19 +261,30 @@ impl Resolve<'_, '_> {
                 continue;
             }
             if let Some(call) = ast::MethodCallExpr::cast(node.clone()) {
-                let (Some(name), Some(function)) = (call.name_ref(), self.sema.resolve_method_call(&call)) else {
+                let (Some(name), Some(function)) =
+                    (call.name_ref(), self.sema.resolve_method_call(&call))
+                else {
                     continue;
                 };
-                self.callee(ModuleDef::Function(function), EdgeKind::Method, name.syntax().text_range(), call.arg_list());
+                self.callee(
+                    ModuleDef::Function(function),
+                    EdgeKind::Method,
+                    name.syntax().text_range(),
+                    call.arg_list(),
+                );
                 continue;
             }
             let path = if let Some(call) = ast::CallExpr::cast(node.clone()) {
                 match call.expr() {
-                    Some(ast::Expr::PathExpr(expr)) => expr.path().map(|path| (path, call.arg_list())),
+                    Some(ast::Expr::PathExpr(expr)) => {
+                        expr.path().map(|path| (path, call.arg_list()))
+                    }
                     _ => None,
                 }
             } else {
-                ast::RecordExpr::cast(node).and_then(|record| record.path()).map(|path| (path, None))
+                ast::RecordExpr::cast(node)
+                    .and_then(|record| record.path())
+                    .map(|path| (path, None))
             };
             let Some((path, args)) = path else {
                 continue;
@@ -269,7 +304,13 @@ impl Resolve<'_, '_> {
 
     /// One resolved site. An extern callee's arguments are read for `Passed`
     /// and `TraitImpl` edges.
-    fn callee(&mut self, def: ModuleDef, kind: EdgeKind, site: ra_ap_syntax::TextRange, args: Option<ast::ArgList>) {
+    fn callee(
+        &mut self,
+        def: ModuleDef,
+        kind: EdgeKind,
+        site: ra_ap_syntax::TextRange,
+        args: Option<ast::ArgList>,
+    ) {
         let project = self.in_project(def);
         self.push(def, kind, site);
         let (false, ModuleDef::Function(function), Some(args)) = (project, def, args) else {
@@ -296,14 +337,21 @@ impl Resolve<'_, '_> {
             if bounds.is_empty() {
                 continue;
             }
-            let Some(adt) = self.sema.type_of_expr(&arg).and_then(|ty| ty.original.strip_references().as_adt()) else {
+            let Some(adt) = self
+                .sema
+                .type_of_expr(&arg)
+                .and_then(|ty| ty.original.strip_references().as_adt())
+            else {
                 continue;
             };
             if !self.in_project(ModuleDef::Adt(adt)) {
                 continue;
             }
             for item in Impl::all_for_type(db, adt.ty(db)) {
-                if !item.trait_(db).is_some_and(|contract| bounds.contains(&contract)) {
+                if !item
+                    .trait_(db)
+                    .is_some_and(|contract| bounds.contains(&contract))
+                {
                     continue;
                 }
                 for assoc in item.items(db) {

@@ -6,15 +6,25 @@ use crate::move_cx::MoveCx;
 pub use hafley_scm::read::lang::rust_checker::ModulePlace;
 
 #[cfg(feature = "rust-checker")]
-fn tree(cx: &MoveCx, source: &std::path::Path) -> Result<std::sync::Arc<hafley_scm::read::lang::rust_checker::RustModuleTree>, String> {
-    let key = source.parent().ok_or_else(|| format!("{} has no parent", source.display()))?;
+fn tree(
+    cx: &MoveCx,
+    source: &std::path::Path,
+) -> Result<std::sync::Arc<hafley_scm::read::lang::rust_checker::RustModuleTree>, String> {
+    let workspace = hafley_scm::read::lang::rust_workspace::discover(source)?;
+    let key = workspace.metadata.workspace_root.as_std_path();
+    let manifests = workspace.manifest_key()?;
     let mut trees = cx.rust_modules.lock().map_err(|error| error.to_string())?;
-    if let Some(tree) = trees.get(key) {
+    if let Some(tree) = trees.get(key).filter(|tree| tree.key == manifests) {
         return Ok(tree.clone());
     }
-    let tree = std::sync::Arc::new(hafley_scm::read::lang::rust_checker::module_tree(
-        source, std::time::Duration::from_secs(120),
-    ).map_err(|error| error.to_string())?);
+    let tree = std::sync::Arc::new(
+        hafley_scm::read::lang::rust_checker::module_tree_for_workspace(
+            source,
+            &workspace,
+            std::time::Duration::from_secs(120),
+        )
+        .map_err(|error| error.to_string())?,
+    );
     trees.insert(key.to_path_buf(), tree.clone());
     Ok(tree)
 }
@@ -22,7 +32,7 @@ fn tree(cx: &MoveCx, source: &std::path::Path) -> Result<std::sync::Arc<hafley_s
 /// The nearest owning Cargo manifest selected for this source.
 #[cfg(feature = "rust-checker")]
 pub fn searched_manifest(cx: &MoveCx, rel: &str) -> Result<std::path::PathBuf, String> {
-    Ok(tree(cx, &cx.abs(rel))?.manifest.clone())
+    hafley_scm::read::lang::rust_workspace::nearest_manifest(&cx.abs(rel))
 }
 
 /// Every module `rel` is once the host holds `cx`'s planned and overlaid texts.
@@ -48,6 +58,7 @@ pub fn extern_name(cx: &MoveCx, from: &ModulePlace, to: &ModulePlace) -> Result<
 #[cfg(not(feature = "rust-checker"))]
 #[derive(Clone, Debug)]
 pub struct ModulePlace {
+    pub target: u32,
     pub crate_root: std::path::PathBuf,
     pub crate_name: String,
     pub path: Vec<String>,
@@ -75,8 +86,12 @@ pub fn require_visible(cx: &MoveCx, from: &str, to: &str, item: &str) -> Result<
     places(cx, from)?;
     match tree(cx, &cx.abs(from))?.can_name(&cx.abs(from), &cx.abs(to), item) {
         Some(true) => Ok(()),
-        Some(false) => Err(format!("cleave path {to}#{item} is not visible from {from}")),
-        None => Err(format!("rust-analyzer cannot establish visibility of {to}#{item} from {from}")),
+        Some(false) => Err(format!(
+            "cleave path {to}#{item} is not visible from {from}"
+        )),
+        None => Err(format!(
+            "rust-analyzer cannot establish visibility of {to}#{item} from {from}"
+        )),
     }
 }
 

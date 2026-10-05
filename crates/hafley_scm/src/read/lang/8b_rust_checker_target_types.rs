@@ -43,8 +43,12 @@ pub fn target_types(
     if seeds.is_empty() {
         return Ok(Vec::new());
     }
-    let (workspace, _) =
-        super::super::rust_checker_session::checker_workspace(root, super::super::rust_checker::Tier::Slow, files, budget)?;
+    let (workspace, _) = super::super::rust_checker_session::checker_workspace(
+        root,
+        super::super::rust_checker::LoadMode::Types,
+        files,
+        budget,
+    )?;
     let workspace = workspace.lock().unwrap();
     let wanted: HashMap<PathBuf, &str> = files
         .iter()
@@ -70,7 +74,8 @@ pub fn target_types(
         }
     }
     let db = workspace.host.raw_database();
-    let _query_span = crate::read::trace::tracked(tracing::info_span!("rust_analyzer.queries")).entered();
+    let _query_span =
+        crate::read::trace::tracked(tracing::info_span!("rust_analyzer.queries")).entered();
     let seed_paths: Vec<&str> = seeds.iter().map(|(path, _)| path.as_str()).collect();
     super::target::prime_crate_closure(
         db,

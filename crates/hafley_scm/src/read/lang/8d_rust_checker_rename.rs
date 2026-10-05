@@ -90,8 +90,12 @@ pub fn rename(
     new_name: &str,
     budget: Duration,
 ) -> Result<Vec<RenameEdit>, RenameFailure> {
-    let (workspace, _) =
-        super::super::rust_checker_session::checker_workspace(root, super::super::rust_checker::Tier::Slow, files, budget)?;
+    let (workspace, _) = super::super::rust_checker_session::checker_workspace(
+        root,
+        super::super::rust_checker::LoadMode::Types,
+        files,
+        budget,
+    )?;
     let mut workspace = workspace.lock().unwrap();
     let mut paths: HashMap<ra_ap_ide::FileId, String> = HashMap::new();
     let mut anchor_id = None;
@@ -109,7 +113,10 @@ pub fn rename(
         }
     }
     let anchor_id = anchor_id.ok_or_else(|| {
-        RenameFailure::Refused(format!("{anchor} is not in the Cargo workspace rust-analyzer loaded at {}", root.display()))
+        RenameFailure::Refused(format!(
+            "{anchor} is not in the Cargo workspace rust-analyzer loaded at {}",
+            root.display()
+        ))
     })?;
     let set_texts = |workspace: &mut super::super::rust_checker_session::CheckerWorkspace,
                      texts: &[(ra_ap_ide::FileId, String)]| {
@@ -122,19 +129,28 @@ pub fn rename(
     let staged: Vec<(ra_ap_ide::FileId, String, String)> = overlays
         .iter()
         .filter_map(|(name, _, text)| {
-            let id = paths.iter().find(|(_, path)| *path == name).map(|(id, _)| *id)?;
+            let id = paths
+                .iter()
+                .find(|(_, path)| *path == name)
+                .map(|(id, _)| *id)?;
             let disk = workspace.host.analysis().file_text(id).ok()?.to_string();
             Some((id, text.clone(), disk))
         })
         .collect();
     set_texts(
         &mut workspace,
-        &staged.iter().map(|(id, text, _)| (*id, text.clone())).collect::<Vec<_>>(),
+        &staged
+            .iter()
+            .map(|(id, text, _)| (*id, text.clone()))
+            .collect::<Vec<_>>(),
     );
     let result = rename_in(&workspace, &paths, anchor_id, seed, new_name);
     set_texts(
         &mut workspace,
-        &staged.iter().map(|(id, _, disk)| (*id, disk.clone())).collect::<Vec<_>>(),
+        &staged
+            .iter()
+            .map(|(id, _, disk)| (*id, disk.clone()))
+            .collect::<Vec<_>>(),
     );
     result
 }
@@ -152,10 +168,11 @@ fn rename_in(
         RenameSeed::At(at) => {
             let byte = TextSize::from(at);
             let file = analysis.parse(anchor_id).map_err(cancelled)?;
-            let on_name = file
-                .syntax()
-                .token_at_offset(byte)
-                .any(|token| token.parent().is_some_and(|parent| ast::Name::can_cast(parent.kind())));
+            let on_name = file.syntax().token_at_offset(byte).any(|token| {
+                token
+                    .parent()
+                    .is_some_and(|parent| ast::Name::can_cast(parent.kind()))
+            });
             // `--at` is any offset inside the declaration; rust-analyzer needs one on its name.
             match on_name {
                 true => u32::from(byte),
@@ -178,10 +195,7 @@ fn rename_in(
                         many.iter()
                             .map(|name| {
                                 let range = name.syntax().text_range();
-                                (
-                                    u32::from(range.start()),
-                                    u32::from(range.end()),
-                                )
+                                (u32::from(range.start()), u32::from(range.end()))
                             })
                             .collect(),
                     ))
@@ -207,7 +221,10 @@ fn rename_in(
         .map_err(cancelled)?
         .map_err(|error| RenameFailure::Refused(error.to_string()))?;
     if !change.file_system_edits.is_empty() {
-        return Err(RenameFailure::FileSystem(format!("{:?}", change.file_system_edits)));
+        return Err(RenameFailure::FileSystem(format!(
+            "{:?}",
+            change.file_system_edits
+        )));
     }
     let mut edits = Vec::new();
     for (file_id, (text_edit, _)) in change.source_file_edits {

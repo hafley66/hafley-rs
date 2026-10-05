@@ -12,7 +12,7 @@ pub use super::rust_checker_ra::{field_reads, FieldProbe, FieldRead};
 pub use super::rust_checker_session::warm_workspace_available;
 
 #[cfg(not(feature = "rust-checker"))]
-pub fn warm_workspace_available(_root: &std::path::Path, _tier: Tier) -> bool {
+pub fn warm_workspace_available(_root: &std::path::Path, _tier: LoadMode) -> bool {
     false
 }
 pub use super::CheckerAnswer;
@@ -64,20 +64,19 @@ pub struct CheckerAnswers {
     pub method_unresolved: usize,
 }
 
-/// `Fast`: workspace crates only, every feature on, no sysroot, nothing compiled.
-/// `Slow`: adds dependencies and the sysroot, so inference types std receivers.
-/// `Names`: Fast's crate graph without the sysroot: def maps only, no file written.
+/// Names loads workspace def maps without a sysroot or inference.
+/// Types loads dependencies and the sysroot for inference.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum Tier {
-    Fast,
-    Slow,
+pub enum LoadMode {
     Names,
+    Types,
 }
 
-/// Why the tier could not run. Every one falls back to the syntax leg.
+/// Why a rust-analyzer host could not answer.
 #[derive(Debug)]
 pub enum CheckerError {
     NotBuilt,
+    NeedsTypes,
     NoWorkspace(String),
     Budget(Duration),
     /// A demand walk popped a body past its deadline.
@@ -87,9 +86,10 @@ pub enum CheckerError {
 impl std::fmt::Display for CheckerError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::NeedsTypes => write!(f, "needs_types"),
             Self::NotBuilt => write!(
                 f,
-                "the rust checker tier needs --features rust-checker; falling back to the syntax leg"
+                "rust-analyzer Names and Types need --features rust-checker"
             ),
             Self::NoWorkspace(detail) => write!(f, "no cargo workspace: {detail}"),
             Self::Budget(budget) => {
@@ -325,30 +325,35 @@ pub fn answer(
 }
 
 #[cfg(feature = "rust-checker")]
-pub use super::rust_checker_ra::{TargetCall, TargetCalls};
-#[cfg(feature = "rust-checker")]
 pub use super::rust_checker_ra::TargetTypeReference;
+#[cfg(feature = "rust-checker")]
+pub use super::rust_checker_ra::{TargetCall, TargetCalls};
 
 #[cfg(feature = "rust-checker")]
 pub fn target_calls(
     root: &Path,
     files: &[(String, PathBuf)],
     seeds: &[(String, String)],
-    tier: Tier,
+    tier: LoadMode,
     budget: Duration,
 ) -> Result<TargetCalls, CheckerError> {
     super::rust_checker_ra::target_calls(root, files, seeds, tier, budget)
 }
 
 #[cfg(feature = "rust-checker")]
-pub use super::rust_checker_ra::{rename, RenameEdit, RenameFailure, RenameSeed};
-#[cfg(feature = "rust-checker")]
-pub use super::rust_checker_ra::{module_tree, ModulePlace, RustModuleTree};
-#[cfg(feature = "rust-checker")]
 pub use super::rust_checker_ra::{
     demand_walk, BodyEdge, BodyEdges, EdgeKind, WalkAnswer, WalkEdge, WalkNode, WalkQuestion,
     WalkSession,
 };
+#[cfg(feature = "rust-checker")]
+pub use super::rust_checker_ra::{
+    module_places, module_tree, module_tree_for_workspace, resolve_method, resolve_path,
+    resolve_prefix, scope_names, Abstain, DefPlace, ModulePlace, NamesHost, RustModuleTree,
+};
+#[cfg(feature = "rust-checker")]
+pub use super::rust_checker_ra::{rename, RenameEdit, RenameFailure, RenameSeed};
+#[cfg(feature = "rust-checker")]
+pub use super::rust_workspace::ManifestKey;
 
 #[cfg(feature = "rust-checker")]
 pub fn target_types(

@@ -2,14 +2,16 @@
 //! module path and declaring `mod` item. No body is type checked.
 
 use super::*;
-use std::sync::{Arc, Mutex};
 use ra_ap_vfs::VfsPath;
+use std::sync::{Arc, Mutex};
 
-use super::super::rust_checker_session::{checker_workspace, CheckerWorkspace};
+use super::super::rust_checker_session::{checker_workspace_loaded, CheckerWorkspace};
 
 /// One module a file is. A file several targets include has one per target.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ModulePlace {
+    /// Dense workspace target identity, ordered by canonical root file.
+    pub target: u32,
     /// The crate's root file, absolute: the crate's identity.
     pub crate_root: PathBuf,
     /// The crate's own name, as an extern path spells it.
@@ -24,7 +26,10 @@ pub struct ModulePlace {
 pub struct RustModuleTree {
     /// Cargo manifest selected for the source, retained for ownership abstains.
     pub manifest: PathBuf,
-    workspace: Arc<Mutex<CheckerWorkspace>>,
+    pub(super) workspace: Arc<Mutex<CheckerWorkspace>>,
+    pub key: super::super::rust_workspace::ManifestKey,
+    pub load: Duration,
+    pub(super) crate_roots: std::collections::BTreeMap<PathBuf, u32>,
     /// Absolute path -> the text the host holds in place of the disk's.
     staged: Mutex<HashMap<PathBuf, String>>,
 }
@@ -32,33 +37,75 @@ pub struct RustModuleTree {
 /// Cargo selects the source's workspace from its directory; rust-analyzer
 /// supplies module ownership from that workspace's def maps.
 pub fn module_tree(source: &Path, budget: Duration) -> Result<RustModuleTree, CheckerError> {
-    let discovered = super::super::rust_workspace::discover(source)
-        .map_err(|error| CheckerError::NoWorkspace(match error.manifest {
+    let discovered =
+        super::super::rust_workspace::discover(source).map_err(|error| CheckerError::NoWorkspace(match error.manifest {
             Some(manifest) => format!("{}: {}", manifest.display(), error.reason),
             None => error.reason,
         }))?;
-    let manifest = discovered.manifest;
-    let metadata = discovered.metadata;
-    let root = metadata.workspace_root.as_std_path();
-    let (workspace, _) = checker_workspace(root, super::super::rust_checker::Tier::Names, &[], budget)?;
+    module_tree_for_workspace(source, &discovered, budget)
+}
+
+/// Open the provider from workspace discovery already performed by the caller.
+pub fn module_tree_for_workspace(
+    source: &Path,
+    discovered: &super::super::rust_workspace::RustWorkspace,
+    budget: Duration,
+) -> Result<RustModuleTree, CheckerError> {
+    let key = discovered
+        .manifest_key()
+        .map_err(CheckerError::NoWorkspace)?;
+    let root = discovered.metadata.workspace_root.as_std_path();
+    let mode = if super::super::rust_checker::warm_workspace_available(
+        root,
+        super::super::rust_checker::LoadMode::Types,
+    ) {
+        super::super::rust_checker::LoadMode::Types
+    } else {
+        super::super::rust_checker::LoadMode::Names
+    };
+    let (workspace, load) = checker_workspace_loaded(
+        discovered,
+        mode,
+        &[(source.to_string_lossy().into_owned(), host_path(source))],
+        budget,
+    )?;
+    let roots: std::collections::BTreeSet<_> = discovered
+        .metadata
+        .workspace_packages()
+        .into_iter()
+        .flat_map(|package| &package.targets)
+        .map(|target| host_path(target.src_path.as_std_path()))
+        .collect();
+    let crate_roots = roots
+        .into_iter()
+        .enumerate()
+        .map(|(index, root)| (root, index as u32))
+        .collect();
     Ok(RustModuleTree {
-        manifest,
+        manifest: discovered.manifest.clone(),
         workspace,
+        key,
+        load,
+        crate_roots,
         staged: Mutex::new(HashMap::new()),
     })
 }
 
 /// `path` canonical; an unborn file through its parent directory.
-fn host_path(path: &Path) -> PathBuf {
+pub(super) fn host_path(path: &Path) -> PathBuf {
     std::fs::canonicalize(path).unwrap_or_else(|_| {
-        match (path.parent().and_then(|dir| std::fs::canonicalize(dir).ok()), path.file_name()) {
+        match (
+            path.parent()
+                .and_then(|dir| std::fs::canonicalize(dir).ok()),
+            path.file_name(),
+        ) {
             (Some(dir), Some(name)) => dir.join(name),
             _ => path.to_path_buf(),
         }
     })
 }
 
-fn vfs_path(path: &Path) -> VfsPath {
+pub(super) fn vfs_path(path: &Path) -> VfsPath {
     VfsPath::new_real_path(path.to_string_lossy().into_owned())
 }
 
@@ -68,18 +115,28 @@ impl RustModuleTree {
     pub fn sync(&self, texts: &[(PathBuf, String)]) -> Result<(), CheckerError> {
         let mut workspace = self.workspace.lock().unwrap();
         let mut staged = self.staged.lock().unwrap();
-        let wanted: HashMap<PathBuf, &String> =
-            texts.iter().map(|(path, text)| (host_path(path), text)).collect();
+        let wanted: HashMap<PathBuf, &String> = texts
+            .iter()
+            .map(|(path, text)| (host_path(path), text))
+            .collect();
         for (path, text) in &wanted {
             if staged.get(path) != Some(*text) {
-                workspace.vfs.set_file_contents(vfs_path(path), Some(text.as_bytes().to_vec()));
+                workspace
+                    .vfs
+                    .set_file_contents(vfs_path(path), Some(text.as_bytes().to_vec()));
                 staged.insert(path.clone(), (*text).clone());
             }
         }
-        let released: Vec<PathBuf> =
-            staged.keys().filter(|path| !wanted.contains_key(*path)).cloned().collect();
+        let released: Vec<PathBuf> = staged
+            .keys()
+            .filter(|path| !wanted.contains_key(*path))
+            .cloned()
+            .collect();
         for path in released {
-            workspace.vfs.set_file_contents(vfs_path(&path), std::fs::read(crate::read::io_path(&path)).ok());
+            workspace.vfs.set_file_contents(
+                vfs_path(&path),
+                std::fs::read(crate::read::io_path(&path)).ok(),
+            );
             staged.remove(&path);
         }
         workspace.apply_vfs_changes()
@@ -94,13 +151,27 @@ impl RustModuleTree {
         let db = workspace.host.raw_database();
         attach_db(db, || {
             let sema = Semantics::new(db);
-            let viewers: Vec<_> = sema.file_to_module_defs(ra_ap_ide::FileId::from_raw(from.index())).collect();
-            let targets: Vec<_> = sema.file_to_module_defs(ra_ap_ide::FileId::from_raw(to.index())).collect();
-            if viewers.is_empty() || targets.is_empty() { return None; }
-            Some(viewers.iter().all(|viewer| targets.iter().any(|target| {
-                target.path_to_root(db).into_iter().all(|module| module.is_visible_from(db, *viewer))
-                    && target.scope(db, Some(*viewer)).iter().any(|(name, _)| name.as_str() == item)
-            })))
+            let viewers: Vec<_> = sema
+                .file_to_module_defs(ra_ap_ide::FileId::from_raw(from.index()))
+                .collect();
+            let targets: Vec<_> = sema
+                .file_to_module_defs(ra_ap_ide::FileId::from_raw(to.index()))
+                .collect();
+            if viewers.is_empty() || targets.is_empty() {
+                return None;
+            }
+            Some(viewers.iter().all(|viewer| {
+                targets.iter().any(|target| {
+                    target
+                        .path_to_root(db)
+                        .into_iter()
+                        .all(|module| module.is_visible_from(db, *viewer))
+                        && target
+                            .scope(db, Some(*viewer))
+                            .iter()
+                            .any(|(name, _)| name.as_str() == item)
+                })
+            }))
         })
     }
 
@@ -110,6 +181,23 @@ impl RustModuleTree {
         let Some((id, _)) = workspace.vfs.file_id(&vfs_path(&host_path(file))) else {
             return Vec::new();
         };
+        let db = workspace.host.raw_database();
+        let mut places: Vec<ModulePlace> = attach_db(db, || {
+            let sema = Semantics::new(db);
+            sema.file_to_module_defs(ra_ap_ide::FileId::from_raw(id.index()))
+                .filter_map(|module| self.place_of(&workspace, db, module))
+                .collect()
+        });
+        places.sort();
+        places
+    }
+
+    pub(super) fn place_of(
+        &self,
+        workspace: &CheckerWorkspace,
+        db: &RootDatabase,
+        module: ra_ap_hir::Module,
+    ) -> Option<ModulePlace> {
         let path_of = |file: ra_ap_ide::FileId| {
             workspace
                 .vfs
@@ -117,35 +205,25 @@ impl RustModuleTree {
                 .as_path()
                 .map(|path| PathBuf::from(path.to_string()))
         };
-        let db = workspace.host.raw_database();
-        let mut places: Vec<ModulePlace> = attach_db(db, || {
-            let sema = Semantics::new(db);
-            sema.file_to_module_defs(ra_ap_ide::FileId::from_raw(id.index()))
-                .filter_map(|module| {
-                    let krate = module.krate(db);
-                    let crate_root = path_of(krate.root_file(db))?;
-                    let decl = module.declaration_source_range(db).and_then(|range| {
-                        let file = range.file_id.file_id()?.file_id(db);
-                        Some((
-                            path_of(file)?,
-                            u32::from(range.value.start()),
-                            u32::from(range.value.end()),
-                        ))
-                    });
-                    Some(ModulePlace {
-                        crate_root,
-                        crate_name: crate_name(db, krate),
-                        path: module
-                            .path_segments(db)
-                            .map(|name| name.as_str().to_string())
-                            .collect(),
-                        decl,
-                    })
-                })
-                .collect()
+        let krate = module.krate(db);
+        let crate_root = path_of(krate.root_file(db))?;
+        let decl = module.declaration_source_range(db).and_then(|range| {
+            Some((
+                path_of(range.file_id.file_id()?.file_id(db))?,
+                range.value.start().into(),
+                range.value.end().into(),
+            ))
         });
-        places.sort_by(|a, b| a.crate_root.cmp(&b.crate_root));
-        places
+        Some(ModulePlace {
+            target: *self.crate_roots.get(&crate_root)?,
+            crate_root,
+            crate_name: crate_name(db, krate),
+            path: module
+                .path_segments(db)
+                .map(|name| name.as_str().to_string())
+                .collect(),
+            decl,
+        })
     }
 
     /// The name crate `from` reaches crate `to` by: its dependency entry's
@@ -181,4 +259,12 @@ fn crate_name(db: &RootDatabase, krate: Crate) -> String {
         .display_name(db)
         .map(|name| name.crate_name().as_str().to_string())
         .unwrap_or_default()
+}
+
+impl Drop for RustModuleTree {
+    fn drop(&mut self) {
+        // Return staged paths to disk before releasing this request's overlay.
+        // Drop cannot report an error; sync callers still receive UTF-8 errors.
+        let _ = self.sync(&[]);
+    }
 }

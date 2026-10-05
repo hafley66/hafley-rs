@@ -1161,7 +1161,7 @@ impl Plan {
             .map(|span| source.slice(*span).to_string())
             .collect();
         let checker =
-            slow || hafley_scm::read::lang::rust_checker::warm_workspace_available(cx.root(), hafley_scm::read::lang::rust_checker::Tier::Slow);
+            slow || hafley_scm::read::lang::rust_checker::warm_workspace_available(cx.root(), hafley_scm::read::lang::rust_checker::LoadMode::Types);
         widen_private_fields(
             &cx,
             &src,

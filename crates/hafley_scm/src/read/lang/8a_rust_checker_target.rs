@@ -56,7 +56,9 @@ pub(super) fn prime_crate_closure(
     threads: usize,
 ) {
     use ra_ap_ide_db::base_db;
-    let _prime = crate::read::trace::tracked(tracing::info_span!("rust_analyzer.prime_crate_closure")).entered();
+    let _prime =
+        crate::read::trace::tracked(tracing::info_span!("rust_analyzer.prime_crate_closure"))
+            .entered();
     let targets: BTreeSet<base_db::Crate> = reaching
         .iter()
         .flat_map(|&file_id| base_db::relevant_crates(db, file_id).to_vec())
@@ -76,7 +78,6 @@ pub(super) fn prime_crate_closure(
     scope.dedup();
     ra_ap_ide_db::prime_caches::parallel_prime_caches(db, &scope, threads, &|_| {});
 }
-
 
 /// The name reference is the callee of a call: `f(..)`, `m::f(..)`, or `x.f(..)`.
 fn is_call(name_ref: &ast::NameRef) -> bool {
@@ -104,16 +105,20 @@ pub fn target_calls(
     root: &Path,
     files: &[(String, PathBuf)],
     seeds: &[(String, String)],
-    tier: super::super::rust_checker::Tier,
+    tier: super::super::rust_checker::LoadMode,
     budget: Duration,
 ) -> Result<TargetCalls, CheckerError> {
+    if tier == super::super::rust_checker::LoadMode::Names {
+        return Err(CheckerError::NeedsTypes);
+    }
     if seeds.is_empty() {
         return Ok(TargetCalls::default());
     }
     let (workspace, _) =
         super::super::rust_checker_session::checker_workspace(root, tier, files, budget)?;
     let workspace = workspace.lock().unwrap();
-    let _file_index_span = crate::read::trace::tracked(tracing::info_span!("rust_analyzer.file_index")).entered();
+    let _file_index_span =
+        crate::read::trace::tracked(tracing::info_span!("rust_analyzer.file_index")).entered();
     let wanted: HashMap<PathBuf, &str> = files
         .iter()
         .map(|(name, path)| {
@@ -139,9 +144,13 @@ pub fn target_calls(
     }
     drop(_file_index_span);
     let db = workspace.host.raw_database();
-    let _query_span = crate::read::trace::tracked(tracing::info_span!("rust_analyzer.queries")).entered();
+    let _query_span =
+        crate::read::trace::tracked(tracing::info_span!("rust_analyzer.queries")).entered();
     let supplied: Vec<&str> = files.iter().map(|(name, _)| name.as_str()).collect();
-    let definitions: Vec<_> = seeds.iter().filter_map(|(path, _)| ids.get(path).copied()).collect();
+    let definitions: Vec<_> = seeds
+        .iter()
+        .filter_map(|(path, _)| ids.get(path).copied())
+        .collect();
     prime_crate_closure(
         db,
         &ids,
@@ -161,7 +170,10 @@ pub fn target_calls(
                 .syntax()
                 .descendants()
                 .filter_map(ast::Fn::cast)
-                .filter(|item| item.name().is_some_and(|item_name| item_name.text() == name.as_str()))
+                .filter(|item| {
+                    item.name()
+                        .is_some_and(|item_name| item_name.text() == name.as_str())
+                })
                 .filter_map(|item| sema.to_def(&item))
                 .collect();
             // A function a macro call declares (`cfg_rt! { pub fn spawn .. }`) has no
@@ -169,7 +181,9 @@ pub fn target_calls(
             for module in sema.file_to_module_defs(definition_file) {
                 for declaration in module.declarations(db) {
                     if let ra_ap_hir::ModuleDef::Function(function) = declaration {
-                        if function.name(db).as_str() == name.as_str() && !functions.contains(&function) {
+                        if function.name(db).as_str() == name.as_str()
+                            && !functions.contains(&function)
+                        {
                             functions.push(function);
                         }
                     }
@@ -183,7 +197,9 @@ pub fn target_calls(
                 let Some(target_path) = paths.get(&nav.file_id) else {
                     continue;
                 };
-                let _usages_span = crate::read::trace::tracked(tracing::info_span!("rust_analyzer.usages")).entered();
+                let _usages_span =
+                    crate::read::trace::tracked(tracing::info_span!("rust_analyzer.usages"))
+                        .entered();
                 let direct = definition.usages(&sema).all();
                 // `usages` does not follow `use x as y` (rust-analyzer issue #14079);
                 // each renaming import is searched again under its alias.
@@ -192,12 +208,17 @@ pub fn target_calls(
                     .flat_map(|(_, references)| references.iter())
                     .filter_map(|reference| reference.name.as_name_ref())
                     .filter_map(|name_ref| {
-                        name_ref.syntax().ancestors().find_map(ast::UseTree::cast)?.rename()
+                        name_ref
+                            .syntax()
+                            .ancestors()
+                            .find_map(ast::UseTree::cast)?
+                            .rename()
                     })
                     .collect();
                 let mut references = direct.references;
                 for rename in &renames {
-                    for (file, aliased) in definition.usages(&sema).with_rename(Some(rename)).all() {
+                    for (file, aliased) in definition.usages(&sema).with_rename(Some(rename)).all()
+                    {
                         references.entry(file).or_default().extend(aliased);
                     }
                 }
@@ -249,12 +270,12 @@ pub fn target_calls(
 }
 
 #[cfg(test)]
-mod fast_tier_tests {
+mod types_mode_tests {
+    use super::super::super::rust_checker::LoadMode;
     use super::*;
-    use super::super::super::rust_checker::Tier;
 
     #[test]
-    fn fast_sees_calls_inside_desugared_expressions() {
+    fn types_sees_calls_inside_desugared_expressions() {
         let scratch = tempfile::TempDir::new().unwrap();
         let root = std::fs::canonicalize(scratch.path()).unwrap();
         std::fs::create_dir_all(root.join("src")).unwrap();
@@ -283,9 +304,10 @@ mod fast_tier_tests {
                 .map(|call| call.enclosing_name.unwrap_or_default())
                 .collect::<Vec<_>>()
         };
-        assert_eq!(callers(Tier::Fast, "target"), ["after_try", "after_try", "awaited", "in_loop"]);
-        assert_eq!(callers(Tier::Fast, "target"), callers(Tier::Slow, "target"));
-        assert_eq!(callers(Tier::Fast, "method"), ["through_std"]);
-        assert_eq!(callers(Tier::Fast, "method"), callers(Tier::Slow, "method"));
+        assert_eq!(
+            callers(LoadMode::Types, "target"),
+            ["after_try", "after_try", "awaited", "in_loop"]
+        );
+        assert_eq!(callers(LoadMode::Types, "method"), ["through_std"]);
     }
 }

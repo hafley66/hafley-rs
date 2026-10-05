@@ -110,7 +110,7 @@ pub(super) fn facts(
             root,
             &files,
             &seeds,
-            sprefa_extract::lang::rust_checker::Tier::Slow,
+            sprefa_extract::lang::rust_checker::LoadMode::Types,
             Duration::from_secs(30),
         )
         .map_err(|error| format!("rust-analyzer target {name}: {error}"))?;

@@ -6,11 +6,11 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
+use ra_ap_hir::AsAssocItem;
 use ra_ap_hir::{
     attach_db, Adt, AssocItem, Crate, Field, Function, GenericDef, HirDisplay, Impl, ModuleDef,
     PathResolution, Semantics, Trait, Type,
 };
-use ra_ap_hir::AsAssocItem;
 use ra_ap_ide::{Edition, NavigationTarget, RootDatabase, TryToNav};
 use ra_ap_ide_db::defs::Definition;
 use ra_ap_syntax::ast::HasName;
@@ -21,23 +21,29 @@ use super::rust_checker::{CheckerAnswers, CheckerError, CheckerRef};
 #[path = "8a_rust_checker_target.rs"]
 mod target;
 pub use target::{target_calls, TargetCall, TargetCalls};
-#[path = "8b_rust_checker_target_types.rs"]
-mod target_types;
 #[path = "8d_rust_checker_rename.rs"]
 mod rename;
+#[path = "8b_rust_checker_target_types.rs"]
+mod target_types;
 pub use rename::{rename, RenameEdit, RenameFailure, RenameSeed};
 #[path = "8e_rust_checker_modules.rs"]
 mod modules;
-pub use modules::{module_tree, ModulePlace, RustModuleTree};
+pub use modules::{module_tree, module_tree_for_workspace, ModulePlace, RustModuleTree};
+#[path = "8h_rust_names.rs"]
+mod names;
+pub use names::{
+    module_places, resolve_method, resolve_path, resolve_prefix, scope_names, Abstain, DefPlace,
+    NamesHost,
+};
 #[path = "8f_rust_checker_body_edges.rs"]
 mod body_edges;
 pub use body_edges::{BodyEdge, BodyEdges, EdgeKind, WalkNode, WalkSession};
 #[path = "8g_rust_checker_walk.rs"]
 mod walk;
-pub use walk::{demand_walk, WalkAnswer, WalkEdge, WalkQuestion};
 use crate::read::trace::{phase_span, record_phase, Phase};
 use crate::read::tsi::{Arg, CoverageClaim, FactOut};
 pub use target_types::{target_types, TargetTypeReference};
+pub use walk::{demand_walk, WalkAnswer, WalkEdge, WalkQuestion};
 
 pub struct FieldProbe {
     pub struct_name_start: u32,
@@ -58,7 +64,12 @@ pub fn field_reads(
     probes: &[FieldProbe],
     budget: Duration,
 ) -> Result<Vec<FieldRead>, CheckerError> {
-    let (workspace, _) = super::rust_checker_session::checker_workspace(root, super::rust_checker::Tier::Slow, files, budget)?;
+    let (workspace, _) = super::rust_checker_session::checker_workspace(
+        root,
+        super::rust_checker::LoadMode::Types,
+        files,
+        budget,
+    )?;
     let workspace = workspace.lock().unwrap();
     let host = &workspace.host;
     let vfs = &workspace.vfs;
@@ -162,7 +173,12 @@ pub fn answer(
     budget: Duration,
     tsi: bool,
 ) -> Result<CheckerAnswers, CheckerError> {
-    let (workspace, load) = super::rust_checker_session::checker_workspace(root, super::rust_checker::Tier::Slow, files, budget)?;
+    let (workspace, load) = super::rust_checker_session::checker_workspace(
+        root,
+        super::rust_checker::LoadMode::Types,
+        files,
+        budget,
+    )?;
     let workspace = workspace.lock().unwrap();
     let host = &workspace.host;
     let vfs = &workspace.vfs;
@@ -194,7 +210,8 @@ pub fn answer(
 
     let db = host.raw_database();
     let walk_started = Instant::now();
-    let _query_span = crate::read::trace::tracked(tracing::info_span!("rust_analyzer.queries")).entered();
+    let _query_span =
+        crate::read::trace::tracked(tracing::info_span!("rust_analyzer.queries")).entered();
     let mut answers = CheckerAnswers {
         load,
         ..CheckerAnswers::default()
@@ -437,7 +454,14 @@ fn method_call_ref(
     let name_ref = call.name_ref()?;
     let function = spans.method.call(|| sema.resolve_method_call(call))?;
     let nav = spans.destination_of(sema, ModuleDef::Function(function))?;
-    mint(sema, ModuleDef::Function(function), destination, file, name_ref.syntax().text_range(), &nav)
+    mint(
+        sema,
+        ModuleDef::Function(function),
+        destination,
+        file,
+        name_ref.syntax().text_range(),
+        &nav,
+    )
 }
 
 /// `a::b::c(..)` and `Foo { .. }`: the item the trailing segment names.
@@ -456,7 +480,14 @@ fn path_call_ref(
         return None;
     }
     let nav = spans.destination_of(sema, def)?;
-    mint(sema, def, destination, file, name_ref.syntax().text_range(), &nav)
+    mint(
+        sema,
+        def,
+        destination,
+        file,
+        name_ref.syntax().text_range(),
+        &nav,
+    )
 }
 
 /// A path naming a type declaration, the shape `Resolve<TypeF>`'s candidates
@@ -479,7 +510,14 @@ fn type_ref(
         return None;
     }
     let nav = spans.destination_of(sema, def)?;
-    let mut reference = mint(sema, def, destination, file, name_ref.syntax().text_range(), &nav)?;
+    let mut reference = mint(
+        sema,
+        def,
+        destination,
+        file,
+        name_ref.syntax().text_range(),
+        &nav,
+    )?;
     reference.written = path
         .segments()
         .filter_map(|segment| segment.name_ref())
@@ -536,17 +574,28 @@ fn qualified(sema: &Semantics<'_, RootDatabase>, def: ModuleDef) -> Option<Strin
     let db = sema.db;
     let module = def.module(db)?;
     let krate = module.krate(db).display_name(db)?.to_string();
-    let owner = match def {
-        ModuleDef::Function(function) => function.as_assoc_item(db).and_then(|item| match item.container(db) {
-            ra_ap_hir::AssocItemContainer::Trait(owner) => Some(owner.name(db)),
-            ra_ap_hir::AssocItemContainer::Impl(owner) => owner.self_ty(db).as_adt().map(|adt| adt.name(db)),
-        }),
-        _ => None,
-    };
+    let owner =
+        match def {
+            ModuleDef::Function(function) => function.as_assoc_item(db).and_then(|item| match item
+                .container(db)
+            {
+                ra_ap_hir::AssocItemContainer::Trait(owner) => Some(owner.name(db)),
+                ra_ap_hir::AssocItemContainer::Impl(owner) => {
+                    owner.self_ty(db).as_adt().map(|adt| adt.name(db))
+                }
+            }),
+            _ => None,
+        };
     let segments = std::iter::once(krate)
-        .chain(module.path_segments(db).map(|name| name.display(db, Edition::CURRENT).to_string()))
+        .chain(
+            module
+                .path_segments(db)
+                .map(|name| name.display(db, Edition::CURRENT).to_string()),
+        )
         .chain(owner.map(|name| name.display(db, Edition::CURRENT).to_string()))
-        .chain(Some(def.name(db)?.display(db, Edition::CURRENT).to_string()));
+        .chain(Some(
+            def.name(db)?.display(db, Edition::CURRENT).to_string(),
+        ));
     Some(segments.collect::<Vec<String>>().join("::"))
 }
 
