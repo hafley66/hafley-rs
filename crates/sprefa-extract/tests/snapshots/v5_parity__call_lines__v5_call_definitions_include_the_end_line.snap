@@ -1,0 +1,14 @@
+---
+source: tests/200_v5_call_lines.rs
+expression: "String::from_utf8(output.stdout).unwrap()"
+---
+{"record":"node","family":"call","span":{"start":7,"end":18,"line":1,"col":8,"line_end":1},"kind":"function","name":"helper"}
+{"record":"node","family":"call","span":{"start":27,"end":36,"line":3,"col":8,"line_end":3},"kind":"function","name":"leaf"}
+{"record":"node","family":"call","span":{"start":45,"end":80,"line":5,"col":8,"line_end":8},"kind":"function","name":"run"}
+{"record":"node","family":"call","span":{"start":89,"end":99,"line":10,"col":8,"line_end":10},"kind":"function","name":"other"}
+{"record":"node","family":"call","span":{"start":108,"end":135,"line":12,"col":8,"line_end":14},"kind":"function","name":"writer"}
+{"record":"node","family":"call","span":{"start":144,"end":173,"line":16,"col":8,"line_end":18},"kind":"function","name":"reader"}
+{"record":"site","family":"call","span":{"start":57,"end":63,"line":6,"col":5,"line_end":6},"callee":"helper","callee_path":null}
+{"record":"site","family":"call","span":{"start":71,"end":75,"line":7,"col":5,"line_end":7},"callee":"leaf","callee_path":null}
+{"record":"site","family":"call","span":{"start":123,"end":130,"line":13,"col":5,"line_end":13},"callee":"execute","callee_path":null}
+{"record":"site","family":"call","span":{"start":159,"end":168,"line":17,"col":5,"line_end":17},"callee":"query_row","callee_path":null}

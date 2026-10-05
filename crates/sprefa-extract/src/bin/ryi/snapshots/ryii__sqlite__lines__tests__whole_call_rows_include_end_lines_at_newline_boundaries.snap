@@ -1,0 +1,51 @@
+---
+source: src/bin/ryi/0c_lines.rs
+expression: rows
+---
+[
+  {
+    "record": "node",
+    "family": "call",
+    "kind": "function",
+    "name": "run",
+    "span": {
+      "start": 3,
+      "end": 26,
+      "line": 1,
+      "col": 4,
+      "line_end": 3
+    }
+  },
+  {
+    "record": "site",
+    "family": "call",
+    "callee": "helper",
+    "span": {
+      "start": 15,
+      "end": 23,
+      "line": 2,
+      "col": 5,
+      "line_end": 2
+    }
+  },
+  {
+    "record": "node",
+    "span": {
+      "start": 0,
+      "end": 11,
+      "line": 1,
+      "col": 1,
+      "line_end": 1
+    }
+  },
+  {
+    "record": "node",
+    "span": {
+      "start": 11,
+      "end": 11,
+      "line": 2,
+      "col": 1,
+      "line_end": 2
+    }
+  }
+]

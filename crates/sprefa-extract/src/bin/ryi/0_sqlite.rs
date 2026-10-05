@@ -17,6 +17,10 @@ pub const DDL: &str = include_str!(concat!(
 ));
 #[path = "0a_bind.rs"]
 mod bind;
+#[path = "0c_lines.rs"]
+mod lines;
+pub use lines::line_col;
+use lines::decorate_lines;
 
 pub mod writers {
     include!(concat!(
@@ -671,39 +675,6 @@ const OWNED_SPANS: [(&str, &str, &str, &str, &str); 4] = [
         "target_col",
     ),
 ];
-
-/// 1-based (line, col) of a byte against newline offsets. Col counts BYTES
-/// from the line start, not characters, matching the spans it decorates.
-pub fn line_col(offsets: &[u32], start: u32) -> (u32, u32) {
-    let line = offsets.partition_point(|offset| *offset < start);
-    let line_start = line.checked_sub(1).map_or(0, |index| offsets[index] + 1);
-    ((line + 1) as u32, start - line_start + 1)
-}
-
-/// Add `line` and `col` beside every `start`/`end` pair at any depth, so a
-/// decorated record is the undecorated bytes plus exactly those fields.
-fn decorate_lines(value: &mut Value, offsets: &[u32]) {
-    match value {
-        Value::Object(map) => {
-            let start = map.get("start").and_then(Value::as_u64);
-            let end = map.get("end").and_then(Value::as_u64);
-            if let (Some(start), Some(_end)) = (start, end) {
-                let (line, col) = line_col(offsets, start as u32);
-                map.insert("line".to_string(), Value::from(line));
-                map.insert("col".to_string(), Value::from(col));
-            }
-            for child in map.values_mut() {
-                decorate_lines(child, offsets);
-            }
-        }
-        Value::Array(items) => {
-            for item in items {
-                decorate_lines(item, offsets);
-            }
-        }
-        _ => {}
-    }
-}
 
 #[cfg(test)]
 mod tests {

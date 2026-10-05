@@ -117,9 +117,9 @@ fn lines_decorates_every_span_and_only_spans() {
     assert_eq!(
         lines,
         vec![
-            r#"{"record":"node","family":"call","span":{"start":14,"end":56,"line":2,"col":1},"kind":"function","name":"hop"}"#.to_string(),
-            r#"{"record":"node","family":"call","span":{"start":0,"end":66,"line":1,"col":1},"kind":"module","name":"<module>"}"#.to_string(),
-            r#"{"record":"site","family":"call","span":{"start":57,"end":60,"line":3,"col":1},"callee":"hop","callee_path":null}"#.to_string(),
+            r#"{"record":"node","family":"call","span":{"start":14,"end":56,"line":2,"col":1,"line_end":2},"kind":"function","name":"hop"}"#.to_string(),
+            r#"{"record":"node","family":"call","span":{"start":0,"end":66,"line":1,"col":1,"line_end":3},"kind":"module","name":"<module>"}"#.to_string(),
+            r#"{"record":"site","family":"call","span":{"start":57,"end":60,"line":3,"col":1,"line_end":3},"callee":"hop","callee_path":null}"#.to_string(),
         ],
     );
 }
@@ -139,10 +139,10 @@ fn col_counts_bytes_not_characters() {
     assert_eq!(
         stdout_lines(&output),
         vec![
-            r#"{"record":"data_doc","family":"data","ordinal":0,"span":{"start":0,"end":31,"line":1,"col":1},"format":"json","doc":{"first":"α","second":"β"}}"#.to_string(),
-            r#"{"record":"data_value","family":"data","ordinal":0,"path":"","kind":"object","text":null,"span":{"start":0,"end":31,"line":1,"col":1}}"#.to_string(),
-            r#"{"record":"data_value","family":"data","ordinal":0,"path":"first","kind":"string","text":"α","span":{"start":11,"end":13,"line":1,"col":12}}"#.to_string(),
-            r#"{"record":"data_value","family":"data","ordinal":0,"path":"second","kind":"string","text":"β","span":{"start":27,"end":29,"line":1,"col":28}}"#.to_string(),
+            r#"{"record":"data_doc","family":"data","ordinal":0,"span":{"start":0,"end":31,"line":1,"col":1,"line_end":1},"format":"json","doc":{"first":"α","second":"β"}}"#.to_string(),
+            r#"{"record":"data_value","family":"data","ordinal":0,"path":"","kind":"object","text":null,"span":{"start":0,"end":31,"line":1,"col":1,"line_end":1}}"#.to_string(),
+            r#"{"record":"data_value","family":"data","ordinal":0,"path":"first","kind":"string","text":"α","span":{"start":11,"end":13,"line":1,"col":12,"line_end":1}}"#.to_string(),
+            r#"{"record":"data_value","family":"data","ordinal":0,"path":"second","kind":"string","text":"β","span":{"start":27,"end":29,"line":1,"col":28,"line_end":1}}"#.to_string(),
         ],
         "col must count bytes from the line start, not characters"
     );
