@@ -164,7 +164,7 @@ pub mod source_query;
 pub mod ts;
 #[cfg(feature = "typespec")]
 pub mod typespec;
-#[cfg(any(feature = "typescript", feature = "go-checker"))]
+#[cfg(feature = "typescript")]
 pub mod ts_checker;
 #[cfg(feature = "typescript")]
 #[path = "0_ts7_lsp_session.rs"]

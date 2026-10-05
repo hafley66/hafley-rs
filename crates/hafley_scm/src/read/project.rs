@@ -1036,8 +1036,7 @@ fn envelope(input: Envelope) -> Vec<FlatFact> {
         rows.push(fact);
     }
     rows.extend(witnesses.into_iter().map(FlatFact::Witness));
-    // The tsc walk enumerates relations rather than answering sites, so its rows
-    // arrive whole and take ordinals after the resolve's.
+    // The demanded checker rows take ordinals after the resolve's.
     let mut ids = tsi_ids;
     if let Some((_, run)) = semantic.iter().find(|(lang, _)| *lang == "ts") {
         if let Some(index) = cx.indexes.ts_checker.get() {

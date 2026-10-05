@@ -40,7 +40,7 @@ type Bound = super::CheckerBound;
 #[derive(Debug)]
 pub enum TsCheckerError {
     NotBuilt,
-    /// `node` is not on PATH, or the driver could not be staged.
+    /// The native tsgo executable could not be launched.
     NoDriver(String),
     /// The driver ran and failed; the string is its last stderr line.
     Failed(String),
@@ -54,9 +54,9 @@ impl std::fmt::Display for TsCheckerError {
                 f,
                 "the ts checker tier needs --features ts-checker; falling back to the syntax leg"
             ),
-            Self::NoDriver(detail) => write!(f, "no node driver: {detail}"),
-            Self::Failed(detail) => write!(f, "the driver failed: {detail}"),
-            Self::Budget(secs) => write!(f, "the driver exceeded {secs}s"),
+            Self::NoDriver(detail) => write!(f, "no tsgo executable: {detail}"),
+            Self::Failed(detail) => write!(f, "tsgo failed: {detail}"),
+            Self::Budget(secs) => write!(f, "tsgo exceeded {secs}s"),
         }
     }
 }
@@ -71,7 +71,7 @@ pub struct TsCheckerIndex {
     /// (file, name AS WRITTEN); a name one file resolves two ways binds nothing.
     types: HashMap<String, HashMap<String, Option<TsCheckerAnswer>>>,
     /// The walk's rows, span digests already substituted for the supplied paths
-    /// the driver wrote.
+    /// the session supplied.
     tsi: Vec<crate::read::tsi::FactOut>,
     coverage: Vec<crate::read::tsi::CoverageClaim>,
     /// Answers naming a corpus file whose parse minted no def there; they fall
@@ -189,7 +189,7 @@ impl TsCheckerIndex {
     }
 
     /// `name` is the candidate's `to` AS WRITTEN, dotted where the source
-    /// dotted it (`ts.Node`), which is the text the driver keys on too.
+    /// dotted it (`ts.Node`), which is the requested position spelling.
     pub fn type_at(&self, path: &str, name: &str) -> Option<TsCheckerAnswer> {
         self.types.get(path)?.get(name)?.clone()
     }
@@ -233,174 +233,4 @@ pub fn answer(
     tsi: bool,
 ) -> Result<TsCheckerAnswers, TsCheckerError> {
     super::tsgo_rows::answer(root, files, tsi).map_err(TsCheckerError::Failed)
-}
-
-/// The driver, embedded rather than installed: a tier that needs a separate
-/// `npm install` to answer is a tier that silently does not run.
-#[cfg(feature = "ts-checker")]
-const DRIVER: &str = include_str!("ts_checker.mjs");
-
-#[cfg(any(feature = "go-checker", feature = "ts-checker"))]
-#[derive(serde::Serialize)]
-pub(super) struct DriverRequest<'a> {
-    pub(super) root: &'a Path,
-    pub(super) files: &'a [(String, PathBuf)],
-    /// The checker walk is the tier's expensive half and answers no resolve
-    /// site, so it runs only for a stream that carries the TSI envelope.
-    pub(super) tsi: bool,
-}
-
-/// One `[start, end, name, dst_path, dst_name, dst_offset]` wire row.
-#[cfg(any(feature = "go-checker", feature = "ts-checker"))]
-type WireRow = (u32, u32, String, String, String, u32);
-
-#[cfg(any(feature = "go-checker", feature = "ts-checker"))]
-#[derive(serde::Deserialize)]
-struct WireFile {
-    path: String,
-    calls: Vec<WireRow>,
-    types: Vec<WireRow>,
-    /// `[relation, arg, ...]` per row; the ordinal is the wire's, minted here.
-    #[serde(default)]
-    tsi: Vec<Vec<serde_json::Value>>,
-}
-
-#[cfg(any(feature = "go-checker", feature = "ts-checker"))]
-#[derive(serde::Deserialize)]
-struct WireStats {
-    stats: WireCosts,
-    #[serde(default)]
-    coverage: Vec<(String, bool, Option<String>)>,
-}
-
-#[cfg(any(feature = "go-checker", feature = "ts-checker"))]
-#[derive(serde::Deserialize)]
-struct WireCosts {
-    #[serde(rename = "loadMs")]
-    load_ms: u64,
-    #[serde(rename = "walkMs")]
-    walk_ms: u64,
-    files: usize,
-}
-
-#[cfg(any(feature = "go-checker", feature = "ts-checker"))]
-#[derive(serde::Deserialize)]
-#[serde(untagged)]
-enum WireLine {
-    File(WireFile),
-    Stats(WireStats),
-}
-
-#[cfg(any(feature = "go-checker", feature = "ts-checker"))]
-fn into_refs(rows: Vec<WireRow>) -> Vec<TsCheckerRef> {
-    rows.into_iter()
-        .map(
-            |(start, end, name, dst_path, dst_name, dst_offset)| TsCheckerRef {
-                start,
-                end,
-                name,
-                dst_path,
-                dst_name,
-                dst_offset,
-            },
-        )
-        .collect()
-}
-
-#[cfg(any(feature = "go-checker", feature = "ts-checker"))]
-pub(super) fn parse_driver_stdout<E>(
-    stdout: &str,
-    mut into_fact: impl FnMut(Vec<serde_json::Value>) -> Result<crate::read::tsi::FactOut, E>,
-    failed: impl Fn(String) -> E,
-) -> Result<TsCheckerAnswers, E> {
-    let mut answers = TsCheckerAnswers::default();
-    for line in stdout.lines().filter(|line| !line.trim().is_empty()) {
-        match serde_json::from_str::<WireLine>(line) {
-            Ok(WireLine::File(file)) => {
-                for row in file.tsi {
-                    answers.tsi.push(into_fact(row)?);
-                }
-                answers
-                    .calls
-                    .insert(file.path.clone(), into_refs(file.calls));
-                answers.types.insert(file.path, into_refs(file.types));
-            }
-            Ok(WireLine::Stats(WireStats { stats, coverage })) => {
-                answers.load = Duration::from_millis(stats.load_ms);
-                answers.walk = Duration::from_millis(stats.walk_ms);
-                answers.files_answered = stats.files;
-                answers.coverage = coverage;
-            }
-            Err(err) => return Err(failed(err.to_string())),
-        }
-    }
-    Ok(answers)
-}
-
-/// One driver row `[relation, arg, ...]` into a fact. A row the registry does
-/// not know, or an argument it cannot decode, stops the tier.
-#[cfg(feature = "ts-checker")]
-fn into_fact(row: Vec<serde_json::Value>) -> Result<crate::read::tsi::FactOut, TsCheckerError> {
-    let mut parts = row.into_iter();
-    let relation = parts
-        .next()
-        .and_then(|head| head.as_str().map(str::to_string))
-        .ok_or_else(|| TsCheckerError::Failed("a tsi row opens with its relation".to_string()))?;
-    let args: Vec<crate::read::tsi::Arg> = parts
-        .map(serde_json::from_value)
-        .collect::<Result<_, _>>()
-        .map_err(|err| TsCheckerError::Failed(format!("{relation}: {err}")))?;
-    crate::read::tsi::registry::check(&relation, &args)
-        .map_err(|detail| TsCheckerError::Failed(format!("{relation}: {detail}")))?;
-    Ok(crate::read::tsi::FactOut {
-        fact: 0,
-        relation,
-        args,
-    })
-}
-
-/// The wall cap, the process group and the file-backed stdout all come from
-/// `run_capped`: the same discipline every scip indexer spawn runs under.
-#[cfg(feature = "ts-checker")]
-pub fn answer_node_legacy(
-    root: &Path,
-    files: &[(String, PathBuf)],
-    tsi: bool,
-) -> Result<TsCheckerAnswers, TsCheckerError> {
-    use crate::read::scip_ensure::{run_capped, Capped};
-    let _checker_span =
-        crate::read::trace::tracked(tracing::info_span!("typescript.checker")).entered();
-
-    let nanos = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|since| since.subsec_nanos())
-        .unwrap_or_default();
-    let dir =
-        std::env::temp_dir().join(format!("sprefa-ts-checker-{}-{nanos}", std::process::id()));
-    let stage = |detail: String| TsCheckerError::NoDriver(detail);
-    std::fs::create_dir_all(&dir).map_err(|err| stage(err.to_string()))?;
-    let script = dir.join("ts_checker.mjs");
-    let request = dir.join("request.json");
-    std::fs::write(&script, DRIVER).map_err(|err| stage(err.to_string()))?;
-    let body = serde_json::to_vec(&DriverRequest { root, files, tsi })
-        .map_err(|err| stage(err.to_string()))?;
-    std::fs::write(&request, body).map_err(|err| stage(err.to_string()))?;
-
-    let (Some(script), Some(request)) = (script.to_str(), request.to_str()) else {
-        return Err(stage("the temp path is not utf-8".to_string()));
-    };
-    match run_capped(&["node", script, request], root, &dir) {
-        Capped::Exited { success: true, .. } => {}
-        Capped::Exited { stderr_tail, .. } => return Err(TsCheckerError::Failed(stderr_tail)),
-        Capped::Killed { secs } => return Err(TsCheckerError::Budget(secs)),
-        Capped::NotLaunched => {
-            return Err(stage("node is not on PATH".to_string()));
-        }
-    }
-
-    let stdout = std::fs::read_to_string(dir.join("indexer.stdout.log"))
-        .map_err(|err| TsCheckerError::Failed(err.to_string()))?;
-    let answers = parse_driver_stdout(&stdout, into_fact, TsCheckerError::Failed)?;
-    let _ = std::fs::remove_dir_all(&dir);
-    Ok(answers)
 }
