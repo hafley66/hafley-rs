@@ -7,3 +7,4 @@ impl Worker {
 }
 #[path = "1_child.rs"]
 mod child;
+pub fn nested() { child::child(); }
