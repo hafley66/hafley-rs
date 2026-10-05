@@ -124,18 +124,19 @@ impl References {
         with_session(&root, |session| {
             let mut declarations = BTreeSet::new();
             let mut qualified_names = BTreeMap::new();
-            for (absolute, supplied) in &supplied {
-                if !typescript(supplied) {
+            // Only a file holding an asked site is opened; tsc reads the rest of
+            // its project from disk through the tsconfig.
+            for (source, file) in &self.files {
+                if file.calls.is_empty() && file.attributes.is_empty() {
                     continue;
                 }
-                let text = match self.files.get(*supplied) {
-                    Some(file) => file.text.clone(),
-                    None => std::fs::read_to_string(absolute)
-                        .map_err(|error| format!("read {}: {error}", absolute.display()))?,
-                };
-                session.sync_document(&file_uri(absolute)?, supplied, &text)?;
+                let uri = file_uri(&canonical(&crate::io_path(Path::new(source))))?;
+                session.sync_document(&uri, source, &file.text)?;
             }
             for (source, file) in &self.files {
+                if file.calls.is_empty() && file.attributes.is_empty() {
+                    continue;
+                }
                 let uri = file_uri(&canonical(&crate::io_path(Path::new(source))))?;
                 for &(start, end, offset) in &file.calls {
                     let reply = session.lsp.request("textDocument/definition", &json!({
@@ -193,6 +194,8 @@ impl References {
                         let hi = byte_at_lsp_position(&target_text, hi)? as u32;
                         let key = ((*target).to_string(), lo, hi);
                         if !qualified_names.contains_key(&key) {
+                            // documentSymbol reads an open document.
+                            session.sync_document(&file_uri(&absolute)?, target, &target_text)?;
                             let name = qualified_declaration(
                                 &mut session.lsp, &file_uri(&absolute)?, &target_text, lo,
                             )?;
