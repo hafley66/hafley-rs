@@ -336,6 +336,10 @@ go-checker = ["go", "hafley_scm/go-checker"]
 name = "all"
 path = "tests/all.rs"
 
+[[test]]
+name = "v5_parity"
+path = "tests/199_v5_parity.rs"
+
 [[bin]]
 name = "ryii"
 path = "src/bin/ryi.rs"
@@ -348,6 +352,7 @@ required-features = ["cli", "read"]
 # mach-sysbindings on mac, a second copy of the same call behind its own
 # types) and `sysinfo` (a whole process/CPU/NIC survey for one field).
 [dev-dependencies]
+insta = { version = "1", features = ["json"] }
 libc = "0.2"
 http-body-util = "0.1"
 hyper = { version = "1", features = ["client", "http1"] }

@@ -1,0 +1,5 @@
+---
+source: tests/199_v5_labeled_break.rs
+expression: tree.root_node().to_sexp()
+---
+(source_file (function_item name: (identifier) parameters: (parameters) return_type: (primitive_type) body: (block (integer_literal))) (function_item name: (identifier) parameters: (parameters (parameter pattern: (identifier) type: (primitive_type))) body: (block)) (function_item name: (identifier) parameters: (parameters (parameter pattern: (identifier) type: (primitive_type))) body: (block (let_declaration pattern: (identifier) value: (loop_expression (label (identifier)) body: (block (expression_statement (loop_expression body: (block (expression_statement (break_expression (label (identifier)) (call_expression function: (identifier) arguments: (arguments)))))))))) (expression_statement (call_expression function: (identifier) arguments: (arguments (identifier)))))))
