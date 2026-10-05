@@ -63,7 +63,7 @@ markdown     cst,types              +types                          no      -   
 prolog       cst,types,call,df      call                            yes     -               -
 python       cst,types,call,df      call+types                        no      -               python
 data         cst,data                                               no      -               -
-ts           cst,types,call,df      call+types manifests,text_spellings,plan_check yes     tsc             typescript
+ts           cst,types,call,df      call+types manifests,text_spellings,plan_check yes     tsgo            typescript
 gdscript     cst                                                    no      -               -
 commonlisp   cst                                                    no      -               -
 typespec     cst                                                    no      -               -

@@ -151,7 +151,7 @@ pub fn demand(text: &str, path: &Path, output: &RyiOutput, tsi: bool) -> TsDeman
     }
 }
 
-fn position(text: &str, byte: u32) -> Result<Value, String> {
+fn lsp_position(text: &str, byte: u32) -> Result<Value, String> {
     let before = text
         .get(..byte as usize)
         .ok_or("site offset is not a UTF-8 boundary")?;
@@ -223,7 +223,7 @@ fn answer_session(
         let text = std::fs::read_to_string(absolute).map_err(|error| error.to_string())?;
         for site in &demand.sites {
             let response = session.lsp.request("textDocument/definition", &json!({
-                "textDocument": {"uri": file_uri(absolute)?.as_str()}, "position": position(&text, site.start)? }))?;
+                "textDocument": {"uri": file_uri(absolute)?.as_str()}, "position": lsp_position(&text, site.start)? }))?;
             if let Some(error) = response.error {
                 return Err(format!("definition: {error:?}"));
             }
@@ -326,7 +326,7 @@ fn answer_session(
     }
     let api = session.initialize_api()?;
     let snapshot = api.call("updateSnapshot", &json!({"openFiles": needed}))?["snapshot"].clone();
-    let result = collect(api, &snapshot, files, &definitions, &mut answers);
+    let result = collect_semantic_rows(api, &snapshot, files, &definitions, &mut answers);
     // Snapshot handles never escape this request. Release opens even after failure.
     let close = api.call("updateSnapshot", &json!({"closeFiles": needed}));
     let dispose = api.call("release", &json!({"snapshot": snapshot}));
@@ -690,7 +690,7 @@ impl Rows<'_> {
     }
 }
 
-fn collect(
+fn collect_semantic_rows(
     api: &mut Ts7Rpc,
     snapshot: &Value,
     files: &[(String, PathBuf, TsDemand)],

@@ -141,3 +141,87 @@ client's trace (`client-npm.trace`, `lsp-open` against the npm `typescript@7.0.2
 - After: 627 edges (621 lines). Every client edge is in ryi's set. ryi's extra 78 lines are sites the client's
   text prefilter `\bSignal\s*(<[^>(]*>)?\(` never asks (nested generics or `(` inside the type arguments); none of
   them is in the client's asked set. `--callers Route` stays 11; `packages/signals` alone gains `2_Signal.ts:18`.
+
+
+## Stock TSI tier parity (2026-10-05)
+
+Same root: `tests/fixtures/tsi`; supplied file: `probe.ts` (542 bytes).
+Old: the base commit `9d4f0dc6` Node driver with local TypeScript **5.9.3**.
+New: the demand-scoped tier with the bundled, unmodified TypeScript **7.0.2** native executable.
+The old capture was taken once before replacing the driver; the new capture was taken once
+with `--witness --resolve --arms type --root tests/fixtures/tsi --ts-checker`.
+Only facts witnessed by `checker_walk` count as new checker rows; syntax rows are excluded.
+The new capture took 0.189 s wall time including the count extraction script; the logged tier
+load was 72 ms and its API walk was 14 ms. No whole-corpus measurement was run.
+
+| relation | rows_old | rows_new |
+| --- | ---: | ---: |
+| ts.interface | 1 | 1 |
+| ts.mapped | 1 | 0 |
+| ts.optional | 7 | 7 |
+| ts.readonly | 3 | 0 |
+| tsi.argument | 3 | 2 |
+| tsi.assignable | 0 | 1 |
+| tsi.callable | 4 | 4 |
+| tsi.called | 3 | 2 |
+| tsi.conforms | 2 | 0 |
+| tsi.denotes | 4 | 11 |
+| tsi.edge | 18 | 22 |
+| tsi.has_type | 40 | 15 |
+| tsi.input | 4 | 4 |
+| tsi.name | 24 | 29 |
+| tsi.origin | 20 | 16 |
+| tsi.output | 4 | 4 |
+| tsi.parameter | 4 | 4 |
+| tsi.primitive | 2 | 4 |
+| tsi.product | 7 | 8 |
+| tsi.sum | 0 | 3 |
+| tsi.symbol | 4 | 9 |
+| tsi.type | 20 | 20 |
+| TOTAL | 175 | 166 |
+
+These counts compare each tier's documented demand policy. The old driver walked every
+identifier and type-reference site; the new tier queried the 15 sites selected by the request.
+The fixture has no tsconfig. TS5's driver uses its default compiler options; the stock LSP
+inferred project adds null/undefined unions to optional property types.
+
+Shape details retained from the former t_101 cases:
+
+| shape | stock snapshot evidence | coverage limit |
+| --- | --- | --- |
+| Product fields | `tsi.product`, field `tsi.edge`, optional flags and typed targets | `ts.readonly` declaration modifiers are absent from the selected API responses |
+| Generic call result | `Partial<User<number>>`, computed `User<number>` handle, `tsi.called` and `tsi.argument` | Some type-reference token positions return stock `any`; returned application handles carry the computed structure |
+| Mapped type | Computed mapped product fields and seven `ts.optional` rows | `ts.mapped` key/constraint/template decomposition is absent from the selected per-type API |
+| Callable input | Four `tsi.callable`, four `tsi.input`, four `tsi.output`, four `tsi.parameter` rows | No claim of exhaustive overload/constraint structure |
+| Heritage conformance | Direct fixture `0_stock.ts` declares one class-extends `tsi.conforms` through `getBaseTypes` | The two TS5 `implements Mapper` conforms rows in `probe.ts` have no stock base-type answer |
+
+Stock emits no subtype, strict_subtype, identical or comparable rows. Partial coverage claims
+include diagnostics for these omissions. The direct demand test additionally asks both
+assignability directions between Derived and Base, checks one passing pair, and verifies
+symbol identity, UTF-16 positions, an unchanged process id and zero LSP opened documents.
+The whole-stream fixture table explicitly checks that witness-off emits no semantic run or
+semantic rows and that every id named by an argument is declared in that stream.
+
+`4_stock_tier_parity.py` reproduces one run per tier without installs or builds and prints
+`relation / rows_old / rows_new`; `5_stock_tier_parity.tsv` records this comparison. Example
+from this crate's workspace:
+
+```sh
+python3 bench/labs/lab-20261005-tsgo-wedge/4_stock_tier_parity.py \
+  --ryii "$CARGO_TARGET_DIR/debug/ryii"
+```
+
+
+Final crate gate (one background run, `KACHE_DISABLED=1`, features
+`cli,ts-checker,go-checker`): unit targets 7/7 and 18/18; consolidated target
+1,282 passed, 3 failed, 19 ignored in 172.34 s. Base failures: zero observed.
+Branch failures: the graph-decline test still selected the retired JS driver;
+the captured root help named `tsc`; the quality gate reported the relocated
+static session cache and new free-function names. Corrections select `SPREFA_TSGO`
+and `tier.tsgo`, pin the help label to `tsgo`, move the existing static-cache
+allowance to its shared location, record the tier's public `answer`, and name
+private helpers `lsp_position` / `collect_semantic_rows`.
+The corrected decline behavior and captured help were checked directly against
+the built binary. Final `cargo check --features cli,ts-checker,go-checker` passed after these corrections.
+No second suite run was performed. Cargo's failed consolidated
+target stopped later targets and doc tests.
