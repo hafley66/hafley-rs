@@ -1,0 +1,3 @@
+# Preserve trailing spaces in the pinned upstream source and exact case strings.
+0_ESLintRulesOfHooks-test.js whitespace=-blank-at-eol
+fixtures/**/*.tsx whitespace=-blank-at-eol
