@@ -1087,7 +1087,7 @@ impl Plan {
                     let mut names: Vec<String> = dest_facts
                         .iter()
                         .flat_map(|facts| facts.specifiers.iter())
-                        .filter(|row| row.module == module)
+                        .filter(|row| module_key(&row.name, &row.module) == module)
                         .map(|row| row.name.clone())
                         .collect();
                     names.push(name);
@@ -1629,7 +1629,7 @@ impl Plan {
                 .iter()
                 .filter(|row| {
                     self.cfg_prefix.is_empty()
-                        && row.module == spelling
+                        && module_key(&row.name, &row.module) == spelling
                         && (rel.ends_with(".rs") || (row.kind == "named" && !row.type_only))
                 })
                 .map(|row| row.name.clone())
