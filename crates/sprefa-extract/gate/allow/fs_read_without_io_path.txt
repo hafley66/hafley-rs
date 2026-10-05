@@ -28,6 +28,7 @@ crates/sprefa-extract/src/bin/ryi.rs	fn::extract_file	1
 crates/sprefa-extract/src/bin/ryi.rs	fn::register_line_tables	1
 crates/sprefa-extract/src/bin/ryi.rs	fn::run_slow	1
 crates/sprefa-extract/src/bin/ryi/0_sqlite.rs	fn::line_table_for	1
+crates/sprefa-extract/src/edit/1ga_ts7_callers.rs	fn::callers	1
 crates/sprefa-extract/src/edit/_1_move_cx.rs	fn::read	1
 crates/sprefa-extract/src/edit/_1_rename_cx.rs	fn::read	1
 crates/sprefa-extract/src/edit/_2_drain.rs	fn::bind_action	1

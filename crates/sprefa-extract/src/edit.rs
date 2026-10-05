@@ -19,6 +19,8 @@ pub mod checker_edges;
 pub mod ts_cst_tokens;
 #[path = "edit/1g_ts7_resolve.rs"]
 pub mod ts7_resolve;
+#[path = "edit/1ga_ts7_callers.rs"]
+pub mod ts7_callers;
 #[cfg(feature = "rust-checker")]
 #[path = "edit/1f_ra_rename.rs"]
 pub mod ra_rename;

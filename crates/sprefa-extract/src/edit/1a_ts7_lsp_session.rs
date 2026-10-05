@@ -65,6 +65,7 @@ impl TsSession {
         match self.opened.get(&key) {
             Some((previous, _)) if previous == text => return Ok(()),
             Some((_, version)) => {
+                let _span = tracing::debug_span!("typescript.lsp", lang = "ts", family = "didChange").entered();
                 let version = version + 1;
                 self.lsp
                     .notify::<DidChangeTextDocument>(&DidChangeTextDocumentParams {
@@ -81,6 +82,7 @@ impl TsSession {
                 self.opened.insert(key, (text.into(), version));
             }
             None => {
+                let _span = tracing::debug_span!("typescript.lsp", lang = "ts", family = "didOpen").entered();
                 self.lsp
                     .notify::<DidOpenTextDocument>(&DidOpenTextDocumentParams {
                         text_document: TextDocumentItem {
@@ -166,6 +168,8 @@ impl Ts7Lsp {
         method: &str,
         params: &impl Serialize,
     ) -> Result<Response, String> {
+        // One span per round trip: the summary's `files` column counts requests per method.
+        let _span = tracing::debug_span!("typescript.lsp", lang = "ts", family = method).entered();
         let id = RequestId::from(self.next_id);
         self.next_id += 1;
         self.send(Message::Request(Request {

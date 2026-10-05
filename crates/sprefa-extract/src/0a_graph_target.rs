@@ -1,6 +1,6 @@
 //! Targeted slow graph evidence over the same resolved-edge rows as fast.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -50,40 +50,48 @@ pub(super) fn facts(
             (supplied, sprefa_extract::io_path(path))
         })
         .collect();
-    let mut ts_seeds: BTreeSet<(String, String)> = facts
+    let ts_root = std::fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
+    // Call sites: the checker answers a definition at each site written `name`.
+    checker_defs.seal();
+    let supplied: Vec<&str> = files.iter().map(|(path, _)| path.as_str()).collect();
+    let candidates: Vec<&str> = sites
         .iter()
-        .filter_map(|fact| {
-            let (path, target, origin) = match fact {
-                FlatFact::ResolvedEdge {
-                    callee_path,
-                    callee_name,
-                    resolution_origin,
-                    ..
-                } => (callee_path, callee_name, resolution_origin),
-                FlatFact::ResolvedTypeEdge {
-                    target_path,
-                    target_name,
-                    resolution_origin,
-                    ..
-                } => (target_path, target_name, resolution_origin),
-                _ => return None,
-            };
-            (target.as_deref() == Some(name)
-                && origin != "scip"
-                && (path.ends_with(".ts") || path.ends_with(".tsx")))
-            .then(|| (path.clone(), name.to_string()))
-        })
+        .map(|(path, ..)| path.as_str())
+        .filter(|path| path.ends_with(".ts") || path.ends_with(".tsx"))
+        .collect::<BTreeSet<_>>()
+        .into_iter()
         .collect();
-    ts_seeds.extend(definitions.keys().filter_map(|(path, definition, _)| {
-        (definition == name && (path.ends_with(".ts") || path.ends_with(".tsx")))
-            .then(|| (path.clone(), definition.clone()))
-    }));
-    let ts_seeds: Vec<_> = ts_seeds.into_iter().collect();
+    let ts_edges = sprefa_extract::edit::ts7_callers::callers(
+        &ts_root, name, &candidates, &supplied, &checker_defs,
+    )
+    .map_err(|error| format!("TypeScript LSP target {name}: {error}"))?;
+    // Type uses: the checker's references to each declaration named `name`.
+    let ts_seeds: Vec<(String, String)> = if request.arms.types {
+        let mut seeds: BTreeSet<(String, String)> = facts
+            .iter()
+            .filter_map(|fact| {
+                let FlatFact::ResolvedTypeEdge { target_path, target_name, resolution_origin, .. } = fact else {
+                    return None;
+                };
+                (target_name.as_deref() == Some(name)
+                    && resolution_origin != "scip"
+                    && (target_path.ends_with(".ts") || target_path.ends_with(".tsx")))
+                .then(|| (target_path.clone(), name.to_string()))
+            })
+            .collect();
+        seeds.extend(definitions.keys().filter_map(|(path, definition, _)| {
+            (definition == name && (path.ends_with(".ts") || path.ends_with(".tsx")))
+                .then(|| (path.clone(), definition.clone()))
+        }));
+        seeds.into_iter().collect()
+    } else {
+        Vec::new()
+    };
     // Open unresolved source files too. A checker search must not inherit
-    // the fast tier's set of already-bound callers as its project boundary.
+    // the fast tier's set of already-bound users as its project boundary.
     let ts_sources: BTreeSet<_> = files.iter().map(|(path, _)| path.clone()).collect();
     let ts_references = sprefa_extract::edit::ts7_graph_target::references(
-        &std::fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf()),
+        &ts_root,
         &files,
         &ts_seeds,
         &ts_sources,
@@ -294,33 +302,6 @@ pub(super) fn facts(
     #[cfg(not(feature = "rust-checker"))]
     let _ = (root, name, files, Duration::from_secs(30));
     for fact in &mut facts {
-        let FlatFact::ResolvedEdge {
-            caller_path,
-            callee_path,
-            callee_name,
-            caller_site_start,
-            caller_site_end,
-            kind,
-            resolution_origin,
-            ..
-        } = fact
-        else {
-            continue;
-        };
-        if callee_name.as_deref() != Some(name) {
-            continue;
-        }
-        if ts_references.iter().any(|reference| {
-            reference.source_path == *caller_path
-                && reference.target_path == *callee_path
-                && *caller_site_start <= reference.site_start
-                && reference.site_end <= *caller_site_end
-        }) {
-            *kind = "checker_resolve".to_string();
-            *resolution_origin = "checker".to_string();
-        }
-    }
-    for fact in &mut facts {
         let FlatFact::ResolvedTypeEdge {
             owner_path,
             target_path,
@@ -340,21 +321,6 @@ pub(super) fn facts(
             *resolution_origin = "checker".to_string();
         }
     }
-    let mut references_by_source: HashMap<&str, Vec<&sprefa_extract::edit::ts7_graph_target::TargetReference>> = HashMap::new();
-    for reference in &ts_references {
-        references_by_source.entry(reference.source_path.as_str()).or_default().push(reference);
-    }
-    for references in references_by_source.values_mut() {
-        references.sort_by_key(|reference| (reference.site_start, reference.site_end));
-    }
-    checker_defs.seal();
-    let edges: Vec<_> = sites.into_iter().filter_map(|(path, start, end)| {
-        let references = references_by_source.get(path.as_str())?;
-        let first = references.partition_point(|reference| reference.site_start < start);
-        let reference = references.get(first).filter(|reference| reference.site_end <= end)?;
-        let target = checker_defs.target(&reference.target_path, reference.target_start, Some(name))?;
-        Some(sprefa_extract::edit::checker_edges::CheckerEdge { source: path, site_start: start, site_end: end, target })
-    }).collect();
-    checker_defs.write(&mut facts, edges);
+    checker_defs.write(&mut facts, ts_edges);
     Ok(facts)
 }

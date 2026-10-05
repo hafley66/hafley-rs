@@ -22,11 +22,15 @@ struct File {
 }
 
 #[derive(Default)]
-struct References {
+pub(super) struct References {
     files: BTreeMap<String, File>,
     defs: CheckerDefs,
     /// The file whose facts are arriving: its CST and its call sites.
     open: Option<(String, CstTokens, Vec<(u32, u32, String)>)>,
+    /// A one-shot question's name: only call sites and JSX attributes whose
+    /// written callee or attribute text is this name are asked. The text is a
+    /// prefilter; the checker's answer decides every edge. `None` asks all.
+    pub(super) demand: Option<String>,
 }
 
 fn typescript(path: &str) -> bool {
@@ -47,7 +51,7 @@ fn locations(result: Value) -> Vec<Value> {
 
 impl References {
     /// A file's raw facts arrive together; its CST lives until the next file starts.
-    fn capture(&mut self, raw: &RawProjectFact<'_>) {
+    pub(super) fn capture(&mut self, raw: &RawProjectFact<'_>) {
         if !typescript(raw.path) {
             return;
         }
@@ -67,18 +71,30 @@ impl References {
         }
     }
 
+    /// Whether any captured file holds a site or attribute to ask about.
+    pub(super) fn has_questions(&self) -> bool {
+        self.files.values().any(|file| !file.calls.is_empty() || !file.attributes.is_empty())
+    }
+
     /// The open file's callee and attribute tokens; its CST is dropped.
-    fn close(&mut self) {
+    pub(super) fn close(&mut self) {
         let Some((path, mut cst, sites)) = self.open.take() else { return };
         cst.seal();
         let Some(file) = self.files.get_mut(&path) else { return };
+        let asked = |name: &str| self.demand.as_deref().is_none_or(|demand| demand == name);
         for (start, end, name) in sites {
+            if !asked(&name) {
+                continue;
+            }
             // A site with no CST callee token is not asked about.
             if let Some((token, _)) = cst.callee(&file.text, start, end, &name) {
                 file.calls.push((start, end, token));
             }
         }
-        file.attributes.extend(cst.attribute_names());
+        let text = &file.text;
+        file.attributes.extend(cst.attribute_names().filter(|(start, end)| {
+            text.get(*start as usize..*end as usize).is_some_and(asked)
+        }));
     }
 
     fn append(&mut self, root: &Path, calls: bool, facts: &mut Vec<FlatFact>) -> Result<(), String> {
@@ -87,17 +103,37 @@ impl References {
         if self.files.is_empty() || !calls {
             return Ok(());
         }
+        let supplied: Vec<&str> = self.files.keys().map(String::as_str).collect();
+        let edges = self.ask(root, &supplied, &self.defs, facts)?;
+        self.defs.write(facts, edges);
+        Ok(())
+    }
+
+    /// One `textDocument/definition` per asked call site and JSX attribute.
+    /// `supplied` is the project's file set: a destination outside it is no edge.
+    /// `defs` names each destination.
+    pub(super) fn ask(
+        &self, root: &Path, supplied: &[&str], defs: &CheckerDefs, facts: &mut Vec<FlatFact>,
+    ) -> Result<Vec<CheckerEdge>, String> {
         let root = canonical(&crate::io_path(root));
-        let supplied: BTreeMap<_, _> = self.files.keys().map(|path| {
-            (canonical(&crate::io_path(Path::new(path))), path.as_str())
+        let supplied: BTreeMap<_, _> = supplied.iter().map(|path| {
+            (canonical(&crate::io_path(Path::new(path))), *path)
         }).collect();
+        let mut texts: BTreeMap<String, String> = BTreeMap::new();
         let mut edges = Vec::new();
         with_session(&root, |session| {
             let mut declarations = BTreeSet::new();
             let mut qualified_names = BTreeMap::new();
             for (absolute, supplied) in &supplied {
-                let file = &self.files[*supplied];
-                session.sync_document(&file_uri(absolute)?, supplied, &file.text)?;
+                if !typescript(supplied) {
+                    continue;
+                }
+                let text = match self.files.get(*supplied) {
+                    Some(file) => file.text.clone(),
+                    None => std::fs::read_to_string(absolute)
+                        .map_err(|error| format!("read {}: {error}", absolute.display()))?,
+                };
+                session.sync_document(&file_uri(absolute)?, supplied, &text)?;
             }
             for (source, file) in &self.files {
                 let uri = file_uri(&canonical(&crate::io_path(Path::new(source))))?;
@@ -115,7 +151,7 @@ impl References {
                             .and_then(|uri| uri.to_file_path().ok()) else { continue };
                         let absolute = canonical(&absolute);
                         let Some(target) = supplied.get(&absolute) else { continue };
-                        let target_file = &self.files[*target];
+                        let target_text = text_of(&self.files, &mut texts, target, &absolute)?;
                         let range = if location.get("range").is_some() {
                             &location["range"]
                         } else {
@@ -123,8 +159,8 @@ impl References {
                         };
                         let at = serde_json::from_value(range["start"].clone())
                             .map_err(|error| format!("definition range: {error}"))?;
-                        let at = byte_at_lsp_position(&target_file.text, at)? as u32;
-                        let Some(target) = self.defs.target(target, at, None) else { continue };
+                        let at = byte_at_lsp_position(target_text, at)? as u32;
+                        let Some(target) = defs.target(target, at, self.demand.as_deref()) else { continue };
                         edges.push(CheckerEdge { source: source.clone(), site_start: start, site_end: end, target });
                         break;
                     }
@@ -143,7 +179,7 @@ impl References {
                             .and_then(|uri| uri.to_file_path().ok()) else { continue };
                         let absolute = canonical(&absolute);
                         let Some(target) = supplied.get(&absolute) else { continue };
-                        let target_file = &self.files[*target];
+                        let target_text = text_of(&self.files, &mut texts, target, &absolute)?.to_string();
                         let range = if location.get("range").is_some() {
                             &location["range"]
                         } else {
@@ -153,12 +189,12 @@ impl References {
                             .map_err(|error| format!("JSX declaration start: {error}"))?;
                         let hi = serde_json::from_value(range["end"].clone())
                             .map_err(|error| format!("JSX declaration end: {error}"))?;
-                        let lo = byte_at_lsp_position(&target_file.text, lo)? as u32;
-                        let hi = byte_at_lsp_position(&target_file.text, hi)? as u32;
+                        let lo = byte_at_lsp_position(&target_text, lo)? as u32;
+                        let hi = byte_at_lsp_position(&target_text, hi)? as u32;
                         let key = ((*target).to_string(), lo, hi);
                         if !qualified_names.contains_key(&key) {
                             let name = qualified_declaration(
-                                &mut session.lsp, &file_uri(&absolute)?, &target_file.text, lo,
+                                &mut session.lsp, &file_uri(&absolute)?, &target_text, lo,
                             )?;
                             qualified_names.insert(key.clone(), name);
                         }
@@ -183,9 +219,23 @@ impl References {
             }
             Ok(())
         })?;
-        self.defs.write(facts, edges);
-        Ok(())
+        Ok(edges)
     }
+}
+
+/// A destination file's text: the captured one, else read once from disk.
+fn text_of<'t>(
+    files: &'t BTreeMap<String, File>, texts: &'t mut BTreeMap<String, String>, path: &str, absolute: &Path,
+) -> Result<&'t str, String> {
+    if let Some(file) = files.get(path) {
+        return Ok(&file.text);
+    }
+    if !texts.contains_key(path) {
+        let text = std::fs::read_to_string(absolute)
+            .map_err(|error| format!("read {}: {error}", absolute.display()))?;
+        texts.insert(path.to_string(), text);
+    }
+    Ok(&texts[path])
 }
 
 fn checker_error(error: String) -> ProjectError {
