@@ -1,3 +1,5 @@
+#[path = "211_dogfood_merge.rs"]
+mod dogfood_merge;
 //! Every integration test in one binary: cargo links once, not per file.
 //! Run one: cargo nextest run -p sprefa-extract -E 'test(/type_ladder/)'
 

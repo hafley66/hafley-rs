@@ -1,0 +1,9 @@
+[package]
+name = 'merge-tests'
+version = '0.0.0'
+edition = '2021'
+autotests = false
+[workspace]
+[[test]]
+name = 'all'
+path = 'tests/all.rs'

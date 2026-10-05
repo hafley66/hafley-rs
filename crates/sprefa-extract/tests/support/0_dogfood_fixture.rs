@@ -7,10 +7,27 @@ pub struct Fixture {
 }
 
 impl Fixture {
+    pub fn from_dir(name: &str) -> Self {
+        let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures").join(name);
+        let mut files = Vec::new();
+        let mut pending = vec![source.clone()];
+        while let Some(directory) = pending.pop() {
+            for entry in std::fs::read_dir(directory).unwrap() {
+                let path = entry.unwrap().path();
+                if path.is_dir() {
+                    pending.push(path);
+                } else {
+                    files.push((path.strip_prefix(&source).unwrap().to_str().unwrap().to_string(), std::fs::read_to_string(path).unwrap()));
+                }
+            }
+        }
+        Self::new(&files.iter().map(|(path, text)| (path.as_str(), text.as_str())).collect::<Vec<_>>())
+    }
+
     pub fn new(files: &[(&str, &str)]) -> Self {
         let scratch = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../plans/ryi-dogfood-validation");
         std::fs::create_dir_all(&scratch).unwrap();
-        let directory = tempfile::tempdir_in(scratch).unwrap();
+        let directory = tempfile::tempdir().unwrap();
         let root = directory.path().join("repo");
         std::fs::create_dir_all(&root).unwrap();
         for (path, text) in files {
