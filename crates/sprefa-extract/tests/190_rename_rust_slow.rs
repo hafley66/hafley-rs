@@ -52,6 +52,7 @@ fn rename_in(fixture: &Fixture, file: &str, declaration: &str, old: &str, new: &
     let text = std::fs::read_to_string(fixture.root.join(file)).unwrap();
     let at = text.find(declaration).unwrap() + declaration.find(old).unwrap();
     let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
+        .current_dir(&fixture.root)
         .env("RUST_LOG", "off")
         .args(["rename", "--commit", "--at", &at.to_string()])
         .args(slow.then_some("--slow"))
@@ -142,6 +143,7 @@ fn fast_tier_stops_on_a_method_call_whose_receiver_type_it_cannot_see() {
     let text = read(&fixture, "src/queue.rs");
     let at = text.find("pub fn len").unwrap() + "pub fn ".len();
     let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
+        .current_dir(&fixture.root)
         .env("RUST_LOG", "off")
         .args(["rename", "--commit", "--at", &at.to_string(), "--root"])
         .arg(&fixture.root)

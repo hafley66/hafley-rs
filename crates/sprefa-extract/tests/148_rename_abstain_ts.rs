@@ -42,6 +42,7 @@ fn fixture() -> Fixture {
 
 fn rename_verb(fixture: &Fixture, extra: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_ryii"))
+        .current_dir(&fixture.root)
         .arg("rename")
         .arg(format!("{ANCHOR}#old"))
         .arg("fresh")

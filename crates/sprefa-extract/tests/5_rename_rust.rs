@@ -85,6 +85,7 @@ fn run_rename(
     extra: &[&str],
 ) -> std::process::Output {
     Command::new(env!("CARGO_BIN_EXE_ryii"))
+        .current_dir(root)
         .arg("rename")
         .arg(target)
         .arg(new)
@@ -146,6 +147,7 @@ fn batch_renames_library_reexports_with_a_main_target() {
     )
     .unwrap();
     let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
+        .current_dir(&fixture.root)
         .arg("rename")
         .arg("--list")
         .arg(&list)
@@ -352,6 +354,7 @@ fn list_commit_is_atomic_across_rows() {
     )
     .expect("write rename list");
     let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
+        .current_dir(&fixture.root)
         .args(["rename", "--list"])
         .arg(&list)
         .arg("--root")
@@ -396,6 +399,7 @@ fn list_rows_read_earlier_edits() {
         )
         .unwrap();
         let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
+        .current_dir(&fixture.root)
             .args(["rename", "--list"])
             .arg(&list)
             .arg("--root")

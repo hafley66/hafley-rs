@@ -103,6 +103,7 @@ fn rename_count_words(slow: bool) {
     let words = source("src/words.rs");
     let at = words.find("pub fn count_words").unwrap() + "pub fn ".len();
     let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
+        .current_dir(&fixture.root)
         .env("RUST_LOG", "off")
         .args(["rename", "--commit", "--at", &at.to_string()])
         .args(slow.then_some("--slow"))
