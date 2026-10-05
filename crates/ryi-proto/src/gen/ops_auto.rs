@@ -130,9 +130,13 @@ pub struct GraphArgs {
   #[doc = "Shortest type-reference paths from NAME; PATH#NAME seeds only NAME declared in files whose path ends with PATH"]
   #[arg(long, value_name = "[PATH#]NAME")]
   pub type_path: Option<String>,
-  #[doc = "Flow paths from PATH@START:END or BLOB@START:END. START/END are zero-based UTF-8 byte offsets, END exclusive. PATH is read under --root (or the current directory); --at reads the revision. BLOB is the exact tagged content digest from file.digest or flow_edge.from_blob (blake3:HEX for worktree facts), not a bare git object ID. The existing command follows interprocedural flow_edge facts; local value flow is emitted as df edges."]
+  #[doc = "Flow paths from PATH@START:END or BLOB@START:END. START/END are zero-based UTF-8 byte offsets, END exclusive. PATH is read under --root (or the current directory); --at reads the revision. BLOB is the exact tagged content digest from file.digest or flow_edge.from_blob (blake3:HEX for worktree facts), not a bare git object ID. Follows local df edges and interprocedural flow_edge facts from the asked node only. --reverse answers what reaches the node."]
   #[arg(long, value_name = "BLOB@START:END")]
   pub flow_path: Option<String>,
+  #[doc = "Follow incoming value-flow edges to answer what reaches the seed"]
+  #[arg(long, requires = "flow_path")]
+  #[serde(default)]
+  pub reverse: bool,
   #[doc = "Control-dependence slice at PATH:BYTE"]
   #[arg(long, value_name = "PATH:BYTE")]
   pub slice: Option<String>,

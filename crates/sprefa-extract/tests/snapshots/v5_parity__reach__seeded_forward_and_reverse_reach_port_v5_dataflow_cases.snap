@@ -1,0 +1,2810 @@
+---
+source: tests/203_v5_reach.rs
+expression: output
+---
+[
+  {
+    "case": "v5:140 name->u",
+    "reaches": {
+      "forward": true,
+      "reverse": true
+    },
+    "sources": [
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 118,
+          "end": 122
+        },
+        "kind": "param",
+        "name": "name",
+        "function": "f"
+      }
+    ],
+    "targets": [
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 191,
+          "end": 192
+        },
+        "kind": "var_read",
+        "name": "u",
+        "function": "f"
+      }
+    ],
+    "forward": [
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:88512b595909fb160b6b2f8f15aa6064eb0fb1f85652c380dd2220fd92607b8f",
+        "from_name": "118:122",
+        "to_path": "blake3:88512b595909fb160b6b2f8f15aa6064eb0fb1f85652c380dd2220fd92607b8f",
+        "to_name": "150:154",
+        "depth": 1,
+        "witness": [
+          22
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:88512b595909fb160b6b2f8f15aa6064eb0fb1f85652c380dd2220fd92607b8f",
+        "from_name": "118:122",
+        "to_path": "blake3:88512b595909fb160b6b2f8f15aa6064eb0fb1f85652c380dd2220fd92607b8f",
+        "to_name": "144:155",
+        "depth": 2,
+        "witness": [
+          22,
+          23
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:88512b595909fb160b6b2f8f15aa6064eb0fb1f85652c380dd2220fd92607b8f",
+        "from_name": "118:122",
+        "to_path": "blake3:88512b595909fb160b6b2f8f15aa6064eb0fb1f85652c380dd2220fd92607b8f",
+        "to_name": "9:10",
+        "depth": 2,
+        "witness": [
+          22,
+          39
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:88512b595909fb160b6b2f8f15aa6064eb0fb1f85652c380dd2220fd92607b8f",
+        "from_name": "118:122",
+        "to_path": "blake3:88512b595909fb160b6b2f8f15aa6064eb0fb1f85652c380dd2220fd92607b8f",
+        "to_name": "140:141",
+        "depth": 3,
+        "witness": [
+          22,
+          23,
+          24
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:88512b595909fb160b6b2f8f15aa6064eb0fb1f85652c380dd2220fd92607b8f",
+        "from_name": "118:122",
+        "to_path": "blake3:88512b595909fb160b6b2f8f15aa6064eb0fb1f85652c380dd2220fd92607b8f",
+        "to_name": "175:176",
+        "depth": 4,
+        "witness": [
+          22,
+          23,
+          24,
+          25
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:88512b595909fb160b6b2f8f15aa6064eb0fb1f85652c380dd2220fd92607b8f",
+        "from_name": "118:122",
+        "to_path": "blake3:88512b595909fb160b6b2f8f15aa6064eb0fb1f85652c380dd2220fd92607b8f",
+        "to_name": "174:176",
+        "depth": 5,
+        "witness": [
+          22,
+          23,
+          24,
+          25,
+          26
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:88512b595909fb160b6b2f8f15aa6064eb0fb1f85652c380dd2220fd92607b8f",
+        "from_name": "118:122",
+        "to_path": "blake3:88512b595909fb160b6b2f8f15aa6064eb0fb1f85652c380dd2220fd92607b8f",
+        "to_name": "169:177",
+        "depth": 6,
+        "witness": [
+          22,
+          23,
+          24,
+          25,
+          26,
+          27
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:88512b595909fb160b6b2f8f15aa6064eb0fb1f85652c380dd2220fd92607b8f",
+        "from_name": "118:122",
+        "to_path": "blake3:88512b595909fb160b6b2f8f15aa6064eb0fb1f85652c380dd2220fd92607b8f",
+        "to_name": "54:55",
+        "depth": 6,
+        "witness": [
+          22,
+          23,
+          24,
+          25,
+          26,
+          41
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:88512b595909fb160b6b2f8f15aa6064eb0fb1f85652c380dd2220fd92607b8f",
+        "from_name": "118:122",
+        "to_path": "blake3:88512b595909fb160b6b2f8f15aa6064eb0fb1f85652c380dd2220fd92607b8f",
+        "to_name": "165:166",
+        "depth": 7,
+        "witness": [
+          22,
+          23,
+          24,
+          25,
+          26,
+          27,
+          28
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:88512b595909fb160b6b2f8f15aa6064eb0fb1f85652c380dd2220fd92607b8f",
+        "from_name": "118:122",
+        "to_path": "blake3:88512b595909fb160b6b2f8f15aa6064eb0fb1f85652c380dd2220fd92607b8f",
+        "to_name": "191:192",
+        "depth": 8,
+        "witness": [
+          22,
+          23,
+          24,
+          25,
+          26,
+          27,
+          28,
+          29
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:88512b595909fb160b6b2f8f15aa6064eb0fb1f85652c380dd2220fd92607b8f",
+        "from_name": "118:122",
+        "to_path": "blake3:88512b595909fb160b6b2f8f15aa6064eb0fb1f85652c380dd2220fd92607b8f",
+        "to_name": "190:192",
+        "depth": 9,
+        "witness": [
+          22,
+          23,
+          24,
+          25,
+          26,
+          27,
+          28,
+          29,
+          30
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:88512b595909fb160b6b2f8f15aa6064eb0fb1f85652c380dd2220fd92607b8f",
+        "from_name": "118:122",
+        "to_path": "blake3:88512b595909fb160b6b2f8f15aa6064eb0fb1f85652c380dd2220fd92607b8f",
+        "to_name": "101:102",
+        "depth": 10,
+        "witness": [
+          22,
+          23,
+          24,
+          25,
+          26,
+          27,
+          28,
+          29,
+          30,
+          43
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:88512b595909fb160b6b2f8f15aa6064eb0fb1f85652c380dd2220fd92607b8f",
+        "from_name": "118:122",
+        "to_path": "blake3:88512b595909fb160b6b2f8f15aa6064eb0fb1f85652c380dd2220fd92607b8f",
+        "to_name": "183:193",
+        "depth": 10,
+        "witness": [
+          22,
+          23,
+          24,
+          25,
+          26,
+          27,
+          28,
+          29,
+          30,
+          31
+        ]
+      }
+    ],
+    "reverse": [
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:88512b595909fb160b6b2f8f15aa6064eb0fb1f85652c380dd2220fd92607b8f",
+        "from_name": "191:192",
+        "to_path": "blake3:88512b595909fb160b6b2f8f15aa6064eb0fb1f85652c380dd2220fd92607b8f",
+        "to_name": "165:166",
+        "depth": 1,
+        "witness": [
+          29
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:88512b595909fb160b6b2f8f15aa6064eb0fb1f85652c380dd2220fd92607b8f",
+        "from_name": "191:192",
+        "to_path": "blake3:88512b595909fb160b6b2f8f15aa6064eb0fb1f85652c380dd2220fd92607b8f",
+        "to_name": "169:177",
+        "depth": 2,
+        "witness": [
+          29,
+          28
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:88512b595909fb160b6b2f8f15aa6064eb0fb1f85652c380dd2220fd92607b8f",
+        "from_name": "191:192",
+        "to_path": "blake3:88512b595909fb160b6b2f8f15aa6064eb0fb1f85652c380dd2220fd92607b8f",
+        "to_name": "174:176",
+        "depth": 3,
+        "witness": [
+          29,
+          28,
+          27
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:88512b595909fb160b6b2f8f15aa6064eb0fb1f85652c380dd2220fd92607b8f",
+        "from_name": "191:192",
+        "to_path": "blake3:88512b595909fb160b6b2f8f15aa6064eb0fb1f85652c380dd2220fd92607b8f",
+        "to_name": "75:88",
+        "depth": 3,
+        "witness": [
+          29,
+          28,
+          42
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:88512b595909fb160b6b2f8f15aa6064eb0fb1f85652c380dd2220fd92607b8f",
+        "from_name": "191:192",
+        "to_path": "blake3:88512b595909fb160b6b2f8f15aa6064eb0fb1f85652c380dd2220fd92607b8f",
+        "to_name": "175:176",
+        "depth": 4,
+        "witness": [
+          29,
+          28,
+          27,
+          26
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:88512b595909fb160b6b2f8f15aa6064eb0fb1f85652c380dd2220fd92607b8f",
+        "from_name": "191:192",
+        "to_path": "blake3:88512b595909fb160b6b2f8f15aa6064eb0fb1f85652c380dd2220fd92607b8f",
+        "to_name": "140:141",
+        "depth": 5,
+        "witness": [
+          29,
+          28,
+          27,
+          26,
+          25
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:88512b595909fb160b6b2f8f15aa6064eb0fb1f85652c380dd2220fd92607b8f",
+        "from_name": "191:192",
+        "to_path": "blake3:88512b595909fb160b6b2f8f15aa6064eb0fb1f85652c380dd2220fd92607b8f",
+        "to_name": "144:155",
+        "depth": 6,
+        "witness": [
+          29,
+          28,
+          27,
+          26,
+          25,
+          24
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:88512b595909fb160b6b2f8f15aa6064eb0fb1f85652c380dd2220fd92607b8f",
+        "from_name": "191:192",
+        "to_path": "blake3:88512b595909fb160b6b2f8f15aa6064eb0fb1f85652c380dd2220fd92607b8f",
+        "to_name": "150:154",
+        "depth": 7,
+        "witness": [
+          29,
+          28,
+          27,
+          26,
+          25,
+          24,
+          23
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:88512b595909fb160b6b2f8f15aa6064eb0fb1f85652c380dd2220fd92607b8f",
+        "from_name": "191:192",
+        "to_path": "blake3:88512b595909fb160b6b2f8f15aa6064eb0fb1f85652c380dd2220fd92607b8f",
+        "to_name": "30:43",
+        "depth": 7,
+        "witness": [
+          29,
+          28,
+          27,
+          26,
+          25,
+          24,
+          40
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:88512b595909fb160b6b2f8f15aa6064eb0fb1f85652c380dd2220fd92607b8f",
+        "from_name": "191:192",
+        "to_path": "blake3:88512b595909fb160b6b2f8f15aa6064eb0fb1f85652c380dd2220fd92607b8f",
+        "to_name": "118:122",
+        "depth": 8,
+        "witness": [
+          29,
+          28,
+          27,
+          26,
+          25,
+          24,
+          23,
+          22
+        ]
+      }
+    ]
+  },
+  {
+    "case": "v5:239 Widget.render name->label",
+    "reaches": {
+      "forward": true,
+      "reverse": true
+    },
+    "sources": [
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 83,
+          "end": 95
+        },
+        "kind": "param",
+        "name": "name",
+        "function": "Widget.render"
+      }
+    ],
+    "targets": [
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 121,
+          "end": 141
+        },
+        "kind": "let_bind",
+        "name": "label",
+        "function": "Widget.render"
+      }
+    ],
+    "forward": [
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:abf087c59a08008426d70d2b665dc7a85d10af4b5dad83d101c496f9581a018c",
+        "from_name": "83:95",
+        "to_path": "blake3:abf087c59a08008426d70d2b665dc7a85d10af4b5dad83d101c496f9581a018c",
+        "to_name": "136:140",
+        "depth": 1,
+        "witness": [
+          13
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:abf087c59a08008426d70d2b665dc7a85d10af4b5dad83d101c496f9581a018c",
+        "from_name": "83:95",
+        "to_path": "blake3:abf087c59a08008426d70d2b665dc7a85d10af4b5dad83d101c496f9581a018c",
+        "to_name": "129:141",
+        "depth": 2,
+        "witness": [
+          13,
+          14
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:abf087c59a08008426d70d2b665dc7a85d10af4b5dad83d101c496f9581a018c",
+        "from_name": "83:95",
+        "to_path": "blake3:abf087c59a08008426d70d2b665dc7a85d10af4b5dad83d101c496f9581a018c",
+        "to_name": "16:29",
+        "depth": 2,
+        "witness": [
+          13,
+          21
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:abf087c59a08008426d70d2b665dc7a85d10af4b5dad83d101c496f9581a018c",
+        "from_name": "83:95",
+        "to_path": "blake3:abf087c59a08008426d70d2b665dc7a85d10af4b5dad83d101c496f9581a018c",
+        "to_name": "121:141",
+        "depth": 3,
+        "witness": [
+          13,
+          14,
+          15
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:abf087c59a08008426d70d2b665dc7a85d10af4b5dad83d101c496f9581a018c",
+        "from_name": "83:95",
+        "to_path": "blake3:abf087c59a08008426d70d2b665dc7a85d10af4b5dad83d101c496f9581a018c",
+        "to_name": "48:53",
+        "depth": 3,
+        "witness": [
+          13,
+          21,
+          11
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:abf087c59a08008426d70d2b665dc7a85d10af4b5dad83d101c496f9581a018c",
+        "from_name": "83:95",
+        "to_path": "blake3:abf087c59a08008426d70d2b665dc7a85d10af4b5dad83d101c496f9581a018c",
+        "to_name": "158:163",
+        "depth": 4,
+        "witness": [
+          13,
+          14,
+          15,
+          16
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:abf087c59a08008426d70d2b665dc7a85d10af4b5dad83d101c496f9581a018c",
+        "from_name": "83:95",
+        "to_path": "blake3:abf087c59a08008426d70d2b665dc7a85d10af4b5dad83d101c496f9581a018c",
+        "to_name": "41:54",
+        "depth": 4,
+        "witness": [
+          13,
+          21,
+          11,
+          12
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:abf087c59a08008426d70d2b665dc7a85d10af4b5dad83d101c496f9581a018c",
+        "from_name": "83:95",
+        "to_path": "blake3:abf087c59a08008426d70d2b665dc7a85d10af4b5dad83d101c496f9581a018c",
+        "to_name": "151:164",
+        "depth": 5,
+        "witness": [
+          13,
+          14,
+          15,
+          16,
+          17
+        ]
+      }
+    ],
+    "reverse": [
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:abf087c59a08008426d70d2b665dc7a85d10af4b5dad83d101c496f9581a018c",
+        "from_name": "121:141",
+        "to_path": "blake3:abf087c59a08008426d70d2b665dc7a85d10af4b5dad83d101c496f9581a018c",
+        "to_name": "129:141",
+        "depth": 1,
+        "witness": [
+          15
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:abf087c59a08008426d70d2b665dc7a85d10af4b5dad83d101c496f9581a018c",
+        "from_name": "121:141",
+        "to_path": "blake3:abf087c59a08008426d70d2b665dc7a85d10af4b5dad83d101c496f9581a018c",
+        "to_name": "136:140",
+        "depth": 2,
+        "witness": [
+          15,
+          14
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:abf087c59a08008426d70d2b665dc7a85d10af4b5dad83d101c496f9581a018c",
+        "from_name": "121:141",
+        "to_path": "blake3:abf087c59a08008426d70d2b665dc7a85d10af4b5dad83d101c496f9581a018c",
+        "to_name": "41:54",
+        "depth": 2,
+        "witness": [
+          15,
+          22
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:abf087c59a08008426d70d2b665dc7a85d10af4b5dad83d101c496f9581a018c",
+        "from_name": "121:141",
+        "to_path": "blake3:abf087c59a08008426d70d2b665dc7a85d10af4b5dad83d101c496f9581a018c",
+        "to_name": "48:53",
+        "depth": 3,
+        "witness": [
+          15,
+          22,
+          12
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:abf087c59a08008426d70d2b665dc7a85d10af4b5dad83d101c496f9581a018c",
+        "from_name": "121:141",
+        "to_path": "blake3:abf087c59a08008426d70d2b665dc7a85d10af4b5dad83d101c496f9581a018c",
+        "to_name": "83:95",
+        "depth": 3,
+        "witness": [
+          15,
+          14,
+          13
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:abf087c59a08008426d70d2b665dc7a85d10af4b5dad83d101c496f9581a018c",
+        "from_name": "121:141",
+        "to_path": "blake3:abf087c59a08008426d70d2b665dc7a85d10af4b5dad83d101c496f9581a018c",
+        "to_name": "16:29",
+        "depth": 4,
+        "witness": [
+          15,
+          22,
+          12,
+          11
+        ]
+      }
+    ]
+  },
+  {
+    "case": "v5:341 Rust q->m",
+    "reaches": {
+      "forward": true,
+      "reverse": true
+    },
+    "sources": [
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 25,
+          "end": 26
+        },
+        "kind": "param",
+        "name": "q",
+        "function": "go"
+      }
+    ],
+    "targets": [
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 78,
+          "end": 79
+        },
+        "kind": "var_read",
+        "name": "m",
+        "function": "go"
+      }
+    ],
+    "forward": [
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:e421b92fbdf35704c1cfc989c66fac6143bc45a12f3e845775ee083ec8107f3a",
+        "from_name": "25:26",
+        "to_path": "blake3:e421b92fbdf35704c1cfc989c66fac6143bc45a12f3e845775ee083ec8107f3a",
+        "to_name": "47:48",
+        "depth": 1,
+        "witness": [
+          12
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:e421b92fbdf35704c1cfc989c66fac6143bc45a12f3e845775ee083ec8107f3a",
+        "from_name": "25:26",
+        "to_path": "blake3:e421b92fbdf35704c1cfc989c66fac6143bc45a12f3e845775ee083ec8107f3a",
+        "to_name": "43:44",
+        "depth": 2,
+        "witness": [
+          12,
+          13
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:e421b92fbdf35704c1cfc989c66fac6143bc45a12f3e845775ee083ec8107f3a",
+        "from_name": "25:26",
+        "to_path": "blake3:e421b92fbdf35704c1cfc989c66fac6143bc45a12f3e845775ee083ec8107f3a",
+        "to_name": "62:63",
+        "depth": 3,
+        "witness": [
+          12,
+          13,
+          14
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:e421b92fbdf35704c1cfc989c66fac6143bc45a12f3e845775ee083ec8107f3a",
+        "from_name": "25:26",
+        "to_path": "blake3:e421b92fbdf35704c1cfc989c66fac6143bc45a12f3e845775ee083ec8107f3a",
+        "to_name": "62:67",
+        "depth": 4,
+        "witness": [
+          12,
+          13,
+          14,
+          15
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:e421b92fbdf35704c1cfc989c66fac6143bc45a12f3e845775ee083ec8107f3a",
+        "from_name": "25:26",
+        "to_path": "blake3:e421b92fbdf35704c1cfc989c66fac6143bc45a12f3e845775ee083ec8107f3a",
+        "to_name": "58:59",
+        "depth": 5,
+        "witness": [
+          12,
+          13,
+          14,
+          15,
+          17
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:e421b92fbdf35704c1cfc989c66fac6143bc45a12f3e845775ee083ec8107f3a",
+        "from_name": "25:26",
+        "to_path": "blake3:e421b92fbdf35704c1cfc989c66fac6143bc45a12f3e845775ee083ec8107f3a",
+        "to_name": "78:79",
+        "depth": 6,
+        "witness": [
+          12,
+          13,
+          14,
+          15,
+          17,
+          18
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:e421b92fbdf35704c1cfc989c66fac6143bc45a12f3e845775ee083ec8107f3a",
+        "from_name": "25:26",
+        "to_path": "blake3:e421b92fbdf35704c1cfc989c66fac6143bc45a12f3e845775ee083ec8107f3a",
+        "to_name": "73:80",
+        "depth": 7,
+        "witness": [
+          12,
+          13,
+          14,
+          15,
+          17,
+          18,
+          19
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:e421b92fbdf35704c1cfc989c66fac6143bc45a12f3e845775ee083ec8107f3a",
+        "from_name": "25:26",
+        "to_path": "blake3:e421b92fbdf35704c1cfc989c66fac6143bc45a12f3e845775ee083ec8107f3a",
+        "to_name": "8:9",
+        "depth": 7,
+        "witness": [
+          12,
+          13,
+          14,
+          15,
+          17,
+          18,
+          23
+        ]
+      }
+    ],
+    "reverse": [
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:e421b92fbdf35704c1cfc989c66fac6143bc45a12f3e845775ee083ec8107f3a",
+        "from_name": "78:79",
+        "to_path": "blake3:e421b92fbdf35704c1cfc989c66fac6143bc45a12f3e845775ee083ec8107f3a",
+        "to_name": "58:59",
+        "depth": 1,
+        "witness": [
+          18
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:e421b92fbdf35704c1cfc989c66fac6143bc45a12f3e845775ee083ec8107f3a",
+        "from_name": "78:79",
+        "to_path": "blake3:e421b92fbdf35704c1cfc989c66fac6143bc45a12f3e845775ee083ec8107f3a",
+        "to_name": "62:67",
+        "depth": 2,
+        "witness": [
+          18,
+          17
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:e421b92fbdf35704c1cfc989c66fac6143bc45a12f3e845775ee083ec8107f3a",
+        "from_name": "78:79",
+        "to_path": "blake3:e421b92fbdf35704c1cfc989c66fac6143bc45a12f3e845775ee083ec8107f3a",
+        "to_name": "62:63",
+        "depth": 3,
+        "witness": [
+          18,
+          17,
+          15
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:e421b92fbdf35704c1cfc989c66fac6143bc45a12f3e845775ee083ec8107f3a",
+        "from_name": "78:79",
+        "to_path": "blake3:e421b92fbdf35704c1cfc989c66fac6143bc45a12f3e845775ee083ec8107f3a",
+        "to_name": "66:67",
+        "depth": 3,
+        "witness": [
+          18,
+          17,
+          16
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:e421b92fbdf35704c1cfc989c66fac6143bc45a12f3e845775ee083ec8107f3a",
+        "from_name": "78:79",
+        "to_path": "blake3:e421b92fbdf35704c1cfc989c66fac6143bc45a12f3e845775ee083ec8107f3a",
+        "to_name": "43:44",
+        "depth": 4,
+        "witness": [
+          18,
+          17,
+          15,
+          14
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:e421b92fbdf35704c1cfc989c66fac6143bc45a12f3e845775ee083ec8107f3a",
+        "from_name": "78:79",
+        "to_path": "blake3:e421b92fbdf35704c1cfc989c66fac6143bc45a12f3e845775ee083ec8107f3a",
+        "to_name": "47:48",
+        "depth": 5,
+        "witness": [
+          18,
+          17,
+          15,
+          14,
+          13
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:e421b92fbdf35704c1cfc989c66fac6143bc45a12f3e845775ee083ec8107f3a",
+        "from_name": "78:79",
+        "to_path": "blake3:e421b92fbdf35704c1cfc989c66fac6143bc45a12f3e845775ee083ec8107f3a",
+        "to_name": "25:26",
+        "depth": 6,
+        "witness": [
+          18,
+          17,
+          15,
+          14,
+          13,
+          12
+        ]
+      }
+    ]
+  },
+  {
+    "case": "v5:341 TS q->m",
+    "reaches": {
+      "forward": true,
+      "reverse": true
+    },
+    "sources": [
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 46,
+          "end": 55
+        },
+        "kind": "param",
+        "name": "q",
+        "function": "go"
+      }
+    ],
+    "targets": [
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 112,
+          "end": 113
+        },
+        "kind": "var_read",
+        "name": "m",
+        "function": "go"
+      }
+    ],
+    "forward": [
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:e11a2fe05d630c1dc49c7781dfab7416f5a760f316afc3b59ed9f7d51216ff9b",
+        "from_name": "46:55",
+        "to_path": "blake3:e11a2fe05d630c1dc49c7781dfab7416f5a760f316afc3b59ed9f7d51216ff9b",
+        "to_name": "79:80",
+        "depth": 1,
+        "witness": [
+          12
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:e11a2fe05d630c1dc49c7781dfab7416f5a760f316afc3b59ed9f7d51216ff9b",
+        "from_name": "46:55",
+        "to_path": "blake3:e11a2fe05d630c1dc49c7781dfab7416f5a760f316afc3b59ed9f7d51216ff9b",
+        "to_name": "75:80",
+        "depth": 2,
+        "witness": [
+          12,
+          13
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:e11a2fe05d630c1dc49c7781dfab7416f5a760f316afc3b59ed9f7d51216ff9b",
+        "from_name": "46:55",
+        "to_path": "blake3:e11a2fe05d630c1dc49c7781dfab7416f5a760f316afc3b59ed9f7d51216ff9b",
+        "to_name": "96:97",
+        "depth": 3,
+        "witness": [
+          12,
+          13,
+          14
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:e11a2fe05d630c1dc49c7781dfab7416f5a760f316afc3b59ed9f7d51216ff9b",
+        "from_name": "46:55",
+        "to_path": "blake3:e11a2fe05d630c1dc49c7781dfab7416f5a760f316afc3b59ed9f7d51216ff9b",
+        "to_name": "96:101",
+        "depth": 4,
+        "witness": [
+          12,
+          13,
+          14,
+          15
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:e11a2fe05d630c1dc49c7781dfab7416f5a760f316afc3b59ed9f7d51216ff9b",
+        "from_name": "46:55",
+        "to_path": "blake3:e11a2fe05d630c1dc49c7781dfab7416f5a760f316afc3b59ed9f7d51216ff9b",
+        "to_name": "92:101",
+        "depth": 5,
+        "witness": [
+          12,
+          13,
+          14,
+          15,
+          17
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:e11a2fe05d630c1dc49c7781dfab7416f5a760f316afc3b59ed9f7d51216ff9b",
+        "from_name": "46:55",
+        "to_path": "blake3:e11a2fe05d630c1dc49c7781dfab7416f5a760f316afc3b59ed9f7d51216ff9b",
+        "to_name": "112:113",
+        "depth": 6,
+        "witness": [
+          12,
+          13,
+          14,
+          15,
+          17,
+          18
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:e11a2fe05d630c1dc49c7781dfab7416f5a760f316afc3b59ed9f7d51216ff9b",
+        "from_name": "46:55",
+        "to_path": "blake3:e11a2fe05d630c1dc49c7781dfab7416f5a760f316afc3b59ed9f7d51216ff9b",
+        "to_name": "107:114",
+        "depth": 7,
+        "witness": [
+          12,
+          13,
+          14,
+          15,
+          17,
+          18,
+          19
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:e11a2fe05d630c1dc49c7781dfab7416f5a760f316afc3b59ed9f7d51216ff9b",
+        "from_name": "46:55",
+        "to_path": "blake3:e11a2fe05d630c1dc49c7781dfab7416f5a760f316afc3b59ed9f7d51216ff9b",
+        "to_name": "14:23",
+        "depth": 7,
+        "witness": [
+          12,
+          13,
+          14,
+          15,
+          17,
+          18,
+          23
+        ]
+      }
+    ],
+    "reverse": [
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:e11a2fe05d630c1dc49c7781dfab7416f5a760f316afc3b59ed9f7d51216ff9b",
+        "from_name": "112:113",
+        "to_path": "blake3:e11a2fe05d630c1dc49c7781dfab7416f5a760f316afc3b59ed9f7d51216ff9b",
+        "to_name": "92:101",
+        "depth": 1,
+        "witness": [
+          18
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:e11a2fe05d630c1dc49c7781dfab7416f5a760f316afc3b59ed9f7d51216ff9b",
+        "from_name": "112:113",
+        "to_path": "blake3:e11a2fe05d630c1dc49c7781dfab7416f5a760f316afc3b59ed9f7d51216ff9b",
+        "to_name": "96:101",
+        "depth": 2,
+        "witness": [
+          18,
+          17
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:e11a2fe05d630c1dc49c7781dfab7416f5a760f316afc3b59ed9f7d51216ff9b",
+        "from_name": "112:113",
+        "to_path": "blake3:e11a2fe05d630c1dc49c7781dfab7416f5a760f316afc3b59ed9f7d51216ff9b",
+        "to_name": "100:101",
+        "depth": 3,
+        "witness": [
+          18,
+          17,
+          16
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:e11a2fe05d630c1dc49c7781dfab7416f5a760f316afc3b59ed9f7d51216ff9b",
+        "from_name": "112:113",
+        "to_path": "blake3:e11a2fe05d630c1dc49c7781dfab7416f5a760f316afc3b59ed9f7d51216ff9b",
+        "to_name": "96:97",
+        "depth": 3,
+        "witness": [
+          18,
+          17,
+          15
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:e11a2fe05d630c1dc49c7781dfab7416f5a760f316afc3b59ed9f7d51216ff9b",
+        "from_name": "112:113",
+        "to_path": "blake3:e11a2fe05d630c1dc49c7781dfab7416f5a760f316afc3b59ed9f7d51216ff9b",
+        "to_name": "75:80",
+        "depth": 4,
+        "witness": [
+          18,
+          17,
+          15,
+          14
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:e11a2fe05d630c1dc49c7781dfab7416f5a760f316afc3b59ed9f7d51216ff9b",
+        "from_name": "112:113",
+        "to_path": "blake3:e11a2fe05d630c1dc49c7781dfab7416f5a760f316afc3b59ed9f7d51216ff9b",
+        "to_name": "79:80",
+        "depth": 5,
+        "witness": [
+          18,
+          17,
+          15,
+          14,
+          13
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:e11a2fe05d630c1dc49c7781dfab7416f5a760f316afc3b59ed9f7d51216ff9b",
+        "from_name": "112:113",
+        "to_path": "blake3:e11a2fe05d630c1dc49c7781dfab7416f5a760f316afc3b59ed9f7d51216ff9b",
+        "to_name": "46:55",
+        "depth": 6,
+        "witness": [
+          18,
+          17,
+          15,
+          14,
+          13,
+          12
+        ]
+      }
+    ]
+  },
+  {
+    "case": "v5:925 produce()@163->x",
+    "reaches": {
+      "forward": true,
+      "reverse": true
+    },
+    "sources": [
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 163,
+          "end": 172
+        },
+        "kind": "call_res",
+        "name": null,
+        "function": "orchestrate"
+      }
+    ],
+    "targets": [
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 149,
+          "end": 150
+        },
+        "kind": "let_bind",
+        "name": "x",
+        "function": "orchestrate"
+      }
+    ],
+    "forward": [
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "from_name": "163:172",
+        "to_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "to_name": "153:194",
+        "depth": 1,
+        "witness": [
+          34
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "from_name": "163:172",
+        "to_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "to_name": "149:150",
+        "depth": 2,
+        "witness": [
+          34,
+          36
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "from_name": "163:172",
+        "to_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "to_name": "208:209",
+        "depth": 3,
+        "witness": [
+          34,
+          36,
+          37
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "from_name": "163:172",
+        "to_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "to_name": "200:210",
+        "depth": 4,
+        "witness": [
+          34,
+          36,
+          37,
+          38
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "from_name": "163:172",
+        "to_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "to_name": "93:94",
+        "depth": 4,
+        "witness": [
+          34,
+          36,
+          37,
+          57
+        ]
+      }
+    ],
+    "reverse": [
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "from_name": "149:150",
+        "to_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "to_name": "153:194",
+        "depth": 1,
+        "witness": [
+          36
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "from_name": "149:150",
+        "to_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "to_name": "163:172",
+        "depth": 2,
+        "witness": [
+          36,
+          34
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "from_name": "149:150",
+        "to_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "to_name": "180:194",
+        "depth": 2,
+        "witness": [
+          36,
+          35
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "from_name": "149:150",
+        "to_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "to_name": "182:192",
+        "depth": 3,
+        "witness": [
+          36,
+          35,
+          33
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "from_name": "149:150",
+        "to_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "to_name": "22:23",
+        "depth": 3,
+        "witness": [
+          36,
+          34,
+          55
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "from_name": "149:150",
+        "to_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "to_name": "49:50",
+        "depth": 4,
+        "witness": [
+          36,
+          35,
+          33,
+          56
+        ]
+      }
+    ]
+  },
+  {
+    "case": "v5:925 fallback()@182->x",
+    "reaches": {
+      "forward": true,
+      "reverse": true
+    },
+    "sources": [
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 182,
+          "end": 192
+        },
+        "kind": "call_res",
+        "name": null,
+        "function": "orchestrate"
+      }
+    ],
+    "targets": [
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 149,
+          "end": 150
+        },
+        "kind": "let_bind",
+        "name": "x",
+        "function": "orchestrate"
+      }
+    ],
+    "forward": [
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "from_name": "182:192",
+        "to_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "to_name": "180:194",
+        "depth": 1,
+        "witness": [
+          33
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "from_name": "182:192",
+        "to_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "to_name": "153:194",
+        "depth": 2,
+        "witness": [
+          33,
+          35
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "from_name": "182:192",
+        "to_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "to_name": "149:150",
+        "depth": 3,
+        "witness": [
+          33,
+          35,
+          36
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "from_name": "182:192",
+        "to_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "to_name": "208:209",
+        "depth": 4,
+        "witness": [
+          33,
+          35,
+          36,
+          37
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "from_name": "182:192",
+        "to_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "to_name": "200:210",
+        "depth": 5,
+        "witness": [
+          33,
+          35,
+          36,
+          37,
+          38
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "from_name": "182:192",
+        "to_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "to_name": "93:94",
+        "depth": 5,
+        "witness": [
+          33,
+          35,
+          36,
+          37,
+          57
+        ]
+      }
+    ],
+    "reverse": [
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "from_name": "149:150",
+        "to_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "to_name": "153:194",
+        "depth": 1,
+        "witness": [
+          36
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "from_name": "149:150",
+        "to_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "to_name": "163:172",
+        "depth": 2,
+        "witness": [
+          36,
+          34
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "from_name": "149:150",
+        "to_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "to_name": "180:194",
+        "depth": 2,
+        "witness": [
+          36,
+          35
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "from_name": "149:150",
+        "to_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "to_name": "182:192",
+        "depth": 3,
+        "witness": [
+          36,
+          35,
+          33
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "from_name": "149:150",
+        "to_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "to_name": "22:23",
+        "depth": 3,
+        "witness": [
+          36,
+          34,
+          55
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "from_name": "149:150",
+        "to_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "to_name": "49:50",
+        "depth": 4,
+        "witness": [
+          36,
+          35,
+          33,
+          56
+        ]
+      }
+    ]
+  },
+  {
+    "case": "v5:925 fallback()@269->y",
+    "reaches": {
+      "forward": true,
+      "reverse": true
+    },
+    "sources": [
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 269,
+          "end": 279
+        },
+        "kind": "call_res",
+        "name": null,
+        "function": "orchestrate"
+      }
+    ],
+    "targets": [
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 220,
+          "end": 221
+        },
+        "kind": "let_bind",
+        "name": "y",
+        "function": "orchestrate"
+      }
+    ],
+    "forward": [
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "from_name": "269:279",
+        "to_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "to_name": "224:286",
+        "depth": 1,
+        "witness": [
+          43
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "from_name": "269:279",
+        "to_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "to_name": "220:221",
+        "depth": 2,
+        "witness": [
+          43,
+          44
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "from_name": "269:279",
+        "to_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "to_name": "300:301",
+        "depth": 3,
+        "witness": [
+          43,
+          44,
+          45
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "from_name": "269:279",
+        "to_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "to_name": "292:302",
+        "depth": 4,
+        "witness": [
+          43,
+          44,
+          45,
+          46
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "from_name": "269:279",
+        "to_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "to_name": "93:94",
+        "depth": 4,
+        "witness": [
+          43,
+          44,
+          45,
+          61
+        ]
+      }
+    ],
+    "reverse": [
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "from_name": "220:221",
+        "to_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "to_name": "224:286",
+        "depth": 1,
+        "witness": [
+          44
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "from_name": "220:221",
+        "to_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "to_name": "247:254",
+        "depth": 2,
+        "witness": [
+          44,
+          42
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "from_name": "220:221",
+        "to_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "to_name": "269:279",
+        "depth": 2,
+        "witness": [
+          44,
+          43
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "from_name": "220:221",
+        "to_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "to_name": "252:253",
+        "depth": 3,
+        "witness": [
+          44,
+          42,
+          41
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "from_name": "220:221",
+        "to_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "to_name": "49:50",
+        "depth": 3,
+        "witness": [
+          44,
+          43,
+          60
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "from_name": "220:221",
+        "to_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "to_name": "78:79",
+        "depth": 3,
+        "witness": [
+          44,
+          42,
+          59
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "from_name": "220:221",
+        "to_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "to_name": "131:132",
+        "depth": 4,
+        "witness": [
+          44,
+          42,
+          41,
+          40
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "from_name": "220:221",
+        "to_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "to_name": "61:62",
+        "depth": 4,
+        "witness": [
+          44,
+          42,
+          59,
+          30
+        ]
+      }
+    ]
+  },
+  {
+    "case": "v5:925 pick(k)@247->y",
+    "reaches": {
+      "forward": true,
+      "reverse": true
+    },
+    "sources": [
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 247,
+          "end": 254
+        },
+        "kind": "call_res",
+        "name": null,
+        "function": "orchestrate"
+      }
+    ],
+    "targets": [
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 220,
+          "end": 221
+        },
+        "kind": "let_bind",
+        "name": "y",
+        "function": "orchestrate"
+      }
+    ],
+    "forward": [
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "from_name": "247:254",
+        "to_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "to_name": "224:286",
+        "depth": 1,
+        "witness": [
+          42
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "from_name": "247:254",
+        "to_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "to_name": "220:221",
+        "depth": 2,
+        "witness": [
+          42,
+          44
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "from_name": "247:254",
+        "to_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "to_name": "300:301",
+        "depth": 3,
+        "witness": [
+          42,
+          44,
+          45
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "from_name": "247:254",
+        "to_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "to_name": "292:302",
+        "depth": 4,
+        "witness": [
+          42,
+          44,
+          45,
+          46
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "from_name": "247:254",
+        "to_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "to_name": "93:94",
+        "depth": 4,
+        "witness": [
+          42,
+          44,
+          45,
+          61
+        ]
+      }
+    ],
+    "reverse": [
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "from_name": "220:221",
+        "to_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "to_name": "224:286",
+        "depth": 1,
+        "witness": [
+          44
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "from_name": "220:221",
+        "to_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "to_name": "247:254",
+        "depth": 2,
+        "witness": [
+          44,
+          42
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "from_name": "220:221",
+        "to_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "to_name": "269:279",
+        "depth": 2,
+        "witness": [
+          44,
+          43
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "from_name": "220:221",
+        "to_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "to_name": "252:253",
+        "depth": 3,
+        "witness": [
+          44,
+          42,
+          41
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "from_name": "220:221",
+        "to_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "to_name": "49:50",
+        "depth": 3,
+        "witness": [
+          44,
+          43,
+          60
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "from_name": "220:221",
+        "to_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "to_name": "78:79",
+        "depth": 3,
+        "witness": [
+          44,
+          42,
+          59
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "from_name": "220:221",
+        "to_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "to_name": "131:132",
+        "depth": 4,
+        "witness": [
+          44,
+          42,
+          41,
+          40
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "from_name": "220:221",
+        "to_path": "blake3:0b0b9e4e55b2d3d7c55b74ca51ed63cdc6ddb23b636ff535aea209c00900c4f5",
+        "to_name": "61:62",
+        "depth": 4,
+        "witness": [
+          44,
+          42,
+          59,
+          30
+        ]
+      }
+    ]
+  },
+  {
+    "case": "v5:1029 produce()@169->outcome",
+    "reaches": {
+      "forward": true,
+      "reverse": true
+    },
+    "sources": [
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 169,
+          "end": 178
+        },
+        "kind": "call_res",
+        "name": null,
+        "function": "orchestrate"
+      }
+    ],
+    "targets": [
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 116,
+          "end": 123
+        },
+        "kind": "let_bind",
+        "name": "outcome",
+        "function": "orchestrate"
+      }
+    ],
+    "forward": [
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:847696555153870a629711ec6dbfe06c3a3ad3844ef251a22f56ced4418651c1",
+        "from_name": "169:178",
+        "to_path": "blake3:847696555153870a629711ec6dbfe06c3a3ad3844ef251a22f56ced4418651c1",
+        "to_name": "163:178",
+        "depth": 1,
+        "witness": [
+          21
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:847696555153870a629711ec6dbfe06c3a3ad3844ef251a22f56ced4418651c1",
+        "from_name": "169:178",
+        "to_path": "blake3:847696555153870a629711ec6dbfe06c3a3ad3844ef251a22f56ced4418651c1",
+        "to_name": "126:221",
+        "depth": 2,
+        "witness": [
+          21,
+          23
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:847696555153870a629711ec6dbfe06c3a3ad3844ef251a22f56ced4418651c1",
+        "from_name": "169:178",
+        "to_path": "blake3:847696555153870a629711ec6dbfe06c3a3ad3844ef251a22f56ced4418651c1",
+        "to_name": "116:123",
+        "depth": 3,
+        "witness": [
+          21,
+          23,
+          25
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:847696555153870a629711ec6dbfe06c3a3ad3844ef251a22f56ced4418651c1",
+        "from_name": "169:178",
+        "to_path": "blake3:847696555153870a629711ec6dbfe06c3a3ad3844ef251a22f56ced4418651c1",
+        "to_name": "235:242",
+        "depth": 4,
+        "witness": [
+          21,
+          23,
+          25,
+          26
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:847696555153870a629711ec6dbfe06c3a3ad3844ef251a22f56ced4418651c1",
+        "from_name": "169:178",
+        "to_path": "blake3:847696555153870a629711ec6dbfe06c3a3ad3844ef251a22f56ced4418651c1",
+        "to_name": "227:243",
+        "depth": 5,
+        "witness": [
+          21,
+          23,
+          25,
+          26,
+          27
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:847696555153870a629711ec6dbfe06c3a3ad3844ef251a22f56ced4418651c1",
+        "from_name": "169:178",
+        "to_path": "blake3:847696555153870a629711ec6dbfe06c3a3ad3844ef251a22f56ced4418651c1",
+        "to_name": "64:69",
+        "depth": 5,
+        "witness": [
+          21,
+          23,
+          25,
+          26,
+          35
+        ]
+      }
+    ],
+    "reverse": [
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:847696555153870a629711ec6dbfe06c3a3ad3844ef251a22f56ced4418651c1",
+        "from_name": "116:123",
+        "to_path": "blake3:847696555153870a629711ec6dbfe06c3a3ad3844ef251a22f56ced4418651c1",
+        "to_name": "126:221",
+        "depth": 1,
+        "witness": [
+          25
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:847696555153870a629711ec6dbfe06c3a3ad3844ef251a22f56ced4418651c1",
+        "from_name": "116:123",
+        "to_path": "blake3:847696555153870a629711ec6dbfe06c3a3ad3844ef251a22f56ced4418651c1",
+        "to_name": "163:178",
+        "depth": 2,
+        "witness": [
+          25,
+          23
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:847696555153870a629711ec6dbfe06c3a3ad3844ef251a22f56ced4418651c1",
+        "from_name": "116:123",
+        "to_path": "blake3:847696555153870a629711ec6dbfe06c3a3ad3844ef251a22f56ced4418651c1",
+        "to_name": "198:214",
+        "depth": 2,
+        "witness": [
+          25,
+          24
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:847696555153870a629711ec6dbfe06c3a3ad3844ef251a22f56ced4418651c1",
+        "from_name": "116:123",
+        "to_path": "blake3:847696555153870a629711ec6dbfe06c3a3ad3844ef251a22f56ced4418651c1",
+        "to_name": "169:178",
+        "depth": 3,
+        "witness": [
+          25,
+          23,
+          21
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:847696555153870a629711ec6dbfe06c3a3ad3844ef251a22f56ced4418651c1",
+        "from_name": "116:123",
+        "to_path": "blake3:847696555153870a629711ec6dbfe06c3a3ad3844ef251a22f56ced4418651c1",
+        "to_name": "204:214",
+        "depth": 3,
+        "witness": [
+          25,
+          24,
+          22
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:847696555153870a629711ec6dbfe06c3a3ad3844ef251a22f56ced4418651c1",
+        "from_name": "116:123",
+        "to_path": "blake3:847696555153870a629711ec6dbfe06c3a3ad3844ef251a22f56ced4418651c1",
+        "to_name": "22:23",
+        "depth": 4,
+        "witness": [
+          25,
+          23,
+          21,
+          33
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:847696555153870a629711ec6dbfe06c3a3ad3844ef251a22f56ced4418651c1",
+        "from_name": "116:123",
+        "to_path": "blake3:847696555153870a629711ec6dbfe06c3a3ad3844ef251a22f56ced4418651c1",
+        "to_name": "49:50",
+        "depth": 4,
+        "witness": [
+          25,
+          24,
+          22,
+          34
+        ]
+      }
+    ]
+  },
+  {
+    "case": "v5:1029 fallback()@204->outcome",
+    "reaches": {
+      "forward": true,
+      "reverse": true
+    },
+    "sources": [
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 204,
+          "end": 214
+        },
+        "kind": "call_res",
+        "name": null,
+        "function": "orchestrate"
+      }
+    ],
+    "targets": [
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 116,
+          "end": 123
+        },
+        "kind": "let_bind",
+        "name": "outcome",
+        "function": "orchestrate"
+      }
+    ],
+    "forward": [
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:847696555153870a629711ec6dbfe06c3a3ad3844ef251a22f56ced4418651c1",
+        "from_name": "204:214",
+        "to_path": "blake3:847696555153870a629711ec6dbfe06c3a3ad3844ef251a22f56ced4418651c1",
+        "to_name": "198:214",
+        "depth": 1,
+        "witness": [
+          22
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:847696555153870a629711ec6dbfe06c3a3ad3844ef251a22f56ced4418651c1",
+        "from_name": "204:214",
+        "to_path": "blake3:847696555153870a629711ec6dbfe06c3a3ad3844ef251a22f56ced4418651c1",
+        "to_name": "126:221",
+        "depth": 2,
+        "witness": [
+          22,
+          24
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:847696555153870a629711ec6dbfe06c3a3ad3844ef251a22f56ced4418651c1",
+        "from_name": "204:214",
+        "to_path": "blake3:847696555153870a629711ec6dbfe06c3a3ad3844ef251a22f56ced4418651c1",
+        "to_name": "116:123",
+        "depth": 3,
+        "witness": [
+          22,
+          24,
+          25
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:847696555153870a629711ec6dbfe06c3a3ad3844ef251a22f56ced4418651c1",
+        "from_name": "204:214",
+        "to_path": "blake3:847696555153870a629711ec6dbfe06c3a3ad3844ef251a22f56ced4418651c1",
+        "to_name": "235:242",
+        "depth": 4,
+        "witness": [
+          22,
+          24,
+          25,
+          26
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:847696555153870a629711ec6dbfe06c3a3ad3844ef251a22f56ced4418651c1",
+        "from_name": "204:214",
+        "to_path": "blake3:847696555153870a629711ec6dbfe06c3a3ad3844ef251a22f56ced4418651c1",
+        "to_name": "227:243",
+        "depth": 5,
+        "witness": [
+          22,
+          24,
+          25,
+          26,
+          27
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:847696555153870a629711ec6dbfe06c3a3ad3844ef251a22f56ced4418651c1",
+        "from_name": "204:214",
+        "to_path": "blake3:847696555153870a629711ec6dbfe06c3a3ad3844ef251a22f56ced4418651c1",
+        "to_name": "64:69",
+        "depth": 5,
+        "witness": [
+          22,
+          24,
+          25,
+          26,
+          35
+        ]
+      }
+    ],
+    "reverse": [
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:847696555153870a629711ec6dbfe06c3a3ad3844ef251a22f56ced4418651c1",
+        "from_name": "116:123",
+        "to_path": "blake3:847696555153870a629711ec6dbfe06c3a3ad3844ef251a22f56ced4418651c1",
+        "to_name": "126:221",
+        "depth": 1,
+        "witness": [
+          25
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:847696555153870a629711ec6dbfe06c3a3ad3844ef251a22f56ced4418651c1",
+        "from_name": "116:123",
+        "to_path": "blake3:847696555153870a629711ec6dbfe06c3a3ad3844ef251a22f56ced4418651c1",
+        "to_name": "163:178",
+        "depth": 2,
+        "witness": [
+          25,
+          23
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:847696555153870a629711ec6dbfe06c3a3ad3844ef251a22f56ced4418651c1",
+        "from_name": "116:123",
+        "to_path": "blake3:847696555153870a629711ec6dbfe06c3a3ad3844ef251a22f56ced4418651c1",
+        "to_name": "198:214",
+        "depth": 2,
+        "witness": [
+          25,
+          24
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:847696555153870a629711ec6dbfe06c3a3ad3844ef251a22f56ced4418651c1",
+        "from_name": "116:123",
+        "to_path": "blake3:847696555153870a629711ec6dbfe06c3a3ad3844ef251a22f56ced4418651c1",
+        "to_name": "169:178",
+        "depth": 3,
+        "witness": [
+          25,
+          23,
+          21
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:847696555153870a629711ec6dbfe06c3a3ad3844ef251a22f56ced4418651c1",
+        "from_name": "116:123",
+        "to_path": "blake3:847696555153870a629711ec6dbfe06c3a3ad3844ef251a22f56ced4418651c1",
+        "to_name": "204:214",
+        "depth": 3,
+        "witness": [
+          25,
+          24,
+          22
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:847696555153870a629711ec6dbfe06c3a3ad3844ef251a22f56ced4418651c1",
+        "from_name": "116:123",
+        "to_path": "blake3:847696555153870a629711ec6dbfe06c3a3ad3844ef251a22f56ced4418651c1",
+        "to_name": "22:23",
+        "depth": 4,
+        "witness": [
+          25,
+          23,
+          21,
+          33
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:847696555153870a629711ec6dbfe06c3a3ad3844ef251a22f56ced4418651c1",
+        "from_name": "116:123",
+        "to_path": "blake3:847696555153870a629711ec6dbfe06c3a3ad3844ef251a22f56ced4418651c1",
+        "to_name": "49:50",
+        "depth": 4,
+        "witness": [
+          25,
+          24,
+          22,
+          34
+        ]
+      }
+    ]
+  },
+  {
+    "case": "v5:1116 produce()@154->outcome",
+    "reaches": {
+      "forward": true,
+      "reverse": true
+    },
+    "sources": [
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 154,
+          "end": 163
+        },
+        "kind": "call_res",
+        "name": null,
+        "function": "orchestrate"
+      }
+    ],
+    "targets": [
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 89,
+          "end": 96
+        },
+        "kind": "let_bind",
+        "name": "outcome",
+        "function": "orchestrate"
+      }
+    ],
+    "forward": [
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:2b3361573ff34c12f4a695b0b16452cb31f491f6e8dfdff2ee55982d7019d714",
+        "from_name": "154:163",
+        "to_path": "blake3:2b3361573ff34c12f4a695b0b16452cb31f491f6e8dfdff2ee55982d7019d714",
+        "to_name": "141:163",
+        "depth": 1,
+        "witness": [
+          14
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:2b3361573ff34c12f4a695b0b16452cb31f491f6e8dfdff2ee55982d7019d714",
+        "from_name": "154:163",
+        "to_path": "blake3:2b3361573ff34c12f4a695b0b16452cb31f491f6e8dfdff2ee55982d7019d714",
+        "to_name": "99:180",
+        "depth": 2,
+        "witness": [
+          14,
+          15
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:2b3361573ff34c12f4a695b0b16452cb31f491f6e8dfdff2ee55982d7019d714",
+        "from_name": "154:163",
+        "to_path": "blake3:2b3361573ff34c12f4a695b0b16452cb31f491f6e8dfdff2ee55982d7019d714",
+        "to_name": "89:96",
+        "depth": 3,
+        "witness": [
+          14,
+          15,
+          16
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:2b3361573ff34c12f4a695b0b16452cb31f491f6e8dfdff2ee55982d7019d714",
+        "from_name": "154:163",
+        "to_path": "blake3:2b3361573ff34c12f4a695b0b16452cb31f491f6e8dfdff2ee55982d7019d714",
+        "to_name": "194:201",
+        "depth": 4,
+        "witness": [
+          14,
+          15,
+          16,
+          17
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:2b3361573ff34c12f4a695b0b16452cb31f491f6e8dfdff2ee55982d7019d714",
+        "from_name": "154:163",
+        "to_path": "blake3:2b3361573ff34c12f4a695b0b16452cb31f491f6e8dfdff2ee55982d7019d714",
+        "to_name": "186:202",
+        "depth": 5,
+        "witness": [
+          14,
+          15,
+          16,
+          17,
+          18
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:2b3361573ff34c12f4a695b0b16452cb31f491f6e8dfdff2ee55982d7019d714",
+        "from_name": "154:163",
+        "to_path": "blake3:2b3361573ff34c12f4a695b0b16452cb31f491f6e8dfdff2ee55982d7019d714",
+        "to_name": "37:42",
+        "depth": 5,
+        "witness": [
+          14,
+          15,
+          16,
+          17,
+          24
+        ]
+      }
+    ],
+    "reverse": [
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:2b3361573ff34c12f4a695b0b16452cb31f491f6e8dfdff2ee55982d7019d714",
+        "from_name": "89:96",
+        "to_path": "blake3:2b3361573ff34c12f4a695b0b16452cb31f491f6e8dfdff2ee55982d7019d714",
+        "to_name": "99:180",
+        "depth": 1,
+        "witness": [
+          16
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:2b3361573ff34c12f4a695b0b16452cb31f491f6e8dfdff2ee55982d7019d714",
+        "from_name": "89:96",
+        "to_path": "blake3:2b3361573ff34c12f4a695b0b16452cb31f491f6e8dfdff2ee55982d7019d714",
+        "to_name": "141:163",
+        "depth": 2,
+        "witness": [
+          16,
+          15
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:2b3361573ff34c12f4a695b0b16452cb31f491f6e8dfdff2ee55982d7019d714",
+        "from_name": "89:96",
+        "to_path": "blake3:2b3361573ff34c12f4a695b0b16452cb31f491f6e8dfdff2ee55982d7019d714",
+        "to_name": "154:163",
+        "depth": 3,
+        "witness": [
+          16,
+          15,
+          14
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:2b3361573ff34c12f4a695b0b16452cb31f491f6e8dfdff2ee55982d7019d714",
+        "from_name": "89:96",
+        "to_path": "blake3:2b3361573ff34c12f4a695b0b16452cb31f491f6e8dfdff2ee55982d7019d714",
+        "to_name": "22:23",
+        "depth": 4,
+        "witness": [
+          16,
+          15,
+          14,
+          23
+        ]
+      }
+    ]
+  },
+  {
+    "case": "callee return->caller binding",
+    "reaches": {
+      "forward": true,
+      "reverse": true
+    },
+    "sources": [
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 18,
+          "end": 31
+        },
+        "kind": "param",
+        "name": "value",
+        "function": "identity"
+      }
+    ],
+    "targets": [
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 90,
+          "end": 115
+        },
+        "kind": "let_bind",
+        "name": "result",
+        "function": "entry"
+      }
+    ],
+    "forward": [
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:74f031595d3911e181af6e929474287a870b5945cbebbd78d6011808ebb5e215",
+        "from_name": "18:31",
+        "to_path": "blake3:74f031595d3911e181af6e929474287a870b5945cbebbd78d6011808ebb5e215",
+        "to_name": "42:47",
+        "depth": 1,
+        "witness": [
+          11
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:74f031595d3911e181af6e929474287a870b5945cbebbd78d6011808ebb5e215",
+        "from_name": "18:31",
+        "to_path": "blake3:74f031595d3911e181af6e929474287a870b5945cbebbd78d6011808ebb5e215",
+        "to_name": "35:48",
+        "depth": 2,
+        "witness": [
+          11,
+          12
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:74f031595d3911e181af6e929474287a870b5945cbebbd78d6011808ebb5e215",
+        "from_name": "18:31",
+        "to_path": "blake3:74f031595d3911e181af6e929474287a870b5945cbebbd78d6011808ebb5e215",
+        "to_name": "99:115",
+        "depth": 3,
+        "witness": [
+          11,
+          12,
+          22
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:74f031595d3911e181af6e929474287a870b5945cbebbd78d6011808ebb5e215",
+        "from_name": "18:31",
+        "to_path": "blake3:74f031595d3911e181af6e929474287a870b5945cbebbd78d6011808ebb5e215",
+        "to_name": "90:115",
+        "depth": 4,
+        "witness": [
+          11,
+          12,
+          22,
+          15
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:74f031595d3911e181af6e929474287a870b5945cbebbd78d6011808ebb5e215",
+        "from_name": "18:31",
+        "to_path": "blake3:74f031595d3911e181af6e929474287a870b5945cbebbd78d6011808ebb5e215",
+        "to_name": "124:130",
+        "depth": 5,
+        "witness": [
+          11,
+          12,
+          22,
+          15,
+          16
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:74f031595d3911e181af6e929474287a870b5945cbebbd78d6011808ebb5e215",
+        "from_name": "18:31",
+        "to_path": "blake3:74f031595d3911e181af6e929474287a870b5945cbebbd78d6011808ebb5e215",
+        "to_name": "117:131",
+        "depth": 6,
+        "witness": [
+          11,
+          12,
+          22,
+          15,
+          16,
+          17
+        ]
+      }
+    ],
+    "reverse": [
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:74f031595d3911e181af6e929474287a870b5945cbebbd78d6011808ebb5e215",
+        "from_name": "90:115",
+        "to_path": "blake3:74f031595d3911e181af6e929474287a870b5945cbebbd78d6011808ebb5e215",
+        "to_name": "99:115",
+        "depth": 1,
+        "witness": [
+          15
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:74f031595d3911e181af6e929474287a870b5945cbebbd78d6011808ebb5e215",
+        "from_name": "90:115",
+        "to_path": "blake3:74f031595d3911e181af6e929474287a870b5945cbebbd78d6011808ebb5e215",
+        "to_name": "108:114",
+        "depth": 2,
+        "witness": [
+          15,
+          14
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:74f031595d3911e181af6e929474287a870b5945cbebbd78d6011808ebb5e215",
+        "from_name": "90:115",
+        "to_path": "blake3:74f031595d3911e181af6e929474287a870b5945cbebbd78d6011808ebb5e215",
+        "to_name": "35:48",
+        "depth": 2,
+        "witness": [
+          15,
+          22
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:74f031595d3911e181af6e929474287a870b5945cbebbd78d6011808ebb5e215",
+        "from_name": "90:115",
+        "to_path": "blake3:74f031595d3911e181af6e929474287a870b5945cbebbd78d6011808ebb5e215",
+        "to_name": "42:47",
+        "depth": 3,
+        "witness": [
+          15,
+          22,
+          12
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:74f031595d3911e181af6e929474287a870b5945cbebbd78d6011808ebb5e215",
+        "from_name": "90:115",
+        "to_path": "blake3:74f031595d3911e181af6e929474287a870b5945cbebbd78d6011808ebb5e215",
+        "to_name": "66:80",
+        "depth": 3,
+        "witness": [
+          15,
+          14,
+          13
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:74f031595d3911e181af6e929474287a870b5945cbebbd78d6011808ebb5e215",
+        "from_name": "90:115",
+        "to_path": "blake3:74f031595d3911e181af6e929474287a870b5945cbebbd78d6011808ebb5e215",
+        "to_name": "18:31",
+        "depth": 4,
+        "witness": [
+          15,
+          22,
+          12,
+          11
+        ]
+      }
+    ]
+  }
+]

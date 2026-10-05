@@ -115,8 +115,11 @@ op graph(
   /** Shortest type-reference paths from NAME; PATH#NAME seeds only NAME declared in files whose path ends with PATH */
   @valueName("[PATH#]NAME") type_path?: string,
 
-  @doc("Flow paths from PATH@START:END or BLOB@START:END. START/END are zero-based UTF-8 byte offsets, END exclusive. PATH is read under --root (or the current directory); --at reads the revision. BLOB is the exact tagged content digest from file.digest or flow_edge.from_blob (blake3:HEX for worktree facts), not a bare git object ID. The existing command follows interprocedural flow_edge facts; local value flow is emitted as df edges.")
+  @doc("Flow paths from PATH@START:END or BLOB@START:END. START/END are zero-based UTF-8 byte offsets, END exclusive. PATH is read under --root (or the current directory); --at reads the revision. BLOB is the exact tagged content digest from file.digest or flow_edge.from_blob (blake3:HEX for worktree facts), not a bare git object ID. Follows local df edges and interprocedural flow_edge facts from the asked node only. --reverse answers what reaches the node.")
   @valueName("BLOB@START:END") flow_path?: string,
+
+  /** Follow incoming value-flow edges to answer what reaches the seed */
+  @requires("flow_path") reverse?: boolean,
 
   /** Control-dependence slice at PATH:BYTE */
   @valueName("PATH:BYTE") slice?: string,

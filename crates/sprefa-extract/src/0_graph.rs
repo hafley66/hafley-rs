@@ -26,6 +26,9 @@ mod target;
 mod anchor;
 #[path = "0c_graph_walk.rs"]
 mod walk;
+#[path = "0d_graph_flow.rs"]
+mod flow;
+use flow::flow_seed;
 
 const CALLERS_SQL: &str = "SELECT caller_path, caller_name, callee_path, callee_name, \
                          grade, kind, caller_site_start, callee_start FROM ( \
@@ -76,7 +79,7 @@ fn load_store(
         Some(path) => Database::create(path)?,
         None => Database::memory()?,
     };
-    let facts = if matches!(arm, Arm::FlowPath(_)) {
+    let facts = if matches!(arm, Arm::FlowPath(_, _)) {
         let mut push_raw = |raw: sprefa_extract::RawProjectFact<'_>| {
             if matches!(
                 &raw.fact,
@@ -257,16 +260,7 @@ fn plane_edges(
              \"target_name\", {}, NULL FROM \"resolved_type_edge\"",
             grade_sql("\"resolution_origin\"")
         ),
-        "flow" => {
-            "SELECT \"_row\", \"from_blob\", printf('%d:%d', \"from__start\", \"from__end\"), \
-                   \"to_blob\", printf('%d:%d', \"to__start\", \"to__end\"), '~', NULL \
-                   FROM \"flow_edge\" \
-             UNION ALL \
-             SELECT \"_row\", \"_content_id\", printf('%d:%d', \"from__start\", \"from__end\"), \
-                    \"_content_id\", printf('%d:%d', \"to__start\", \"to__end\"), '~', NULL \
-                    FROM \"edge\" WHERE \"family\" = 'df' AND \"_content_id\" IS NOT NULL"
-                .to_string()
-        }
+        "flow" => flow::SQL.to_string(),
         _ => unreachable!("only fixed graph planes reach this query"),
     };
     let mut statement = connection.prepare(&sql)?;
@@ -417,48 +411,6 @@ fn paths(
         .collect())
 }
 
-/// Normalize a path to the content identity used by flow facts. Revision
-/// queries read their scratch tree; digest seeds already name that identity.
-fn flow_seed(seed: &str, root: Option<&Path>) -> Result<BTreeSet<Node>, Box<dyn std::error::Error>> {
-    let (blob, span) = seed
-        .rsplit_once('@')
-        .ok_or("flow seed must be PATH@START:END or BLOB@START:END")?;
-    let (start, end) = span
-        .split_once(':')
-        .ok_or("flow seed must be PATH@START:END or BLOB@START:END")?;
-    let start: u32 = start.parse()?;
-    let end: u32 = end.parse()?;
-    if start >= end {
-        return Err("flow seed requires START < END (zero-based byte offsets, END exclusive)".into());
-    }
-    let digest = blob.strip_prefix("blake3:").filter(|hex| {
-        hex.len() == 64 && hex.bytes().all(|byte| byte.is_ascii_hexdigit())
-    }).or_else(|| blob.strip_prefix("git:").filter(|hex| {
-        hex.len() == 40 && hex.bytes().all(|byte| byte.is_ascii_hexdigit())
-    }));
-    let blob = if digest.is_some() {
-        blob.to_ascii_lowercase()
-    } else {
-        let path = Path::new(blob);
-        let path = match root {
-            Some(root) if !path.is_absolute() => root.join(path),
-            _ => path.to_path_buf(),
-        };
-        let mut bytes = Vec::new();
-        fs::File::open(sprefa_extract::io_path(&path))
-            .and_then(|mut file| file.read_to_end(&mut bytes))
-            .map_err(|error| format!("flow seed input '{blob}': {error}"))?;
-        if end as usize > bytes.len() {
-            return Err(format!("flow seed END {end} exceeds input length {}", bytes.len()).into());
-        }
-        sprefa_extract::content_id_of(&bytes).to_string()
-    };
-    Ok(BTreeSet::from([(
-        blob,
-        Some(format!("{start}:{end}")),
-    )]))
-}
-
 #[derive(Default)]
 struct GradeSplit {
     plus: u32,
@@ -502,7 +454,7 @@ fn emit_summary_line(rows: &[FlatFact], arm: &Arm<'_>, compared: bool) {
         ));
         return;
     }
-    if matches!(arm, Arm::CallPath(_) | Arm::TypePath(_) | Arm::FlowPath(_)) {
+    if matches!(arm, Arm::CallPath(_) | Arm::TypePath(_) | Arm::FlowPath(_, _)) {
         crate::ops::print_diagnostic(format_args!("{} paths", rows.len()));
         return;
     }
@@ -531,7 +483,7 @@ enum Arm<'a> {
     From(&'a str),
     CallPath(&'a str),
     TypePath(&'a str),
-    FlowPath(&'a str),
+    FlowPath(&'a str, bool),
 }
 
 impl Arm<'_> {
@@ -540,7 +492,7 @@ impl Arm<'_> {
             Arm::Callers(name) | Arm::From(name) | Arm::CallPath(name) | Arm::TypePath(name) => {
                 name.rsplit_once('#').map_or(*name, |(_, name)| name)
             }
-            Arm::Uses(name) | Arm::FlowPath(name) => name,
+            Arm::Uses(name) | Arm::FlowPath(name, _) => name,
         }
     }
 
@@ -550,7 +502,7 @@ impl Arm<'_> {
                 types: true,
                 ..ResolveArms::default()
             },
-            Arm::FlowPath(_) => ResolveArms {
+            Arm::FlowPath(_, _) => ResolveArms {
                 call: true,
                 flow: true,
                 ..ResolveArms::default()
@@ -622,12 +574,15 @@ impl Arm<'_> {
                 |edges| Ok(named_starts(edges, name)),
                 deadline,
             ),
-            Arm::FlowPath(seed) => paths(
-                &plane_edges(connection, "flow")?,
-                "flow",
-                |_| flow_seed(seed, lines.root.as_deref()),
-                deadline,
-            ),
+            Arm::FlowPath(seed, reverse) => {
+                let mut edges = plane_edges(connection, "flow")?;
+                if *reverse {
+                    for edge in &mut edges {
+                        std::mem::swap(&mut edge.src, &mut edge.dst);
+                    }
+                }
+                paths(&edges, "flow", |_| flow_seed(seed, lines.root.as_deref()), deadline)
+            },
         }
     }
 
@@ -775,7 +730,7 @@ pub fn run_to(
         (_, _, Some(name), _, _, _) => Arm::From(name),
         (_, _, _, Some(name), _, _) => Arm::CallPath(name),
         (_, _, _, _, Some(name), _) => Arm::TypePath(name),
-        (_, _, _, _, _, Some(name)) => Arm::FlowPath(name),
+        (_, _, _, _, _, Some(name)) => Arm::FlowPath(name, cli.reverse),
         _ => unreachable!("the clap ArgGroup requires one of the six"),
     };
     let rows = if let Some(revision) = &cli.at {
@@ -809,7 +764,7 @@ pub fn run_to(
         let (sha, before) = ask_at(&mut reader, revision, &selected, &cli, &arm, None)?;
         match &cli.compare {
             Some(other) => {
-                if !matches!(arm, Arm::CallPath(_) | Arm::TypePath(_) | Arm::FlowPath(_)) {
+                if !matches!(arm, Arm::CallPath(_) | Arm::TypePath(_) | Arm::FlowPath(_, _)) {
                     return Err("--compare requires --call-path, --type-path or --flow-path".into());
                 }
                 let (other_sha, after) = ask_at(&mut reader, other, &selected, &cli, &arm, None)?;

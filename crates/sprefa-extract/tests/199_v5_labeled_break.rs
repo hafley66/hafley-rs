@@ -1,6 +1,6 @@
 use sprefa_extract::{dispatch, flatten_jsonl, FamilyMask};
 
-const SOURCE: &str = "fn produce() -> i64 { 1 }\nfn consume(value: i64) {}\nfn orchestrate(flag: bool) {\n    let outcome = 'outer: loop {\n        loop {\n            break 'outer produce();\n        }\n    };\n    consume(outcome);\n}\n";
+pub(super) const SOURCE: &str = "fn produce() -> i64 { 1 }\nfn consume(value: i64) {}\nfn orchestrate(flag: bool) {\n    let outcome = 'outer: loop {\n        loop {\n            break 'outer produce();\n        }\n    };\n    consume(outcome);\n}\n";
 
 #[test]
 fn labeled_break_cst_and_whole_flow() {
