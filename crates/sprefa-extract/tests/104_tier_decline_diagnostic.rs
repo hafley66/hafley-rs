@@ -33,9 +33,10 @@ fn facts(args: &[&str], path: Option<&PathBuf>, typescript: Option<String>) -> V
     command.current_dir(env!("CARGO_MANIFEST_DIR")).args(args);
     if let Some(path) = path {
         command.env("PATH", path);
+        command.env("SPREFA_TSGO", path.join("missing-tsgo"));
     }
     if let Some(typescript) = typescript {
-        command.env("SPREFA_TS_CHECKER_TYPESCRIPT", typescript);
+        command.env("SPREFA_TSGO", typescript);
     }
     let output = command.output().expect("extract binary runs");
     assert!(
@@ -87,11 +88,11 @@ fn ts_tier_off_path_is_a_diagnostic() {
         "one declined tier, one row: {declined:?}"
     );
     assert_eq!(declined[0]["run"], 0, "a decline is the syntax run's news");
-    assert_eq!(word(declined[0], "relation"), "tier.tsc");
+    assert_eq!(word(declined[0], "relation"), "tier.tsgo");
     let detail = word(declined[0], "detail");
     #[cfg(feature = "ts-checker")]
     assert!(
-        detail.contains("node"),
+        detail.contains("tsgo"),
         "the reason names the driver: {detail}"
     );
     #[cfg(not(feature = "ts-checker"))]
@@ -182,26 +183,19 @@ fn the_declined_stream_survives_the_reverse_door() {
     let landed = facts(&["ingest", raw.to_str().expect("utf8 path")], None, None);
     let declined = of_record(&landed, "diagnostic");
     assert_eq!(declined.len(), 1, "the door kept the decline: {declined:?}");
-    assert_eq!(word(declined[0], "relation"), "tier.tsc");
+    assert_eq!(word(declined[0], "relation"), "tier.tsgo");
 }
 
 /// A `typescript` the driver can load, the way `tests/98_resolve_witness.rs`
 /// finds one: a checkout's `lib/typescript.js` is the built compiler.
 #[cfg(feature = "ts-checker")]
 fn typescript() -> String {
-    if let Ok(pinned) = std::env::var("SPREFA_TS_CHECKER_TYPESCRIPT") {
-        return pinned;
-    }
-    let root = std::env::var("RATCHET_TS_ROOT")
-        .unwrap_or_else(|_| "/Users/chrishafley/projects/TypeScript-5.9".to_string());
-    let built = PathBuf::from(&root).join("lib/typescript.js");
-    assert!(
-        built.is_file(),
-        "no typescript for the checker tier: set SPREFA_TS_CHECKER_TYPESCRIPT to a \
-         typescript.js, or RATCHET_TS_ROOT to a TypeScript checkout (tried {})",
-        built.display()
-    );
-    built.to_string_lossy().into_owned()
+    let platform = match std::env::consts::OS { "macos" => "darwin", "windows" => "win32", other => other };
+    let arch = match std::env::consts::ARCH { "aarch64" => "arm64", "x86_64" => "x64", other => other };
+    let executable = if platform == "win32" { "tsc.exe" } else { "tsc" };
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join(format!("ts7/node_modules/@typescript/typescript-{platform}-{arch}/lib/{executable}"))
+        .to_string_lossy().into_owned()
 }
 
 /// The other direction: a tier that LOADED is a semantic run, never a decline.
@@ -209,6 +203,7 @@ fn typescript() -> String {
 #[test]
 fn a_loaded_tier_files_no_decline() {
     let facts = facts(&ts_args(), None, Some(typescript()));
+    insta::assert_json_snapshot!("stock_loaded_output", facts);
     let tiers: Vec<String> = of_record(&facts, "diagnostic")
         .into_iter()
         .map(|row| word(row, "relation"))
@@ -223,5 +218,5 @@ fn a_loaded_tier_files_no_decline() {
         .filter(|run| run["mode"] == "semantic")
         .map(|run| word(run, "tool"))
         .collect();
-    assert_eq!(semantic, vec!["tsc".to_string()], "the tier answered");
+    assert_eq!(semantic, vec!["tsgo".to_string()], "the tier answered");
 }

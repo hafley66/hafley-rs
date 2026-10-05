@@ -20,7 +20,7 @@ fn lines(args: &[&str], typescript: Option<String>) -> Vec<String> {
     let mut command = Command::new(env!("CARGO_BIN_EXE_ryii"));
     command.current_dir(env!("CARGO_MANIFEST_DIR")).args(args);
     if let Some(path) = typescript {
-        command.env("SPREFA_TS_CHECKER_TYPESCRIPT", path);
+        command.env("SPREFA_TSGO", path);
     }
     let output = command.output().expect("extract binary runs");
     assert!(
@@ -187,19 +187,12 @@ fn the_witnessed_stream_survives_the_reverse_door() {
 /// one: a checkout's `lib/typescript.js` is the built compiler.
 #[cfg(feature = "ts-checker")]
 fn typescript() -> String {
-    if let Ok(pinned) = std::env::var("SPREFA_TS_CHECKER_TYPESCRIPT") {
-        return pinned;
-    }
-    let root = std::env::var("RATCHET_TS_ROOT")
-        .unwrap_or_else(|_| "/Users/chrishafley/projects/TypeScript-5.9".to_string());
-    let built = PathBuf::from(&root).join("lib/typescript.js");
-    assert!(
-        built.is_file(),
-        "no typescript for the checker tier: set SPREFA_TS_CHECKER_TYPESCRIPT to a \
-         typescript.js, or RATCHET_TS_ROOT to a TypeScript checkout (tried {})",
-        built.display()
-    );
-    built.to_string_lossy().into_owned()
+    let platform = match std::env::consts::OS { "macos" => "darwin", "windows" => "win32", other => other };
+    let arch = match std::env::consts::ARCH { "aarch64" => "arm64", "x86_64" => "x64", other => other };
+    let executable = if platform == "win32" { "tsc.exe" } else { "tsc" };
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join(format!("ts7/node_modules/@typescript/typescript-{platform}-{arch}/lib/{executable}"))
+        .to_string_lossy().into_owned()
 }
 
 /// `agree.ts` imports what it calls and what it extends, so the module plane
@@ -226,6 +219,7 @@ fn agree_facts() -> Vec<Value> {
 #[test]
 fn a_loaded_checker_mints_its_own_run() {
     let facts = agree_facts();
+    insta::assert_json_snapshot!("stock_witness_output", facts);
     let mut runs: Vec<(u64, String, String)> = of_record(&facts, "run")
         .iter()
         .map(|row| {
@@ -240,8 +234,8 @@ fn a_loaded_checker_mints_its_own_run() {
     assert_eq!(
         runs,
         vec![
-            (0, "syntax".to_string(), "extract".to_string()),
-            (1, "semantic".to_string(), "tsc".to_string()),
+            (0, "syntax".to_string(), "ryi".to_string()),
+            (1, "semantic".to_string(), "tsgo".to_string()),
         ],
         "one run per tier that ran"
     );

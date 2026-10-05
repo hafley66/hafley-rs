@@ -13,7 +13,7 @@
 //!
 //! The tier drives the project's own `typescript`. The fixture is a bare
 //! directory with no `node_modules`, so this test pins the compiler the way a
-//! monorepo does, through `SPREFA_TS_CHECKER_TYPESCRIPT`.
+//! monorepo does, through `SPREFA_TSGO`.
 
 #![cfg(feature = "ts-checker")]
 
@@ -35,19 +35,12 @@ const FILES: &[&str] = &[
 /// A `typescript` the driver can load, machine-local the way the ratchet's
 /// corpus roots are. A checkout's `lib/typescript.js` is the built compiler.
 fn typescript() -> String {
-    if let Ok(pinned) = std::env::var("SPREFA_TS_CHECKER_TYPESCRIPT") {
-        return pinned;
-    }
-    let root = std::env::var("RATCHET_TS_ROOT")
-        .unwrap_or_else(|_| "/Users/chrishafley/projects/TypeScript-5.9".to_string());
-    let built = PathBuf::from(&root).join("lib/typescript.js");
-    assert!(
-        built.is_file(),
-        "no typescript for the checker tier: set SPREFA_TS_CHECKER_TYPESCRIPT to a \
-         typescript.js, or RATCHET_TS_ROOT to a TypeScript checkout (tried {})",
-        built.display()
-    );
-    built.to_string_lossy().into_owned()
+    let platform = match std::env::consts::OS { "macos" => "darwin", "windows" => "win32", other => other };
+    let arch = match std::env::consts::ARCH { "aarch64" => "arm64", "x86_64" => "x64", other => other };
+    let executable = if platform == "win32" { "tsc.exe" } else { "tsc" };
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join(format!("ts7/node_modules/@typescript/typescript-{platform}-{arch}/lib/{executable}"))
+        .to_string_lossy().into_owned()
 }
 
 fn run(checker: bool) -> Vec<Value> {
@@ -64,7 +57,7 @@ fn run(checker: bool) -> Vec<Value> {
     args.extend(FILES.iter().map(|name| format!("{DIR}/{name}")));
     let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
         .current_dir(env!("CARGO_MANIFEST_DIR"))
-        .env("SPREFA_TS_CHECKER_TYPESCRIPT", typescript())
+        .env("SPREFA_TSGO", typescript())
         .args(&args)
         .output()
         .expect("extract binary runs");
@@ -172,6 +165,7 @@ fn the_syntax_leg_alone_name_matches_a_lib_global() {
 #[test]
 fn the_checker_binds_the_generic_receiver_to_its_own_file() {
     let facts = run(true);
+    insta::assert_json_snapshot!("stock_checker_output", facts);
     let edges = call_edges(&facts);
     assert!(
         edges.contains(&(
