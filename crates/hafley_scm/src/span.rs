@@ -17,6 +17,9 @@ impl Span {
     pub const fn anchor(at: u32) -> Self {
         Self { start: at, len: 0 }
     }
+    pub const fn contains(self, inner: Self) -> bool {
+        self.start <= inner.start && inner.end() <= self.end()
+    }
     pub const fn end(self) -> u32 {
         self.start + self.len
     }

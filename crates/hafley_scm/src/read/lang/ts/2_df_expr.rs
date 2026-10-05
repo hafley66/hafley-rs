@@ -4,14 +4,10 @@ use super::*;
 mod jsx;
 use jsx::{df_jsx_element, df_jsx_fragment};
 
-/// Post-order value flow for one TS expression. Returns the node carrying its
-/// value, or a generic `expr` node when the variant isn't chased (conservative:
-/// may miss, never invents). Port of v5 `ts_flow_expr`. `fn_sym` is the enclosing
-/// callable's sym — an inline lambda's `closure` node name derives from it.
 pub(super) fn df_flow_expr(
     expr: &ts::Expression,
     file: &str,
-    fn_sym: &str,
+    fn_sym: &DfOwner,
     strings: &mut Strings,
     scope: &mut Scope,
     sink: &mut FamilyBundle<DfF>,
@@ -176,19 +172,42 @@ pub(super) fn df_flow_expr(
             }
             node
         }
-        // An INLINE lambda: lift its body as its own scope under v5's `lam_sym`
-        // (`{enclosing}::closure::{byte}`; chains when nested), then mint the
-        // `closure` VALUE node carrying that exact sym as its name.
         E::ArrowFunctionExpression(arrow) => {
-            let lam_sym = format!("{fn_sym}::closure::{}", span.start);
-            df_lift_arrow(&arrow.params, &arrow.body, file, &lam_sym, strings, sink, scope);
-            df_push(sink, strings, span, DfNodeKind::Closure, Some(&lam_sym))
+            let lam_sym = DfOwner {
+                kind: fn_sym.kind,
+                name: format!("{}::closure::{}", fn_sym.name, span.start),
+            };
+            df_lift_arrow(
+                &arrow.params,
+                &arrow.body,
+                file,
+                &lam_sym,
+                strings,
+                sink,
+                scope,
+            );
+            df_push(
+                sink,
+                strings,
+                span,
+                DfNodeKind::Closure,
+                Some(&format!("{file}::{}::{}", lam_sym.kind, lam_sym.name)),
+            )
         }
         E::FunctionExpression(func) => match func.body.as_deref() {
             Some(body) => {
-                let lam_sym = format!("{fn_sym}::closure::{}", span.start);
-                df_lift_fn(&func.params, body, false, file, &lam_sym, strings, sink, scope);
-                df_push(sink, strings, span, DfNodeKind::Closure, Some(&lam_sym))
+                let lam_sym = DfOwner {
+                    kind: fn_sym.kind,
+                    name: format!("{}::closure::{}", fn_sym.name, span.start),
+                };
+                df_lift_fn(&func.params, body, file, &lam_sym, strings, sink, scope);
+                df_push(
+                    sink,
+                    strings,
+                    span,
+                    DfNodeKind::Closure,
+                    Some(&format!("{file}::{}::{}", lam_sym.kind, lam_sym.name)),
+                )
             }
             None => df_push(sink, strings, span, DfNodeKind::Expr, None),
         },
@@ -328,4 +347,3 @@ pub(super) fn df_flow_expr(
         _ => df_push(sink, strings, span, DfNodeKind::Expr, None),
     }
 }
-

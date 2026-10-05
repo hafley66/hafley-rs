@@ -2624,8 +2624,8 @@ fn lambda_value_span(value: &ts::Expression) -> Option<oxc_span::Span> {
 mod call_closure;
 use call_closure::LambdaDefs;
 
-/// Whether any call site sits outside every definition, using prefix-max end
-/// rather than `covering_def` per site: that re-sorts the def spans per site.
+/// Whether any call site sits outside every def in `sink`. Prefix-max of def
+/// end, not `covering_def` per site: that re-sorts the def spans per site.
 fn module_scope_owns_a_call(sink: &FamilyBundle<CallF>) -> bool {
     let mut reach: Vec<(u32, u32)> = sink
         .nodes

@@ -3,7 +3,7 @@ use super::*;
 pub(super) fn df_jsx_element(
     el: &ts::JSXElement,
     file: &str,
-    fn_sym: &str,
+    fn_sym: &DfOwner,
     strings: &mut Strings,
     scope: &mut Scope,
     sink: &mut FamilyBundle<DfF>,
@@ -94,9 +94,12 @@ pub(super) fn df_jsx_element(
     if !component {
         return props;
     }
-    df_owner(sink, strings, eager_mark, file, fn_sym);
+    df_owner(sink, strings, eager_mark, fn_sym);
     let body_mark = sink.nodes.len();
-    let lam_sym = format!("{fn_sym}::closure::{}", el.span.start);
+    let lam_sym = DfOwner {
+        kind: fn_sym.kind,
+        name: format!("{}::closure::{}", fn_sym.name, el.span.start),
+    };
     let captured = df_push(
         sink,
         strings,
@@ -126,14 +129,20 @@ pub(super) fn df_jsx_element(
         None,
     );
     df_edge(sink, call, ret);
-    df_owner(sink, strings, body_mark, file, &lam_sym);
-    df_push(sink, strings, el.span, DfNodeKind::Closure, Some(&lam_sym))
+    df_owner(sink, strings, body_mark, &lam_sym);
+    df_push(
+        sink,
+        strings,
+        el.span,
+        DfNodeKind::Closure,
+        Some(&format!("{file}::{}::{}", lam_sym.kind, lam_sym.name)),
+    )
 }
 
 pub(super) fn df_jsx_fragment(
     fragment: &ts::JSXFragment,
     file: &str,
-    fn_sym: &str,
+    fn_sym: &DfOwner,
     strings: &mut Strings,
     scope: &mut Scope,
     sink: &mut FamilyBundle<DfF>,
@@ -154,7 +163,7 @@ pub(super) fn df_jsx_fragment(
 fn children(
     children: &[ts::JSXChild],
     file: &str,
-    fn_sym: &str,
+    fn_sym: &DfOwner,
     strings: &mut Strings,
     scope: &mut Scope,
     sink: &mut FamilyBundle<DfF>,

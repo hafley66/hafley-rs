@@ -1,9 +1,5 @@
 use super::*;
 
-/// Seed a callable's param nodes into the scope. A bare identifier binds as
-/// itself; an object-destructuring param mints one param node PER property
-/// (whose name is the property key). Port of v5 `ts_seed_params` (the positional
-/// `param_pos` aux is emitted as DfParam rows).
 pub(super) fn df_seed_params(
     params: &ts::FormalParameters,
     strings: &mut Strings,
@@ -57,7 +53,6 @@ pub(super) fn df_seed_params(
     }
 }
 
-/// Push one df node, returning its `NodeRef` (the dense index edges reference).
 pub(super) fn df_push(
     sink: &mut FamilyBundle<DfF>,
     strings: &mut Strings,
@@ -74,13 +69,10 @@ pub(super) fn df_push(
     node_ref
 }
 
-/// One Direct value edge: `dst` receives the value of `src`.
 pub(super) fn df_edge(sink: &mut FamilyBundle<DfF>, src: NodeRef, dst: NodeRef) {
     sink.edges.push(Edge::new(src, dst, DfEdgeKind::Direct));
 }
 
-/// One loop row. Port of v5 `ts_loop_fact`. The collection text is a source
-/// SLICE, so it rides `loop_collection_spans` for the projector to resolve.
 pub(super) fn df_loop_row(
     sink: &mut FamilyBundle<DfF>,
     loop_span: oxc_span::Span,
@@ -104,14 +96,9 @@ pub(super) fn df_owner(
     sink: &mut FamilyBundle<DfF>,
     strings: &mut Strings,
     mark: usize,
-    file: &str,
-    fn_sym: &str,
+    owner: &DfOwner,
 ) {
-    let name = fn_sym
-        .strip_prefix(&format!("{file}::function::"))
-        .or_else(|| fn_sym.strip_prefix(&format!("{file}::method::")))
-        .unwrap_or(fn_sym);
-    let owner = strings.intern(name);
+    let owner = strings.intern(&owner.name);
     sink.aux.functions.resize(sink.nodes.len(), None);
     for slot in &mut sink.aux.functions[mark..] {
         if slot.is_none() {

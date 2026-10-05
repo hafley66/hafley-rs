@@ -22,18 +22,16 @@ pub(super) fn emit(
         let capture = match owners {
             (Some(from), Some(to)) => from != to,
             _ => closures.iter().any(|closure| {
-                contains(closure.span, df.node(edge.dst).span)
-                    && !contains(closure.span, df.node(edge.src).span)
+                closure.span.contains(df.node(edge.dst).span)
+                    && !closure.span.contains(df.node(edge.src).span)
             }),
         };
         if capture {
-            edges.push(FlowEdge {
-                src_blob: blob.clone(),
-                src_span: df.node(edge.src).span,
-                dst_blob: blob.clone(),
-                dst_span: df.node(edge.dst).span,
-                kind: FlowEdgeKind::LambdaElem,
-            });
+            edges.push(FlowEdge::new(
+                (blob, df.node(edge.src).span),
+                (blob, df.node(edge.dst).span),
+                FlowEdgeKind::LambdaElem,
+            ));
         }
     }
     for (index, node) in df
@@ -44,7 +42,7 @@ pub(super) fn emit(
     {
         let Some(closure) = closures
             .iter()
-            .filter(|closure| contains(closure.span, node.span))
+            .filter(|closure| closure.span.contains(node.span))
             .min_by_key(|closure| closure.span.end() - closure.span.start)
         else {
             continue;
@@ -64,16 +62,10 @@ pub(super) fn emit(
                 continue;
             }
         }
-        edges.push(FlowEdge {
-            src_blob: blob.clone(),
-            src_span: node.span,
-            dst_blob: blob.clone(),
-            dst_span: closure.span,
-            kind: FlowEdgeKind::LambdaRet,
-        });
+        edges.push(FlowEdge::new(
+            (blob, node.span),
+            (blob, closure.span),
+            FlowEdgeKind::LambdaRet,
+        ));
     }
-}
-
-fn contains(outer: Span, inner: Span) -> bool {
-    outer.start <= inner.start && inner.end() <= outer.end()
 }

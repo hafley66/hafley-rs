@@ -1113,7 +1113,7 @@ impl Family for DfF {
 
 #[path = "0d_flow.rs"]
 mod flow;
-pub use flow::{flow_edges, FlowEdge, FlowEdgeKind, FlowF};
+pub use flow::{covering_def, flow_edges, FlowEdge, FlowEdgeKind, FlowF};
 
 // ── CONTROL-FLOW plane: CfgF ────────────────────────────────────────────────
 
@@ -1928,10 +1928,6 @@ impl DefIndex {
         self.spans = spans;
     }
 }
-
-#[path = "0c_call_owner.rs"]
-mod call_owner;
-pub use call_owner::covering_def;
 
 /// Same-file name lookup: the CallF def node in `defs` whose interned name is
 /// `name` (the same-file fast path before the corpus `DefIndex` join). Written

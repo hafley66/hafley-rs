@@ -5,8 +5,6 @@ mod arguments;
 #[path = "0c_closure_flow.rs"]
 mod closures;
 
-// ── VALUE-FLOW plane: FlowF  (inter-procedural value flow) ───────────────────
-
 /// Cross-function value flow, a separate family from `DfF`. Phase-2 only: no
 /// `FamilyMask` bit, no `RyiOutput` field; a pure join computes its edges.
 #[derive(Default, Copy, Clone, Debug)]
@@ -45,8 +43,6 @@ impl Family for FlowF {
     const TAG: FamilyTag = FamilyTag::Flow;
 }
 
-/// One cross-function value-flow edge, BOTH endpoints (blob, span) because flow
-/// crosses files. Emitted only by the `flow_edges` join.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FlowEdge {
     pub src_blob: ContentId,
@@ -56,8 +52,18 @@ pub struct FlowEdge {
     pub kind: FlowEdgeKind,
 }
 
-/// The pure inter-procedural value-flow join: `DfArg` x resolved call edge x
-/// `DfParam` (ArgToParam) plus callee `Ret` nodes (RetToCallRes).
+impl FlowEdge {
+    fn new(src: (&ContentId, Span), dst: (&ContentId, Span), kind: FlowEdgeKind) -> Self {
+        Self {
+            src_blob: src.0.clone(),
+            src_span: src.1,
+            dst_blob: dst.0.clone(),
+            dst_span: dst.1,
+            kind,
+        }
+    }
+}
+
 pub fn flow_edges(
     inputs: &[(ContentId, &RyiOutput)],
     resolved: &[(ContentId, Vec<ProjectEdge<CallF>>)],
@@ -98,8 +104,7 @@ pub fn flow_edges(
                 }
                 for param in &callee_df.aux.params {
                     let param_span = callee_df.node(param.node).span;
-                    let in_callee = call_edge.dst_span.start <= param_span.start
-                        && param_span.end() <= call_edge.dst_span.end();
+                    let in_callee = call_edge.dst_span.contains(param_span);
                     if !in_callee || param.pos as i64 != arg.pos {
                         continue;
                     }
@@ -112,22 +117,18 @@ pub fn flow_edges(
                         &callee.strings,
                     );
                     if whole {
-                        edges.push(FlowEdge {
-                            src_blob: caller_blob.clone(),
-                            src_span: caller_df.node(arg.arg).span,
-                            dst_blob: call_edge.dst_blob.clone(),
-                            dst_span: param_span,
-                            kind: FlowEdgeKind::ArgToParam,
-                        });
+                        edges.push(FlowEdge::new(
+                            (caller_blob, caller_df.node(arg.arg).span),
+                            (&call_edge.dst_blob, param_span),
+                            FlowEdgeKind::ArgToParam,
+                        ));
                     }
                     for (value, target) in fields {
-                        edges.push(FlowEdge {
-                            src_blob: caller_blob.clone(),
-                            src_span: caller_df.node(value).span,
-                            dst_blob: call_edge.dst_blob.clone(),
-                            dst_span: callee_df.node(target).span,
-                            kind: FlowEdgeKind::ArgToParam,
-                        });
+                        edges.push(FlowEdge::new(
+                            (caller_blob, caller_df.node(value).span),
+                            (&call_edge.dst_blob, callee_df.node(target).span),
+                            FlowEdgeKind::ArgToParam,
+                        ));
                     }
                 }
             }
@@ -136,18 +137,15 @@ pub fn flow_edges(
                 if node.kind != DfNodeKind::Ret {
                     continue;
                 }
-                let in_callee = call_edge.dst_span.start <= node.span.start
-                    && node.span.end() <= call_edge.dst_span.end();
+                let in_callee = call_edge.dst_span.contains(node.span);
                 if !in_callee {
                     continue;
                 }
-                edges.push(FlowEdge {
-                    src_blob: caller_blob.clone(),
-                    src_span: call_span,
-                    dst_blob: call_edge.dst_blob.clone(),
-                    dst_span: node.span,
-                    kind: FlowEdgeKind::RetToCallRes,
-                });
+                edges.push(FlowEdge::new(
+                    (caller_blob, call_span),
+                    (&call_edge.dst_blob, node.span),
+                    FlowEdgeKind::RetToCallRes,
+                ));
             }
         }
     }
@@ -164,9 +162,53 @@ pub fn flow_edges(
     edges
 }
 
+/// Explicit deferred sites bind to their closure; eager sites select the
+/// tightest covering definition, excluding deferred-only closure spans.
+pub fn covering_def(defs: &FamilyBundle<CallF>, site: Span) -> Option<NodeRef> {
+    if let Some((_, owner)) = defs
+        .aux
+        .deferred_sites
+        .iter()
+        .find(|(call, _)| *call == site)
+    {
+        return defs
+            .nodes
+            .iter()
+            .position(|node| node.kind == CallKind::Lambda && node.span == *owner)
+            .map(|index| NodeRef(index as u32));
+    }
+    let mut best: Option<(Span, NodeRef)> = None;
+    for (ix, node) in defs.nodes.iter().enumerate() {
+        let span = node.span;
+        if defs
+            .aux
+            .deferred_sites
+            .iter()
+            .any(|(_, deferred)| *deferred == span)
+        {
+            continue;
+        }
+        if !span.contains(site) {
+            continue;
+        }
+        let key = (span.end() - span.start, span.start, span.end());
+        let better = match best {
+            None => true,
+            Some((b, _)) => {
+                let bkey = (b.end() - b.start, b.start, b.end());
+                key < bkey
+            }
+        };
+        if better {
+            best = Some((span, NodeRef(ix as u32)));
+        }
+    }
+    best.map(|(_, r)| r)
+}
+
 /// The caller's call node at `site`: the `CallRes`/`New` node whose span equals
 /// the site, else the smallest such span containing it, else `None`.
-fn call_node(bundle: &FamilyBundle<DfF>, site: Span) -> Option<NodeRef> {
+pub(super) fn call_node(bundle: &FamilyBundle<DfF>, site: Span) -> Option<NodeRef> {
     let is_call = |kind: DfNodeKind| matches!(kind, DfNodeKind::CallRes | DfNodeKind::New);
     for (index, node) in bundle.nodes.iter().enumerate() {
         if is_call(node.kind) && node.span == site {
@@ -178,7 +220,7 @@ fn call_node(bundle: &FamilyBundle<DfF>, site: Span) -> Option<NodeRef> {
         if !is_call(node.kind) {
             continue;
         }
-        let contains = node.span.start <= site.start && site.end() <= node.span.end();
+        let contains = node.span.contains(site);
         let tighter = best.map_or(true, |(span, _)| {
             node.span.end() - node.span.start < span.end() - span.start
         });

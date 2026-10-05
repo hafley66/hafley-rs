@@ -30,7 +30,7 @@ pub(super) fn targets(
             for (index, node) in callee.nodes.iter().enumerate() {
                 let target = NodeRef(index as u32);
                 if node.kind != DfNodeKind::Member
-                    || !field_span_in_definition(node.span, definition)
+                    || !definition.contains(node.span)
                     || node.name.map(|name| strings.lookup(name)) != Some(value.name.as_str())
                 {
                     continue;
@@ -47,10 +47,6 @@ pub(super) fn targets(
         }
     }
     (field.is_none() || objects.is_empty(), targets)
-}
-
-fn field_span_in_definition(span: Span, definition: Span) -> bool {
-    definition.start <= span.start && span.end() <= definition.end()
 }
 
 // Resolve only identity reads/bindings and explicit object spreads.
@@ -97,7 +93,7 @@ fn parameter_object(
             return true;
         }
         let value = df.node(node);
-        if !field_span_in_definition(value.span, definition)
+        if !definition.contains(value.span)
             || !matches!(value.kind, DfNodeKind::VarRead | DfNodeKind::LetBind)
         {
             return false;
