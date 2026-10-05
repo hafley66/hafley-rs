@@ -176,6 +176,7 @@ impl Cleave for RustSource {
     ) -> Option<(String, Edit)> {
         let dir = dest.rsplit_once('/').map_or("", |(dir, _)| dir);
         let file = dest.rsplit('/').next().unwrap_or(dest);
+        let declarer = declarer.filter(|_| foreign_crate(cx, src, dest).is_none());
         let parent = match declarer {
             Some(declarer) => declarer.to_string(),
             None => parent_candidates(dir)
@@ -192,7 +193,7 @@ impl Cleave for RustSource {
         {
             return None;
         }
-        let aim = match numbered || declarer.is_some() {
+        let aim = match numbered || !parent_candidates(dir).contains(&parent) {
             true => format!(
                 "#[path = \"{}\"] ",
                 crate::move_cx::relative_between(

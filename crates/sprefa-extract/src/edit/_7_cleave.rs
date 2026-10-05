@@ -769,7 +769,7 @@ impl Plan {
                 "{src} -> {dest} crosses languages; cross-language cleave is out of scope"
             ));
         }
-        let declarer = match imports.rust_routes.declaring_files(&src) {
+        let declarer = match imports.rust_routes.declaring_files(&src).as_slice() {
             [] => None,
             [one] => Some(one.clone()),
             many => {

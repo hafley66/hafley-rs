@@ -1123,8 +1123,22 @@ type ExportTable = HashMap<String, Resolution>;
 
 impl RustModuleIndex {
     /// The files whose `#[path]` decl names `path`; empty when layout places it.
-    pub fn declaring_files(&self, path: &str) -> &[String] {
-        self.path_parents.get(path).map_or(&[], Vec::as_slice)
+    pub fn declaring_files(&self, path: &str) -> Vec<String> {
+        self.path_parents
+            .get(path)
+            .into_iter()
+            .flatten()
+            .filter(|parent| {
+                self.facts.get(*parent).is_some_and(|facts| {
+                    facts.mod_decls.iter().any(|(name, attribute)| {
+                        attribute.is_some()
+                            && self.mod_file(parent, name, attribute.as_deref()).as_deref()
+                                == Some(path)
+                    })
+                })
+            })
+            .cloned()
+            .collect()
     }
 
     pub fn crate_root_of(&self, path: &str) -> Option<String> {
