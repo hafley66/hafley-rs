@@ -10,11 +10,16 @@ pub fn module_resolution_rows_from_tree(
     source: &[u8],
 ) -> ModuleResolutionRows {
     let mut rows = ModuleResolutionRows::default();
-    collect_items(tree.root_node(), source, &mut rows);
+    collect_items(tree.root_node(), source, &mut rows, &[]);
     rows
 }
 
-fn collect_items(node: tree_sitter::Node<'_>, source: &[u8], rows: &mut ModuleResolutionRows) {
+fn collect_items(
+    node: tree_sitter::Node<'_>,
+    source: &[u8],
+    rows: &mut ModuleResolutionRows,
+    scope: &[(String, Option<String>)],
+) {
     let mut pending_attrs = Vec::new();
     for item in named_children(node) {
         if matches!(item.kind(), "attribute_item" | "inner_attribute_item") {
@@ -80,9 +85,18 @@ fn collect_items(node: tree_sitter::Node<'_>, source: &[u8], rows: &mut ModuleRe
                 };
                 let name = text(name_node, source).to_owned();
                 if let Some(body) = item.child_by_field_name("body") {
-                    rows.inline_mods.push(name);
-                    collect_items(body, source, rows);
+                    rows.inline_mods.push(name.clone());
+                    let mut nested = scope.to_vec();
+                    nested.push((name, path_attribute(&pending_attrs)));
+                    collect_items(body, source, rows, &nested);
                 } else {
+                    let name = scope
+                        .iter()
+                        .map(|(name, _)| name.as_str())
+                        .chain(std::iter::once(name.as_str()))
+                        .collect::<Vec<_>>()
+                        .join("::");
+                    rows.mod_scopes.insert(name.clone(), scope.to_vec());
                     rows.mod_decls.push((name, path_attribute(&pending_attrs)));
                 }
             }

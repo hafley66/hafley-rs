@@ -11,7 +11,7 @@
 //! (`rust.rs:1690`, documented `NO ROW`). `hafley_scm` extracts the syntax
 //! rows from the phase-1 parse; this file resolves those rows across files.
 
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::sync::Mutex;
 
 use crate::read::seams::DefIndex;
@@ -43,6 +43,45 @@ struct StarImport {
     reexport: bool,
 }
 
+fn module_candidates(
+    path: &str,
+    name: &str,
+    attribute: Option<&str>,
+    scope: &[(String, Option<String>)],
+) -> Vec<String> {
+    let mut directory = mod_dir(path);
+    for (index, (module, attribute)) in scope.iter().enumerate() {
+        directory = match attribute {
+            Some(literal) => normalize_join(
+                if index == 0 {
+                    parent_dir(path)
+                } else {
+                    &directory
+                },
+                literal,
+            ),
+            None => normalize_join(&directory, module),
+        };
+    }
+    match attribute {
+        Some(literal) => vec![normalize_join(
+            if scope.is_empty() {
+                parent_dir(path)
+            } else {
+                &directory
+            },
+            literal,
+        )],
+        None => {
+            let name = name.rsplit("::").next().unwrap_or(name);
+            vec![
+                normalize_join(&directory, &format!("{name}.rs")),
+                normalize_join(&directory, &format!("{name}/mod.rs")),
+            ]
+        }
+    }
+}
+
 /// One file's `use`/`mod` facts, carried from phase 1 into project resolve.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct RustModuleFacts {
@@ -52,6 +91,7 @@ pub struct RustModuleFacts {
     inline_mods: BTreeSet<String>,
     /// `mod x;` / `#[path = "y.rs"] mod x;`: name plus the path literal.
     mod_decls: Vec<(String, Option<String>)>,
+    mod_scopes: BTreeMap<String, Vec<(String, Option<String>)>>,
     /// Every impl block's (self type, fn name, fn def span), for the corpus
     /// receiver leg's (T, m) table.
     impls: Vec<ImplEntry>,
@@ -408,6 +448,7 @@ fn rust_module_facts_from_rows(
             .collect(),
         inline_mods: rows.inline_mods.into_iter().collect(),
         mod_decls: rows.mod_decls,
+        mod_scopes: rows.mod_scopes,
         impls: rows
             .impls
             .into_iter()
@@ -1134,18 +1175,38 @@ impl RustModuleIndex {
                 .entry(blob.clone())
                 .or_insert_with(|| path.clone());
             if path.ends_with(".rs") {
-                index
-                    .module_paths
-                    .insert(path.clone(), module_segments(path));
+                index.module_paths.insert(
+                    path.clone(),
+                    if index
+                        .target_scopes
+                        .get(path)
+                        .is_some_and(|scopes| scopes.iter().any(|scope| scope.root == *path))
+                    {
+                        module_segments(
+                            index
+                                .crate_dirs
+                                .get(path)
+                                .map(String::as_str)
+                                .unwrap_or(path),
+                        )
+                    } else {
+                        module_segments(path)
+                    },
+                );
             }
         }
         let mut displaced: HashMap<String, Vec<(String, String)>> = HashMap::new();
         for (path, facts) in &files {
-            let dir = parent_dir(path);
             for (name, path_attr) in &facts.mod_decls {
-                let Some(literal) = path_attr else { continue };
-                let target = normalize_join(dir, literal);
-                if index.blobs.contains_key(&target) {
+                if let Some(target) = module_candidates(
+                    path,
+                    name,
+                    path_attr.as_deref(),
+                    facts.mod_scopes.get(name).map(Vec::as_slice).unwrap_or(&[]),
+                )
+                .into_iter()
+                .find(|target| index.blobs.contains_key(target))
+                {
                     let parents = index.path_parents.entry(target.clone()).or_default();
                     if !parents.contains(path) {
                         parents.push(path.clone());
@@ -1160,6 +1221,7 @@ impl RustModuleIndex {
         fn declared_segments(
             path: &str,
             displaced: &HashMap<String, Vec<(String, String)>>,
+            bases: &HashMap<String, Vec<String>>,
             visiting: &mut HashSet<String>,
         ) -> Option<Vec<String>> {
             if !visiting.insert(path.to_string()) {
@@ -1167,17 +1229,22 @@ impl RustModuleIndex {
             }
             let result = match displaced.get(path).map(Vec::as_slice) {
                 Some([(parent, name)]) => {
-                    let mut segments = declared_segments(parent, displaced, visiting)?;
-                    segments.push(name.clone());
+                    let mut segments = declared_segments(parent, displaced, bases, visiting)?;
+                    segments.extend(name.split("::").map(str::to_string));
                     segments
                 }
-                _ => module_segments(path),
+                _ => bases
+                    .get(path)
+                    .cloned()
+                    .unwrap_or_else(|| module_segments(path)),
             };
             visiting.remove(path);
             Some(result)
         }
         for target in displaced.keys() {
-            if let Some(segments) = declared_segments(target, &displaced, &mut HashSet::new()) {
+            if let Some(segments) =
+                declared_segments(target, &displaced, &index.module_paths, &mut HashSet::new())
+            {
                 index.module_paths.insert(target.clone(), segments);
             }
         }
@@ -1593,14 +1660,14 @@ impl RustModuleIndex {
     }
 
     fn mod_file(&self, path: &str, name: &str, path_attr: Option<&str>) -> Option<String> {
-        if let Some(literal) = path_attr {
-            let target = normalize_join(parent_dir(path), literal);
-            return self.blobs.contains_key(&target).then_some(target);
-        }
-        let dir = mod_dir(path);
-        [format!("{name}.rs"), format!("{name}/mod.rs")]
+        let scope = self
+            .facts
+            .get(path)
+            .and_then(|facts| facts.mod_scopes.get(name))
+            .map(Vec::as_slice)
+            .unwrap_or(&[]);
+        module_candidates(path, name, path_attr, scope)
             .into_iter()
-            .map(|file| normalize_join(&dir, &file))
             .find(|target| self.blobs.contains_key(target))
     }
 

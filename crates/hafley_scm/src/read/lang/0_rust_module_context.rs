@@ -8,7 +8,10 @@ use std::path::Path;
 pub(super) fn load(
     files: &mut Vec<(String, RustModuleFacts)>,
     corpus: &mut Vec<(String, ContentId)>,
-) -> (HashMap<String, HashSet<TargetScope>>, Vec<(String, String, String)>) {
+) -> (
+    HashMap<String, HashSet<TargetScope>>,
+    Vec<(String, String, String)>,
+) {
     let nearest = nearest_crate_dirs(corpus);
     let wanted: HashSet<String> = corpus.iter().map(|(path, _)| path.clone()).collect();
     let mut facts: HashMap<String, RustModuleFacts> = files.iter().cloned().collect();
@@ -102,6 +105,7 @@ pub(super) fn load(
                 stars: module.stars,
                 inline_mods: module.inline_mods,
                 mod_decls: module.mod_decls,
+                mod_scopes: module.mod_scopes,
                 ..RustModuleFacts::default()
             },
         ));
@@ -134,20 +138,17 @@ fn retain_module_ancestry(
         .map(|facts| facts.mod_decls.clone())
         .unwrap_or_default();
     for (name, attribute) in declarations {
-        let candidates = match attribute {
-            Some(literal) => vec![normalize_join(parent_dir(path), &literal)],
-            None => {
-                let directory = mod_dir(path);
-                vec![
-                    format!("{directory}/{name}.rs"),
-                    format!("{directory}/{name}/mod.rs"),
-                ]
-            }
-        };
+        let inline_scope = facts
+            .get(path)
+            .and_then(|facts| facts.mod_scopes.get(&name))
+            .map(Vec::as_slice)
+            .unwrap_or(&[]);
+        let candidates = module_candidates(path, &name, attribute.as_deref(), inline_scope);
         if let Some(child) = candidates.into_iter().find(|child| {
             facts.contains_key(child) || crate::read::io_path(Path::new(child)).is_file()
         }) {
-            needed |= retain_module_ancestry(&child, scope, wanted, facts, retained, scopes, visiting);
+            needed |=
+                retain_module_ancestry(&child, scope, wanted, facts, retained, scopes, visiting);
         }
     }
     visiting.remove(path);

@@ -53,6 +53,7 @@ pub struct ModuleResolutionRows {
     pub stars: Vec<StarImportRow>,
     pub inline_mods: Vec<String>,
     pub mod_decls: Vec<(String, Option<String>)>,
+    pub mod_scopes: std::collections::BTreeMap<String, Vec<(String, Option<String>)>>,
     pub enums: Vec<EnumVariantsRow>,
     pub traits: Vec<TraitMethodsRow>,
     pub aliases: Vec<Range<u32>>,
@@ -61,11 +62,15 @@ pub struct ModuleResolutionRows {
 
 pub fn module_resolution_rows(parsed: &syn::File) -> ModuleResolutionRows {
     let mut rows = ModuleResolutionRows::default();
-    collect(&parsed.items, &mut rows);
+    collect(&parsed.items, &mut rows, &[]);
     rows
 }
 
-fn collect(items: &[syn::Item], rows: &mut ModuleResolutionRows) {
+fn collect(
+    items: &[syn::Item],
+    rows: &mut ModuleResolutionRows,
+    scope: &[(String, Option<String>)],
+) {
     for item in items {
         match item {
             syn::Item::Use(item) => {
@@ -100,11 +105,20 @@ fn collect(items: &[syn::Item], rows: &mut ModuleResolutionRows) {
             syn::Item::Mod(item) => match &item.content {
                 Some((_, inner)) => {
                     rows.inline_mods.push(item.ident.to_string());
-                    collect(inner, rows);
+                    let mut nested = scope.to_vec();
+                    nested.push((item.ident.to_string(), mod_path_attr(&item.attrs)));
+                    collect(inner, rows, &nested);
                 }
-                None => rows
-                    .mod_decls
-                    .push((item.ident.to_string(), mod_path_attr(&item.attrs))),
+                None => {
+                    let name = scope
+                        .iter()
+                        .map(|(name, _)| name.as_str())
+                        .chain(std::iter::once(item.ident.to_string().as_str()))
+                        .collect::<Vec<_>>()
+                        .join("::");
+                    rows.mod_scopes.insert(name.clone(), scope.to_vec());
+                    rows.mod_decls.push((name, mod_path_attr(&item.attrs)));
+                }
             },
             syn::Item::Enum(item) => {
                 let variants = item
@@ -120,9 +134,7 @@ fn collect(items: &[syn::Item], rows: &mut ModuleResolutionRows) {
                     variants,
                 });
             }
-            syn::Item::Type(item) => rows
-                .aliases
-                .push(span_range(item.ident.span())),
+            syn::Item::Type(item) => rows.aliases.push(span_range(item.ident.span())),
             syn::Item::Impl(item) => {
                 if let Some(self_type) = principal_ty(&item.self_ty) {
                     let trait_name = item.trait_.as_ref().and_then(|(path, _)| {
@@ -137,9 +149,8 @@ fn collect(items: &[syn::Item], rows: &mut ModuleResolutionRows) {
                             let syn::ImplItem::Fn(method) = child else {
                                 return None;
                             };
-                            let (start, end) = def_range(method.sig.ident.span(),
-                                method.block.span(),
-                            );
+                            let (start, end) =
+                                def_range(method.sig.ident.span(), method.block.span());
                             Some((method.sig.ident.to_string(), start..end))
                         })
                         .collect();
