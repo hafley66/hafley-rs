@@ -426,7 +426,9 @@ pub fn reclaim_carcass(repo: &Path, branch: &str, worktree: &Path) -> Result<Rec
     // A worktree directory deleted by hand leaves an admin entry that keeps
     // `worktree add` refusing the same path.
     run_git(&repo.to_path_buf(), &["worktree", "prune"])?;
-    if branch_present {
+    // Re-read: another candidate in the same gc pass (or a concurrent lane
+    // reclaim) may have deleted the branch since the check above.
+    if branch_present && branch_exists(repo, branch) {
         run_git(&repo.to_path_buf(), &["branch", "-D", branch])?;
         removed.branch = Some(branch.to_owned());
     }
