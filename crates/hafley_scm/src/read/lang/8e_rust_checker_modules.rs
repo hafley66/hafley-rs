@@ -32,30 +32,10 @@ pub struct RustModuleTree {
 /// Cargo selects the source's workspace from its directory; rust-analyzer
 /// supplies module ownership from that workspace's def maps.
 pub fn module_tree(source: &Path, budget: Duration) -> Result<RustModuleTree, CheckerError> {
-    let directory = source.parent().ok_or_else(|| CheckerError::NoWorkspace(
-        format!("{} has no directory to search for Cargo.toml", source.display()),
-    ))?;
-    let located = std::process::Command::new("cargo")
-        .args(["locate-project", "--message-format", "json"])
-        .current_dir(crate::read::io_path(directory))
-        .output()
-        .map_err(|error| CheckerError::NoWorkspace(error.to_string()))?;
-    if !located.status.success() {
-        return Err(CheckerError::NoWorkspace(format!(
-            "Cargo.toml searched from {}: {}", directory.display(),
-            String::from_utf8_lossy(&located.stderr).trim(),
-        )));
-    }
-    let located: serde_json::Value = serde_json::from_slice(&located.stdout)
-        .map_err(|error| CheckerError::NoWorkspace(error.to_string()))?;
-    let manifest = PathBuf::from(located["root"].as_str().ok_or_else(||
-        CheckerError::NoWorkspace("cargo locate-project returned no manifest".to_string()))?);
-    let metadata = cargo_metadata::MetadataCommand::new()
-        .manifest_path(&manifest)
-        .no_deps()
-        .other_options(vec!["--offline".to_string()])
-        .exec()
-        .map_err(|error| CheckerError::NoWorkspace(format!("{}: {error}", manifest.display())))?;
+    let discovered = super::super::rust_workspace::discover(source)
+        .map_err(CheckerError::NoWorkspace)?;
+    let manifest = discovered.manifest;
+    let metadata = discovered.metadata;
     let root = metadata.workspace_root.as_std_path();
     let (workspace, _) = checker_workspace(root, super::super::rust_checker::Tier::Names, &[], budget)?;
     Ok(RustModuleTree {

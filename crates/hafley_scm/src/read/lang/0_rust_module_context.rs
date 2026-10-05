@@ -23,17 +23,12 @@ pub(super) fn load(
         let Ok(manifest) = manifest.canonicalize() else {
             continue;
         };
-        let metadata = match cargo_metadata::MetadataCommand::new()
-            .manifest_path(&manifest)
-            .no_deps()
-            .other_options(vec!["--offline".to_string()])
-            .exec()
-        {
-            Ok(metadata) => metadata,
+        let metadata = match super::super::rust_workspace::discover(&manifest) {
+            Ok(workspace) => workspace.metadata,
             Err(error) => {
                 for (path, root) in &nearest {
                     if root == package_root {
-                        failures.push((path.clone(), lexical(&manifest), error.to_string()));
+                        failures.push((path.clone(), lexical(&manifest), error.clone()));
                     }
                 }
                 continue;

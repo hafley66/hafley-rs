@@ -138,6 +138,9 @@ mod rust_checker_project;
 #[cfg(feature = "rust-checker")]
 #[path = "8_rust_checker_session.rs"]
 mod rust_checker_session;
+#[cfg(feature = "cargo-metadata")]
+#[path = "0_rust_workspace.rs"]
+pub mod rust_workspace;
 #[cfg(feature = "rust")]
 pub mod rust_modules;
 #[cfg(feature = "rust")]
