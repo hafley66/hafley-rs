@@ -57,3 +57,43 @@ prototype client), `3_measure.sh`, `results.tsv`. Results appended to this brief
 Branch `lab/20261005-tsgo-wedge`; commit the lab. Report: the map table, each wedge with diff size
 and measurements, and a ranked recommendation: the least-code wedge that retires the Node script and
 makes the slow TypeScript tier batch, with what ryi would change to use it.
+
+## Results (2026-10-05)
+
+Lab: `crates/sprefa-extract/bench/labs/lab-20261005-tsgo-wedge/` (README.md holds the full table and notes).
+
+- Source: microsoft/typescript-go is closed; the Go compiler lives in microsoft/TypeScript under `tsc/`.
+  Tag `v7.0.2` = `1e4744d68260a7cb91b62b12edc3f6a2187faaf1` (`tsc/internal/core/version.go` = 7.0.2); the npm
+  package's `gitHead` 2bd066d8 is not fetchable.
+- Existing channels: `tsc --api --async` is a JSON-RPC (Content-Length framed) checker API with batched
+  `getSymbolsAtPositions` / `getTypesAtPositions`, `isTypeAssignableTo`, `getBaseTypes`, type-structure getters,
+  and `updateSnapshot{openFiles}` loading many files in one snapshot. It has no definition method (node handles
+  plus binary AST decode, no `.d.ts` -> source mapping) and no subtype / identical / comparable. The LSP has
+  definition and references and no type queries. `didOpen` runs one snapshot update per file
+  (`internal/project/session.go:295`); an unopened file is answered from disk.
+
+| wedge | Go lines | question | wall_s | user_s | max_rss_mb | requests | files_opened | answers_equal |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| ryii today | 0 | Route callers | 1.66 | 3.94 | 393 | | 4 | truth (11) |
+| a1 lsp-noopen | 0 | Route callers | 0.22 | 0.69 | 258 | 15 | 0 | yes |
+| a2 stock api | 0 | Route callers | 0.21 | 0.76 | 255 | 28 | 6 | no (10) |
+| b lsp `ryi/batch` | 163 | Route callers | 0.24 | 0.73 | 259 | 2 | 0 | yes |
+| c api `ryiBatch` | 163 | Route callers | 0.20 | 0.69 | 261 | 3 | 6 | yes |
+| lsp-open (today's protocol) | 0 | Signal callers | 2.63 | 7.91 | 1283 | 582 | 133 | truth (549) |
+| a1 lsp-noopen | 0 | Signal callers | 2.01 | 7.34 | 1339 | 582 | 0 | yes |
+| a2 stock api | 0 | Signal callers | 0.64 | 2.99 | 817 | 829 | 133 | no (187) |
+| b lsp `ryi/batch` | 163 | Signal callers | 1.56 | 7.06 | 1576 | 2 | 0 | yes |
+| c api `ryiBatch` | 163 | Signal callers | 0.97 | 3.35 | 1038 | 3 | 133 | yes |
+| a2 stock api | 0 | 20 assignable pairs | 0.11 | 0.34 | 136 | 27 | 4 | truth (20) |
+| b lsp `ryi/batch` | 163 | 20 assignable pairs | 0.10 | 0.34 | 138 | 2 | 0 | yes |
+| c api `ryiBatch` | 163 | 20 assignable pairs | 0.10 | 0.37 | 138 | 3 | 4 | yes |
+
+Ranking: c, b, a1, a2. c and b share `ls/ryibatch.go` (+131, calls `ProvideDefinition` per position, then one
+checker per program for symbol/type ids and `assignable`/`subtype`/`strict_subtype`/`identical`/`comparable`) and
+`checker/exports.go` (+16, four exported wrappers); c adds 16 lines to `api/session.go`, b 16 lines to
+`lsp/server.go`. ryi's change for c: an API JSON-RPC session to the patched binary, `1g_ts7_resolve.rs::ask`
+sends `updateSnapshot` + one `ryiBatch` instead of `didOpen` + per-site definitions, and `ryiBatch{types, pairs}`
+replaces `ts_checker.rs`/`ts_checker.mjs` for identity, has_type and relation rows; the Node script's
+type-structure rows still need the stock per-handle getters or more batch fields. Side finding: ryii's Signal
+callers run drops 356 cross-package edges, the same set the stock API misses (declarations under
+`packages/signals/dist/*.d.ts`).

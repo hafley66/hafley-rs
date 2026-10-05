@@ -1,0 +1,191 @@
+diff --git a/tsc/internal/api/session.go b/tsc/internal/api/session.go
+index 7e29c44b6..ad3235854 100644
+--- a/tsc/internal/api/session.go
++++ b/tsc/internal/api/session.go
+@@ -540,6 +540,22 @@ func (s *Session) HandleRequest(ctx context.Context, method string, params json.
+ 		return params, nil
+ 	case "ping":
+ 		return "pong", nil
++	case "ryiBatch":
++		var batch ls.RyiBatchParams
++		if err := json.Unmarshal(params, &batch); err != nil {
++			return nil, fmt.Errorf("%w: %w", ErrInvalidRequest, err)
++		}
++		sd, err := s.getSnapshotData(SnapshotID(batch.Snapshot))
++		if err != nil {
++			return nil, err
++		}
++		return ls.RyiBatch(ctx, &batch, func(uri lsproto.DocumentUri) (*ls.LanguageService, error) {
++			proj := sd.snapshot.GetDefaultProject(uri)
++			if proj == nil {
++				return nil, fmt.Errorf("%w: no project for %s", ErrClientError, uri)
++			}
++			return ls.NewLanguageService(proj.ID(), proj.GetProgram(), sd.snapshot, uri.FileName()), nil
++		})
+ 	}
+ 
+ 	parsed, err := unmarshalPayload(method, params)
+diff --git a/tsc/internal/checker/exports.go b/tsc/internal/checker/exports.go
+index 90162bdae..f65c97b7e 100644
+--- a/tsc/internal/checker/exports.go
++++ b/tsc/internal/checker/exports.go
+@@ -326,6 +326,22 @@ func (c *Checker) IsTypeAssignableTo(source *Type, target *Type) bool {
+ 	return c.isTypeAssignableTo(source, target)
+ }
+ 
++func (c *Checker) IsTypeSubtypeOf(source *Type, target *Type) bool {
++	return c.isTypeSubtypeOf(source, target)
++}
++
++func (c *Checker) IsTypeStrictSubtypeOf(source *Type, target *Type) bool {
++	return c.isTypeStrictSubtypeOf(source, target)
++}
++
++func (c *Checker) IsTypeIdenticalTo(source *Type, target *Type) bool {
++	return c.isTypeIdenticalTo(source, target)
++}
++
++func (c *Checker) IsTypeComparableTo(source *Type, target *Type) bool {
++	return c.isTypeComparableTo(source, target)
++}
++
+ func (c *Checker) GetUnionTypeEx(types []*Type, unionReduction UnionReduction) *Type {
+ 	return c.getUnionTypeEx(types, unionReduction, nil, nil)
+ }
+diff --git a/tsc/internal/ls/ryibatch.go b/tsc/internal/ls/ryibatch.go
+new file mode 100644
+index 000000000..8e68f4628
+--- /dev/null
++++ b/tsc/internal/ls/ryibatch.go
+@@ -0,0 +1,131 @@
++package ls
++
++import (
++	"context"
++	"fmt"
++	"slices"
++
++	"github.com/microsoft/typescript-go/internal/ast"
++	"github.com/microsoft/typescript-go/internal/astnav"
++	"github.com/microsoft/typescript-go/internal/checker"
++	"github.com/microsoft/typescript-go/internal/compiler"
++	"github.com/microsoft/typescript-go/internal/lsp/lsproto"
++)
++
++type RyiFile struct {
++	Uri       lsproto.DocumentUri `json:"uri"`
++	Positions []lsproto.Position  `json:"positions"`
++}
++
++// RyiPair indexes the request's positions flattened in file order.
++type RyiPair struct {
++	Source   int    `json:"source"`
++	Target   int    `json:"target"`
++	Relation string `json:"relation"`
++}
++
++type RyiBatchParams struct {
++	Snapshot   uint64    `json:"snapshot,omitzero"`
++	Files      []RyiFile `json:"files"`
++	Pairs      []RyiPair `json:"pairs,omitempty"`
++	Definition bool      `json:"definition,omitzero"`
++	Types      bool      `json:"types,omitzero"`
++}
++
++type RyiAnswer struct {
++	Definition *lsproto.DefinitionResponse `json:"definition,omitempty"`
++	Symbol     uint64                      `json:"symbol,omitzero"`
++	Type       uint32                      `json:"type,omitzero"`
++}
++
++type RyiBatchResult struct {
++	Files [][]RyiAnswer `json:"files"`
++	Pairs []*bool       `json:"pairs,omitempty"`
++}
++
++func ryiRelate(c *checker.Checker, relation string, source, target *checker.Type) (bool, error) {
++	switch relation {
++	case "assignable":
++		return c.IsTypeAssignableTo(source, target), nil
++	case "subtype":
++		return c.IsTypeSubtypeOf(source, target), nil
++	case "strict_subtype":
++		return c.IsTypeStrictSubtypeOf(source, target), nil
++	case "identical":
++		return c.IsTypeIdenticalTo(source, target), nil
++	case "comparable":
++		return c.IsTypeComparableTo(source, target), nil
++	}
++	return false, fmt.Errorf("ryi/batch: unknown relation %q", relation)
++}
++
++// RyiBatch answers every position with ProvideDefinition and, from one checker per program,
++// symbol and type identity plus the pairs whose two positions share that program.
++func RyiBatch(ctx context.Context, params *RyiBatchParams, serviceOf func(lsproto.DocumentUri) (*LanguageService, error)) (*RyiBatchResult, error) {
++	result := &RyiBatchResult{Files: make([][]RyiAnswer, len(params.Files)), Pairs: make([]*bool, len(params.Pairs))}
++	services := make([]*LanguageService, len(params.Files))
++	flat := []struct{ file, position int }{}
++	var programs []*compiler.Program
++	for fx, file := range params.Files {
++		service, err := serviceOf(file.Uri)
++		if err != nil {
++			return nil, err
++		}
++		services[fx] = service
++		result.Files[fx] = make([]RyiAnswer, len(file.Positions))
++		for px, position := range file.Positions {
++			flat = append(flat, struct{ file, position int }{fx, px})
++			if params.Definition {
++				definition, err := service.ProvideDefinition(ctx, file.Uri, position)
++				if err != nil {
++					return nil, err
++				}
++				result.Files[fx][px].Definition = &definition
++			}
++		}
++		if !slices.Contains(programs, service.GetProgram()) {
++			programs = append(programs, service.GetProgram())
++		}
++	}
++	paired := make(map[int]bool)
++	for _, pair := range params.Pairs {
++		paired[pair.Source], paired[pair.Target] = true, true
++	}
++	types := make([]*checker.Type, len(flat))
++	for _, program := range programs {
++		c, done := program.GetTypeChecker(ctx)
++		for ix, at := range flat {
++			service := services[at.file]
++			if service.GetProgram() != program || !(params.Types || paired[ix]) {
++				continue
++			}
++			file := params.Files[at.file]
++			sourceFile := program.GetSourceFile(file.Uri.FileName())
++			if sourceFile == nil {
++				continue
++			}
++			node := astnav.GetTouchingPropertyName(sourceFile, int(service.converters.LineAndCharacterToPosition(sourceFile, file.Positions[at.position])))
++			if symbol := c.GetSymbolAtLocation(node); symbol != nil {
++				result.Files[at.file][at.position].Symbol = uint64(ast.GetSymbolId(symbol))
++			}
++			if t := c.GetTypeAtLocation(node); t != nil {
++				types[ix] = t
++				result.Files[at.file][at.position].Type = uint32(t.Id())
++			}
++		}
++		for px, pair := range params.Pairs {
++			source, target := flat[pair.Source], flat[pair.Target]
++			if services[source.file].GetProgram() != program || services[target.file].GetProgram() != program || types[pair.Source] == nil || types[pair.Target] == nil {
++				continue
++			}
++			related, err := ryiRelate(c, pair.Relation, types[pair.Source], types[pair.Target])
++			if err != nil {
++				done()
++				return nil, err
++			}
++			result.Pairs[px] = &related
++		}
++		done()
++	}
++	return result, nil
++}

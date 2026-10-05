@@ -1,0 +1,17 @@
+wedge	question	binary	wall_s	user_s	sys_s	max_rss_mb	requests	files_opened	answers	answers_equal
+ryii-today	callers	npm typescript@7.0.2	1.66	3.94	0.84	393			11	truth
+lsp-open	callers	tsgo-base	0.33	0.99	0.41	316	15	6	11	yes
+lsp-noopen	callers	tsgo-base	0.22	0.69	0.28	258	15	0	11	yes
+api	callers	tsgo-base	0.21	0.76	0.25	255	28	6	10	no
+api-batch	callers	tsgo-wedge	0.20	0.69	0.24	261	3	6	11	yes
+lsp-batch	callers	tsgo-wedge	0.24	0.73	0.27	259	2	0	11	yes
+lsp-open	callers=Signal@packages/signals/src/2_Signal.ts	tsgo-base	2.63	7.91	2.06	1283	582	133	549	truth
+lsp-noopen	callers=Signal@packages/signals/src/2_Signal.ts	tsgo-base	2.01	7.34	2.07	1339	582	0	549	yes
+api	callers=Signal@packages/signals/src/2_Signal.ts	tsgo-base	0.64	2.99	0.82	817	829	133	187	no
+api-batch	callers=Signal@packages/signals/src/2_Signal.ts	tsgo-wedge	0.97	3.35	0.83	1038	3	133	549	yes
+lsp-batch	callers=Signal@packages/signals/src/2_Signal.ts	tsgo-wedge	1.56	7.06	1.97	1576	2	0	549	yes
+ryii-today	callers=Signal@packages/signals/src/2_Signal.ts	npm typescript@7.0.2	3.99	4.25	0.83	384			188	no
+api	relations	tsgo-base	0.11	0.34	0.08	136	27	4	20	truth
+api-batch	relations	tsgo-wedge	0.10	0.37	0.08	138	3	4	20	yes
+lsp-batch	relations	tsgo-wedge	0.10	0.34	0.08	138	2	0	20	yes
+lsp-open	relations	tsgo-base	0.05	0.08	0.01	84	1	0	0	unreachable
