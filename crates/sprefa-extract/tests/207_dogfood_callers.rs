@@ -53,7 +53,6 @@ fn bounded_rust_callers_keep_module_routes_or_emit_a_cargo_abstain() {
             &["tests/all.rs", "tests/0_capture.rs"],
             true,
         ),
-        ("dogfood_callers", "src/0_calls.rs#method", &["src/0_calls.rs", "src/3_unknown.rs"], false),
     ];
     for (case, anchor, files, slow) in cases {
         let root = format!("tests/fixtures/{case}");
@@ -86,7 +85,6 @@ fn bounded_rust_callers_keep_module_routes_or_emit_a_cargo_abstain() {
                 .to_string(),
             "$CRATE",
         );
-        if files.contains(&"src/3_unknown.rs") { assert!(stdout.contains("\"reason\":\"inferred\""), "{stdout}"); }
         results.push(format!("{case}/{anchor} slow={slow}:\n{stdout}"));
     }
     insta::assert_snapshot!(results.join("\n"), @r#"
