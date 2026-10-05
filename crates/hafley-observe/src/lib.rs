@@ -22,6 +22,9 @@ pub mod sink;
 #[path = "5_sqlite.rs"]
 pub mod sqlite;
 #[cfg(feature = "sqlite-sink")]
+#[path = "5b_sqlite_work.rs"]
+pub mod sqlite_work;
+#[cfg(feature = "sqlite-sink")]
 #[path = "5a_sqlite_memory.rs"]
 pub mod sqlite_memory;
 #[cfg(feature = "oh")]
@@ -40,7 +43,8 @@ pub use _1_init::{init, init_with_sinks, init_with_writer, startup};
 pub use _2_otlp::shutdown;
 pub use _3_chrome::{chrome_layer, finish_trace, flush_trace, trace_path, TRACE_PATH_VARIABLE};
 pub use _4_counts::{
-    assert_growth, assert_growth_sized, observed_growth, observed_growth_sized, CountRecorder,
+    assert_growth, assert_growth_at_most, assert_growth_sized, growth_between, observed_growth,
+    observed_growth_sized, CountRecorder,
     EventStats, EventSums, FieldStats, Growth, SpanCounts,
 };
 pub use flush::{Flush, ParseFlushError, Row, Sink, Writer};

@@ -9,7 +9,7 @@ pub struct SpanCounts {
     pub fanout: BTreeMap<(String, String), usize>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Growth {
     Constant,
     /// Only `observed_growth_sized` reports it: a log ratio depends on the sizes, not their ratio.
@@ -162,8 +162,16 @@ pub fn observed_growth(
     name: &str,
     size_ratio: f64,
 ) -> Growth {
-    let before = small.entries_of(name) as f64;
-    let after = large.entries_of(name) as f64;
+    growth_between(
+        small.entries_of(name) as u64,
+        large.entries_of(name) as u64,
+        size_ratio,
+    )
+}
+
+/// `observed_growth` of any count: `before` at size n, `after` at size `size_ratio * n`.
+pub fn growth_between(before: u64, after: u64, size_ratio: f64) -> Growth {
+    let (before, after) = (before as f64, after as f64);
     if before <= 0.0 {
         return Growth::Constant;
     }
@@ -194,6 +202,15 @@ pub fn assert_growth(
         actual,
         small.entries_of(name),
         large.entries_of(name)
+    );
+}
+
+/// Fails when `growth_between` puts `name` above `ceiling`.
+pub fn assert_growth_at_most(name: &str, before: u64, after: u64, size_ratio: f64, ceiling: Growth) {
+    let actual = growth_between(before, after, size_ratio);
+    assert!(
+        actual <= ceiling,
+        "{name} grew {actual:?} from {before} to {after} across a {size_ratio}x input, ceiling {ceiling:?}"
     );
 }
 

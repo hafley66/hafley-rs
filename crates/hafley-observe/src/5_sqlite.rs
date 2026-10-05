@@ -76,6 +76,12 @@ impl StatementCounters {
     /// PROFILE observes one finished execution. SQLite counters otherwise
     /// accumulate across executions of a cached sqlite3_stmt.
     unsafe fn take(statement: *mut ffi::sqlite3_stmt) -> Self {
+        Self::take_with(statement, true)
+    }
+
+    /// `take`, with `run` reset only when `reset_run`: kept, it counts the
+    /// statement's executions so far, and zero at its STMT event marks a first run.
+    pub(crate) unsafe fn take_with(statement: *mut ffi::sqlite3_stmt, reset_run: bool) -> Self {
         let counter = |op| ffi::sqlite3_stmt_status(statement, op, 1);
         StatementCounters {
             vm_step: counter(ffi::SQLITE_STMTSTATUS_VM_STEP),
@@ -83,7 +89,7 @@ impl StatementCounters {
             sort: counter(ffi::SQLITE_STMTSTATUS_SORT),
             autoindex: counter(ffi::SQLITE_STMTSTATUS_AUTOINDEX),
             reprepare: counter(ffi::SQLITE_STMTSTATUS_REPREPARE),
-            run: counter(ffi::SQLITE_STMTSTATUS_RUN),
+            run: ffi::sqlite3_stmt_status(statement, ffi::SQLITE_STMTSTATUS_RUN, reset_run as i32),
             // MEMUSED is a gauge; SQLite ignores resetFlg for it.
             mem_used: counter(ffi::SQLITE_STMTSTATUS_MEMUSED),
         }
@@ -107,55 +113,73 @@ impl StatementCounters {
     }
 }
 
+/// The SQL text of a statement; empty for the schema reparse, which has none.
+pub(crate) unsafe fn statement_sql<'a>(statement: *mut ffi::sqlite3_stmt) -> &'a str {
+    let sql = ffi::sqlite3_sql(statement);
+    if sql.is_null() {
+        ""
+    } else {
+        CStr::from_ptr(sql).to_str().unwrap_or("")
+    }
+}
+
+/// The `statement begins` event, when its callsite is enabled.
+pub(crate) unsafe fn emit_begin(statement: *mut ffi::sqlite3_stmt) {
+    if !tracing::enabled!(target: SQLITE_TARGET, tracing::Level::TRACE) {
+        return;
+    }
+    let sql = statement_sql(statement);
+    let expanded = ffi::sqlite3_expanded_sql(statement);
+    let expanded_text = if expanded.is_null() {
+        String::new()
+    } else {
+        CStr::from_ptr(expanded).to_string_lossy().into_owned()
+    };
+    if !expanded.is_null() {
+        ffi::sqlite3_free(expanded.cast());
+    }
+    tracing::trace!(
+        target: SQLITE_TARGET,
+        sql = %sql,
+        expanded = %expanded_text,
+        "statement begins"
+    );
+}
+
 /// `vm_step` is the deterministic cost of a statement: the same input yields
 /// the same count on every machine, unlike elapsed time.
+pub(crate) unsafe fn emit_finished(statement: *mut ffi::sqlite3_stmt, nanos: u64, counters: &StatementCounters) {
+    let sql = statement_sql(statement);
+    tracing::debug!(
+        target: SQLITE_TARGET,
+        sql = %sql,
+        nanos,
+        vm_step = counters.vm_step,
+        fullscan_step = counters.fullscan_step,
+        sort = counters.sort,
+        autoindex = counters.autoindex,
+        reprepare = counters.reprepare,
+        run = counters.run,
+        mem_used = counters.mem_used,
+        "statement finished"
+    );
+    for finding in counters.findings() {
+        tracing::warn!(
+            target: SQLITE_TARGET,
+            sql = %sql,
+            vm_step = counters.vm_step,
+            "{}",
+            finding.as_str()
+        );
+    }
+}
+
 unsafe fn emit(event: u32, statement: *mut ffi::sqlite3_stmt, extra: *mut c_void) {
     match event {
-        ffi::SQLITE_TRACE_STMT => {
-            let sql = CStr::from_ptr(ffi::sqlite3_sql(statement)).to_string_lossy();
-            let expanded = ffi::sqlite3_expanded_sql(statement);
-            let expanded_text = if expanded.is_null() {
-                String::new()
-            } else {
-                CStr::from_ptr(expanded).to_string_lossy().into_owned()
-            };
-            if !expanded.is_null() {
-                ffi::sqlite3_free(expanded.cast());
-            }
-            tracing::trace!(
-                target: SQLITE_TARGET,
-                sql = %sql,
-                expanded = %expanded_text,
-                "statement begins"
-            );
-        }
+        ffi::SQLITE_TRACE_STMT => emit_begin(statement),
         ffi::SQLITE_TRACE_PROFILE => {
-            let sql = CStr::from_ptr(ffi::sqlite3_sql(statement)).to_string_lossy();
-            let nanos = *(extra as *const u64);
             let counters = StatementCounters::take(statement);
-            let findings = counters.findings();
-            tracing::debug!(
-                target: SQLITE_TARGET,
-                sql = %sql,
-                nanos,
-                vm_step = counters.vm_step,
-                fullscan_step = counters.fullscan_step,
-                sort = counters.sort,
-                autoindex = counters.autoindex,
-                reprepare = counters.reprepare,
-                run = counters.run,
-                mem_used = counters.mem_used,
-                "statement finished"
-            );
-            for finding in findings {
-                tracing::warn!(
-                    target: SQLITE_TARGET,
-                    sql = %sql,
-                    vm_step = counters.vm_step,
-                    "{}",
-                    finding.as_str()
-                );
-            }
+            emit_finished(statement, *(extra as *const u64), &counters);
         }
         _ => {}
     }
