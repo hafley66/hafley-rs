@@ -6,6 +6,8 @@
 use super::cleave_fields::widen_private_fields;
 #[path = "7c_cleave_root_items.rs"]
 mod root_items;
+#[path = "7g_cleave_empty_sources.rs"]
+mod empty_sources;
 #[path = "7b_cleave_ts_imports.rs"]
 mod ts_imports;
 use root_items::root_item_spans;
@@ -169,6 +171,7 @@ fn run_list(cli: &CleaveArgs, list: &Path, home: Option<&Path>) -> Result<(), cr
     let state = state_root_for(cli.state.as_deref(), home, &[root.as_path()])?;
     let mut cx = MoveCx::open_with_untracked(&root, cli.root.is_some())?;
     let mut imports = Imports::read(&cx, &root)?;
+    let mut sources = BTreeSet::new();
     let mut imported_before: BTreeMap<String, BTreeSet<(String, String)>> = BTreeMap::new();
     crate::outln!("root {}", root.display());
     for (target, dest) in &rows {
@@ -192,6 +195,7 @@ fn run_list(cli: &CleaveArgs, list: &Path, home: Option<&Path>) -> Result<(), cr
                     .insert((module_key(&row.name, &row.module), row.name.clone()));
             }
         }
+        sources.insert(plan.rows.src.clone());
         let edits = plan.land()?;
         imports.land(&plan, &edits);
         cx = plan.cx;
@@ -200,6 +204,7 @@ fn run_list(cli: &CleaveArgs, list: &Path, home: Option<&Path>) -> Result<(), cr
         }
     }
     drop_batch_unused_imports(&mut cx, &imports, &imported_before)?;
+    let deleted = empty_sources::remove(&mut cx, &sources)?;
     let _ = std::fs::remove_dir_all(overlay_scratch());
     for (rel, text) in cx.overlaid() {
         if rel.ends_with(".rs") {
@@ -207,7 +212,7 @@ fn run_list(cli: &CleaveArgs, list: &Path, home: Option<&Path>) -> Result<(), cr
                 .map_err(|error| format!("cleave batch leaves invalid Rust in {rel}: {error}"))?;
         }
     }
-    let (stages, touched, created) = batch_stages(&cx)?;
+    let (stages, touched, created) = batch_stages(&cx, &deleted)?;
     match cli.commit {
         true => {
             let journal = VerifyJournal::capture(&root, &[], &created, &touched)?;
@@ -295,6 +300,7 @@ fn drop_batch_unused_imports(
 #[allow(clippy::type_complexity)]
 fn batch_stages(
     cx: &MoveCx,
+    deleted: &BTreeSet<String>,
 ) -> Result<(Vec<Vec<soopy::SourceAction>>, Vec<String>, Vec<String>), String> {
     let root = cx.root();
     let identity = soopy::SourceRoot::open_directory(root)
@@ -312,6 +318,11 @@ fn batch_stages(
                     continue;
                 }
                 let source = directory_source(&identity, rel);
+                if deleted.contains(rel) {
+                    replaced.push(soopy::SourceAction::Delete { source, expected: content_id(root, rel)? });
+                    touched.push(rel.clone());
+                    continue;
+                }
                 let edit = soopy::TextEdit {
                     range: soopy::ActionSpan {
                         source: source.clone(),
@@ -333,10 +344,8 @@ fn batch_stages(
             }
         }
     }
-    let stages = [replaced, made]
-        .into_iter()
-        .filter(|stage| !stage.is_empty())
-        .collect();
+    replaced.extend(made);
+    let stages = if replaced.is_empty() { Vec::new() } else { vec![replaced] };
     Ok((stages, touched, created))
 }
 
@@ -1750,6 +1759,12 @@ impl Plan {
 
     /// One soopy stage of Replace actions, plus a Create stage when DEST is new.
     fn stages(&self) -> Result<Vec<Vec<soopy::SourceAction>>, String> {
+        if self.rows.src.ends_with(".rs") {
+            let mut cx = self.cx.clone();
+            for (rel, (text, _)) in self.land()? { cx.overlay(&rel, text); }
+            let deleted = empty_sources::remove(&mut cx, &BTreeSet::from([self.rows.src.clone()]))?;
+            if !deleted.is_empty() { return Ok(batch_stages(&cx, &deleted)?.0); }
+        }
         let identity = soopy::SourceRoot::open_directory(&self.root)
             .map_err(|error| format!("open root {}: {error}", self.root.display()))?
             .directory()
