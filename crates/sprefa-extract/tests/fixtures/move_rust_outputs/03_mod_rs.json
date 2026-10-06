@@ -1,0 +1,84 @@
+{
+  "steps": [
+    {
+      "action": "directory",
+      "path": "$work/state"
+    },
+    {
+      "action": "copy_tree",
+      "source": "$fixtures/rust_move/basic",
+      "target": "$work/repo"
+    },
+    {
+      "action": "git",
+      "cwd": "$work/repo",
+      "args": [
+        "init",
+        "-q",
+        "."
+      ]
+    },
+    {
+      "action": "git",
+      "cwd": "$work/repo",
+      "args": [
+        "add",
+        "-A"
+      ]
+    },
+    {
+      "action": "git",
+      "cwd": "$work/repo",
+      "args": [
+        "-c",
+        "user.email=extract@move.test",
+        "-c",
+        "user.name=extract-move",
+        "commit",
+        "-qm",
+        "fixture"
+      ]
+    },
+    {
+      "action": "write",
+      "path": "$work/state/moves.tsv",
+      "text": "$work/repo/src/a.rs\t$work/repo/src/a/mod.rs\n"
+    },
+    {
+      "action": "run",
+      "name": "move",
+      "cwd": "$manifest",
+      "arguments": [
+        "move",
+        "--list",
+        "$work/state/moves.tsv",
+        "--root",
+        "$work/repo",
+        "--state",
+        "$work/state",
+        "--commit"
+      ],
+      "environment": {
+        "RUSTUP_TOOLCHAIN": "stable"
+      },
+      "raw_stdout": true,
+      "stdout_redactions": [
+        {
+          "pattern": "(?m)^((?:\\[root [^\\n]+?\\] )?stage )[0-9a-f]{64}(.*)$",
+          "replacement": "${1}$$STAGE${2}"
+        }
+      ],
+      "expect_exit_code": 0
+    },
+    {
+      "action": "read_tree",
+      "name": "source_tree",
+      "path": "$work/repo",
+      "directory": true,
+      "exclude_prefixes": [
+        ".git/",
+        "target/"
+      ]
+    }
+  ]
+}

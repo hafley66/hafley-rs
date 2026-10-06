@@ -1,0 +1,340 @@
+---
+source: tests/support/2_fixture_runner.rs
+---
+{
+  "00_rename": {
+    "cargo_check": {
+      "exit_code": 0
+    },
+    "move": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/a.rs -> src/_0_a.rs\nrelocate mod a -> _0_a in src/lib.rs\nreplace src/lib.rs -> src/lib.rs  update src/lib.rs (91 bytes)\n    --- original\n    +++ modified\n    @@ -1,7 +1,7 @@\n    -mod a;\n    +mod _0_a;\n     mod b;\n    \n    -use crate::a::f;\n    +use crate::_0_a::f;\n    \n     pub fn call() -> u32 {\n         f() + b::legacy::two()\nstage $STAGE committed\nmove    src/a.rs -> src/_0_a.rs  move src/a.rs -> src/_0_a.rs (28 bytes)\nstage $STAGE committed\n",
+      "stderr": ""
+    },
+    "source_tree": {
+      "Cargo.toml": "[package]\nname = \"rust-move-fixture\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[lib]\npath = \"src/lib.rs\"\n\n[[bin]]\nname = \"x\"\npath = \"src/bin/x.rs\"\n",
+      "data/": {
+        "directory": true
+      },
+      "data/note.txt": "note\n",
+      "src/": {
+        "directory": true
+      },
+      "src/_0_a.rs": "pub fn f() -> u32 {\n    1\n}\n",
+      "src/b.rs": "#[path = \"vendor/legacy.rs\"]\npub mod legacy;\n\npub const NOTE: &str = include_str!(\"../data/note.txt\");\n",
+      "src/bin/": {
+        "directory": true
+      },
+      "src/bin/x.rs": "fn main() {\n    println!(\"x\");\n}\n",
+      "src/lib.rs": "mod _0_a;\nmod b;\n\nuse crate::_0_a::f;\n\npub fn call() -> u32 {\n    f() + b::legacy::two()\n}\n",
+      "src/vendor/": {
+        "directory": true
+      },
+      "src/vendor/legacy.rs": "pub fn two() -> u32 {\n    2\n}\n"
+    }
+  },
+  "01_outside": {
+    "git_status": {
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    "move": {
+      "exit_code": 2,
+      "stdout": "",
+      "stderr": "rust: move destination crates/ascii-engine/src/_0_a.rs is outside the source Rust crate root for src/a.rs\n"
+    },
+    "source_tree": {
+      "Cargo.toml": "[package]\nname = \"rust-move-fixture\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[lib]\npath = \"src/lib.rs\"\n\n[[bin]]\nname = \"x\"\npath = \"src/bin/x.rs\"\n",
+      "data/": {
+        "directory": true
+      },
+      "data/note.txt": "note\n",
+      "src/": {
+        "directory": true
+      },
+      "src/a.rs": "pub fn f() -> u32 {\n    1\n}\n",
+      "src/b.rs": "#[path = \"vendor/legacy.rs\"]\npub mod legacy;\n\npub const NOTE: &str = include_str!(\"../data/note.txt\");\n",
+      "src/bin/": {
+        "directory": true
+      },
+      "src/bin/x.rs": "fn main() {\n    println!(\"x\");\n}\n",
+      "src/lib.rs": "mod a;\nmod b;\n\nuse crate::a::f;\n\npub fn call() -> u32 {\n    f() + b::legacy::two()\n}\n",
+      "src/vendor/": {
+        "directory": true
+      },
+      "src/vendor/legacy.rs": "pub fn two() -> u32 {\n    2\n}\n"
+    }
+  },
+  "02_path": {
+    "move": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/a.rs -> src/util/a.rs\nreplace src/lib.rs -> src/lib.rs  update src/lib.rs (107 bytes)\n    --- original\n    +++ modified\n    @@ -1,4 +1,4 @@\n    -mod a;\n    +#[path = \"util/a.rs\"] mod a;\n     mod b;\n    \n     use crate::a::f;\nstage $STAGE committed\nmove    src/a.rs -> src/util/a.rs  move src/a.rs -> src/util/a.rs (28 bytes)\nstage $STAGE committed\n",
+      "stderr": ""
+    },
+    "source_tree": {
+      "Cargo.toml": "[package]\nname = \"rust-move-fixture\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[lib]\npath = \"src/lib.rs\"\n\n[[bin]]\nname = \"x\"\npath = \"src/bin/x.rs\"\n",
+      "data/": {
+        "directory": true
+      },
+      "data/note.txt": "note\n",
+      "src/": {
+        "directory": true
+      },
+      "src/b.rs": "#[path = \"vendor/legacy.rs\"]\npub mod legacy;\n\npub const NOTE: &str = include_str!(\"../data/note.txt\");\n",
+      "src/bin/": {
+        "directory": true
+      },
+      "src/bin/x.rs": "fn main() {\n    println!(\"x\");\n}\n",
+      "src/lib.rs": "#[path = \"util/a.rs\"] mod a;\nmod b;\n\nuse crate::a::f;\n\npub fn call() -> u32 {\n    f() + b::legacy::two()\n}\n",
+      "src/util/": {
+        "directory": true
+      },
+      "src/util/a.rs": "pub fn f() -> u32 {\n    1\n}\n",
+      "src/vendor/": {
+        "directory": true
+      },
+      "src/vendor/legacy.rs": "pub fn two() -> u32 {\n    2\n}\n"
+    }
+  },
+  "03_mod_rs": {
+    "move": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/a.rs -> src/a/mod.rs\nmove    src/a.rs -> src/a/mod.rs  move src/a.rs -> src/a/mod.rs (28 bytes)\nstage $STAGE committed\n",
+      "stderr": ""
+    },
+    "source_tree": {
+      "Cargo.toml": "[package]\nname = \"rust-move-fixture\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[lib]\npath = \"src/lib.rs\"\n\n[[bin]]\nname = \"x\"\npath = \"src/bin/x.rs\"\n",
+      "data/": {
+        "directory": true
+      },
+      "data/note.txt": "note\n",
+      "src/": {
+        "directory": true
+      },
+      "src/a/": {
+        "directory": true
+      },
+      "src/a/mod.rs": "pub fn f() -> u32 {\n    1\n}\n",
+      "src/b.rs": "#[path = \"vendor/legacy.rs\"]\npub mod legacy;\n\npub const NOTE: &str = include_str!(\"../data/note.txt\");\n",
+      "src/bin/": {
+        "directory": true
+      },
+      "src/bin/x.rs": "fn main() {\n    println!(\"x\");\n}\n",
+      "src/lib.rs": "mod a;\nmod b;\n\nuse crate::a::f;\n\npub fn call() -> u32 {\n    f() + b::legacy::two()\n}\n",
+      "src/vendor/": {
+        "directory": true
+      },
+      "src/vendor/legacy.rs": "pub fn two() -> u32 {\n    2\n}\n"
+    }
+  },
+  "04_deeper": {
+    "move": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/b.rs -> src/deep/b.rs\nreplace src/b.rs -> src/b.rs  update src/b.rs (109 bytes)\n    --- original\n    +++ modified\n    @@ -1,4 +1,4 @@\n    -#[path = \"vendor/legacy.rs\"]\n    +#[path = \"../vendor/legacy.rs\"]\n     pub mod legacy;\n    \n    -pub const NOTE: &str = include_str!(\"../data/note.txt\");\n    +pub const NOTE: &str = include_str!(\"../../data/note.txt\");\nreplace src/lib.rs -> src/lib.rs  update src/lib.rs (107 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,5 @@\n     mod a;\n    -mod b;\n    +#[path = \"deep/b.rs\"] mod b;\n    \n     use crate::a::f;\n    \nstage $STAGE committed\nmove    src/b.rs -> src/deep/b.rs  move src/b.rs -> src/deep/b.rs (109 bytes)\nstage $STAGE committed\n",
+      "stderr": ""
+    },
+    "source_tree": {
+      "Cargo.toml": "[package]\nname = \"rust-move-fixture\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[lib]\npath = \"src/lib.rs\"\n\n[[bin]]\nname = \"x\"\npath = \"src/bin/x.rs\"\n",
+      "data/": {
+        "directory": true
+      },
+      "data/note.txt": "note\n",
+      "src/": {
+        "directory": true
+      },
+      "src/a.rs": "pub fn f() -> u32 {\n    1\n}\n",
+      "src/bin/": {
+        "directory": true
+      },
+      "src/bin/x.rs": "fn main() {\n    println!(\"x\");\n}\n",
+      "src/deep/": {
+        "directory": true
+      },
+      "src/deep/b.rs": "#[path = \"../vendor/legacy.rs\"]\npub mod legacy;\n\npub const NOTE: &str = include_str!(\"../../data/note.txt\");\n",
+      "src/lib.rs": "mod a;\n#[path = \"deep/b.rs\"] mod b;\n\nuse crate::a::f;\n\npub fn call() -> u32 {\n    f() + b::legacy::two()\n}\n",
+      "src/vendor/": {
+        "directory": true
+      },
+      "src/vendor/legacy.rs": "pub fn two() -> u32 {\n    2\n}\n"
+    }
+  },
+  "05_bin": {
+    "move": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/bin/x.rs -> src/bin/tools/x.rs\nmanifest Cargo.toml: bin[0].path src/bin/x.rs -> src/bin/tools/x.rs\nreplace Cargo.toml -> Cargo.toml  update Cargo.toml (147 bytes)\n    --- original\n    +++ modified\n    @@ -8,4 +8,4 @@\n    \n     [[bin]]\n     name = \"x\"\n    -path = \"src/bin/x.rs\"\n    +path = \"src/bin/tools/x.rs\"\nstage $STAGE committed\nmove    src/bin/x.rs -> src/bin/tools/x.rs  move src/bin/x.rs -> src/bin/tools/x.rs (33 bytes)\nstage $STAGE committed\n",
+      "stderr": ""
+    },
+    "source_tree": {
+      "Cargo.toml": "[package]\nname = \"rust-move-fixture\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[lib]\npath = \"src/lib.rs\"\n\n[[bin]]\nname = \"x\"\npath = \"src/bin/tools/x.rs\"\n",
+      "data/": {
+        "directory": true
+      },
+      "data/note.txt": "note\n",
+      "src/": {
+        "directory": true
+      },
+      "src/a.rs": "pub fn f() -> u32 {\n    1\n}\n",
+      "src/b.rs": "#[path = \"vendor/legacy.rs\"]\npub mod legacy;\n\npub const NOTE: &str = include_str!(\"../data/note.txt\");\n",
+      "src/bin/": {
+        "directory": true
+      },
+      "src/bin/tools/": {
+        "directory": true
+      },
+      "src/bin/tools/x.rs": "fn main() {\n    println!(\"x\");\n}\n",
+      "src/lib.rs": "mod a;\nmod b;\n\nuse crate::a::f;\n\npub fn call() -> u32 {\n    f() + b::legacy::two()\n}\n",
+      "src/vendor/": {
+        "directory": true
+      },
+      "src/vendor/legacy.rs": "pub fn two() -> u32 {\n    2\n}\n"
+    }
+  },
+  "06_dry": {
+    "git_status": {
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    "move": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/a.rs -> src/util/a.rs\nreplace src/lib.rs -> src/lib.rs  update src/lib.rs (107 bytes)\n    --- original\n    +++ modified\n    @@ -1,4 +1,4 @@\n    -mod a;\n    +#[path = \"util/a.rs\"] mod a;\n     mod b;\n    \n     use crate::a::f;\nstage $STAGE dry run, tree untouched\nmove    src/a.rs -> src/util/a.rs  move src/a.rs -> src/util/a.rs (28 bytes)\nstage $STAGE dry run, tree untouched\n",
+      "stderr": ""
+    },
+    "source_tree": {
+      "Cargo.toml": "[package]\nname = \"rust-move-fixture\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[lib]\npath = \"src/lib.rs\"\n\n[[bin]]\nname = \"x\"\npath = \"src/bin/x.rs\"\n",
+      "data/": {
+        "directory": true
+      },
+      "data/note.txt": "note\n",
+      "src/": {
+        "directory": true
+      },
+      "src/a.rs": "pub fn f() -> u32 {\n    1\n}\n",
+      "src/b.rs": "#[path = \"vendor/legacy.rs\"]\npub mod legacy;\n\npub const NOTE: &str = include_str!(\"../data/note.txt\");\n",
+      "src/bin/": {
+        "directory": true
+      },
+      "src/bin/x.rs": "fn main() {\n    println!(\"x\");\n}\n",
+      "src/lib.rs": "mod a;\nmod b;\n\nuse crate::a::f;\n\npub fn call() -> u32 {\n    f() + b::legacy::two()\n}\n",
+      "src/vendor/": {
+        "directory": true
+      },
+      "src/vendor/legacy.rs": "pub fn two() -> u32 {\n    2\n}\n"
+    }
+  },
+  "07_relocate": {
+    "cargo_check": {
+      "exit_code": 0
+    },
+    "move": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/a.rs -> src/util/a.rs\nrelocate mod a: src/lib.rs -> src/util/mod.rs\nreplace src/lib.rs -> src/lib.rs  update src/lib.rs (126 bytes)\n    --- original\n    +++ modified\n    @@ -1,9 +1,8 @@\n    -mod a;\n     mod other;\n     mod util;\n    \n    -use crate::a::f;\n    +use crate::util::a::f;\n    \n     pub fn call() -> u32 {\n    -    f() + a::g() + other::reach() + util::size()\n    +    f() + util::a::g() + other::reach() + util::size()\n     }\nreplace src/other.rs -> src/other.rs  update src/other.rs (50 bytes)\n    --- original\n    +++ modified\n    @@ -1,3 +1,3 @@\n     pub fn reach() -> u32 {\n    -    super::a::f()\n    +    super::util::a::f()\n     }\nreplace src/util/mod.rs -> src/util/mod.rs  update src/util/mod.rs (68 bytes)\n    --- original\n    +++ modified\n    @@ -1,3 +1,4 @@\n    +pub mod a;\n     mod helper;\n    \n     pub fn size() -> u32 {\nstage $STAGE committed\nmove    src/a.rs -> src/util/a.rs  move src/a.rs -> src/util/a.rs (57 bytes)\nstage $STAGE committed\n",
+      "stderr": ""
+    },
+    "source_tree": {
+      "Cargo.toml": "[package]\nname = \"rust-relocate-fixture\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[lib]\npath = \"src/lib.rs\"\n",
+      "src/": {
+        "directory": true
+      },
+      "src/lib.rs": "mod other;\nmod util;\n\nuse crate::util::a::f;\n\npub fn call() -> u32 {\n    f() + util::a::g() + other::reach() + util::size()\n}\n",
+      "src/other.rs": "pub fn reach() -> u32 {\n    super::util::a::f()\n}\n",
+      "src/util/": {
+        "directory": true
+      },
+      "src/util/a.rs": "pub fn f() -> u32 {\n    1\n}\n\npub fn g() -> u32 {\n    2\n}\n",
+      "src/util/helper.rs": "pub fn size() -> u32 {\n    3\n}\n",
+      "src/util/mod.rs": "pub mod a;\nmod helper;\n\npub fn size() -> u32 {\n    helper::size()\n}\n"
+    }
+  },
+  "08_no_parent": {
+    "git_status": {
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    "move": {
+      "exit_code": 2,
+      "stdout": "",
+      "stderr": "rust: --relocate-mod: src/other.rs -> src/nope/other.rs has no parent module file (the destination sits under no crate root); create one in the same batch or drop --relocate-mod\n"
+    },
+    "source_tree": {
+      "Cargo.toml": "[package]\nname = \"rust-relocate-fixture\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[lib]\npath = \"src/lib.rs\"\n",
+      "src/": {
+        "directory": true
+      },
+      "src/a.rs": "pub fn f() -> u32 {\n    1\n}\n\npub fn g() -> u32 {\n    2\n}\n",
+      "src/lib.rs": "mod a;\nmod other;\nmod util;\n\nuse crate::a::f;\n\npub fn call() -> u32 {\n    f() + a::g() + other::reach() + util::size()\n}\n",
+      "src/other.rs": "pub fn reach() -> u32 {\n    super::a::f()\n}\n",
+      "src/util/": {
+        "directory": true
+      },
+      "src/util/helper.rs": "pub fn size() -> u32 {\n    3\n}\n",
+      "src/util/mod.rs": "mod helper;\n\npub fn size() -> u32 {\n    helper::size()\n}\n"
+    }
+  },
+  "09_default": {
+    "move": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/a.rs -> src/util/a.rs\nreplace src/lib.rs -> src/lib.rs  update src/lib.rs (143 bytes)\n    --- original\n    +++ modified\n    @@ -1,4 +1,4 @@\n    -mod a;\n    +#[path = \"util/a.rs\"] mod a;\n     mod other;\n     mod util;\n    \nstage $STAGE committed\nmove    src/a.rs -> src/util/a.rs  move src/a.rs -> src/util/a.rs (57 bytes)\nstage $STAGE committed\n",
+      "stderr": ""
+    },
+    "source_tree": {
+      "Cargo.toml": "[package]\nname = \"rust-relocate-fixture\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[lib]\npath = \"src/lib.rs\"\n",
+      "src/": {
+        "directory": true
+      },
+      "src/lib.rs": "#[path = \"util/a.rs\"] mod a;\nmod other;\nmod util;\n\nuse crate::a::f;\n\npub fn call() -> u32 {\n    f() + a::g() + other::reach() + util::size()\n}\n",
+      "src/other.rs": "pub fn reach() -> u32 {\n    super::a::f()\n}\n",
+      "src/util/": {
+        "directory": true
+      },
+      "src/util/a.rs": "pub fn f() -> u32 {\n    1\n}\n\npub fn g() -> u32 {\n    2\n}\n",
+      "src/util/helper.rs": "pub fn size() -> u32 {\n    3\n}\n",
+      "src/util/mod.rs": "mod helper;\n\npub fn size() -> u32 {\n    helper::size()\n}\n"
+    }
+  },
+  "10_visibility": {
+    "cargo_check": {
+      "exit_code": 0
+    },
+    "move": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/a.rs -> src/util/a.rs\nwiden src/a.rs:9 handed_off -> pub(crate)\nrelocate mod a: src/lib.rs -> src/util/mod.rs\nreplace src/a.rs -> src/a.rs  update src/a.rs (122 bytes)\n    --- original\n    +++ modified\n    @@ -6,6 +6,6 @@\n         1\n     }\n    \n    -fn handed_off() -> u32 {\n    +pub(crate) fn handed_off() -> u32 {\n         2\n     }\nreplace src/lib.rs -> src/lib.rs  update src/lib.rs (111 bytes)\n    --- original\n    +++ modified\n    @@ -1,8 +1,7 @@\n    -mod a;\n     mod other;\n     mod util;\n    \n    -use crate::a::f;\n    +use crate::util::a::f;\n    \n     pub fn call() -> u32 {\n         f() + other::reach() + util::size()\nreplace src/other.rs -> src/other.rs  update src/other.rs (59 bytes)\n    --- original\n    +++ modified\n    @@ -1,3 +1,3 @@\n     pub fn reach() -> u32 {\n    -    super::a::handed_off()\n    +    super::util::a::handed_off()\n     }\nreplace src/util/mod.rs -> src/util/mod.rs  update src/util/mod.rs (42 bytes)\n    --- original\n    +++ modified\n    @@ -1,3 +1,4 @@\n    +pub mod a;\n     pub fn size() -> u32 {\n         3\n     }\nstage $STAGE committed\nmove    src/a.rs -> src/util/a.rs  move src/a.rs -> src/util/a.rs (122 bytes)\nstage $STAGE committed\n",
+      "stderr": ""
+    },
+    "source_tree": {
+      "Cargo.toml": "[package]\nname = \"rust-visibility-fixture\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[lib]\npath = \"src/lib.rs\"\n",
+      "src/": {
+        "directory": true
+      },
+      "src/lib.rs": "mod other;\nmod util;\n\nuse crate::util::a::f;\n\npub fn call() -> u32 {\n    f() + other::reach() + util::size()\n}\n",
+      "src/other.rs": "pub fn reach() -> u32 {\n    super::util::a::handed_off()\n}\n",
+      "src/util/": {
+        "directory": true
+      },
+      "src/util/a.rs": "pub fn f() -> u32 {\n    local_warmup()\n}\n\nfn local_warmup() -> u32 {\n    1\n}\n\npub(crate) fn handed_off() -> u32 {\n    2\n}\n",
+      "src/util/mod.rs": "pub mod a;\npub fn size() -> u32 {\n    3\n}\n"
+    }
+  },
+  "11_visibility_default": {
+    "move": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/a.rs -> src/util/a.rs\nreplace src/lib.rs -> src/lib.rs  update src/lib.rs (134 bytes)\n    --- original\n    +++ modified\n    @@ -1,4 +1,4 @@\n    -mod a;\n    +#[path = \"util/a.rs\"] mod a;\n     mod other;\n     mod util;\n    \nstage $STAGE committed\nmove    src/a.rs -> src/util/a.rs  move src/a.rs -> src/util/a.rs (111 bytes)\nstage $STAGE committed\n",
+      "stderr": ""
+    },
+    "source_tree": {
+      "Cargo.toml": "[package]\nname = \"rust-visibility-fixture\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[lib]\npath = \"src/lib.rs\"\n",
+      "src/": {
+        "directory": true
+      },
+      "src/lib.rs": "#[path = \"util/a.rs\"] mod a;\nmod other;\nmod util;\n\nuse crate::a::f;\n\npub fn call() -> u32 {\n    f() + other::reach() + util::size()\n}\n",
+      "src/other.rs": "pub fn reach() -> u32 {\n    super::a::handed_off()\n}\n",
+      "src/util/": {
+        "directory": true
+      },
+      "src/util/a.rs": "pub fn f() -> u32 {\n    local_warmup()\n}\n\nfn local_warmup() -> u32 {\n    1\n}\n\nfn handed_off() -> u32 {\n    2\n}\n",
+      "src/util/mod.rs": "pub fn size() -> u32 {\n    3\n}\n"
+    }
+  }
+}

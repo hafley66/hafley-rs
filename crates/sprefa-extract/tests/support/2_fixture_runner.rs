@@ -146,10 +146,14 @@ pub fn commands(case: &Value, api: impl Fn(&Value) -> Value) -> Value {
                 );
             }
             "read_tree" => {
-                observed.insert(
-                    name.to_string(),
-                    serde_json::json!(std::fs::read_to_string(path()).unwrap()),
-                );
+                let value = if step["directory"] == true {
+                    let mut files = tree_contents(&path());
+                    if let Some(prefixes) = step["exclude_prefixes"].as_array() {
+                        files.retain(|file, _| !prefixes.iter().any(|prefix| file.starts_with(prefix.as_str().unwrap())));
+                    }
+                    serde_json::json!(files)
+                } else { serde_json::json!(std::fs::read_to_string(path()).unwrap()) };
+                observed.insert(name.to_string(), value);
             }
             "replace" => {
                 let text = std::fs::read_to_string(path()).unwrap();
