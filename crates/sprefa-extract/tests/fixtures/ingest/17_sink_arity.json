@@ -1,0 +1,22 @@
+{
+  "steps": [
+    {
+      "action": "api",
+      "name": "sink",
+      "api": "wrong_arity",
+      "run": 0,
+      "method": "checker_walk",
+      "facts": [
+        {
+          "relation": "tsi.edge",
+          "args": [
+            {
+              "id": 0
+            }
+          ]
+        }
+      ],
+      "message": "arity 1, the registry says 5"
+    }
+  ]
+}

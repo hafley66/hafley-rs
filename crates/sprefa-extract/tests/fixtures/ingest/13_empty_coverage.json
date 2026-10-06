@@ -1,0 +1,32 @@
+{
+  "steps": [
+    {
+      "action": "run",
+      "name": "ingest",
+      "cwd": "$manifest",
+      "stdin_file": "$fixtures/ingest/13_empty_coverage.jsonl",
+      "raw_stdout": true,
+      "unasserted_exit": true,
+      "unasserted_stderr": false,
+      "assert_success": false,
+      "arguments": [
+        "ingest",
+        "/dev/stdin"
+      ]
+    },
+    {
+      "action": "claim",
+      "name": "error_0",
+      "kind": "contains",
+      "cell": "ingest.stderr",
+      "text": "tsi.sum"
+    },
+    {
+      "action": "claim",
+      "name": "error_1",
+      "kind": "contains",
+      "cell": "ingest.stderr",
+      "text": "run 0"
+    }
+  ]
+}

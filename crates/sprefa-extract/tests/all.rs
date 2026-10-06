@@ -608,3 +608,6 @@ mod cfg_support;
 #[cfg(feature = "cli")]
 #[path = "support/12_http.rs"]
 mod http_support;
+
+#[path = "support/13_ingest.rs"]
+mod ingest_support;

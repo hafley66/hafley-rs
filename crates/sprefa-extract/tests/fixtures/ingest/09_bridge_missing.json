@@ -1,0 +1,18 @@
+{
+  "steps": [
+    {
+      "action": "run",
+      "name": "ingest",
+      "cwd": "$manifest",
+      "stdin_file": "$fixtures/ingest/09_bridge_missing.jsonl",
+      "raw_stdout": true,
+      "unasserted_exit": true,
+      "unasserted_stderr": false,
+      "assert_success": false,
+      "arguments": [
+        "ingest",
+        "/dev/stdin"
+      ]
+    }
+  ]
+}

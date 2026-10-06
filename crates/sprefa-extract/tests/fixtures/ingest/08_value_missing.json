@@ -1,0 +1,25 @@
+{
+  "steps": [
+    {
+      "action": "run",
+      "name": "ingest",
+      "cwd": "$manifest",
+      "stdin_file": "$fixtures/ingest/08_value_missing.jsonl",
+      "raw_stdout": true,
+      "unasserted_exit": true,
+      "unasserted_stderr": false,
+      "assert_success": false,
+      "arguments": [
+        "ingest",
+        "/dev/stdin"
+      ]
+    },
+    {
+      "action": "claim",
+      "name": "error_0",
+      "kind": "contains",
+      "cell": "ingest.stderr",
+      "text": "id 330"
+    }
+  ]
+}

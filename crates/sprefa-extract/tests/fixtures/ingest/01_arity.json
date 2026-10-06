@@ -1,0 +1,39 @@
+{
+  "steps": [
+    {
+      "action": "run",
+      "name": "ingest",
+      "cwd": "$manifest",
+      "stdin_file": "$fixtures/ingest/01_arity.jsonl",
+      "raw_stdout": true,
+      "unasserted_exit": true,
+      "unasserted_stderr": false,
+      "assert_success": false,
+      "arguments": [
+        "ingest",
+        "/dev/stdin"
+      ]
+    },
+    {
+      "action": "claim",
+      "name": "error_0",
+      "kind": "contains",
+      "cell": "ingest.stderr",
+      "text": "tsi.edge"
+    },
+    {
+      "action": "claim",
+      "name": "error_1",
+      "kind": "contains",
+      "cell": "ingest.stderr",
+      "text": "line 7"
+    },
+    {
+      "action": "claim",
+      "name": "error_2",
+      "kind": "contains",
+      "cell": "ingest.stderr",
+      "text": "arity 4"
+    }
+  ]
+}

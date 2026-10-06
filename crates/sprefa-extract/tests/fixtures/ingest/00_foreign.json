@@ -1,0 +1,40 @@
+{
+  "steps": [
+    {
+      "action": "run",
+      "name": "once",
+      "cwd": "$manifest",
+      "stdin_file": "$fixtures/ingest/00_foreign.jsonl",
+      "raw_stdout": true,
+      "unasserted_exit": true,
+      "unasserted_stderr": true,
+      "stdout_to": "$work/once.jsonl",
+      "assert_success": true,
+      "arguments": [
+        "ingest",
+        "/dev/stdin"
+      ]
+    },
+    {
+      "action": "run",
+      "name": "twice",
+      "cwd": "$manifest",
+      "stdin_file": "$work/once.jsonl",
+      "raw_stdout": true,
+      "unasserted_exit": true,
+      "unasserted_stderr": true,
+      "assert_success": true,
+      "arguments": [
+        "ingest",
+        "/dev/stdin"
+      ]
+    },
+    {
+      "action": "claim",
+      "name": "idempotent",
+      "kind": "cells_equal",
+      "left": "once.stdout",
+      "right": "twice.stdout"
+    }
+  ]
+}

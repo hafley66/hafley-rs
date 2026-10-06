@@ -1,0 +1,225 @@
+---
+source: tests/support/2_fixture_runner.rs
+---
+{
+  "00_foreign": {
+    "idempotent": true,
+    "once": {
+      "success": true,
+      "stdout": "{\"record\":\"protocol\",\"version\":1}\n{\"record\":\"coverage\",\"run\":0,\"relation\":\"tsi.edge\",\"coverage\":\"complete\"}\n{\"record\":\"fact\",\"fact\":0,\"relation\":\"ts.readonly\",\"args\":[{\"id\":0}]}\n{\"record\":\"fact\",\"fact\":1,\"relation\":\"tsi.edge\",\"args\":[{\"id\":0},{\"id\":1},{\"text\":\"id\"},{\"id\":2},{\"int\":0}]}\n{\"record\":\"fact\",\"fact\":2,\"relation\":\"tsi.edge\",\"args\":[{\"id\":3},{\"id\":1},{\"text\":\"name\"},{\"id\":4},{\"int\":1}]}\n{\"record\":\"fact\",\"fact\":3,\"relation\":\"tsi.product\",\"args\":[{\"id\":1}]}\n{\"record\":\"fact\",\"fact\":4,\"relation\":\"tsi.type\",\"args\":[{\"id\":1}]}\n{\"record\":\"fact\",\"fact\":5,\"relation\":\"tsi.type\",\"args\":[{\"id\":2}]}\n{\"record\":\"fact\",\"fact\":6,\"relation\":\"tsi.type\",\"args\":[{\"id\":4}]}\n{\"record\":\"run\",\"run\":0,\"mode\":\"semantic\",\"tool\":\"probe\",\"version\":\"0.0.1\",\"scope\":[\"blake3:probe\"]}\n{\"record\":\"witness\",\"fact\":0,\"run\":0,\"method\":\"checker_walk\"}\n{\"record\":\"witness\",\"fact\":0,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":1,\"run\":0,\"method\":\"checker_walk\"}\n{\"record\":\"witness\",\"fact\":1,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":2,\"run\":0,\"method\":\"checker_walk\"}\n{\"record\":\"witness\",\"fact\":2,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":3,\"run\":0,\"method\":\"checker_walk\"}\n{\"record\":\"witness\",\"fact\":3,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":4,\"run\":0,\"method\":\"checker_walk\"}\n{\"record\":\"witness\",\"fact\":4,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":5,\"run\":0,\"method\":\"checker_walk\"}\n{\"record\":\"witness\",\"fact\":5,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":6,\"run\":0,\"method\":\"checker_walk\"}\n{\"record\":\"witness\",\"fact\":6,\"run\":0,\"method\":\"foreign\"}\n"
+    },
+    "twice": {
+      "success": true,
+      "stdout": "{\"record\":\"protocol\",\"version\":1}\n{\"record\":\"coverage\",\"run\":0,\"relation\":\"tsi.edge\",\"coverage\":\"complete\"}\n{\"record\":\"fact\",\"fact\":0,\"relation\":\"ts.readonly\",\"args\":[{\"id\":0}]}\n{\"record\":\"fact\",\"fact\":1,\"relation\":\"tsi.edge\",\"args\":[{\"id\":0},{\"id\":1},{\"text\":\"id\"},{\"id\":2},{\"int\":0}]}\n{\"record\":\"fact\",\"fact\":2,\"relation\":\"tsi.edge\",\"args\":[{\"id\":3},{\"id\":1},{\"text\":\"name\"},{\"id\":4},{\"int\":1}]}\n{\"record\":\"fact\",\"fact\":3,\"relation\":\"tsi.product\",\"args\":[{\"id\":1}]}\n{\"record\":\"fact\",\"fact\":4,\"relation\":\"tsi.type\",\"args\":[{\"id\":1}]}\n{\"record\":\"fact\",\"fact\":5,\"relation\":\"tsi.type\",\"args\":[{\"id\":2}]}\n{\"record\":\"fact\",\"fact\":6,\"relation\":\"tsi.type\",\"args\":[{\"id\":4}]}\n{\"record\":\"run\",\"run\":0,\"mode\":\"semantic\",\"tool\":\"probe\",\"version\":\"0.0.1\",\"scope\":[\"blake3:probe\"]}\n{\"record\":\"witness\",\"fact\":0,\"run\":0,\"method\":\"checker_walk\"}\n{\"record\":\"witness\",\"fact\":0,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":1,\"run\":0,\"method\":\"checker_walk\"}\n{\"record\":\"witness\",\"fact\":1,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":2,\"run\":0,\"method\":\"checker_walk\"}\n{\"record\":\"witness\",\"fact\":2,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":3,\"run\":0,\"method\":\"checker_walk\"}\n{\"record\":\"witness\",\"fact\":3,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":4,\"run\":0,\"method\":\"checker_walk\"}\n{\"record\":\"witness\",\"fact\":4,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":5,\"run\":0,\"method\":\"checker_walk\"}\n{\"record\":\"witness\",\"fact\":5,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":6,\"run\":0,\"method\":\"checker_walk\"}\n{\"record\":\"witness\",\"fact\":6,\"run\":0,\"method\":\"foreign\"}\n"
+    }
+  },
+  "01_arity": {
+    "error_0": true,
+    "error_1": true,
+    "error_2": true,
+    "ingest": {
+      "success": false,
+      "stdout": "",
+      "stderr": "ryi: line 7: tsi.edge: arity 4, the registry says 5\n"
+    }
+  },
+  "02_kind": {
+    "error_0": true,
+    "error_1": true,
+    "ingest": {
+      "success": false,
+      "stdout": "",
+      "stderr": "ryi: line 7: tsi.edge: argument at position 4 is text, the registry says int\n"
+    }
+  },
+  "03_unknown": {
+    "error_0": true,
+    "error_1": true,
+    "ingest": {
+      "success": false,
+      "stdout": "",
+      "stderr": "ryi: line 9: tsi.frobnicate: not in registry\n"
+    }
+  },
+  "04_dangling": {
+    "error_0": true,
+    "error_1": true,
+    "ingest": {
+      "success": false,
+      "stdout": "",
+      "stderr": "ryi: line 7: id 9 is declared by no tsi.type, tsi.symbol, tsi.value, tsi.edge, rust.impl or tsi.called row\n"
+    }
+  },
+  "05_symbol": {
+    "ingest": {
+      "success": true,
+      "stdout": "{\"record\":\"protocol\",\"version\":1}\n{\"record\":\"coverage\",\"run\":0,\"relation\":\"tsi.edge\",\"coverage\":\"complete\"}\n{\"record\":\"fact\",\"fact\":0,\"relation\":\"ts.readonly\",\"args\":[{\"id\":0}]}\n{\"record\":\"fact\",\"fact\":1,\"relation\":\"tsi.denotes\",\"args\":[{\"id\":1},{\"id\":2}]}\n{\"record\":\"fact\",\"fact\":2,\"relation\":\"tsi.edge\",\"args\":[{\"id\":0},{\"id\":2},{\"text\":\"id\"},{\"id\":3},{\"int\":0}]}\n{\"record\":\"fact\",\"fact\":3,\"relation\":\"tsi.edge\",\"args\":[{\"id\":4},{\"id\":2},{\"text\":\"name\"},{\"id\":5},{\"int\":1}]}\n{\"record\":\"fact\",\"fact\":4,\"relation\":\"tsi.product\",\"args\":[{\"id\":2}]}\n{\"record\":\"fact\",\"fact\":5,\"relation\":\"tsi.symbol\",\"args\":[{\"id\":1}]}\n{\"record\":\"fact\",\"fact\":6,\"relation\":\"tsi.type\",\"args\":[{\"id\":2}]}\n{\"record\":\"fact\",\"fact\":7,\"relation\":\"tsi.type\",\"args\":[{\"id\":3}]}\n{\"record\":\"fact\",\"fact\":8,\"relation\":\"tsi.type\",\"args\":[{\"id\":5}]}\n{\"record\":\"run\",\"run\":0,\"mode\":\"semantic\",\"tool\":\"probe\",\"version\":\"0.0.1\",\"scope\":[\"blake3:probe\"]}\n{\"record\":\"witness\",\"fact\":0,\"run\":0,\"method\":\"checker_walk\"}\n{\"record\":\"witness\",\"fact\":0,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":1,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":2,\"run\":0,\"method\":\"checker_walk\"}\n{\"record\":\"witness\",\"fact\":2,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":3,\"run\":0,\"method\":\"checker_walk\"}\n{\"record\":\"witness\",\"fact\":3,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":4,\"run\":0,\"method\":\"checker_walk\"}\n{\"record\":\"witness\",\"fact\":4,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":5,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":6,\"run\":0,\"method\":\"checker_walk\"}\n{\"record\":\"witness\",\"fact\":6,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":7,\"run\":0,\"method\":\"checker_walk\"}\n{\"record\":\"witness\",\"fact\":7,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":8,\"run\":0,\"method\":\"checker_walk\"}\n{\"record\":\"witness\",\"fact\":8,\"run\":0,\"method\":\"foreign\"}\n"
+    }
+  },
+  "06_symbol_missing": {
+    "error_0": true,
+    "ingest": {
+      "success": false,
+      "stdout": "",
+      "stderr": "ryi: line 18: id 301 is declared by no tsi.type, tsi.symbol, tsi.value, tsi.edge, rust.impl or tsi.called row\n"
+    }
+  },
+  "07_value": {
+    "ingest": {
+      "success": true,
+      "stdout": "{\"record\":\"protocol\",\"version\":1}\n{\"record\":\"coverage\",\"run\":0,\"relation\":\"tsi.edge\",\"coverage\":\"complete\"}\n{\"record\":\"fact\",\"fact\":0,\"relation\":\"ts.readonly\",\"args\":[{\"id\":0}]}\n{\"record\":\"fact\",\"fact\":1,\"relation\":\"tsi.called\",\"args\":[{\"id\":1},{\"id\":2},{\"id\":3}]}\n{\"record\":\"fact\",\"fact\":10,\"relation\":\"tsi.value_argument\",\"args\":[{\"id\":3},{\"int\":0},{\"id\":7}]}\n{\"record\":\"fact\",\"fact\":2,\"relation\":\"tsi.edge\",\"args\":[{\"id\":0},{\"id\":2},{\"text\":\"id\"},{\"id\":4},{\"int\":0}]}\n{\"record\":\"fact\",\"fact\":3,\"relation\":\"tsi.edge\",\"args\":[{\"id\":5},{\"id\":2},{\"text\":\"name\"},{\"id\":6},{\"int\":1}]}\n{\"record\":\"fact\",\"fact\":4,\"relation\":\"tsi.product\",\"args\":[{\"id\":2}]}\n{\"record\":\"fact\",\"fact\":5,\"relation\":\"tsi.type\",\"args\":[{\"id\":1}]}\n{\"record\":\"fact\",\"fact\":6,\"relation\":\"tsi.type\",\"args\":[{\"id\":2}]}\n{\"record\":\"fact\",\"fact\":7,\"relation\":\"tsi.type\",\"args\":[{\"id\":4}]}\n{\"record\":\"fact\",\"fact\":8,\"relation\":\"tsi.type\",\"args\":[{\"id\":6}]}\n{\"record\":\"fact\",\"fact\":9,\"relation\":\"tsi.value\",\"args\":[{\"id\":7},{\"id\":2}]}\n{\"record\":\"run\",\"run\":0,\"mode\":\"semantic\",\"tool\":\"probe\",\"version\":\"0.0.1\",\"scope\":[\"blake3:probe\"]}\n{\"record\":\"witness\",\"fact\":0,\"run\":0,\"method\":\"checker_walk\"}\n{\"record\":\"witness\",\"fact\":0,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":1,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":10,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":2,\"run\":0,\"method\":\"checker_walk\"}\n{\"record\":\"witness\",\"fact\":2,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":3,\"run\":0,\"method\":\"checker_walk\"}\n{\"record\":\"witness\",\"fact\":3,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":4,\"run\":0,\"method\":\"checker_walk\"}\n{\"record\":\"witness\",\"fact\":4,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":5,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":6,\"run\":0,\"method\":\"checker_walk\"}\n{\"record\":\"witness\",\"fact\":6,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":7,\"run\":0,\"method\":\"checker_walk\"}\n{\"record\":\"witness\",\"fact\":7,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":8,\"run\":0,\"method\":\"checker_walk\"}\n{\"record\":\"witness\",\"fact\":8,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":9,\"run\":0,\"method\":\"foreign\"}\n"
+    }
+  },
+  "08_value_missing": {
+    "error_0": true,
+    "ingest": {
+      "success": false,
+      "stdout": "",
+      "stderr": "ryi: line 20: id 330 is declared by no tsi.type, tsi.symbol, tsi.value, tsi.edge, rust.impl or tsi.called row\n"
+    }
+  },
+  "09_bridge_missing": {
+    "ingest": {
+      "success": false,
+      "stdout": "",
+      "stderr": "ryi: line 18: id 340 is declared by no tsi.type, tsi.symbol, tsi.value, tsi.edge, rust.impl or tsi.called row\n"
+    }
+  },
+  "10_bridge": {
+    "ingest": {
+      "success": true,
+      "stdout": "{\"record\":\"protocol\",\"version\":1}\n{\"record\":\"coverage\",\"run\":0,\"relation\":\"tsi.edge\",\"coverage\":\"complete\"}\n{\"record\":\"fact\",\"fact\":0,\"relation\":\"ts.readonly\",\"args\":[{\"id\":0}]}\n{\"record\":\"fact\",\"fact\":1,\"relation\":\"tsi.edge\",\"args\":[{\"id\":0},{\"id\":1},{\"text\":\"id\"},{\"id\":2},{\"int\":0}]}\n{\"record\":\"fact\",\"fact\":2,\"relation\":\"tsi.edge\",\"args\":[{\"id\":3},{\"id\":1},{\"text\":\"name\"},{\"id\":4},{\"int\":1}]}\n{\"record\":\"fact\",\"fact\":3,\"relation\":\"tsi.product\",\"args\":[{\"id\":1}]}\n{\"record\":\"fact\",\"fact\":4,\"relation\":\"tsi.scip_symbol\",\"args\":[{\"id\":5},{\"text\":\"scip-typescript npm probe 1.0.0 src/`probe.ts`/User#\"}]}\n{\"record\":\"fact\",\"fact\":5,\"relation\":\"tsi.symbol\",\"args\":[{\"id\":5}]}\n{\"record\":\"fact\",\"fact\":6,\"relation\":\"tsi.type\",\"args\":[{\"id\":1}]}\n{\"record\":\"fact\",\"fact\":7,\"relation\":\"tsi.type\",\"args\":[{\"id\":2}]}\n{\"record\":\"fact\",\"fact\":8,\"relation\":\"tsi.type\",\"args\":[{\"id\":4}]}\n{\"record\":\"run\",\"run\":0,\"mode\":\"semantic\",\"tool\":\"probe\",\"version\":\"0.0.1\",\"scope\":[\"blake3:probe\"]}\n{\"record\":\"witness\",\"fact\":0,\"run\":0,\"method\":\"checker_walk\"}\n{\"record\":\"witness\",\"fact\":0,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":1,\"run\":0,\"method\":\"checker_walk\"}\n{\"record\":\"witness\",\"fact\":1,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":2,\"run\":0,\"method\":\"checker_walk\"}\n{\"record\":\"witness\",\"fact\":2,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":3,\"run\":0,\"method\":\"checker_walk\"}\n{\"record\":\"witness\",\"fact\":3,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":4,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":5,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":6,\"run\":0,\"method\":\"checker_walk\"}\n{\"record\":\"witness\",\"fact\":6,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":7,\"run\":0,\"method\":\"checker_walk\"}\n{\"record\":\"witness\",\"fact\":7,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":8,\"run\":0,\"method\":\"checker_walk\"}\n{\"record\":\"witness\",\"fact\":8,\"run\":0,\"method\":\"foreign\"}\n"
+    }
+  },
+  "11_impl": {
+    "ingest": {
+      "success": true,
+      "stdout": "{\"record\":\"protocol\",\"version\":1}\n{\"record\":\"coverage\",\"run\":0,\"relation\":\"tsi.edge\",\"coverage\":\"complete\"}\n{\"record\":\"fact\",\"fact\":0,\"relation\":\"rust.impl\",\"args\":[{\"id\":0},{\"id\":1},{\"id\":2}]}\n{\"record\":\"fact\",\"fact\":1,\"relation\":\"ts.readonly\",\"args\":[{\"id\":3}]}\n{\"record\":\"fact\",\"fact\":2,\"relation\":\"tsi.edge\",\"args\":[{\"id\":3},{\"id\":1},{\"text\":\"id\"},{\"id\":4},{\"int\":0}]}\n{\"record\":\"fact\",\"fact\":3,\"relation\":\"tsi.edge\",\"args\":[{\"id\":5},{\"id\":1},{\"text\":\"name\"},{\"id\":2},{\"int\":1}]}\n{\"record\":\"fact\",\"fact\":4,\"relation\":\"tsi.product\",\"args\":[{\"id\":1}]}\n{\"record\":\"fact\",\"fact\":5,\"relation\":\"tsi.type\",\"args\":[{\"id\":1}]}\n{\"record\":\"fact\",\"fact\":6,\"relation\":\"tsi.type\",\"args\":[{\"id\":2}]}\n{\"record\":\"fact\",\"fact\":7,\"relation\":\"tsi.type\",\"args\":[{\"id\":4}]}\n{\"record\":\"run\",\"run\":0,\"mode\":\"semantic\",\"tool\":\"probe\",\"version\":\"0.0.1\",\"scope\":[\"blake3:probe\"]}\n{\"record\":\"witness\",\"fact\":0,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":1,\"run\":0,\"method\":\"checker_walk\"}\n{\"record\":\"witness\",\"fact\":1,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":2,\"run\":0,\"method\":\"checker_walk\"}\n{\"record\":\"witness\",\"fact\":2,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":3,\"run\":0,\"method\":\"checker_walk\"}\n{\"record\":\"witness\",\"fact\":3,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":4,\"run\":0,\"method\":\"checker_walk\"}\n{\"record\":\"witness\",\"fact\":4,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":5,\"run\":0,\"method\":\"checker_walk\"}\n{\"record\":\"witness\",\"fact\":5,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":6,\"run\":0,\"method\":\"checker_walk\"}\n{\"record\":\"witness\",\"fact\":6,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":7,\"run\":0,\"method\":\"checker_walk\"}\n{\"record\":\"witness\",\"fact\":7,\"run\":0,\"method\":\"foreign\"}\n"
+    }
+  },
+  "12_cycle": {
+    "ingest": {
+      "within_budget": true,
+      "stdout": "{\"record\":\"protocol\",\"version\":1}\n{\"record\":\"coverage\",\"run\":0,\"relation\":\"tsi.edge\",\"coverage\":\"complete\"}\n{\"record\":\"fact\",\"fact\":0,\"relation\":\"ts.readonly\",\"args\":[{\"id\":0}]}\n{\"record\":\"fact\",\"fact\":1,\"relation\":\"tsi.edge\",\"args\":[{\"id\":0},{\"id\":1},{\"text\":\"id\"},{\"id\":1},{\"int\":0}]}\n{\"record\":\"fact\",\"fact\":2,\"relation\":\"tsi.edge\",\"args\":[{\"id\":2},{\"id\":1},{\"text\":\"name\"},{\"id\":3},{\"int\":1}]}\n{\"record\":\"fact\",\"fact\":3,\"relation\":\"tsi.product\",\"args\":[{\"id\":1}]}\n{\"record\":\"fact\",\"fact\":4,\"relation\":\"tsi.type\",\"args\":[{\"id\":1}]}\n{\"record\":\"fact\",\"fact\":5,\"relation\":\"tsi.type\",\"args\":[{\"id\":3}]}\n{\"record\":\"fact\",\"fact\":6,\"relation\":\"tsi.type\",\"args\":[{\"id\":4}]}\n{\"record\":\"run\",\"run\":0,\"mode\":\"semantic\",\"tool\":\"probe\",\"version\":\"0.0.1\",\"scope\":[\"blake3:probe\"]}\n{\"record\":\"witness\",\"fact\":0,\"run\":0,\"method\":\"checker_walk\"}\n{\"record\":\"witness\",\"fact\":0,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":1,\"run\":0,\"method\":\"checker_walk\"}\n{\"record\":\"witness\",\"fact\":1,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":2,\"run\":0,\"method\":\"checker_walk\"}\n{\"record\":\"witness\",\"fact\":2,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":3,\"run\":0,\"method\":\"checker_walk\"}\n{\"record\":\"witness\",\"fact\":3,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":4,\"run\":0,\"method\":\"checker_walk\"}\n{\"record\":\"witness\",\"fact\":4,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":5,\"run\":0,\"method\":\"checker_walk\"}\n{\"record\":\"witness\",\"fact\":5,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":6,\"run\":0,\"method\":\"checker_walk\"}\n{\"record\":\"witness\",\"fact\":6,\"run\":0,\"method\":\"foreign\"}\n",
+      "success": true
+    }
+  },
+  "13_empty_coverage": {
+    "error_0": true,
+    "error_1": true,
+    "ingest": {
+      "success": false,
+      "stdout": "",
+      "stderr": "ryi: run 0: coverage complete for tsi.sum with no fact row\n"
+    }
+  },
+  "14_schema": {
+    "registry": [
+      "  relation=tsi.type args=[id]",
+      "  relation=tsi.symbol args=[id]",
+      "  relation=tsi.denotes args=[id,id]",
+      "  relation=tsi.scip_symbol args=[id,text]",
+      "  relation=tsi.value args=[id,id]",
+      "  relation=tsi.value_argument args=[id,int,id]",
+      "  relation=tsi.has_type args=[span,id]",
+      "  relation=tsi.origin args=[id,atom,span]",
+      "  relation=tsi.name args=[id,text]",
+      "  relation=tsi.product args=[id]",
+      "  relation=tsi.sum args=[id]",
+      "  relation=tsi.callable args=[id]",
+      "  relation=tsi.primitive args=[id,atom]",
+      "  relation=tsi.edge args=[id,id,text,id,int]",
+      "  relation=tsi.parameter args=[id,id,int,atom]",
+      "  relation=tsi.called args=[id,id,id]",
+      "  relation=tsi.argument args=[id,int,id]",
+      "  relation=tsi.input args=[id,int,id]",
+      "  relation=tsi.output args=[id,int,id]",
+      "  relation=tsi.subtype args=[id,id,atom]",
+      "  relation=tsi.assignable args=[id,id,atom]",
+      "  relation=tsi.conforms args=[id,id,atom]",
+      "  relation=tsi.equivalent args=[id,id,atom]",
+      "  relation=ts.interface args=[id]",
+      "  relation=ts.conditional args=[id,id,id,id,id]",
+      "  relation=ts.mapped args=[id,id,id,id]",
+      "  relation=ts.readonly args=[id]",
+      "  relation=ts.optional args=[id]",
+      "  relation=rust.trait args=[id]",
+      "  relation=rust.impl args=[id,id,id]",
+      "  relation=rust.lifetime args=[id,atom]",
+      "  relation=rust.ownership args=[id,atom]",
+      "  relation=rust.assoc args=[id,text,id]",
+      "  relation=go.interface args=[id]",
+      "  relation=go.type_set args=[id,id]",
+      "  relation=go.embedding args=[id,id]"
+    ],
+    "schema": {}
+  },
+  "15_witness": {
+    "ingest": {
+      "success": true,
+      "stdout": "{\"record\":\"protocol\",\"version\":1}\n{\"record\":\"coverage\",\"run\":0,\"relation\":\"extract.type\",\"coverage\":\"partial\"}\n{\"record\":\"coverage\",\"run\":0,\"relation\":\"tsi.callable\",\"coverage\":\"partial\"}\n{\"record\":\"coverage\",\"run\":0,\"relation\":\"tsi.name\",\"coverage\":\"partial\"}\n{\"record\":\"coverage\",\"run\":0,\"relation\":\"tsi.origin\",\"coverage\":\"partial\"}\n{\"record\":\"coverage\",\"run\":0,\"relation\":\"tsi.product\",\"coverage\":\"partial\"}\n{\"record\":\"coverage\",\"run\":0,\"relation\":\"tsi.type\",\"coverage\":\"partial\"}\n{\"record\":\"fact\",\"fact\":0,\"relation\":\"tsi.callable\",\"args\":[{\"id\":0}]}\n{\"record\":\"fact\",\"fact\":1,\"relation\":\"tsi.name\",\"args\":[{\"id\":0},{\"text\":\"run\"}]}\n{\"record\":\"fact\",\"fact\":2,\"relation\":\"tsi.name\",\"args\":[{\"id\":1},{\"text\":\"{\\n  return helper();\\n}\"}]}\n{\"record\":\"fact\",\"fact\":3,\"relation\":\"tsi.origin\",\"args\":[{\"id\":0},{\"atom\":\"ts\"},{\"span\":[\"blake3:0eb8341b0b12d08ba613e69d4151453e401554b9dfe8cbf74601709bba08156f\",16,19]}]}\n{\"record\":\"fact\",\"fact\":4,\"relation\":\"tsi.origin\",\"args\":[{\"id\":1},{\"atom\":\"ts\"},{\"span\":[\"blake3:0eb8341b0b12d08ba613e69d4151453e401554b9dfe8cbf74601709bba08156f\",22,44]}]}\n{\"record\":\"fact\",\"fact\":5,\"relation\":\"tsi.product\",\"args\":[{\"id\":1}]}\n{\"record\":\"fact\",\"fact\":6,\"relation\":\"tsi.type\",\"args\":[{\"id\":0}]}\n{\"record\":\"fact\",\"fact\":7,\"relation\":\"tsi.type\",\"args\":[{\"id\":1}]}\n{\"record\":\"node\",\"fact\":8,\"family\":\"type\",\"span\":{\"start\":7,\"end\":44},\"kind\":\"function\",\"name\":\"run\"}\n{\"record\":\"run\",\"run\":0,\"mode\":\"syntax\",\"tool\":\"ryi\",\"version\":\"0.1.0\",\"scope\":[\"blake3:0eb8341b0b12d08ba613e69d4151453e401554b9dfe8cbf74601709bba08156f\"]}\n{\"record\":\"witness\",\"fact\":0,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":0,\"run\":0,\"method\":\"parse\"}\n{\"record\":\"witness\",\"fact\":1,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":1,\"run\":0,\"method\":\"parse\"}\n{\"record\":\"witness\",\"fact\":2,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":2,\"run\":0,\"method\":\"parse\"}\n{\"record\":\"witness\",\"fact\":3,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":3,\"run\":0,\"method\":\"parse\"}\n{\"record\":\"witness\",\"fact\":4,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":4,\"run\":0,\"method\":\"parse\"}\n{\"record\":\"witness\",\"fact\":5,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":5,\"run\":0,\"method\":\"parse\"}\n{\"record\":\"witness\",\"fact\":6,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":6,\"run\":0,\"method\":\"parse\"}\n{\"record\":\"witness\",\"fact\":7,\"run\":0,\"method\":\"foreign\"}\n{\"record\":\"witness\",\"fact\":7,\"run\":0,\"method\":\"parse\"}\n{\"record\":\"witness\",\"fact\":8,\"run\":0,\"method\":\"parse\"}\n"
+    },
+    "producer": {
+      "success": true,
+      "stdout": "{\"record\":\"protocol\",\"version\":1}\n{\"record\":\"run\",\"run\":0,\"mode\":\"syntax\",\"tool\":\"ryi\",\"version\":\"0.1.0\",\"scope\":[\"blake3:0eb8341b0b12d08ba613e69d4151453e401554b9dfe8cbf74601709bba08156f\"]}\n{\"record\":\"node\",\"fact\":1,\"family\":\"type\",\"span\":{\"start\":7,\"end\":44},\"kind\":\"function\",\"name\":\"run\"}\n{\"record\":\"fact\",\"fact\":2,\"relation\":\"tsi.type\",\"args\":[{\"id\":0}]}\n{\"record\":\"fact\",\"fact\":3,\"relation\":\"tsi.origin\",\"args\":[{\"id\":0},{\"atom\":\"ts\"},{\"span\":[\"blake3:0eb8341b0b12d08ba613e69d4151453e401554b9dfe8cbf74601709bba08156f\",16,19]}]}\n{\"record\":\"fact\",\"fact\":4,\"relation\":\"tsi.name\",\"args\":[{\"id\":0},{\"text\":\"run\"}]}\n{\"record\":\"fact\",\"fact\":5,\"relation\":\"tsi.callable\",\"args\":[{\"id\":0}]}\n{\"record\":\"fact\",\"fact\":6,\"relation\":\"tsi.type\",\"args\":[{\"id\":1}]}\n{\"record\":\"fact\",\"fact\":7,\"relation\":\"tsi.origin\",\"args\":[{\"id\":1},{\"atom\":\"ts\"},{\"span\":[\"blake3:0eb8341b0b12d08ba613e69d4151453e401554b9dfe8cbf74601709bba08156f\",22,44]}]}\n{\"record\":\"fact\",\"fact\":8,\"relation\":\"tsi.name\",\"args\":[{\"id\":1},{\"text\":\"{\\n  return helper();\\n}\"}]}\n{\"record\":\"fact\",\"fact\":9,\"relation\":\"tsi.product\",\"args\":[{\"id\":1}]}\n{\"record\":\"witness\",\"fact\":1,\"run\":0,\"method\":\"parse\"}\n{\"record\":\"witness\",\"fact\":2,\"run\":0,\"method\":\"parse\"}\n{\"record\":\"witness\",\"fact\":3,\"run\":0,\"method\":\"parse\"}\n{\"record\":\"witness\",\"fact\":4,\"run\":0,\"method\":\"parse\"}\n{\"record\":\"witness\",\"fact\":5,\"run\":0,\"method\":\"parse\"}\n{\"record\":\"witness\",\"fact\":6,\"run\":0,\"method\":\"parse\"}\n{\"record\":\"witness\",\"fact\":7,\"run\":0,\"method\":\"parse\"}\n{\"record\":\"witness\",\"fact\":8,\"run\":0,\"method\":\"parse\"}\n{\"record\":\"witness\",\"fact\":9,\"run\":0,\"method\":\"parse\"}\n{\"record\":\"coverage\",\"run\":0,\"relation\":\"extract.type\",\"coverage\":\"partial\"}\n{\"record\":\"coverage\",\"run\":0,\"relation\":\"tsi.type\",\"coverage\":\"partial\"}\n{\"record\":\"coverage\",\"run\":0,\"relation\":\"tsi.origin\",\"coverage\":\"partial\"}\n{\"record\":\"coverage\",\"run\":0,\"relation\":\"tsi.name\",\"coverage\":\"partial\"}\n{\"record\":\"coverage\",\"run\":0,\"relation\":\"tsi.callable\",\"coverage\":\"partial\"}\n{\"record\":\"coverage\",\"run\":0,\"relation\":\"tsi.product\",\"coverage\":\"partial\"}\n"
+    }
+  },
+  "16_sink": {
+    "sink": {
+      "ids": [
+        0,
+        1
+      ],
+      "ordinals": [
+        0,
+        1
+      ],
+      "rows": [
+        {
+          "record": "fact",
+          "fact": 0,
+          "relation": "tsi.type",
+          "args": [
+            {
+              "id": 0
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 1,
+          "relation": "tsi.product",
+          "args": [
+            {
+              "id": 0
+            }
+          ]
+        },
+        {
+          "record": "witness",
+          "fact": 0,
+          "run": 3,
+          "method": "checker_walk"
+        },
+        {
+          "record": "witness",
+          "fact": 1,
+          "run": 3,
+          "method": "checker_walk"
+        },
+        {
+          "record": "coverage",
+          "run": 3,
+          "relation": "tsi.type",
+          "coverage": "complete"
+        }
+      ]
+    }
+  },
+  "17_sink_arity": {
+    "sink": {
+      "debug_only": true,
+      "expected_message": "arity 1, the registry says 5"
+    }
+  }
+}

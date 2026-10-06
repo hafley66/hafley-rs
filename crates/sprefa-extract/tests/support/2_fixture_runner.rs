@@ -359,6 +359,7 @@ pub fn commands(case: &Value, api: impl Fn(&Value) -> Value) -> Value {
                 let mut stderr = String::from_utf8(output.stderr).unwrap();
                 if step["sort_stdout"] == true { let mut lines: Vec<_> = stdout.lines().collect(); lines.sort(); stdout = lines.join("\n"); }
                 if step["trim_stderr"] == true { stderr = stderr.trim().to_string(); }
+                if let Some(success) = step["assert_success"].as_bool() { assert_eq!(output.status.success(), success, "{name}: {stderr}"); }
                 if step["unasserted_exit"] != true {
                 assert_eq!(
                     output.status.success(),
@@ -383,6 +384,7 @@ pub fn commands(case: &Value, api: impl Fn(&Value) -> Value) -> Value {
                     std::fs::write(expand(target), &stdout).unwrap();
                 }
                 let mut result = serde_json::json!({"exit_code":output.status.code(),"stdout":stdout,"stderr":stderr});
+                if step.get("assert_success").is_some() { result["success"] = Value::Bool(output.status.success()); }
                 if let Some(limit) = step["maximum_seconds"].as_u64() {
                     let within_budget = elapsed.as_secs() < limit;
                     assert!(within_budget, "{name}: exceeded {limit}s: {elapsed:?}");

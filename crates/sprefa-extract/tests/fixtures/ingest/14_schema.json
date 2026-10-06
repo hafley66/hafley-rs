@@ -1,0 +1,23 @@
+{
+  "steps": [
+    {
+      "action": "run",
+      "name": "schema",
+      "cwd": "$manifest",
+      "raw_stdout": true,
+      "stdout_to": "$work/schema.txt",
+      "unasserted_exit": true,
+      "unasserted_stdout": true,
+      "unasserted_stderr": true,
+      "arguments": [
+        "schema"
+      ]
+    },
+    {
+      "action": "api",
+      "name": "registry",
+      "api": "registry",
+      "path": "$work/schema.txt"
+    }
+  ]
+}

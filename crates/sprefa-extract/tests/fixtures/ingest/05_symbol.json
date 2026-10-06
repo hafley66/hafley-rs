@@ -1,0 +1,18 @@
+{
+  "steps": [
+    {
+      "action": "run",
+      "name": "ingest",
+      "cwd": "$manifest",
+      "stdin_file": "$fixtures/ingest/05_symbol.jsonl",
+      "raw_stdout": true,
+      "unasserted_exit": true,
+      "unasserted_stderr": true,
+      "assert_success": true,
+      "arguments": [
+        "ingest",
+        "/dev/stdin"
+      ]
+    }
+  ]
+}

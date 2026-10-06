@@ -1,0 +1,33 @@
+{
+  "steps": [
+    {
+      "action": "api",
+      "name": "sink",
+      "api": "sink",
+      "run": 3,
+      "method": "checker_walk",
+      "fresh_ids": 2,
+      "facts": [
+        {
+          "relation": "tsi.type",
+          "args": [
+            {
+              "id": 0
+            }
+          ]
+        },
+        {
+          "relation": "tsi.product",
+          "args": [
+            {
+              "id": 0
+            }
+          ]
+        }
+      ],
+      "complete": [
+        "tsi.type"
+      ]
+    }
+  ]
+}

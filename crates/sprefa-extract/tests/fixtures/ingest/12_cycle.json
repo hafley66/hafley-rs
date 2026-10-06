@@ -1,0 +1,20 @@
+{
+  "steps": [
+    {
+      "action": "run",
+      "name": "ingest",
+      "cwd": "$manifest",
+      "stdin_file": "$fixtures/ingest/12_cycle.jsonl",
+      "raw_stdout": true,
+      "unasserted_exit": true,
+      "unasserted_stderr": true,
+      "maximum_seconds": 10,
+      "hard_deadline_ms": 10000,
+      "assert_success": true,
+      "arguments": [
+        "ingest",
+        "/dev/stdin"
+      ]
+    }
+  ]
+}
