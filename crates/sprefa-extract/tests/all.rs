@@ -598,3 +598,6 @@ mod cli_crawl_support;
 
 #[path = "support/9_scip_freshness.rs"]
 mod freshness_support;
+
+#[path = "support/10_tsi_rows.rs"]
+mod tsi_rows_support;

@@ -1,0 +1,69 @@
+{
+  "steps": [
+    {
+      "action": "run",
+      "name": "without_witness",
+      "arguments": [
+        "--kinds",
+        "type",
+        "tests/fixtures/tsi/probe.ts"
+      ],
+      "cwd": "$manifest",
+      "expect_exit_code": 0
+    },
+    {
+      "action": "claim",
+      "name": "without_facts",
+      "cell": "without_witness.stdout",
+      "kind": "json_all",
+      "pointer": "record",
+      "not_value": "fact"
+    },
+    {
+      "action": "claim",
+      "name": "without_fact_field",
+      "cell": "without_witness.stdout",
+      "kind": "json_key_absent",
+      "key": "fact"
+    },
+    {
+      "action": "claim",
+      "name": "nonempty",
+      "cell": "without_witness.stdout",
+      "kind": "contains",
+      "text": "{"
+    },
+    {
+      "action": "run",
+      "name": "witnessed",
+      "arguments": [
+        "--witness",
+        "--kinds",
+        "type",
+        "tests/fixtures/tsi/probe.ts"
+      ],
+      "cwd": "$manifest",
+      "expect_exit_code": 0,
+      "stdout_to": "$work/witnessed.jsonl"
+    },
+    {
+      "action": "api",
+      "name": "registry_and_id_closure",
+      "api": "tsi_producer_validate",
+      "input": "$work/witnessed.jsonl"
+    },
+    {
+      "action": "run",
+      "name": "ingest",
+      "arguments": [
+        "ingest",
+        "/dev/stdin"
+      ],
+      "cwd": "$manifest",
+      "stdin_file": "$work/witnessed.jsonl",
+      "expect_exit_code": 0,
+      "unasserted_stdout": true,
+      "unasserted_stderr": true
+    }
+  ]
+}

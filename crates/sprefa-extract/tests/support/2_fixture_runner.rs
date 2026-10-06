@@ -613,7 +613,11 @@ fn claim(
     if kind == "not_equals" { assert_ne!(value, step["value"], "{step}"); return Value::Bool(true); }
     if kind == "json_all" {
         let rows: Vec<Value> = value.as_str().unwrap().lines().map(|line| serde_json::from_str(line).unwrap()).collect();
-        assert!(rows.iter().all(|row| row.pointer(&format!("/{}", step["pointer"].as_str().unwrap())) == Some(&step["value"])), "{step}");
+        assert!(rows.iter().all(|row| { let value = row.pointer(&format!("/{}", step["pointer"].as_str().unwrap())); if step.get("not_value").is_some() { value != Some(&step["not_value"]) } else { value == Some(&step["value"]) } }), "{step}");
+        return Value::Bool(true);
+    }
+    if kind == "json_key_absent" {
+        assert!(value.as_str().unwrap().lines().all(|line| serde_json::from_str::<Value>(line).unwrap().get(step["key"].as_str().unwrap()).is_none()), "{step}");
         return Value::Bool(true);
     }
     let text = value.as_str().unwrap_or("");

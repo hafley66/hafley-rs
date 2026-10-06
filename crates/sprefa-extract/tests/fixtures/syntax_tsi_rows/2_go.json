@@ -1,0 +1,37 @@
+{
+  "steps": [
+    {
+      "action": "run",
+      "name": "without_witness",
+      "arguments": [
+        "--kinds",
+        "type",
+        "tests/fixtures/tsi/probe_graph.go"
+      ],
+      "cwd": "$manifest",
+      "expect_exit_code": 0
+    },
+    {
+      "action": "claim",
+      "name": "without_facts",
+      "cell": "without_witness.stdout",
+      "kind": "json_all",
+      "pointer": "record",
+      "not_value": "fact"
+    },
+    {
+      "action": "claim",
+      "name": "without_fact_field",
+      "cell": "without_witness.stdout",
+      "kind": "json_key_absent",
+      "key": "fact"
+    },
+    {
+      "action": "claim",
+      "name": "nonempty",
+      "cell": "without_witness.stdout",
+      "kind": "contains",
+      "text": "{"
+    }
+  ]
+}
