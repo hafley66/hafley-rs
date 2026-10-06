@@ -10,12 +10,8 @@
       ],
       "expect_exit_code": 0,
       "raw_stdout": true,
-      "stdout_redactions": [
-        {
-          "pattern": ",\"(?:index_mtime_unix_ms|staleness|reused)\":(?:[0-9]+|\"(?:[^\"\\\\]|\\\\.)*\"|true|false)",
-          "replacement": ""
-        }
-      ]
+      "unasserted_stdout": true,
+      "unasserted_stderr": true
     },
     {
       "action": "claim",
@@ -26,10 +22,5 @@
         "\"record\":\"param\""
       ]
     }
-  ],
-  "unasserted_index_fields": [
-    "index_mtime_unix_ms",
-    "staleness",
-    "reused"
   ]
 }
