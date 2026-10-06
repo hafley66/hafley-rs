@@ -1,0 +1,85 @@
+{
+  "steps": [
+    {
+      "action": "directory",
+      "path": "$work/state"
+    },
+    {
+      "action": "copy_tree",
+      "source": "$fixtures/rust_cross",
+      "target": "$work/repo"
+    },
+    {
+      "action": "write",
+      "path": "$work/repo/alpha/src/tagged.rs",
+      "text": "use std::collections::HashMap;\n\npub fn fresh() -> std::collections::HashMap<u8, u8> {\n    std::collections::HashMap::new()\n}\n\npub fn kept() -> HashMap<u8, u8> {\n    HashMap::new()\n}\n"
+    },
+    {
+      "action": "write",
+      "path": "$work/repo/alpha/src/lib.rs",
+      "text": "pub mod shapes;\npub mod tagged;\npub mod util;\n\npub use shapes::Circle;\n\npub const VERSION_TAG: &str = \"v1\";\n"
+    },
+    {
+      "action": "git",
+      "cwd": "$work/repo",
+      "args": [
+        "init",
+        "-q",
+        "."
+      ]
+    },
+    {
+      "action": "git",
+      "cwd": "$work/repo",
+      "args": [
+        "add",
+        "-A"
+      ]
+    },
+    {
+      "action": "git",
+      "cwd": "$work/repo",
+      "args": [
+        "-c",
+        "user.email=ryi@cross.test",
+        "-c",
+        "user.name=ryi-cross",
+        "commit",
+        "-qm",
+        "fixture"
+      ]
+    },
+    {
+      "action": "run",
+      "name": "command",
+      "arguments": [
+        "cleave",
+        "$work/repo/alpha/src/tagged.rs#fresh",
+        "$work/repo/alpha/src/fresh.rs",
+        "--commit",
+        "--root",
+        "$work/repo",
+        "--state",
+        "$work/state"
+      ],
+      "environment": {
+        "RUST_LOG": "warn",
+        "RUSTUP_TOOLCHAIN": "stable"
+      },
+      "expect_exit_code": 0,
+      "raw_stdout": true,
+      "stdout_redactions": [
+        {
+          "pattern": "(?m)^((?:\\[root [^\\n]+?\\] )?stage )[0-9a-f]{64}(.*)$",
+          "replacement": "${1}$$STAGE${2}"
+        }
+      ]
+    },
+    {
+      "action": "file_equals",
+      "name": "file_0",
+      "path": "$work/repo/alpha/src/fresh.rs",
+      "text": "pub fn fresh() -> std::collections::HashMap<u8, u8> {\n    std::collections::HashMap::new()\n}\n"
+    }
+  ]
+}

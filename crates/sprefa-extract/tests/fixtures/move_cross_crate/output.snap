@@ -1,0 +1,210 @@
+---
+source: tests/support/2_fixture_runner.rs
+---
+{
+  "00_a_file_crosses_crates_with_paths_manifests_and_visibility": {
+    "cargo_check": {
+      "exit_code": 0
+    },
+    "command": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan alpha/src/shapes.rs -> beta/src/3_shapes.rs\ncross-crate alpha/src/shapes.rs: alpha -> beta\nwiden alpha/src/shapes.rs:4 radius -> pub\nwiden alpha/src/shapes.rs:8 new -> pub\nwiden alpha/src/shapes.rs:13 area -> pub\ndep beta/Cargo.toml: + delta = { path = \"../delta\" } (for alpha/src/shapes.rs)\nrelocate mod shapes: alpha/src/lib.rs -> beta/src/lib.rs\ndep gamma/Cargo.toml: + beta = { path = \"../beta\" } (for gamma/src/lib.rs)\nreplace alpha/src/lib.rs -> alpha/src/lib.rs  update alpha/src/lib.rs (82 bytes)\n    --- original\n    +++ modified\n    @@ -1,6 +1,5 @@\n    -pub mod shapes;\n     pub mod util;\n    \n    -pub use shapes::Circle;\n    +pub use beta::shapes::Circle;\n    \n     pub const VERSION_TAG: &str = \"v1\";\nreplace alpha/src/shapes.rs -> alpha/src/shapes.rs  update alpha/src/shapes.rs (319 bytes)\n    --- original\n    +++ modified\n    @@ -1,16 +1,16 @@\n    -use beta::base::Unit;\n    +use crate::base::Unit;\n    \n     pub struct Circle {\n    -    pub(crate) radius: f64,\n    +    pub radius: f64,\n     }\n    \n     impl Circle {\n    -    pub(crate) fn new(radius: f64) -> Self {\n    +    pub fn new(radius: f64) -> Self {\n             Circle { radius }\n         }\n     }\n    \n    -pub(crate) fn area(circle: &Circle) -> f64 {\n    +pub fn area(circle: &Circle) -> f64 {\n         circle.radius * circle.radius * delta::scale() * Unit::one()\n     }\n    \nreplace alpha/src/util.rs -> alpha/src/util.rs  update alpha/src/util.rs (272 bytes)\n    --- original\n    +++ modified\n    @@ -1,9 +1,10 @@\n    -use crate::shapes::perimeter;\n    -use crate::{shapes::{area, Circle}, VERSION_TAG};\n    +use beta::shapes::perimeter;\n    +use beta::shapes::{area, Circle};\n    +use crate::VERSION_TAG;\n    \n     pub const LABEL: &str = VERSION_TAG;\n    \n     pub fn unit_area() -> f64 {\n         let circle = Circle::new(1.0);\n    -    area(&circle) + crate::shapes::area(&circle) + circle.radius + perimeter(1.0)\n    +    area(&circle) + beta::shapes::area(&circle) + circle.radius + perimeter(1.0)\n     }\nreplace beta/Cargo.toml -> beta/Cargo.toml  update beta/Cargo.toml (105 bytes)\n    --- original\n    +++ modified\n    @@ -2,3 +2,6 @@\n     name = \"beta\"\n     version = \"0.1.0\"\n     edition = \"2021\"\n    +\n    +[dependencies]\n    +delta = { path = \"../delta\" }\nreplace beta/src/lib.rs -> beta/src/lib.rs  update beta/src/lib.rs (54 bytes)\n    --- original\n    +++ modified\n    @@ -1 +1,2 @@\n     pub mod base;\n    +#[path = \"3_shapes.rs\"] pub mod shapes;\nreplace gamma/Cargo.toml -> gamma/Cargo.toml  update gamma/Cargo.toml (134 bytes)\n    --- original\n    +++ modified\n    @@ -5,3 +5,4 @@\n    \n     [dependencies]\n     alpha = { path = \"../alpha\" }\n    +beta = { path = \"../beta\" }\nreplace gamma/src/lib.rs -> gamma/src/lib.rs  update gamma/src/lib.rs (104 bytes)\n    --- original\n    +++ modified\n    @@ -1,4 +1,4 @@\n    -use alpha::shapes::Circle;\n    +use beta::shapes::Circle;\n    \n     pub fn describe(_circle: &Circle) -> &'static str {\n         alpha::util::LABEL\nstage $STAGE committed\nmove    alpha/src/shapes.rs -> beta/src/3_shapes.rs  move alpha/src/shapes.rs -> beta/src/3_shapes.rs (319 bytes)\nstage $STAGE committed\n",
+      "stderr": ""
+    },
+    "file_0": {
+      "stored_text": "pub mod util;\n\npub use beta::shapes::Circle;\n\npub const VERSION_TAG: &str = \"v1\";\n"
+    },
+    "file_1": {
+      "stored_text": "use beta::shapes::perimeter;\nuse beta::shapes::{area, Circle};\nuse crate::VERSION_TAG;\n\npub const LABEL: &str = VERSION_TAG;\n\npub fn unit_area() -> f64 {\n    let circle = Circle::new(1.0);\n    area(&circle) + beta::shapes::area(&circle) + circle.radius + perimeter(1.0)\n}\n"
+    },
+    "file_2": {
+      "stored_text": "pub mod base;\n#[path = \"3_shapes.rs\"] pub mod shapes;\n"
+    },
+    "file_3": {
+      "stored_text": "use crate::base::Unit;\n\npub struct Circle {\n    pub radius: f64,\n}\n\nimpl Circle {\n    pub fn new(radius: f64) -> Self {\n        Circle { radius }\n    }\n}\n\npub fn area(circle: &Circle) -> f64 {\n    circle.radius * circle.radius * delta::scale() * Unit::one()\n}\n\npub fn perimeter(radius: f64) -> f64 {\n    radius * 6.0\n}\n"
+    },
+    "file_4": {
+      "stored_text": "[package]\nname = \"beta\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\ndelta = { path = \"../delta\" }\n"
+    },
+    "file_5": {
+      "stored_text": "[package]\nname = \"gamma\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\nalpha = { path = \"../alpha\" }\nbeta = { path = \"../beta\" }\n"
+    },
+    "file_6": {
+      "stored_text": "use beta::shapes::Circle;\n\npub fn describe(_circle: &Circle) -> &'static str {\n    alpha::util::LABEL\n}\n"
+    }
+  },
+  "01_a_dry_run_names_every_edit_and_touches_nothing": {
+    "command": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan alpha/src/shapes.rs -> beta/src/shapes.rs\ncross-crate alpha/src/shapes.rs: alpha -> beta\nwiden alpha/src/shapes.rs:4 radius -> pub\nwiden alpha/src/shapes.rs:8 new -> pub\nwiden alpha/src/shapes.rs:13 area -> pub\ndep beta/Cargo.toml: + delta = { path = \"../delta\" } (for alpha/src/shapes.rs)\nrelocate mod shapes: alpha/src/lib.rs -> beta/src/lib.rs\ndep gamma/Cargo.toml: + beta = { path = \"../beta\" } (for gamma/src/lib.rs)\nreplace alpha/src/lib.rs -> alpha/src/lib.rs  update alpha/src/lib.rs (82 bytes)\n    --- original\n    +++ modified\n    @@ -1,6 +1,5 @@\n    -pub mod shapes;\n     pub mod util;\n    \n    -pub use shapes::Circle;\n    +pub use beta::shapes::Circle;\n    \n     pub const VERSION_TAG: &str = \"v1\";\nreplace alpha/src/shapes.rs -> alpha/src/shapes.rs  update alpha/src/shapes.rs (319 bytes)\n    --- original\n    +++ modified\n    @@ -1,16 +1,16 @@\n    -use beta::base::Unit;\n    +use crate::base::Unit;\n    \n     pub struct Circle {\n    -    pub(crate) radius: f64,\n    +    pub radius: f64,\n     }\n    \n     impl Circle {\n    -    pub(crate) fn new(radius: f64) -> Self {\n    +    pub fn new(radius: f64) -> Self {\n             Circle { radius }\n         }\n     }\n    \n    -pub(crate) fn area(circle: &Circle) -> f64 {\n    +pub fn area(circle: &Circle) -> f64 {\n         circle.radius * circle.radius * delta::scale() * Unit::one()\n     }\n    \nreplace alpha/src/util.rs -> alpha/src/util.rs  update alpha/src/util.rs (272 bytes)\n    --- original\n    +++ modified\n    @@ -1,9 +1,10 @@\n    -use crate::shapes::perimeter;\n    -use crate::{shapes::{area, Circle}, VERSION_TAG};\n    +use beta::shapes::perimeter;\n    +use beta::shapes::{area, Circle};\n    +use crate::VERSION_TAG;\n    \n     pub const LABEL: &str = VERSION_TAG;\n    \n     pub fn unit_area() -> f64 {\n         let circle = Circle::new(1.0);\n    -    area(&circle) + crate::shapes::area(&circle) + circle.radius + perimeter(1.0)\n    +    area(&circle) + beta::shapes::area(&circle) + circle.radius + perimeter(1.0)\n     }\nreplace beta/Cargo.toml -> beta/Cargo.toml  update beta/Cargo.toml (105 bytes)\n    --- original\n    +++ modified\n    @@ -2,3 +2,6 @@\n     name = \"beta\"\n     version = \"0.1.0\"\n     edition = \"2021\"\n    +\n    +[dependencies]\n    +delta = { path = \"../delta\" }\nreplace beta/src/lib.rs -> beta/src/lib.rs  update beta/src/lib.rs (30 bytes)\n    --- original\n    +++ modified\n    @@ -1 +1,2 @@\n     pub mod base;\n    +pub mod shapes;\nreplace gamma/Cargo.toml -> gamma/Cargo.toml  update gamma/Cargo.toml (134 bytes)\n    --- original\n    +++ modified\n    @@ -5,3 +5,4 @@\n    \n     [dependencies]\n     alpha = { path = \"../alpha\" }\n    +beta = { path = \"../beta\" }\nreplace gamma/src/lib.rs -> gamma/src/lib.rs  update gamma/src/lib.rs (104 bytes)\n    --- original\n    +++ modified\n    @@ -1,4 +1,4 @@\n    -use alpha::shapes::Circle;\n    +use beta::shapes::Circle;\n    \n     pub fn describe(_circle: &Circle) -> &'static str {\n         alpha::util::LABEL\nstage $STAGE dry run, tree untouched\nmove    alpha/src/shapes.rs -> beta/src/shapes.rs  move alpha/src/shapes.rs -> beta/src/shapes.rs (319 bytes)\nstage $STAGE dry run, tree untouched\n",
+      "stderr": ""
+    },
+    "exists_0": {
+      "exists": true
+    },
+    "restored_input": {
+      "stored_text": "use crate::shapes::perimeter;\nuse crate::{shapes::{area, Circle}, VERSION_TAG};\n\npub const LABEL: &str = VERSION_TAG;\n\npub fn unit_area() -> f64 {\n    let circle = Circle::new(1.0);\n    area(&circle) + crate::shapes::area(&circle) + circle.radius + perimeter(1.0)\n}\n"
+    }
+  },
+  "02_a_move_that_closes_a_dependency_cycle_is_a_named_stop": {
+    "command": {
+      "exit_code": 2,
+      "stdout": "",
+      "stderr": "rust: dependency cycle: beta -> alpha -> beta (the batch makes beta depend on alpha: alpha/src/shapes.rs uses alpha::VERSION_TAG)\n"
+    },
+    "exists_0": {
+      "exists": true
+    }
+  },
+  "03_a_module_leaving_its_children_behind_is_a_named_stop": {
+    "command": {
+      "exit_code": 2,
+      "stdout": "",
+      "stderr": "rust: alpha/src/shapes.rs declares `mod inner` (alpha/src/shapes/inner.rs), which this batch does not move; add it to the batch\n"
+    }
+  },
+  "04_a_cleave_across_crates_spells_the_callers_with_the_crate": {
+    "cargo_check": {
+      "exit_code": 0
+    },
+    "command": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan alpha/src/shapes.rs#perimeter -> beta/src/base.rs\ndrag fixpoint 1 passes\ncaller alpha/src/util.rs\nreplace alpha/src/shapes.rs -> alpha/src/shapes.rs  update alpha/src/shapes.rs (280 bytes)\n    --- original\n    +++ modified\n    @@ -13,7 +13,3 @@\n     pub(crate) fn area(circle: &Circle) -> f64 {\n         circle.radius * circle.radius * delta::scale() * Unit::one()\n     }\n    -\n    -pub fn perimeter(radius: f64) -> f64 {\n    -    radius * 6.0\n    -}\nreplace alpha/src/util.rs -> alpha/src/util.rs  update alpha/src/util.rs (263 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,5 @@\n    -use crate::shapes::perimeter;\n     use crate::{shapes::{area, Circle}, VERSION_TAG};\n    +use beta::base::perimeter;\n    \n     pub const LABEL: &str = VERSION_TAG;\n    \nreplace beta/src/base.rs -> beta/src/base.rs  update beta/src/base.rs (135 bytes)\n    --- original\n    +++ modified\n    @@ -5,3 +5,7 @@\n             1.0\n         }\n     }\n    +\n    +pub fn perimeter(radius: f64) -> f64 {\n    +    radius * 6.0\n    +}\nstage $STAGE committed\n",
+      "stderr": ""
+    },
+    "file_0": {
+      "stored_text": "use crate::{shapes::{area, Circle}, VERSION_TAG};\nuse beta::base::perimeter;\n\npub const LABEL: &str = VERSION_TAG;\n\npub fn unit_area() -> f64 {\n    let circle = Circle::new(1.0);\n    area(&circle) + crate::shapes::area(&circle) + circle.radius + perimeter(1.0)\n}\n"
+    },
+    "projected_file_0": "pub struct Unit;\n\nimpl Unit {\n    pub fn one() -> f64 {\n        1.0\n    }\n}\n\npub fn perimeter(radius: f64) -> f64 {\n    radius * 6.0\n}\n"
+  },
+  "05_a_batch_carries_a_module_and_its_child_across_crates": {
+    "cargo_check": {
+      "exit_code": 0
+    },
+    "command": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan alpha/src/shapes.rs -> beta/src/shapes.rs\nplan alpha/src/shapes/inner.rs -> beta/src/shapes/inner.rs\ncross-crate alpha/src/shapes.rs: alpha -> beta\nwiden alpha/src/shapes.rs:4 radius -> pub\nwiden alpha/src/shapes.rs:8 new -> pub\nwiden alpha/src/shapes.rs:13 area -> pub\nrelocate mod shapes: alpha/src/lib.rs -> beta/src/lib.rs\ndep gamma/Cargo.toml: + beta = { path = \"../beta\" } (for gamma/src/lib.rs)\nreplace alpha/src/lib.rs -> alpha/src/lib.rs  update alpha/src/lib.rs (82 bytes)\n    --- original\n    +++ modified\n    @@ -1,6 +1,5 @@\n    -pub mod shapes;\n     pub mod util;\n    \n    -pub use shapes::Circle;\n    +pub use beta::shapes::Circle;\n    \n     pub const VERSION_TAG: &str = \"v1\";\nreplace alpha/src/shapes.rs -> alpha/src/shapes.rs  update alpha/src/shapes.rs (307 bytes)\n    --- original\n    +++ modified\n    @@ -1,17 +1,17 @@\n     pub mod inner;\n    \n     pub struct Circle {\n    -    pub(crate) radius: f64,\n    +    pub radius: f64,\n     }\n    \n     impl Circle {\n    -    pub(crate) fn new(radius: f64) -> Self {\n    +    pub fn new(radius: f64) -> Self {\n             Circle { radius }\n         }\n     }\n    \n    -pub(crate) fn area(circle: &Circle) -> f64 {\n    -    circle.radius * f64::from(inner::depth())\n    +pub fn area(circle: &Circle) -> f64 {\n    +    circle.radius * f64::from(crate::shapes::inner::depth())\n     }\n    \n     pub fn perimeter(radius: f64) -> f64 {\nreplace alpha/src/util.rs -> alpha/src/util.rs  update alpha/src/util.rs (272 bytes)\n    --- original\n    +++ modified\n    @@ -1,9 +1,10 @@\n    -use crate::shapes::perimeter;\n    -use crate::{shapes::{area, Circle}, VERSION_TAG};\n    +use beta::shapes::perimeter;\n    +use beta::shapes::{area, Circle};\n    +use crate::VERSION_TAG;\n    \n     pub const LABEL: &str = VERSION_TAG;\n    \n     pub fn unit_area() -> f64 {\n         let circle = Circle::new(1.0);\n    -    area(&circle) + crate::shapes::area(&circle) + circle.radius + perimeter(1.0)\n    +    area(&circle) + beta::shapes::area(&circle) + circle.radius + perimeter(1.0)\n     }\nreplace beta/src/lib.rs -> beta/src/lib.rs  update beta/src/lib.rs (30 bytes)\n    --- original\n    +++ modified\n    @@ -1 +1,2 @@\n     pub mod base;\n    +pub mod shapes;\nreplace gamma/Cargo.toml -> gamma/Cargo.toml  update gamma/Cargo.toml (134 bytes)\n    --- original\n    +++ modified\n    @@ -5,3 +5,4 @@\n    \n     [dependencies]\n     alpha = { path = \"../alpha\" }\n    +beta = { path = \"../beta\" }\nreplace gamma/src/lib.rs -> gamma/src/lib.rs  update gamma/src/lib.rs (104 bytes)\n    --- original\n    +++ modified\n    @@ -1,4 +1,4 @@\n    -use alpha::shapes::Circle;\n    +use beta::shapes::Circle;\n    \n     pub fn describe(_circle: &Circle) -> &'static str {\n         alpha::util::LABEL\nstage $STAGE committed\nmove    alpha/src/shapes.rs -> beta/src/shapes.rs  move alpha/src/shapes.rs -> beta/src/shapes.rs (307 bytes)\nmove    alpha/src/shapes/inner.rs -> beta/src/shapes/inner.rs  move alpha/src/shapes/inner.rs -> beta/src/shapes/inner.rs (81 bytes)\nstage $STAGE committed\nrmdir alpha/src/shapes\n",
+      "stderr": ""
+    },
+    "file_0": {
+      "stored_text": "pub mod base;\npub mod shapes;\n"
+    },
+    "file_1": {
+      "stored_text": "pub(crate) fn depth() -> u32 {\n    super::super::shapes::perimeter(1.0) as u32\n}\n"
+    },
+    "projected_file_0": "pub mod inner;\n\npub struct Circle {\n    pub radius: f64,\n}\n\nimpl Circle {\n    pub fn new(radius: f64) -> Self {\n        Circle { radius }\n    }\n}\n\npub fn area(circle: &Circle) -> f64 {\n    circle.radius * f64::from(crate::shapes::inner::depth())\n}\n\npub fn perimeter(radius: f64) -> f64 {\n    radius * 6.0\n}\n"
+  },
+  "06_a_failed_verify_restores_the_moved_file_bytes": {
+    "command": {
+      "exit_code": 3,
+      "stdout": "root $work/repo\nplan alpha/src/shapes.rs -> beta/src/shapes.rs\ncross-crate alpha/src/shapes.rs: alpha -> beta\nwiden alpha/src/shapes.rs:4 radius -> pub\nwiden alpha/src/shapes.rs:8 new -> pub\nwiden alpha/src/shapes.rs:13 area -> pub\ndep beta/Cargo.toml: + delta = { path = \"../delta\" } (for alpha/src/shapes.rs)\nrelocate mod shapes: alpha/src/lib.rs -> beta/src/lib.rs\ndep gamma/Cargo.toml: + beta = { path = \"../beta\" } (for gamma/src/lib.rs)\nreplace alpha/src/lib.rs -> alpha/src/lib.rs  update alpha/src/lib.rs (82 bytes)\n    --- original\n    +++ modified\n    @@ -1,6 +1,5 @@\n    -pub mod shapes;\n     pub mod util;\n    \n    -pub use shapes::Circle;\n    +pub use beta::shapes::Circle;\n    \n     pub const VERSION_TAG: &str = \"v1\";\nreplace alpha/src/shapes.rs -> alpha/src/shapes.rs  update alpha/src/shapes.rs (319 bytes)\n    --- original\n    +++ modified\n    @@ -1,16 +1,16 @@\n    -use beta::base::Unit;\n    +use crate::base::Unit;\n    \n     pub struct Circle {\n    -    pub(crate) radius: f64,\n    +    pub radius: f64,\n     }\n    \n     impl Circle {\n    -    pub(crate) fn new(radius: f64) -> Self {\n    +    pub fn new(radius: f64) -> Self {\n             Circle { radius }\n         }\n     }\n    \n    -pub(crate) fn area(circle: &Circle) -> f64 {\n    +pub fn area(circle: &Circle) -> f64 {\n         circle.radius * circle.radius * delta::scale() * Unit::one()\n     }\n    \nreplace alpha/src/util.rs -> alpha/src/util.rs  update alpha/src/util.rs (272 bytes)\n    --- original\n    +++ modified\n    @@ -1,9 +1,10 @@\n    -use crate::shapes::perimeter;\n    -use crate::{shapes::{area, Circle}, VERSION_TAG};\n    +use beta::shapes::perimeter;\n    +use beta::shapes::{area, Circle};\n    +use crate::VERSION_TAG;\n    \n     pub const LABEL: &str = VERSION_TAG;\n    \n     pub fn unit_area() -> f64 {\n         let circle = Circle::new(1.0);\n    -    area(&circle) + crate::shapes::area(&circle) + circle.radius + perimeter(1.0)\n    +    area(&circle) + beta::shapes::area(&circle) + circle.radius + perimeter(1.0)\n     }\nreplace beta/Cargo.toml -> beta/Cargo.toml  update beta/Cargo.toml (105 bytes)\n    --- original\n    +++ modified\n    @@ -2,3 +2,6 @@\n     name = \"beta\"\n     version = \"0.1.0\"\n     edition = \"2021\"\n    +\n    +[dependencies]\n    +delta = { path = \"../delta\" }\nreplace beta/src/lib.rs -> beta/src/lib.rs  update beta/src/lib.rs (30 bytes)\n    --- original\n    +++ modified\n    @@ -1 +1,2 @@\n     pub mod base;\n    +pub mod shapes;\nreplace gamma/Cargo.toml -> gamma/Cargo.toml  update gamma/Cargo.toml (134 bytes)\n    --- original\n    +++ modified\n    @@ -5,3 +5,4 @@\n    \n     [dependencies]\n     alpha = { path = \"../alpha\" }\n    +beta = { path = \"../beta\" }\nreplace gamma/src/lib.rs -> gamma/src/lib.rs  update gamma/src/lib.rs (104 bytes)\n    --- original\n    +++ modified\n    @@ -1,4 +1,4 @@\n    -use alpha::shapes::Circle;\n    +use beta::shapes::Circle;\n    \n     pub fn describe(_circle: &Circle) -> &'static str {\n         alpha::util::LABEL\nstage $STAGE committed\nmove    alpha/src/shapes.rs -> beta/src/shapes.rs  move alpha/src/shapes.rs -> beta/src/shapes.rs (319 bytes)\nstage $STAGE committed\nverify failed (rc=1): rolled back 7 files\n",
+      "stderr": ""
+    },
+    "git_status": {
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    "restored_input": {
+      "stored_text": "use beta::base::Unit;\n\npub struct Circle {\n    pub(crate) radius: f64,\n}\n\nimpl Circle {\n    pub(crate) fn new(radius: f64) -> Self {\n        Circle { radius }\n    }\n}\n\npub(crate) fn area(circle: &Circle) -> f64 {\n    circle.radius * circle.radius * delta::scale() * Unit::one()\n}\n\npub fn perimeter(radius: f64) -> f64 {\n    radius * 6.0\n}\n"
+    }
+  },
+  "07_a_rolled_back_move_can_recommit_with_the_same_state": {
+    "command": {
+      "exit_code": 3,
+      "stdout": "root $work/repo\nplan alpha/src/shapes.rs -> beta/src/shapes.rs\ncross-crate alpha/src/shapes.rs: alpha -> beta\nwiden alpha/src/shapes.rs:4 radius -> pub\nwiden alpha/src/shapes.rs:8 new -> pub\nwiden alpha/src/shapes.rs:13 area -> pub\ndep beta/Cargo.toml: + delta = { path = \"../delta\" } (for alpha/src/shapes.rs)\nrelocate mod shapes: alpha/src/lib.rs -> beta/src/lib.rs\ndep gamma/Cargo.toml: + beta = { path = \"../beta\" } (for gamma/src/lib.rs)\nreplace alpha/src/lib.rs -> alpha/src/lib.rs  update alpha/src/lib.rs (82 bytes)\n    --- original\n    +++ modified\n    @@ -1,6 +1,5 @@\n    -pub mod shapes;\n     pub mod util;\n    \n    -pub use shapes::Circle;\n    +pub use beta::shapes::Circle;\n    \n     pub const VERSION_TAG: &str = \"v1\";\nreplace alpha/src/shapes.rs -> alpha/src/shapes.rs  update alpha/src/shapes.rs (319 bytes)\n    --- original\n    +++ modified\n    @@ -1,16 +1,16 @@\n    -use beta::base::Unit;\n    +use crate::base::Unit;\n    \n     pub struct Circle {\n    -    pub(crate) radius: f64,\n    +    pub radius: f64,\n     }\n    \n     impl Circle {\n    -    pub(crate) fn new(radius: f64) -> Self {\n    +    pub fn new(radius: f64) -> Self {\n             Circle { radius }\n         }\n     }\n    \n    -pub(crate) fn area(circle: &Circle) -> f64 {\n    +pub fn area(circle: &Circle) -> f64 {\n         circle.radius * circle.radius * delta::scale() * Unit::one()\n     }\n    \nreplace alpha/src/util.rs -> alpha/src/util.rs  update alpha/src/util.rs (272 bytes)\n    --- original\n    +++ modified\n    @@ -1,9 +1,10 @@\n    -use crate::shapes::perimeter;\n    -use crate::{shapes::{area, Circle}, VERSION_TAG};\n    +use beta::shapes::perimeter;\n    +use beta::shapes::{area, Circle};\n    +use crate::VERSION_TAG;\n    \n     pub const LABEL: &str = VERSION_TAG;\n    \n     pub fn unit_area() -> f64 {\n         let circle = Circle::new(1.0);\n    -    area(&circle) + crate::shapes::area(&circle) + circle.radius + perimeter(1.0)\n    +    area(&circle) + beta::shapes::area(&circle) + circle.radius + perimeter(1.0)\n     }\nreplace beta/Cargo.toml -> beta/Cargo.toml  update beta/Cargo.toml (105 bytes)\n    --- original\n    +++ modified\n    @@ -2,3 +2,6 @@\n     name = \"beta\"\n     version = \"0.1.0\"\n     edition = \"2021\"\n    +\n    +[dependencies]\n    +delta = { path = \"../delta\" }\nreplace beta/src/lib.rs -> beta/src/lib.rs  update beta/src/lib.rs (30 bytes)\n    --- original\n    +++ modified\n    @@ -1 +1,2 @@\n     pub mod base;\n    +pub mod shapes;\nreplace gamma/Cargo.toml -> gamma/Cargo.toml  update gamma/Cargo.toml (134 bytes)\n    --- original\n    +++ modified\n    @@ -5,3 +5,4 @@\n    \n     [dependencies]\n     alpha = { path = \"../alpha\" }\n    +beta = { path = \"../beta\" }\nreplace gamma/src/lib.rs -> gamma/src/lib.rs  update gamma/src/lib.rs (104 bytes)\n    --- original\n    +++ modified\n    @@ -1,4 +1,4 @@\n    -use alpha::shapes::Circle;\n    +use beta::shapes::Circle;\n    \n     pub fn describe(_circle: &Circle) -> &'static str {\n         alpha::util::LABEL\nstage $STAGE committed\nmove    alpha/src/shapes.rs -> beta/src/shapes.rs  move alpha/src/shapes.rs -> beta/src/shapes.rs (319 bytes)\nstage $STAGE committed\nverify failed (rc=1): rolled back 7 files\n",
+      "stderr": ""
+    },
+    "destination_absent_after_rollback": {
+      "exists": false
+    },
+    "exists_1": {
+      "exists": false
+    },
+    "exists_2": {
+      "exists": true
+    },
+    "restored_input": {
+      "stored_text": "use beta::base::Unit;\n\npub struct Circle {\n    pub(crate) radius: f64,\n}\n\nimpl Circle {\n    pub(crate) fn new(radius: f64) -> Self {\n        Circle { radius }\n    }\n}\n\npub(crate) fn area(circle: &Circle) -> f64 {\n    circle.radius * circle.radius * delta::scale() * Unit::one()\n}\n\npub fn perimeter(radius: f64) -> f64 {\n    radius * 6.0\n}\n"
+    },
+    "retry": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan alpha/src/shapes.rs -> beta/src/shapes.rs\ncross-crate alpha/src/shapes.rs: alpha -> beta\nwiden alpha/src/shapes.rs:4 radius -> pub\nwiden alpha/src/shapes.rs:8 new -> pub\nwiden alpha/src/shapes.rs:13 area -> pub\ndep beta/Cargo.toml: + delta = { path = \"../delta\" } (for alpha/src/shapes.rs)\nrelocate mod shapes: alpha/src/lib.rs -> beta/src/lib.rs\ndep gamma/Cargo.toml: + beta = { path = \"../beta\" } (for gamma/src/lib.rs)\nreplace alpha/src/lib.rs -> alpha/src/lib.rs  update alpha/src/lib.rs (82 bytes)\n    --- original\n    +++ modified\n    @@ -1,6 +1,5 @@\n    -pub mod shapes;\n     pub mod util;\n    \n    -pub use shapes::Circle;\n    +pub use beta::shapes::Circle;\n    \n     pub const VERSION_TAG: &str = \"v1\";\nreplace alpha/src/shapes.rs -> alpha/src/shapes.rs  update alpha/src/shapes.rs (319 bytes)\n    --- original\n    +++ modified\n    @@ -1,16 +1,16 @@\n    -use beta::base::Unit;\n    +use crate::base::Unit;\n    \n     pub struct Circle {\n    -    pub(crate) radius: f64,\n    +    pub radius: f64,\n     }\n    \n     impl Circle {\n    -    pub(crate) fn new(radius: f64) -> Self {\n    +    pub fn new(radius: f64) -> Self {\n             Circle { radius }\n         }\n     }\n    \n    -pub(crate) fn area(circle: &Circle) -> f64 {\n    +pub fn area(circle: &Circle) -> f64 {\n         circle.radius * circle.radius * delta::scale() * Unit::one()\n     }\n    \nreplace alpha/src/util.rs -> alpha/src/util.rs  update alpha/src/util.rs (272 bytes)\n    --- original\n    +++ modified\n    @@ -1,9 +1,10 @@\n    -use crate::shapes::perimeter;\n    -use crate::{shapes::{area, Circle}, VERSION_TAG};\n    +use beta::shapes::perimeter;\n    +use beta::shapes::{area, Circle};\n    +use crate::VERSION_TAG;\n    \n     pub const LABEL: &str = VERSION_TAG;\n    \n     pub fn unit_area() -> f64 {\n         let circle = Circle::new(1.0);\n    -    area(&circle) + crate::shapes::area(&circle) + circle.radius + perimeter(1.0)\n    +    area(&circle) + beta::shapes::area(&circle) + circle.radius + perimeter(1.0)\n     }\nreplace beta/Cargo.toml -> beta/Cargo.toml  update beta/Cargo.toml (105 bytes)\n    --- original\n    +++ modified\n    @@ -2,3 +2,6 @@\n     name = \"beta\"\n     version = \"0.1.0\"\n     edition = \"2021\"\n    +\n    +[dependencies]\n    +delta = { path = \"../delta\" }\nreplace beta/src/lib.rs -> beta/src/lib.rs  update beta/src/lib.rs (30 bytes)\n    --- original\n    +++ modified\n    @@ -1 +1,2 @@\n     pub mod base;\n    +pub mod shapes;\nreplace gamma/Cargo.toml -> gamma/Cargo.toml  update gamma/Cargo.toml (134 bytes)\n    --- original\n    +++ modified\n    @@ -5,3 +5,4 @@\n    \n     [dependencies]\n     alpha = { path = \"../alpha\" }\n    +beta = { path = \"../beta\" }\nreplace gamma/src/lib.rs -> gamma/src/lib.rs  update gamma/src/lib.rs (104 bytes)\n    --- original\n    +++ modified\n    @@ -1,4 +1,4 @@\n    -use alpha::shapes::Circle;\n    +use beta::shapes::Circle;\n    \n     pub fn describe(_circle: &Circle) -> &'static str {\n         alpha::util::LABEL\nstage $STAGE committed\nmove    alpha/src/shapes.rs -> beta/src/shapes.rs  move alpha/src/shapes.rs -> beta/src/shapes.rs (319 bytes)\nstage $STAGE committed\n",
+      "stderr": ""
+    }
+  },
+  "08_a_cleave_into_a_new_numbered_file_declares_it": {
+    "cargo_check": {
+      "exit_code": 0
+    },
+    "command": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan alpha/src/shapes.rs#perimeter -> beta/src/4_round.rs\ndrag fixpoint 1 passes\ncaller alpha/src/util.rs\nreplace alpha/src/shapes.rs -> alpha/src/shapes.rs  update alpha/src/shapes.rs (280 bytes)\n    --- original\n    +++ modified\n    @@ -13,7 +13,3 @@\n     pub(crate) fn area(circle: &Circle) -> f64 {\n         circle.radius * circle.radius * delta::scale() * Unit::one()\n     }\n    -\n    -pub fn perimeter(radius: f64) -> f64 {\n    -    radius * 6.0\n    -}\nreplace alpha/src/util.rs -> alpha/src/util.rs  update alpha/src/util.rs (264 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,5 @@\n    -use crate::shapes::perimeter;\n     use crate::{shapes::{area, Circle}, VERSION_TAG};\n    +use beta::round::perimeter;\n    \n     pub const LABEL: &str = VERSION_TAG;\n    \nreplace beta/src/lib.rs -> beta/src/lib.rs  update beta/src/lib.rs (52 bytes)\n    --- original\n    +++ modified\n    @@ -1 +1,2 @@\n     pub mod base;\n    +#[path = \"4_round.rs\"] pub mod round;\nstage $STAGE committed\ncreate  - -> beta/src/4_round.rs  create beta/src/4_round.rs (58 bytes)\n    --- original\n    +++ modified\n    @@ -0,0 +1,3 @@\n    +pub fn perimeter(radius: f64) -> f64 {\n    +    radius * 6.0\n    +}\nstage $STAGE committed\n",
+      "stderr": ""
+    },
+    "file_0": {
+      "stored_text": "pub mod base;\n#[path = \"4_round.rs\"] pub mod round;\n"
+    },
+    "projected_file_0": "use crate::{shapes::{area, Circle}, VERSION_TAG};\nuse beta::round::perimeter;\n\npub const LABEL: &str = VERSION_TAG;\n\npub fn unit_area() -> f64 {\n    let circle = Circle::new(1.0);\n    area(&circle) + crate::shapes::area(&circle) + circle.radius + perimeter(1.0)\n}\n"
+  },
+  "09_a_cleave_into_a_new_file_of_the_same_crate_declares_it": {
+    "cargo_check": {
+      "exit_code": 0
+    },
+    "command": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan alpha/src/shapes.rs#perimeter -> alpha/src/round.rs\ndrag fixpoint 1 passes\ncaller alpha/src/util.rs\nreplace alpha/src/lib.rs -> alpha/src/lib.rs  update alpha/src/lib.rs (107 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,6 @@\n     pub mod shapes;\n     pub mod util;\n    +pub mod round;\n    \n     pub use shapes::Circle;\n    \nreplace alpha/src/shapes.rs -> alpha/src/shapes.rs  update alpha/src/shapes.rs (280 bytes)\n    --- original\n    +++ modified\n    @@ -13,7 +13,3 @@\n     pub(crate) fn area(circle: &Circle) -> f64 {\n         circle.radius * circle.radius * delta::scale() * Unit::one()\n     }\n    -\n    -pub fn perimeter(radius: f64) -> f64 {\n    -    radius * 6.0\n    -}\nreplace alpha/src/util.rs -> alpha/src/util.rs  update alpha/src/util.rs (265 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,5 @@\n    -use crate::shapes::perimeter;\n     use crate::{shapes::{area, Circle}, VERSION_TAG};\n    +use crate::round::perimeter;\n    \n     pub const LABEL: &str = VERSION_TAG;\n    \nstage $STAGE committed\ncreate  - -> alpha/src/round.rs  create alpha/src/round.rs (58 bytes)\n    --- original\n    +++ modified\n    @@ -0,0 +1,3 @@\n    +pub fn perimeter(radius: f64) -> f64 {\n    +    radius * 6.0\n    +}\nstage $STAGE committed\n",
+      "stderr": ""
+    },
+    "file_0": {
+      "stored_text": "pub mod shapes;\npub mod util;\npub mod round;\n\npub use shapes::Circle;\n\npub const VERSION_TAG: &str = \"v1\";\n"
+    }
+  },
+  "10_a_cleave_that_would_cycle_is_a_named_stop": {
+    "command": {
+      "exit_code": 2,
+      "stdout": "",
+      "stderr": "dependency cycle: alpha -> beta -> alpha (alpha/src/util.rs uses area, and beta/src/base.rs would import from alpha)\n"
+    }
+  },
+  "11_a_cleave_carrying_a_third_party_import_needs_it_in_dest": {
+    "command": {
+      "exit_code": 2,
+      "stdout": "",
+      "stderr": "cleave across packages: beta must depend on serde_json (tagged imports Value from serde_json::Value); add the dependency\n"
+    }
+  },
+  "12_a_name_spelled_through_its_full_path_carries_no_import": {
+    "command": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan alpha/src/tagged.rs#fresh -> alpha/src/fresh.rs\ndrag fixpoint 1 passes\nreplace alpha/src/lib.rs -> alpha/src/lib.rs  update alpha/src/lib.rs (123 bytes)\n    --- original\n    +++ modified\n    @@ -1,6 +1,7 @@\n     pub mod shapes;\n     pub mod tagged;\n     pub mod util;\n    +pub mod fresh;\n    \n     pub use shapes::Circle;\n    \nreplace alpha/src/tagged.rs -> alpha/src/tagged.rs  update alpha/src/tagged.rs (88 bytes)\n    --- original\n    +++ modified\n    @@ -1,9 +1,5 @@\n     use std::collections::HashMap;\n    \n    -pub fn fresh() -> std::collections::HashMap<u8, u8> {\n    -    std::collections::HashMap::new()\n    -}\n    -\n     pub fn kept() -> HashMap<u8, u8> {\n         HashMap::new()\n     }\nstage $STAGE committed\ncreate  - -> alpha/src/fresh.rs  create alpha/src/fresh.rs (93 bytes)\n    --- original\n    +++ modified\n    @@ -0,0 +1,3 @@\n    +pub fn fresh() -> std::collections::HashMap<u8, u8> {\n    +    std::collections::HashMap::new()\n    +}\nstage $STAGE committed\n",
+      "stderr": ""
+    },
+    "file_0": {
+      "stored_text": "pub fn fresh() -> std::collections::HashMap<u8, u8> {\n    std::collections::HashMap::new()\n}\n"
+    }
+  },
+  "13_a_ts_file_crosses_packages_with_package_specifiers_and_a_dependency": {
+    "command": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan packages/a/src/shape.ts -> packages/b/src/shape.ts\ndep packages/a/package.json: + \"@ws/b\": \"*\" (for packages/a/src/util.ts)\nreplace packages/a/package.json -> packages/a/package.json  update packages/a/package.json (86 bytes)\n    --- original\n    +++ modified\n    @@ -1,4 +1,7 @@\n     {\n       \"name\": \"@ws/a\",\n    -  \"version\": \"0.0.0\"\n    +  \"version\": \"0.0.0\",\n    +  \"dependencies\": {\n    +    \"@ws/b\": \"*\"\n    +  }\n     }\nreplace packages/a/src/util.ts -> packages/a/src/util.ts  update packages/a/src/util.ts (84 bytes)\n    --- original\n    +++ modified\n    @@ -1,3 +1,3 @@\n    -import { area } from './shape';\n    +import { area } from '@ws/b/shape';\n    \n     export const unitArea = (): number => area(1);\nreplace packages/b/src/main.ts -> packages/b/src/main.ts  update packages/b/src/main.ts (100 bytes)\n    --- original\n    +++ modified\n    @@ -1,3 +1,3 @@\n    -import { area } from '../../a/src/shape';\n    +import { area } from './shape';\n    \n     export const twice = (radius: number): number => 2 * area(radius);\nstage $STAGE committed\nmove    packages/a/src/shape.ts -> packages/b/src/shape.ts  move packages/a/src/shape.ts -> packages/b/src/shape.ts (65 bytes)\nstage $STAGE committed\n",
+      "stderr": ""
+    },
+    "file_0": {
+      "stored_text": "import { area } from '@ws/b/shape';\n\nexport const unitArea = (): number => area(1);\n"
+    },
+    "file_1": {
+      "stored_text": "import { area } from './shape';\n\nexport const twice = (radius: number): number => 2 * area(radius);\n"
+    },
+    "file_2": {
+      "stored_text": "{\n  \"name\": \"@ws/a\",\n  \"version\": \"0.0.0\",\n  \"dependencies\": {\n    \"@ws/b\": \"*\"\n  }\n}\n"
+    }
+  },
+  "14_a_ts_move_that_closes_a_package_cycle_is_a_named_stop": {
+    "command": {
+      "exit_code": 2,
+      "stdout": "",
+      "stderr": "ts: dependency cycle: @ws/a -> @ws/b -> @ws/a (the batch makes @ws/a depend on @ws/b for packages/a/src/util.ts)\n"
+    }
+  }
+}

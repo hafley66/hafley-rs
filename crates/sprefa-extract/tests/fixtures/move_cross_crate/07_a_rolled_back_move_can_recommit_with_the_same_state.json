@@ -1,0 +1,121 @@
+{
+  "steps": [
+    {
+      "action": "directory",
+      "path": "$work/state"
+    },
+    {
+      "action": "copy_tree",
+      "source": "$fixtures/rust_cross",
+      "target": "$work/repo"
+    },
+    {
+      "action": "git",
+      "cwd": "$work/repo",
+      "args": [
+        "init",
+        "-q",
+        "."
+      ]
+    },
+    {
+      "action": "git",
+      "cwd": "$work/repo",
+      "args": [
+        "add",
+        "-A"
+      ]
+    },
+    {
+      "action": "git",
+      "cwd": "$work/repo",
+      "args": [
+        "-c",
+        "user.email=ryi@cross.test",
+        "-c",
+        "user.name=ryi-cross",
+        "commit",
+        "-qm",
+        "fixture"
+      ]
+    },
+    {
+      "action": "run",
+      "name": "command",
+      "arguments": [
+        "move",
+        "$work/repo/alpha/src/shapes.rs",
+        "$work/repo/beta/src/shapes.rs",
+        "--commit",
+        "--verify",
+        "false",
+        "--root",
+        "$work/repo",
+        "--state",
+        "$work/state"
+      ],
+      "environment": {
+        "RUST_LOG": "warn",
+        "RUSTUP_TOOLCHAIN": "stable"
+      },
+      "expect_exit_code": 3,
+      "raw_stdout": true,
+      "stdout_redactions": [
+        {
+          "pattern": "(?m)^((?:\\[root [^\\n]+?\\] )?stage )[0-9a-f]{64}(.*)$",
+          "replacement": "${1}$$STAGE${2}"
+        }
+      ]
+    },
+    {
+      "action": "file_equals",
+      "name": "restored_input",
+      "path": "$work/repo/alpha/src/shapes.rs",
+      "text": "use beta::base::Unit;\n\npub struct Circle {\n    pub(crate) radius: f64,\n}\n\nimpl Circle {\n    pub(crate) fn new(radius: f64) -> Self {\n        Circle { radius }\n    }\n}\n\npub(crate) fn area(circle: &Circle) -> f64 {\n    circle.radius * circle.radius * delta::scale() * Unit::one()\n}\n\npub fn perimeter(radius: f64) -> f64 {\n    radius * 6.0\n}\n"
+    },
+    {
+      "action": "exists",
+      "name": "destination_absent_after_rollback",
+      "path": "$work/repo/beta/src/shapes.rs",
+      "expected": false
+    },
+    {
+      "action": "run",
+      "name": "retry",
+      "arguments": [
+        "move",
+        "$work/repo/alpha/src/shapes.rs",
+        "$work/repo/beta/src/shapes.rs",
+        "--commit",
+        "--root",
+        "$work/repo",
+        "--state",
+        "$work/state"
+      ],
+      "environment": {
+        "RUST_LOG": "warn",
+        "RUSTUP_TOOLCHAIN": "stable"
+      },
+      "expect_exit_code": 0,
+      "raw_stdout": true,
+      "stdout_redactions": [
+        {
+          "pattern": "(?m)^((?:\\[root [^\\n]+?\\] )?stage )[0-9a-f]{64}(.*)$",
+          "replacement": "${1}$$STAGE${2}"
+        }
+      ]
+    },
+    {
+      "action": "exists",
+      "name": "exists_1",
+      "path": "$work/repo/alpha/src/shapes.rs",
+      "expected": false
+    },
+    {
+      "action": "exists",
+      "name": "exists_2",
+      "path": "$work/repo/beta/src/shapes.rs",
+      "expected": true
+    }
+  ]
+}

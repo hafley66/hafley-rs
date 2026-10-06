@@ -1,0 +1,131 @@
+{
+  "steps": [
+    {
+      "action": "directory",
+      "path": "$work/state"
+    },
+    {
+      "action": "copy_tree",
+      "source": "$fixtures/rust_cross",
+      "target": "$work/repo"
+    },
+    {
+      "action": "git",
+      "cwd": "$work/repo",
+      "args": [
+        "init",
+        "-q",
+        "."
+      ]
+    },
+    {
+      "action": "git",
+      "cwd": "$work/repo",
+      "args": [
+        "add",
+        "-A"
+      ]
+    },
+    {
+      "action": "git",
+      "cwd": "$work/repo",
+      "args": [
+        "-c",
+        "user.email=ryi@cross.test",
+        "-c",
+        "user.name=ryi-cross",
+        "commit",
+        "-qm",
+        "fixture"
+      ]
+    },
+    {
+      "action": "run",
+      "name": "command",
+      "arguments": [
+        "move",
+        "$work/repo/alpha/src/shapes.rs",
+        "$work/repo/beta/src/3_shapes.rs",
+        "--commit",
+        "--root",
+        "$work/repo",
+        "--state",
+        "$work/state"
+      ],
+      "environment": {
+        "RUST_LOG": "warn",
+        "RUSTUP_TOOLCHAIN": "stable"
+      },
+      "expect_exit_code": 0,
+      "raw_stdout": true,
+      "stdout_redactions": [
+        {
+          "pattern": "(?m)^((?:\\[root [^\\n]+?\\] )?stage )[0-9a-f]{64}(.*)$",
+          "replacement": "${1}$$STAGE${2}"
+        }
+      ]
+    },
+    {
+      "action": "file_equals",
+      "name": "file_0",
+      "path": "$work/repo/alpha/src/lib.rs",
+      "text": "pub mod util;\n\npub use beta::shapes::Circle;\n\npub const VERSION_TAG: &str = \"v1\";\n"
+    },
+    {
+      "action": "file_equals",
+      "name": "file_1",
+      "path": "$work/repo/alpha/src/util.rs",
+      "text": "use beta::shapes::perimeter;\nuse beta::shapes::{area, Circle};\nuse crate::VERSION_TAG;\n\npub const LABEL: &str = VERSION_TAG;\n\npub fn unit_area() -> f64 {\n    let circle = Circle::new(1.0);\n    area(&circle) + beta::shapes::area(&circle) + circle.radius + perimeter(1.0)\n}\n"
+    },
+    {
+      "action": "file_equals",
+      "name": "file_2",
+      "path": "$work/repo/beta/src/lib.rs",
+      "text": "pub mod base;\n#[path = \"3_shapes.rs\"] pub mod shapes;\n"
+    },
+    {
+      "action": "file_equals",
+      "name": "file_3",
+      "path": "$work/repo/beta/src/3_shapes.rs",
+      "text": "use crate::base::Unit;\n\npub struct Circle {\n    pub radius: f64,\n}\n\nimpl Circle {\n    pub fn new(radius: f64) -> Self {\n        Circle { radius }\n    }\n}\n\npub fn area(circle: &Circle) -> f64 {\n    circle.radius * circle.radius * delta::scale() * Unit::one()\n}\n\npub fn perimeter(radius: f64) -> f64 {\n    radius * 6.0\n}\n"
+    },
+    {
+      "action": "file_equals",
+      "name": "file_4",
+      "path": "$work/repo/beta/Cargo.toml",
+      "text": "[package]\nname = \"beta\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\ndelta = { path = \"../delta\" }\n"
+    },
+    {
+      "action": "file_equals",
+      "name": "file_5",
+      "path": "$work/repo/gamma/Cargo.toml",
+      "text": "[package]\nname = \"gamma\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\nalpha = { path = \"../alpha\" }\nbeta = { path = \"../beta\" }\n"
+    },
+    {
+      "action": "file_equals",
+      "name": "file_6",
+      "path": "$work/repo/gamma/src/lib.rs",
+      "text": "use beta::shapes::Circle;\n\npub fn describe(_circle: &Circle) -> &'static str {\n    alpha::util::LABEL\n}\n"
+    },
+    {
+      "action": "run",
+      "name": "cargo_check",
+      "program": "$cargo",
+      "arguments": [
+        "check",
+        "--offline",
+        "-q"
+      ],
+      "cwd": "$work/repo",
+      "environment": {
+        "CARGO_TARGET_DIR": "$work/repo/target",
+        "KACHE_DISABLED": "1",
+        "RUSTUP_TOOLCHAIN": "stable"
+      },
+      "expect_exit_code": 0,
+      "raw_stdout": true,
+      "unasserted_stdout": true,
+      "unasserted_stderr": true
+    }
+  ]
+}

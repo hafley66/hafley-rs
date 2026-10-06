@@ -1,0 +1,80 @@
+{
+  "steps": [
+    {
+      "action": "directory",
+      "path": "$work/state"
+    },
+    {
+      "action": "copy_tree",
+      "source": "$fixtures/rust_cross",
+      "target": "$work/repo"
+    },
+    {
+      "action": "git",
+      "cwd": "$work/repo",
+      "args": [
+        "init",
+        "-q",
+        "."
+      ]
+    },
+    {
+      "action": "git",
+      "cwd": "$work/repo",
+      "args": [
+        "add",
+        "-A"
+      ]
+    },
+    {
+      "action": "git",
+      "cwd": "$work/repo",
+      "args": [
+        "-c",
+        "user.email=ryi@cross.test",
+        "-c",
+        "user.name=ryi-cross",
+        "commit",
+        "-qm",
+        "fixture"
+      ]
+    },
+    {
+      "action": "run",
+      "name": "command",
+      "arguments": [
+        "move",
+        "$work/repo/alpha/src/shapes.rs",
+        "$work/repo/beta/src/shapes.rs",
+        "--root",
+        "$work/repo",
+        "--state",
+        "$work/state"
+      ],
+      "environment": {
+        "RUST_LOG": "warn",
+        "RUSTUP_TOOLCHAIN": "stable"
+      },
+      "expect_exit_code": 0,
+      "raw_stdout": true,
+      "stdout_redactions": [
+        {
+          "pattern": "(?m)^((?:\\[root [^\\n]+?\\] )?stage )[0-9a-f]{64}(.*)$",
+          "replacement": "${1}$$STAGE${2}"
+        }
+      ]
+    },
+    {
+      "action": "file_equals",
+      "name": "restored_input",
+      "path": "$work/repo/alpha/src/util.rs",
+      "text": "use crate::shapes::perimeter;\nuse crate::{shapes::{area, Circle}, VERSION_TAG};\n\npub const LABEL: &str = VERSION_TAG;\n\npub fn unit_area() -> f64 {\n    let circle = Circle::new(1.0);\n    area(&circle) + crate::shapes::area(&circle) + circle.radius + perimeter(1.0)\n}\n"
+    },
+    {
+      "action": "exists",
+      "name": "exists_0",
+      "path": "$work/repo/alpha/src/shapes.rs",
+      "expected": true
+    }
+  ]
+}
