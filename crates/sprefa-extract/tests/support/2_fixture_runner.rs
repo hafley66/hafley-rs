@@ -168,6 +168,10 @@ pub fn commands(case: &Value, api: impl Fn(&Value) -> Value) -> Value {
                         .or_else(|| step["right"].as_str())
                         .unwrap(),
                 )));
+                if let Some(prefixes) = step["exclude_prefixes"].as_array() {
+                    actual.retain(|path, _| !prefixes.iter().any(|prefix| path.starts_with(prefix.as_str().unwrap())));
+                    expected.retain(|path, _| !prefixes.iter().any(|prefix| path.starts_with(prefix.as_str().unwrap())));
+                }
                 if step["file_bytes_only"] == true {
                     actual.retain(|_, value| value.get("directory") != Some(&Value::Bool(true)));
                     expected.retain(|_, value| value.get("directory") != Some(&Value::Bool(true)));
@@ -189,6 +193,12 @@ pub fn commands(case: &Value, api: impl Fn(&Value) -> Value) -> Value {
                     }
                 }
                 observed.insert(name.to_string(), serde_json::json!({"files":actual}));
+            }
+            "json_count" => {
+                let rows: Value = serde_json::from_slice(&std::fs::read(path()).unwrap()).unwrap();
+                let count = rows.as_array().unwrap().iter().filter(|row| row[step["key"].as_str().unwrap()] == step["value"]).count();
+                assert!(count > step["minimum"].as_u64().unwrap() as usize, "{name}: {count}");
+                observed.insert(name.to_string(), serde_json::json!({"above_minimum":true,"minimum":step["minimum"]}));
             }
             "sql_query" => {
                 let db =
