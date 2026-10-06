@@ -1,0 +1,9 @@
+{
+  "steps": [
+    {
+      "action": "api",
+      "name": "indexers",
+      "api": "indexer_argv"
+    }
+  ]
+}

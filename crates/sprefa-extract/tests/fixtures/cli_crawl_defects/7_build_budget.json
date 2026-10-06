@@ -1,0 +1,58 @@
+{
+  "steps": [
+    {
+      "action": "write",
+      "path": "$work/root/main.go",
+      "text": "package main\nfunc main() {}\n"
+    },
+    {
+      "action": "write",
+      "path": "$work/root/go.mod",
+      "text": "module fake\n\ngo 1.21\n"
+    },
+    {
+      "action": "write",
+      "path": "$work/fake-bin/scip-go",
+      "text": "#!/bin/sh\nsleep 30\n",
+      "executable": true
+    },
+    {
+      "action": "run",
+      "name": "extract",
+      "cwd": "$manifest",
+      "arguments": [
+        "scip",
+        "--raw",
+        "--scip-build",
+        "--root",
+        "$work/root",
+        "--scip-timeout",
+        "1",
+        "$work/root/main.go"
+      ],
+      "environment": {
+        "PATH": "$work/fake-bin:$path"
+      },
+      "expect_success": false,
+      "unasserted_exit": true,
+      "unasserted_stdout": true,
+      "unasserted_stderr": true,
+      "stdout_null": true,
+      "hard_deadline_ms": 15000
+    },
+    {
+      "action": "claim",
+      "name": "failure",
+      "cell": "extract.exit_code",
+      "kind": "not_equals",
+      "value": 0
+    },
+    {
+      "action": "claim",
+      "name": "budget",
+      "cell": "extract.stderr",
+      "kind": "contains",
+      "text": "exceeded the 1s budget"
+    }
+  ]
+}

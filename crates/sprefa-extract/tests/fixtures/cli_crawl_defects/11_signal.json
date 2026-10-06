@@ -1,0 +1,74 @@
+{
+  "steps": [
+    {
+      "action": "write",
+      "path": "$work/root/Cargo.toml",
+      "text": "[package]\nname='failed-indexer'\nversion='0.0.0'\nedition='2021'\n"
+    },
+    {
+      "action": "write",
+      "path": "$work/root/src/lib.rs",
+      "text": "pub fn probe() {}\n"
+    },
+    {
+      "action": "write",
+      "path": "$work/bin/rust-analyzer",
+      "text": "#!/bin/sh\nprintf 'signal root cause\\n' >&2\nkill -TERM $$\n",
+      "executable": true
+    },
+    {
+      "action": "run",
+      "name": "extract",
+      "cwd": "$manifest",
+      "arguments": [
+        "scip",
+        "--scip-cache",
+        "$work/root/cache",
+        "$work/root"
+      ],
+      "expect_exit_code": 0,
+      "environment": {
+        "PATH": "$work/bin:$path",
+        "HAFLEY_LOG_FORMAT": "json",
+        "DL_TRAIL": "0"
+      },
+      "env_remove": [
+        "RUST_LOG"
+      ],
+      "unasserted_stderr": true,
+      "stdout_redactions": [
+        {
+          "pattern": "/[^\" ]*/rust-analyzer-[0-9]+-[0-9]+/index\\.scip",
+          "replacement": "<stage>/index.scip"
+        }
+      ]
+    },
+    {
+      "action": "claim",
+      "name": "status",
+      "cell": "extract.stdout",
+      "kind": "json_contains",
+      "pointer": "detail",
+      "expect": true,
+      "text": "terminated by signal 15"
+    },
+    {
+      "action": "claim",
+      "name": "cause",
+      "cell": "extract.stdout",
+      "kind": "json_contains",
+      "pointer": "detail",
+      "expect": true,
+      "text": "signal root cause"
+    },
+    {
+      "action": "claim",
+      "name": "signal",
+      "cell": "extract.stderr",
+      "kind": "json_equals",
+      "pointer": "fields/process.status",
+      "expect": "terminated by signal 15",
+      "line_contains": "\"message\":\"indexer process failed\""
+    }
+  ]
+}

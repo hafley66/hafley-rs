@@ -1,0 +1,170 @@
+{
+  "steps": [
+    {
+      "action": "write",
+      "path": "$work/root/Cargo.toml",
+      "text": "[package]\nname='failed-evidence'\nversion='0.0.0'\nedition='2021'\n"
+    },
+    {
+      "action": "write",
+      "path": "$work/root/src/lib.rs",
+      "text": "pub fn probe() {}\n"
+    },
+    {
+      "action": "write",
+      "path": "$work/bin/rust-analyzer",
+      "text": "#!/bin/sh\nprintf 'root cause: cargo metadata π failed\\n' >&2\ni=0\nwhile [ \"$i\" -lt 12000 ]; do printf 'é' >&2; i=$((i + 1)); done\nprintf '\\n7: worker_pool\\n8: __pthread_joiner_wake\\n' >&2\nexit 17\n",
+      "executable": true
+    },
+    {
+      "action": "run",
+      "name": "extract",
+      "cwd": "$manifest",
+      "arguments": [
+        "scip",
+        "--scip-cache",
+        "$work/root/cache",
+        "$work/root"
+      ],
+      "expect_exit_code": 0,
+      "environment": {
+        "PATH": "$work/bin:$path",
+        "HAFLEY_LOG_FORMAT": "json",
+        "DL_TRAIL": "0"
+      },
+      "env_remove": [
+        "RUST_LOG"
+      ],
+      "unasserted_stderr": true,
+      "stdout_redactions": [
+        {
+          "pattern": "/[^\" ]*/rust-analyzer-[0-9]+-[0-9]+/index\\.scip",
+          "replacement": "<stage>/index.scip"
+        }
+      ]
+    },
+    {
+      "action": "claim",
+      "name": "one_row",
+      "cell": "extract.stdout",
+      "kind": "line_count",
+      "line_prefix": "{",
+      "expect": 1
+    },
+    {
+      "action": "claim",
+      "name": "record",
+      "cell": "extract.stdout",
+      "kind": "json_equals",
+      "pointer": "record",
+      "expect": "scip_skip"
+    },
+    {
+      "action": "claim",
+      "name": "reason",
+      "cell": "extract.stdout",
+      "kind": "json_equals",
+      "pointer": "reason",
+      "expect": "failed"
+    },
+    {
+      "action": "claim",
+      "name": "detail_0",
+      "cell": "extract.stdout",
+      "kind": "json_contains",
+      "pointer": "detail",
+      "expect": true,
+      "text": "command [\"rust-analyzer\", \"scip\", \".\", \"--output\""
+    },
+    {
+      "action": "claim",
+      "name": "detail_1",
+      "cell": "extract.stdout",
+      "kind": "json_contains",
+      "pointer": "detail",
+      "expect": true,
+      "text": "exited with code 17"
+    },
+    {
+      "action": "claim",
+      "name": "detail_2",
+      "cell": "extract.stdout",
+      "kind": "json_contains",
+      "pointer": "detail",
+      "expect": true,
+      "text": "root cause: cargo metadata π failed"
+    },
+    {
+      "action": "claim",
+      "name": "detail_3",
+      "cell": "extract.stdout",
+      "kind": "json_contains",
+      "pointer": "detail",
+      "expect": true,
+      "text": "stderr bytes omitted"
+    },
+    {
+      "action": "claim",
+      "name": "tail",
+      "cell": "extract.stdout",
+      "kind": "json_ends_with",
+      "pointer": "detail",
+      "expect": true,
+      "text": "8: __pthread_joiner_wake"
+    },
+    {
+      "action": "claim",
+      "name": "utf8",
+      "cell": "extract.stdout",
+      "kind": "json_absent",
+      "pointer": "detail",
+      "expect": true,
+      "text": "�"
+    },
+    {
+      "action": "claim",
+      "name": "bound",
+      "cell": "extract.stdout",
+      "kind": "json_bytes_lt",
+      "pointer": "detail",
+      "expect": true,
+      "limit": 17000
+    },
+    {
+      "action": "claim",
+      "name": "process",
+      "cell": "extract.stderr",
+      "kind": "json_equals",
+      "pointer": "fields/process.command",
+      "expect": "rust-analyzer",
+      "line_contains": "\"message\":\"indexer process failed\""
+    },
+    {
+      "action": "claim",
+      "name": "status",
+      "cell": "extract.stderr",
+      "kind": "json_equals",
+      "pointer": "fields/process.status",
+      "expect": "exited with code 17",
+      "line_contains": "\"message\":\"indexer process failed\""
+    },
+    {
+      "action": "claim",
+      "name": "pid",
+      "cell": "extract.stderr",
+      "kind": "json_u64",
+      "pointer": "fields/process.pid",
+      "expect": true,
+      "line_contains": "\"message\":\"indexer process failed\""
+    },
+    {
+      "action": "claim",
+      "name": "duration",
+      "cell": "extract.stderr",
+      "kind": "json_u64",
+      "pointer": "fields/duration_ms",
+      "expect": true,
+      "line_contains": "\"message\":\"indexer process failed\""
+    }
+  ]
+}

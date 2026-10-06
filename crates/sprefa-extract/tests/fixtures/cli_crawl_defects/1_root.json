@@ -1,0 +1,44 @@
+{
+  "steps": [
+    {
+      "action": "write",
+      "path": "$work/root/a.go",
+      "text": "package a\nfunc A() {}\n"
+    },
+    {
+      "action": "write",
+      "path": "$work/root/index.scip",
+      "text": "not a real index"
+    },
+    {
+      "action": "run",
+      "name": "extract",
+      "cwd": "$manifest",
+      "arguments": [
+        "--scip-deps",
+        "--root",
+        "$work/root",
+        "--scip-index",
+        "$work/root/index.scip",
+        "$work/root"
+      ],
+      "unasserted_exit": true,
+      "unasserted_stdout": true,
+      "unasserted_stderr": true
+    },
+    {
+      "action": "claim",
+      "name": "root_status",
+      "cell": "extract.exit_code",
+      "kind": "not_equals",
+      "value": 2
+    },
+    {
+      "action": "claim",
+      "name": "root_directory",
+      "cell": "extract.stderr",
+      "kind": "absent",
+      "text": "is a directory"
+    }
+  ]
+}

@@ -38,14 +38,31 @@ pub fn execute(step: &Value, expand: &impl Fn(&str) -> String) -> (Output, Durat
         }
     }
     let started = std::time::Instant::now();
-    let output = if step.get("stdin").is_some() || step.get("stdin_file").is_some() {
-        use std::io::Write;
-        let input = if let Some(file) = step["stdin_file"].as_str() {
-            std::fs::read(expand(file)).unwrap()
-        } else { expand(step["stdin"].as_str().unwrap()).into_bytes() };
-        command.stdin(std::process::Stdio::piped()).stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped());
+    let controlled = step.get("stdin").is_some() || step.get("stdin_file").is_some()
+        || step.get("close_stdout_after").is_some() || step.get("hard_deadline_ms").is_some();
+    let output = if controlled {
+        use std::io::{Read, Write};
+        use std::process::Stdio;
+        command.stdin(Stdio::piped()).stdout(if step["stdout_null"] == true { Stdio::null() } else { Stdio::piped() }).stderr(Stdio::piped());
         let mut child = command.spawn().unwrap();
-        child.stdin.take().unwrap().write_all(&input).unwrap();
+        if step.get("stdin").is_some() || step.get("stdin_file").is_some() {
+            let input = if let Some(file) = step["stdin_file"].as_str() { std::fs::read(expand(file)).unwrap() }
+                else { expand(step["stdin"].as_str().unwrap()).into_bytes() };
+            child.stdin.take().unwrap().write_all(&input).unwrap();
+        } else { drop(child.stdin.take()); }
+        if let Some(count) = step["close_stdout_after"].as_u64() {
+            let mut first = vec![0; count as usize];
+            child.stdout.take().unwrap().read_exact(&mut first).unwrap();
+        }
+        if let Some(limit) = step["hard_deadline_ms"].as_u64() {
+            while child.try_wait().unwrap().is_none() {
+                if started.elapsed() >= Duration::from_millis(limit) {
+                    let _ = child.kill(); let _ = child.wait();
+                    panic!("command still running after {limit}ms: {step}");
+                }
+                std::thread::sleep(Duration::from_millis(100));
+            }
+        }
         child.wait_with_output().unwrap()
     } else { command.output().unwrap() };
     let elapsed = started.elapsed();

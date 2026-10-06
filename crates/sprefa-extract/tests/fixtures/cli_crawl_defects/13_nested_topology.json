@@ -1,0 +1,97 @@
+{
+  "steps": [
+    {
+      "action": "write",
+      "path": "$work/repository/Cargo.toml",
+      "text": "[workspace]\nresolver='2'\nmembers=['packages/app','packages/dependency','shared/transitive']\n[workspace.package]\nedition='2021'\n"
+    },
+    {
+      "action": "write",
+      "path": "$work/repository/Cargo.lock",
+      "text": "version = 4\n"
+    },
+    {
+      "action": "write",
+      "path": "$work/repository/.cargo/config.toml",
+      "text": "[build]\nincremental = false\n"
+    },
+    {
+      "action": "write",
+      "path": "$work/repository/packages/app/Cargo.toml",
+      "text": "[package]\nname='app'\nversion='0.0.0'\nedition.workspace=true\n[dependencies]\ndependency={path='../dependency'}\n"
+    },
+    {
+      "action": "write",
+      "path": "$work/repository/packages/app/src/lib.rs",
+      "text": "pub fn app() {}\n"
+    },
+    {
+      "action": "write",
+      "path": "$work/repository/packages/dependency/Cargo.toml",
+      "text": "[package]\nname='dependency'\nversion='0.0.0'\nedition.workspace=true\n[dependencies]\ntransitive={path='../../shared/transitive'}\n"
+    },
+    {
+      "action": "write",
+      "path": "$work/repository/packages/dependency/src/lib.rs",
+      "text": "pub fn dependency() {}\n"
+    },
+    {
+      "action": "write",
+      "path": "$work/repository/shared/transitive/Cargo.toml",
+      "text": "[package]\nname='transitive'\nversion='0.0.0'\nedition.workspace=true\n"
+    },
+    {
+      "action": "write",
+      "path": "$work/repository/shared/transitive/src/lib.rs",
+      "text": "pub fn transitive() {}\n"
+    },
+    {
+      "action": "write",
+      "path": "$work/bin/rust-analyzer",
+      "text": "#!/bin/sh\ntest -f ../dependency/Cargo.toml || { echo 'missing sibling dependency' >&2; exit 41; }\ntest -f ../../shared/transitive/Cargo.toml || { echo 'missing transitive dependency' >&2; exit 42; }\ntest -f ../../Cargo.toml || { echo 'missing workspace manifest' >&2; exit 43; }\ntest -f ../../Cargo.lock || { echo 'missing workspace lockfile' >&2; exit 44; }\ntest -f ../../.cargo/config.toml || { echo 'missing cargo config' >&2; exit 45; }\ntest -f ../../shared/transitive/src/lib.rs || { echo 'missing transitive source' >&2; exit 46; }\ngrep -q 'pub fn transitive() {}' ../../shared/transitive/src/lib.rs || { echo 'wrong transitive source' >&2; exit 47; }\nprintf 'index' > \"$4\"\n",
+      "executable": true
+    },
+    {
+      "action": "git",
+      "args": [
+        "init",
+        "-q",
+        "$work/repository"
+      ],
+      "expect_success": true,
+      "unasserted_stdout": true,
+      "unasserted_stderr": true,
+      "name": "repository_init"
+    },
+    {
+      "action": "api",
+      "name": "build",
+      "api": "rust_build",
+      "root": "$work/repository/packages/app",
+      "path": "$work/bin:/bin:/usr/bin",
+      "expect": "index"
+    },
+    {
+      "action": "read_tree",
+      "name": "lockfile",
+      "path": "$work/repository/Cargo.lock"
+    },
+    {
+      "action": "read_tree",
+      "name": "transitive_source",
+      "path": "$work/repository/shared/transitive/src/lib.rs"
+    },
+    {
+      "action": "exists",
+      "name": "repository_target",
+      "path": "$work/repository/target",
+      "expected": false
+    },
+    {
+      "action": "exists",
+      "name": "app_target",
+      "path": "$work/repository/packages/app/target",
+      "expected": false
+    }
+  ]
+}

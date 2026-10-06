@@ -1,0 +1,52 @@
+{
+  "steps": [
+    {
+      "action": "write",
+      "path": "$work/root/main.go",
+      "text": "package main\nfunc main() {}\n"
+    },
+    {
+      "action": "write",
+      "path": "$work/root/go.mod",
+      "text": "module fake\n\ngo 1.21\n"
+    },
+    {
+      "action": "write",
+      "path": "$work/fake-bin/scip-go",
+      "text": "#!/bin/sh\nsleep 30\n",
+      "executable": true
+    },
+    {
+      "action": "run",
+      "name": "extract",
+      "cwd": "$manifest",
+      "arguments": [
+        "scip",
+        "--scip-cache",
+        "$work/root/cache",
+        "--scip-timeout",
+        "1",
+        "$work/root"
+      ],
+      "environment": {
+        "PATH": "$work/fake-bin:$path"
+      },
+      "unasserted_exit": true,
+      "unasserted_stderr": true
+    },
+    {
+      "action": "claim",
+      "name": "skip",
+      "cell": "extract.stdout",
+      "kind": "contains",
+      "text": "\"record\":\"scip_skip\""
+    },
+    {
+      "action": "claim",
+      "name": "timeout",
+      "cell": "extract.stdout",
+      "kind": "contains",
+      "text": "timed_out"
+    }
+  ]
+}

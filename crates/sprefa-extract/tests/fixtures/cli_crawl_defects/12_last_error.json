@@ -1,0 +1,11 @@
+{
+  "steps": [
+    {
+      "action": "api",
+      "name": "last_error",
+      "api": "last_error_line",
+      "text": "panic root\n8: __pthread_joiner_wake\nnote: run with RUST_BACKTRACE=1\n",
+      "expect": "8: __pthread_joiner_wake"
+    }
+  ]
+}

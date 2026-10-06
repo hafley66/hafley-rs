@@ -224,8 +224,8 @@ pub fn commands(case: &Value, api: impl Fn(&Value) -> Value) -> Value {
                     let unit = expand(repeat["text"].as_str().unwrap());
                     let count = repeat["count"].as_u64().unwrap();
                     let mut composed = expand(step["prefix"].as_str().unwrap_or(""));
-                    for _ in 0..count {
-                        composed.push_str(&unit);
+                    for index in 0..count {
+                        composed.push_str(&if repeat.get("indexed") == Some(&Value::Bool(true)) { unit.replace("{index}", &index.to_string()) } else { unit.clone() });
                     }
                     composed.push_str(&expand(step["suffix"].as_str().unwrap_or("")));
                     composed.into_bytes()
@@ -606,9 +606,16 @@ fn claim(
         return serde_json::json!(actual);
     }
     let value = cell("cell");
+    if kind == "not_equals" { assert_ne!(value, step["value"], "{step}"); return Value::Bool(true); }
+    if kind == "json_all" {
+        let rows: Vec<Value> = value.as_str().unwrap().lines().map(|line| serde_json::from_str(line).unwrap()).collect();
+        assert!(rows.iter().all(|row| row.pointer(&format!("/{}", step["pointer"].as_str().unwrap())) == Some(&step["value"])), "{step}");
+        return Value::Bool(true);
+    }
     let text = value.as_str().unwrap_or("");
     let needle = || expand(step["text"].as_str().unwrap());
     let (actual, expected) = match kind {
+        "not_json" => (Value::Bool(serde_json::from_str::<Value>(text.trim()).is_err()), Value::Bool(true)),
         "contains" => (
             serde_json::json!(text.contains(&needle())),
             Value::Bool(true),
@@ -662,7 +669,7 @@ fn claim(
         _ if kind.starts_with("json_") => {
             let row: Value = serde_json::from_str(
                 text.lines().enumerate()
-                    .find(|(index, line)| step["line"].as_u64().map_or_else(|| line.starts_with(step["line_prefix"].as_str().unwrap_or("{")), |wanted| *index == wanted as usize))
+                    .find(|(index, line)| if let Some(needle) = step["line_contains"].as_str() { line.contains(needle) } else { step["line"].as_u64().map_or_else(|| line.starts_with(step["line_prefix"].as_str().unwrap_or("{")), |wanted| *index == wanted as usize) })
                     .unwrap().1,
             )
             .unwrap();
@@ -690,6 +697,11 @@ fn claim(
                         .any(|row| row[step["column"].as_str().unwrap()] == step["value"]),
                 ),
                 "json_scalar" | "json_equals" => selected.clone(),
+                "json_contains" => Value::Bool(selected.as_str().unwrap().contains(&needle())),
+                "json_absent" => Value::Bool(!selected.as_str().unwrap().contains(&needle())),
+                "json_ends_with" => Value::Bool(selected.as_str().unwrap().ends_with(&needle())),
+                "json_bytes_lt" => Value::Bool(selected.as_str().unwrap().len() < step["limit"].as_u64().unwrap() as usize),
+                "json_u64" => Value::Bool(selected.as_u64().is_some()),
                 _ => panic!("unknown claim: {step}"),
             };
             let expected = if kind == "json_column_absent" {
@@ -932,5 +944,6 @@ pub fn expand_text(text: &str, work: &str) -> String {
             .replace("$manifest", env!("CARGO_MANIFEST_DIR"))
             .replace("$ryii", env!("CARGO_BIN_EXE_ryii"))
             .replace("$cargo", env!("CARGO"))
+            .replace("$path", env!("PATH"))
             .replace("$target", option_env!("CARGO_TARGET_DIR").unwrap_or(concat!(env!("HOME"), "/.cache/lanes/shared/target")))
 }

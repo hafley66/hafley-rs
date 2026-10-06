@@ -1,0 +1,77 @@
+{
+  "steps": [
+    {
+      "action": "write",
+      "path": "$work/root/Cargo.toml",
+      "text": "[package]\nname='failed-indexer'\nversion='0.0.0'\nedition='2021'\n"
+    },
+    {
+      "action": "write",
+      "path": "$work/root/src/lib.rs",
+      "text": "pub fn probe() {}\n"
+    },
+    {
+      "action": "write",
+      "path": "$work/bin/rust-analyzer",
+      "text": "#!/bin/sh\nexit 19\n",
+      "executable": true
+    },
+    {
+      "action": "run",
+      "name": "extract",
+      "cwd": "$manifest",
+      "arguments": [
+        "scip",
+        "--scip-cache",
+        "$work/root/cache",
+        "$work/root"
+      ],
+      "expect_exit_code": 0,
+      "environment": {
+        "PATH": "$work/bin:$path",
+        "HAFLEY_LOG_FORMAT": "human",
+        "DL_TRAIL": "0"
+      },
+      "env_remove": [
+        "RUST_LOG"
+      ],
+      "unasserted_stderr": true,
+      "stdout_redactions": [
+        {
+          "pattern": "/[^\" ]*/rust-analyzer-[0-9]+-[0-9]+/index\\.scip",
+          "replacement": "<stage>/index.scip"
+        }
+      ]
+    },
+    {
+      "action": "claim",
+      "name": "record",
+      "cell": "extract.stdout",
+      "kind": "json_equals",
+      "pointer": "record",
+      "expect": "scip_skip"
+    },
+    {
+      "action": "claim",
+      "name": "detail",
+      "cell": "extract.stdout",
+      "kind": "json_contains",
+      "pointer": "detail",
+      "expect": true,
+      "text": "exited with code 19; stderr was empty"
+    },
+    {
+      "action": "claim",
+      "name": "telemetry",
+      "cell": "extract.stderr",
+      "kind": "contains",
+      "text": "indexer process failed"
+    },
+    {
+      "action": "claim",
+      "name": "human",
+      "cell": "extract.stderr",
+      "kind": "not_json"
+    }
+  ]
+}

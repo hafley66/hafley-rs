@@ -1,0 +1,30 @@
+{
+  "steps": [
+    {
+      "action": "write",
+      "path": "$work/pipe.ts",
+      "repeat": {
+        "text": "export function f{index}(n: number): number { return n + {index}; }\n",
+        "count": 5000,
+        "indexed": true
+      }
+    },
+    {
+      "action": "run",
+      "name": "extract",
+      "cwd": "$manifest",
+      "arguments": [
+        "$work/pipe.ts"
+      ],
+      "expect_exit_code": 0,
+      "close_stdout_after": 1
+    },
+    {
+      "action": "claim",
+      "name": "silent",
+      "cell": "extract.stderr",
+      "kind": "text_equals",
+      "text": ""
+    }
+  ]
+}

@@ -1,0 +1,71 @@
+{
+  "steps": [
+    {
+      "action": "run",
+      "name": "directory",
+      "cwd": "$manifest",
+      "arguments": [
+        "--kinds",
+        "cst",
+        "$fixtures/graph_rust"
+      ],
+      "expect_exit_code": 0
+    },
+    {
+      "action": "claim",
+      "name": "directory_family",
+      "cell": "directory.stdout",
+      "kind": "json_all",
+      "pointer": "family",
+      "value": "cst"
+    },
+    {
+      "action": "claim",
+      "name": "directory_nonempty",
+      "cell": "directory.stdout",
+      "kind": "contains",
+      "text": "{"
+    },
+    {
+      "action": "claim",
+      "name": "directory_stderr",
+      "cell": "directory.stderr",
+      "kind": "absent",
+      "text": "--resolve"
+    },
+    {
+      "action": "run",
+      "name": "files",
+      "cwd": "$manifest",
+      "arguments": [
+        "--kinds",
+        "cst",
+        "$fixtures/graph_rust/0_widget.rs",
+        "$fixtures/graph_rust/1_reader.rs"
+      ],
+      "expect_exit_code": 0
+    },
+    {
+      "action": "claim",
+      "name": "files_family",
+      "cell": "files.stdout",
+      "kind": "json_all",
+      "pointer": "family",
+      "value": "cst"
+    },
+    {
+      "action": "claim",
+      "name": "files_nonempty",
+      "cell": "files.stdout",
+      "kind": "contains",
+      "text": "{"
+    },
+    {
+      "action": "claim",
+      "name": "files_stderr",
+      "cell": "files.stderr",
+      "kind": "absent",
+      "text": "--resolve"
+    }
+  ]
+}

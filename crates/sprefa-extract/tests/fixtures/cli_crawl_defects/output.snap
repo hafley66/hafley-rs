@@ -1,0 +1,3300 @@
+---
+source: tests/support/2_fixture_runner.rs
+---
+{
+  "10_logging_off": {
+    "detail": true,
+    "extract": {
+      "exit_code": 0,
+      "stdout": [
+        {
+          "record": "scip_skip",
+          "lang": "rust",
+          "bin": "rust-analyzer",
+          "reason": "failed",
+          "detail": "scip indexer failed: command [\"rust-analyzer\", \"scip\", \".\", \"--output\", \"<stage>/index.scip\"] exited with code 21; stderr:\nsmall root cause"
+        }
+      ],
+      "stderr": ""
+    },
+    "quiet": ""
+  },
+  "11_signal": {
+    "cause": true,
+    "extract": {
+      "exit_code": 0,
+      "stdout": [
+        {
+          "record": "scip_skip",
+          "lang": "rust",
+          "bin": "rust-analyzer",
+          "reason": "failed",
+          "detail": "scip indexer failed: command [\"rust-analyzer\", \"scip\", \".\", \"--output\", \"<stage>/index.scip\"] terminated by signal 15; stderr:\nsignal root cause"
+        }
+      ]
+    },
+    "signal": "terminated by signal 15",
+    "status": true
+  },
+  "12_last_error": {
+    "last_error": "8: __pthread_joiner_wake"
+  },
+  "13_nested_topology": {
+    "app_target": {
+      "exists": false
+    },
+    "build": "index",
+    "lockfile": "version = 4\n",
+    "repository_target": {
+      "exists": false
+    },
+    "transitive_source": "pub fn transitive() {}\n"
+  },
+  "1_root": {
+    "extract": {},
+    "root_directory": true,
+    "root_status": true
+  },
+  "2_resolve_directory": {
+    "extract": {
+      "exit_code": 2
+    }
+  },
+  "3_cst_paths": {
+    "directory": {
+      "exit_code": 0,
+      "stdout": [
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 0,
+            "end": 41
+          },
+          "kind": "source_file",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 0,
+            "end": 40
+          },
+          "kind": "struct_item",
+          "name": "Widget"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 0,
+            "end": 3
+          },
+          "kind": "visibility_modifier",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 11,
+            "end": 17
+          },
+          "kind": "type_identifier",
+          "name": "Widget"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 18,
+            "end": 40
+          },
+          "kind": "field_declaration_list",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 24,
+            "end": 37
+          },
+          "kind": "field_declaration",
+          "name": "value"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 24,
+            "end": 27
+          },
+          "kind": "visibility_modifier",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 28,
+            "end": 33
+          },
+          "kind": "field_identifier",
+          "name": "value"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 35,
+            "end": 37
+          },
+          "kind": "primitive_type",
+          "name": null
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 0,
+            "end": 41
+          },
+          "to": {
+            "start": 0,
+            "end": 40
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 0,
+            "end": 40
+          },
+          "to": {
+            "start": 0,
+            "end": 3
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 0,
+            "end": 40
+          },
+          "to": {
+            "start": 11,
+            "end": 17
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 0,
+            "end": 40
+          },
+          "to": {
+            "start": 18,
+            "end": 40
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 18,
+            "end": 40
+          },
+          "to": {
+            "start": 24,
+            "end": 37
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 24,
+            "end": 37
+          },
+          "to": {
+            "start": 24,
+            "end": 27
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 24,
+            "end": 37
+          },
+          "to": {
+            "start": 28,
+            "end": 33
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 24,
+            "end": 37
+          },
+          "to": {
+            "start": 35,
+            "end": 37
+          }
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 0,
+            "end": 323
+          },
+          "kind": "source_file",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 0,
+            "end": 18
+          },
+          "kind": "use_declaration",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 4,
+            "end": 17
+          },
+          "kind": "scoped_identifier",
+          "name": "Widget"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 4,
+            "end": 9
+          },
+          "kind": "crate",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 11,
+            "end": 17
+          },
+          "kind": "identifier",
+          "name": "Widget"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 20,
+            "end": 70
+          },
+          "kind": "function_item",
+          "name": "read"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 20,
+            "end": 23
+          },
+          "kind": "visibility_modifier",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 27,
+            "end": 31
+          },
+          "kind": "identifier",
+          "name": "read"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 31,
+            "end": 46
+          },
+          "kind": "parameters",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 32,
+            "end": 45
+          },
+          "kind": "parameter",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 32,
+            "end": 37
+          },
+          "kind": "identifier",
+          "name": "value"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 39,
+            "end": 45
+          },
+          "kind": "type_identifier",
+          "name": "Widget"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 50,
+            "end": 56
+          },
+          "kind": "type_identifier",
+          "name": "Widget"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 57,
+            "end": 70
+          },
+          "kind": "block",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 63,
+            "end": 68
+          },
+          "kind": "identifier",
+          "name": "value"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 72,
+            "end": 123
+          },
+          "kind": "function_item",
+          "name": "make"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 72,
+            "end": 75
+          },
+          "kind": "visibility_modifier",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 79,
+            "end": 83
+          },
+          "kind": "identifier",
+          "name": "make"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 83,
+            "end": 85
+          },
+          "kind": "parameters",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 89,
+            "end": 95
+          },
+          "kind": "type_identifier",
+          "name": "Widget"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 96,
+            "end": 123
+          },
+          "kind": "block",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 102,
+            "end": 121
+          },
+          "kind": "struct_expression",
+          "name": "Widget"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 102,
+            "end": 108
+          },
+          "kind": "type_identifier",
+          "name": "Widget"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 109,
+            "end": 121
+          },
+          "kind": "field_initializer_list",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 111,
+            "end": 119
+          },
+          "kind": "field_initializer",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 111,
+            "end": 116
+          },
+          "kind": "field_identifier",
+          "name": "value"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 118,
+            "end": 119
+          },
+          "kind": "integer_literal",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 125,
+            "end": 143
+          },
+          "kind": "struct_item",
+          "name": "Reader"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 125,
+            "end": 128
+          },
+          "kind": "visibility_modifier",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 136,
+            "end": 142
+          },
+          "kind": "type_identifier",
+          "name": "Reader"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 145,
+            "end": 232
+          },
+          "kind": "impl_item",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 150,
+            "end": 156
+          },
+          "kind": "type_identifier",
+          "name": "Reader"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 157,
+            "end": 232
+          },
+          "kind": "declaration_list",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 163,
+            "end": 230
+          },
+          "kind": "function_item",
+          "name": "method"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 163,
+            "end": 166
+          },
+          "kind": "visibility_modifier",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 170,
+            "end": 176
+          },
+          "kind": "identifier",
+          "name": "method"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 176,
+            "end": 198
+          },
+          "kind": "parameters",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 177,
+            "end": 182
+          },
+          "kind": "self_parameter",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 178,
+            "end": 182
+          },
+          "kind": "self",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 184,
+            "end": 197
+          },
+          "kind": "parameter",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 184,
+            "end": 189
+          },
+          "kind": "identifier",
+          "name": "value"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 191,
+            "end": 197
+          },
+          "kind": "type_identifier",
+          "name": "Widget"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 202,
+            "end": 208
+          },
+          "kind": "type_identifier",
+          "name": "Widget"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 209,
+            "end": 230
+          },
+          "kind": "block",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 219,
+            "end": 224
+          },
+          "kind": "identifier",
+          "name": "value"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 234,
+            "end": 322
+          },
+          "kind": "trait_item",
+          "name": "Reads"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 234,
+            "end": 237
+          },
+          "kind": "visibility_modifier",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 244,
+            "end": 249
+          },
+          "kind": "type_identifier",
+          "name": "Reads"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 250,
+            "end": 322
+          },
+          "kind": "declaration_list",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 256,
+            "end": 320
+          },
+          "kind": "function_item",
+          "name": "default"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 259,
+            "end": 266
+          },
+          "kind": "identifier",
+          "name": "default"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 266,
+            "end": 288
+          },
+          "kind": "parameters",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 267,
+            "end": 272
+          },
+          "kind": "self_parameter",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 268,
+            "end": 272
+          },
+          "kind": "self",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 274,
+            "end": 287
+          },
+          "kind": "parameter",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 274,
+            "end": 279
+          },
+          "kind": "identifier",
+          "name": "value"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 281,
+            "end": 287
+          },
+          "kind": "type_identifier",
+          "name": "Widget"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 292,
+            "end": 298
+          },
+          "kind": "type_identifier",
+          "name": "Widget"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 299,
+            "end": 320
+          },
+          "kind": "block",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 309,
+            "end": 314
+          },
+          "kind": "identifier",
+          "name": "value"
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 0,
+            "end": 323
+          },
+          "to": {
+            "start": 0,
+            "end": 18
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 0,
+            "end": 18
+          },
+          "to": {
+            "start": 4,
+            "end": 17
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 4,
+            "end": 17
+          },
+          "to": {
+            "start": 4,
+            "end": 9
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 4,
+            "end": 17
+          },
+          "to": {
+            "start": 11,
+            "end": 17
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 0,
+            "end": 323
+          },
+          "to": {
+            "start": 20,
+            "end": 70
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 20,
+            "end": 70
+          },
+          "to": {
+            "start": 20,
+            "end": 23
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 20,
+            "end": 70
+          },
+          "to": {
+            "start": 27,
+            "end": 31
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 20,
+            "end": 70
+          },
+          "to": {
+            "start": 31,
+            "end": 46
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 31,
+            "end": 46
+          },
+          "to": {
+            "start": 32,
+            "end": 45
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 32,
+            "end": 45
+          },
+          "to": {
+            "start": 32,
+            "end": 37
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 32,
+            "end": 45
+          },
+          "to": {
+            "start": 39,
+            "end": 45
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 20,
+            "end": 70
+          },
+          "to": {
+            "start": 50,
+            "end": 56
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 20,
+            "end": 70
+          },
+          "to": {
+            "start": 57,
+            "end": 70
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 57,
+            "end": 70
+          },
+          "to": {
+            "start": 63,
+            "end": 68
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 0,
+            "end": 323
+          },
+          "to": {
+            "start": 72,
+            "end": 123
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 72,
+            "end": 123
+          },
+          "to": {
+            "start": 72,
+            "end": 75
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 72,
+            "end": 123
+          },
+          "to": {
+            "start": 79,
+            "end": 83
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 72,
+            "end": 123
+          },
+          "to": {
+            "start": 83,
+            "end": 85
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 72,
+            "end": 123
+          },
+          "to": {
+            "start": 89,
+            "end": 95
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 72,
+            "end": 123
+          },
+          "to": {
+            "start": 96,
+            "end": 123
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 96,
+            "end": 123
+          },
+          "to": {
+            "start": 102,
+            "end": 121
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 102,
+            "end": 121
+          },
+          "to": {
+            "start": 102,
+            "end": 108
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 102,
+            "end": 121
+          },
+          "to": {
+            "start": 109,
+            "end": 121
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 109,
+            "end": 121
+          },
+          "to": {
+            "start": 111,
+            "end": 119
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 111,
+            "end": 119
+          },
+          "to": {
+            "start": 111,
+            "end": 116
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 111,
+            "end": 119
+          },
+          "to": {
+            "start": 118,
+            "end": 119
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 0,
+            "end": 323
+          },
+          "to": {
+            "start": 125,
+            "end": 143
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 125,
+            "end": 143
+          },
+          "to": {
+            "start": 125,
+            "end": 128
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 125,
+            "end": 143
+          },
+          "to": {
+            "start": 136,
+            "end": 142
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 0,
+            "end": 323
+          },
+          "to": {
+            "start": 145,
+            "end": 232
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 145,
+            "end": 232
+          },
+          "to": {
+            "start": 150,
+            "end": 156
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 145,
+            "end": 232
+          },
+          "to": {
+            "start": 157,
+            "end": 232
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 157,
+            "end": 232
+          },
+          "to": {
+            "start": 163,
+            "end": 230
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 163,
+            "end": 230
+          },
+          "to": {
+            "start": 163,
+            "end": 166
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 163,
+            "end": 230
+          },
+          "to": {
+            "start": 170,
+            "end": 176
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 163,
+            "end": 230
+          },
+          "to": {
+            "start": 176,
+            "end": 198
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 176,
+            "end": 198
+          },
+          "to": {
+            "start": 177,
+            "end": 182
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 177,
+            "end": 182
+          },
+          "to": {
+            "start": 178,
+            "end": 182
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 176,
+            "end": 198
+          },
+          "to": {
+            "start": 184,
+            "end": 197
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 184,
+            "end": 197
+          },
+          "to": {
+            "start": 184,
+            "end": 189
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 184,
+            "end": 197
+          },
+          "to": {
+            "start": 191,
+            "end": 197
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 163,
+            "end": 230
+          },
+          "to": {
+            "start": 202,
+            "end": 208
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 163,
+            "end": 230
+          },
+          "to": {
+            "start": 209,
+            "end": 230
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 209,
+            "end": 230
+          },
+          "to": {
+            "start": 219,
+            "end": 224
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 0,
+            "end": 323
+          },
+          "to": {
+            "start": 234,
+            "end": 322
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 234,
+            "end": 322
+          },
+          "to": {
+            "start": 234,
+            "end": 237
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 234,
+            "end": 322
+          },
+          "to": {
+            "start": 244,
+            "end": 249
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 234,
+            "end": 322
+          },
+          "to": {
+            "start": 250,
+            "end": 322
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 250,
+            "end": 322
+          },
+          "to": {
+            "start": 256,
+            "end": 320
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 256,
+            "end": 320
+          },
+          "to": {
+            "start": 259,
+            "end": 266
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 256,
+            "end": 320
+          },
+          "to": {
+            "start": 266,
+            "end": 288
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 266,
+            "end": 288
+          },
+          "to": {
+            "start": 267,
+            "end": 272
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 267,
+            "end": 272
+          },
+          "to": {
+            "start": 268,
+            "end": 272
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 266,
+            "end": 288
+          },
+          "to": {
+            "start": 274,
+            "end": 287
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 274,
+            "end": 287
+          },
+          "to": {
+            "start": 274,
+            "end": 279
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 274,
+            "end": 287
+          },
+          "to": {
+            "start": 281,
+            "end": 287
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 256,
+            "end": 320
+          },
+          "to": {
+            "start": 292,
+            "end": 298
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 256,
+            "end": 320
+          },
+          "to": {
+            "start": 299,
+            "end": 320
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 299,
+            "end": 320
+          },
+          "to": {
+            "start": 309,
+            "end": 314
+          }
+        }
+      ],
+      "stderr": ""
+    },
+    "directory_family": true,
+    "directory_nonempty": true,
+    "directory_stderr": true,
+    "files": {
+      "exit_code": 0,
+      "stdout": [
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 0,
+            "end": 41
+          },
+          "kind": "source_file",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 0,
+            "end": 40
+          },
+          "kind": "struct_item",
+          "name": "Widget"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 0,
+            "end": 3
+          },
+          "kind": "visibility_modifier",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 11,
+            "end": 17
+          },
+          "kind": "type_identifier",
+          "name": "Widget"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 18,
+            "end": 40
+          },
+          "kind": "field_declaration_list",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 24,
+            "end": 37
+          },
+          "kind": "field_declaration",
+          "name": "value"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 24,
+            "end": 27
+          },
+          "kind": "visibility_modifier",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 28,
+            "end": 33
+          },
+          "kind": "field_identifier",
+          "name": "value"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 35,
+            "end": 37
+          },
+          "kind": "primitive_type",
+          "name": null
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 0,
+            "end": 41
+          },
+          "to": {
+            "start": 0,
+            "end": 40
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 0,
+            "end": 40
+          },
+          "to": {
+            "start": 0,
+            "end": 3
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 0,
+            "end": 40
+          },
+          "to": {
+            "start": 11,
+            "end": 17
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 0,
+            "end": 40
+          },
+          "to": {
+            "start": 18,
+            "end": 40
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 18,
+            "end": 40
+          },
+          "to": {
+            "start": 24,
+            "end": 37
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 24,
+            "end": 37
+          },
+          "to": {
+            "start": 24,
+            "end": 27
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 24,
+            "end": 37
+          },
+          "to": {
+            "start": 28,
+            "end": 33
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 24,
+            "end": 37
+          },
+          "to": {
+            "start": 35,
+            "end": 37
+          }
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 0,
+            "end": 323
+          },
+          "kind": "source_file",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 0,
+            "end": 18
+          },
+          "kind": "use_declaration",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 4,
+            "end": 17
+          },
+          "kind": "scoped_identifier",
+          "name": "Widget"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 4,
+            "end": 9
+          },
+          "kind": "crate",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 11,
+            "end": 17
+          },
+          "kind": "identifier",
+          "name": "Widget"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 20,
+            "end": 70
+          },
+          "kind": "function_item",
+          "name": "read"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 20,
+            "end": 23
+          },
+          "kind": "visibility_modifier",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 27,
+            "end": 31
+          },
+          "kind": "identifier",
+          "name": "read"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 31,
+            "end": 46
+          },
+          "kind": "parameters",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 32,
+            "end": 45
+          },
+          "kind": "parameter",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 32,
+            "end": 37
+          },
+          "kind": "identifier",
+          "name": "value"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 39,
+            "end": 45
+          },
+          "kind": "type_identifier",
+          "name": "Widget"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 50,
+            "end": 56
+          },
+          "kind": "type_identifier",
+          "name": "Widget"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 57,
+            "end": 70
+          },
+          "kind": "block",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 63,
+            "end": 68
+          },
+          "kind": "identifier",
+          "name": "value"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 72,
+            "end": 123
+          },
+          "kind": "function_item",
+          "name": "make"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 72,
+            "end": 75
+          },
+          "kind": "visibility_modifier",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 79,
+            "end": 83
+          },
+          "kind": "identifier",
+          "name": "make"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 83,
+            "end": 85
+          },
+          "kind": "parameters",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 89,
+            "end": 95
+          },
+          "kind": "type_identifier",
+          "name": "Widget"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 96,
+            "end": 123
+          },
+          "kind": "block",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 102,
+            "end": 121
+          },
+          "kind": "struct_expression",
+          "name": "Widget"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 102,
+            "end": 108
+          },
+          "kind": "type_identifier",
+          "name": "Widget"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 109,
+            "end": 121
+          },
+          "kind": "field_initializer_list",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 111,
+            "end": 119
+          },
+          "kind": "field_initializer",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 111,
+            "end": 116
+          },
+          "kind": "field_identifier",
+          "name": "value"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 118,
+            "end": 119
+          },
+          "kind": "integer_literal",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 125,
+            "end": 143
+          },
+          "kind": "struct_item",
+          "name": "Reader"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 125,
+            "end": 128
+          },
+          "kind": "visibility_modifier",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 136,
+            "end": 142
+          },
+          "kind": "type_identifier",
+          "name": "Reader"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 145,
+            "end": 232
+          },
+          "kind": "impl_item",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 150,
+            "end": 156
+          },
+          "kind": "type_identifier",
+          "name": "Reader"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 157,
+            "end": 232
+          },
+          "kind": "declaration_list",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 163,
+            "end": 230
+          },
+          "kind": "function_item",
+          "name": "method"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 163,
+            "end": 166
+          },
+          "kind": "visibility_modifier",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 170,
+            "end": 176
+          },
+          "kind": "identifier",
+          "name": "method"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 176,
+            "end": 198
+          },
+          "kind": "parameters",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 177,
+            "end": 182
+          },
+          "kind": "self_parameter",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 178,
+            "end": 182
+          },
+          "kind": "self",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 184,
+            "end": 197
+          },
+          "kind": "parameter",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 184,
+            "end": 189
+          },
+          "kind": "identifier",
+          "name": "value"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 191,
+            "end": 197
+          },
+          "kind": "type_identifier",
+          "name": "Widget"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 202,
+            "end": 208
+          },
+          "kind": "type_identifier",
+          "name": "Widget"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 209,
+            "end": 230
+          },
+          "kind": "block",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 219,
+            "end": 224
+          },
+          "kind": "identifier",
+          "name": "value"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 234,
+            "end": 322
+          },
+          "kind": "trait_item",
+          "name": "Reads"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 234,
+            "end": 237
+          },
+          "kind": "visibility_modifier",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 244,
+            "end": 249
+          },
+          "kind": "type_identifier",
+          "name": "Reads"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 250,
+            "end": 322
+          },
+          "kind": "declaration_list",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 256,
+            "end": 320
+          },
+          "kind": "function_item",
+          "name": "default"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 259,
+            "end": 266
+          },
+          "kind": "identifier",
+          "name": "default"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 266,
+            "end": 288
+          },
+          "kind": "parameters",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 267,
+            "end": 272
+          },
+          "kind": "self_parameter",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 268,
+            "end": 272
+          },
+          "kind": "self",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 274,
+            "end": 287
+          },
+          "kind": "parameter",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 274,
+            "end": 279
+          },
+          "kind": "identifier",
+          "name": "value"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 281,
+            "end": 287
+          },
+          "kind": "type_identifier",
+          "name": "Widget"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 292,
+            "end": 298
+          },
+          "kind": "type_identifier",
+          "name": "Widget"
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 299,
+            "end": 320
+          },
+          "kind": "block",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cst",
+          "span": {
+            "start": 309,
+            "end": 314
+          },
+          "kind": "identifier",
+          "name": "value"
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 0,
+            "end": 323
+          },
+          "to": {
+            "start": 0,
+            "end": 18
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 0,
+            "end": 18
+          },
+          "to": {
+            "start": 4,
+            "end": 17
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 4,
+            "end": 17
+          },
+          "to": {
+            "start": 4,
+            "end": 9
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 4,
+            "end": 17
+          },
+          "to": {
+            "start": 11,
+            "end": 17
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 0,
+            "end": 323
+          },
+          "to": {
+            "start": 20,
+            "end": 70
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 20,
+            "end": 70
+          },
+          "to": {
+            "start": 20,
+            "end": 23
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 20,
+            "end": 70
+          },
+          "to": {
+            "start": 27,
+            "end": 31
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 20,
+            "end": 70
+          },
+          "to": {
+            "start": 31,
+            "end": 46
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 31,
+            "end": 46
+          },
+          "to": {
+            "start": 32,
+            "end": 45
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 32,
+            "end": 45
+          },
+          "to": {
+            "start": 32,
+            "end": 37
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 32,
+            "end": 45
+          },
+          "to": {
+            "start": 39,
+            "end": 45
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 20,
+            "end": 70
+          },
+          "to": {
+            "start": 50,
+            "end": 56
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 20,
+            "end": 70
+          },
+          "to": {
+            "start": 57,
+            "end": 70
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 57,
+            "end": 70
+          },
+          "to": {
+            "start": 63,
+            "end": 68
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 0,
+            "end": 323
+          },
+          "to": {
+            "start": 72,
+            "end": 123
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 72,
+            "end": 123
+          },
+          "to": {
+            "start": 72,
+            "end": 75
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 72,
+            "end": 123
+          },
+          "to": {
+            "start": 79,
+            "end": 83
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 72,
+            "end": 123
+          },
+          "to": {
+            "start": 83,
+            "end": 85
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 72,
+            "end": 123
+          },
+          "to": {
+            "start": 89,
+            "end": 95
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 72,
+            "end": 123
+          },
+          "to": {
+            "start": 96,
+            "end": 123
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 96,
+            "end": 123
+          },
+          "to": {
+            "start": 102,
+            "end": 121
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 102,
+            "end": 121
+          },
+          "to": {
+            "start": 102,
+            "end": 108
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 102,
+            "end": 121
+          },
+          "to": {
+            "start": 109,
+            "end": 121
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 109,
+            "end": 121
+          },
+          "to": {
+            "start": 111,
+            "end": 119
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 111,
+            "end": 119
+          },
+          "to": {
+            "start": 111,
+            "end": 116
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 111,
+            "end": 119
+          },
+          "to": {
+            "start": 118,
+            "end": 119
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 0,
+            "end": 323
+          },
+          "to": {
+            "start": 125,
+            "end": 143
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 125,
+            "end": 143
+          },
+          "to": {
+            "start": 125,
+            "end": 128
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 125,
+            "end": 143
+          },
+          "to": {
+            "start": 136,
+            "end": 142
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 0,
+            "end": 323
+          },
+          "to": {
+            "start": 145,
+            "end": 232
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 145,
+            "end": 232
+          },
+          "to": {
+            "start": 150,
+            "end": 156
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 145,
+            "end": 232
+          },
+          "to": {
+            "start": 157,
+            "end": 232
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 157,
+            "end": 232
+          },
+          "to": {
+            "start": 163,
+            "end": 230
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 163,
+            "end": 230
+          },
+          "to": {
+            "start": 163,
+            "end": 166
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 163,
+            "end": 230
+          },
+          "to": {
+            "start": 170,
+            "end": 176
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 163,
+            "end": 230
+          },
+          "to": {
+            "start": 176,
+            "end": 198
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 176,
+            "end": 198
+          },
+          "to": {
+            "start": 177,
+            "end": 182
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 177,
+            "end": 182
+          },
+          "to": {
+            "start": 178,
+            "end": 182
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 176,
+            "end": 198
+          },
+          "to": {
+            "start": 184,
+            "end": 197
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 184,
+            "end": 197
+          },
+          "to": {
+            "start": 184,
+            "end": 189
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 184,
+            "end": 197
+          },
+          "to": {
+            "start": 191,
+            "end": 197
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 163,
+            "end": 230
+          },
+          "to": {
+            "start": 202,
+            "end": 208
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 163,
+            "end": 230
+          },
+          "to": {
+            "start": 209,
+            "end": 230
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 209,
+            "end": 230
+          },
+          "to": {
+            "start": 219,
+            "end": 224
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 0,
+            "end": 323
+          },
+          "to": {
+            "start": 234,
+            "end": 322
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 234,
+            "end": 322
+          },
+          "to": {
+            "start": 234,
+            "end": 237
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 234,
+            "end": 322
+          },
+          "to": {
+            "start": 244,
+            "end": 249
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 234,
+            "end": 322
+          },
+          "to": {
+            "start": 250,
+            "end": 322
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 250,
+            "end": 322
+          },
+          "to": {
+            "start": 256,
+            "end": 320
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 256,
+            "end": 320
+          },
+          "to": {
+            "start": 259,
+            "end": 266
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 256,
+            "end": 320
+          },
+          "to": {
+            "start": 266,
+            "end": 288
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 266,
+            "end": 288
+          },
+          "to": {
+            "start": 267,
+            "end": 272
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 267,
+            "end": 272
+          },
+          "to": {
+            "start": 268,
+            "end": 272
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 266,
+            "end": 288
+          },
+          "to": {
+            "start": 274,
+            "end": 287
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 274,
+            "end": 287
+          },
+          "to": {
+            "start": 274,
+            "end": 279
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 274,
+            "end": 287
+          },
+          "to": {
+            "start": 281,
+            "end": 287
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 256,
+            "end": 320
+          },
+          "to": {
+            "start": 292,
+            "end": 298
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 256,
+            "end": 320
+          },
+          "to": {
+            "start": 299,
+            "end": 320
+          }
+        },
+        {
+          "record": "edge",
+          "family": "cst",
+          "kind": "child",
+          "from": {
+            "start": 299,
+            "end": 320
+          },
+          "to": {
+            "start": 309,
+            "end": 314
+          }
+        }
+      ],
+      "stderr": ""
+    },
+    "files_family": true,
+    "files_nonempty": true,
+    "files_stderr": true
+  },
+  "4_broken_pipe": {
+    "extract": {
+      "exit_code": 0,
+      "stdout": [],
+      "stderr": ""
+    },
+    "silent": ""
+  },
+  "5_indexer_argv": {
+    "indexers": {
+      "go": [
+        "--output",
+        "{out}",
+        "./..."
+      ],
+      "ts": [
+        "index",
+        "--infer-tsconfig",
+        "--output",
+        "{out}"
+      ],
+      "python": [
+        "index",
+        ".",
+        "--output",
+        "{out}"
+      ]
+    }
+  },
+  "6_family_budget": {
+    "extract": {
+      "stdout": [
+        {
+          "record": "scip_skip",
+          "lang": "go",
+          "bin": "scip-go",
+          "reason": "timed_out",
+          "detail": "exceeded the 1s budget; process group killed"
+        }
+      ]
+    },
+    "skip": true,
+    "timeout": true
+  },
+  "7_build_budget": {
+    "budget": true,
+    "extract": {},
+    "failure": true
+  },
+  "8_failed_evidence": {
+    "bound": true,
+    "detail_0": true,
+    "detail_1": true,
+    "detail_2": true,
+    "detail_3": true,
+    "duration": true,
+    "extract": {
+      "exit_code": 0,
+      "stdout": [
+        {
+          "record": "scip_skip",
+          "lang": "rust",
+          "bin": "rust-analyzer",
+          "reason": "failed",
+          "detail": "scip indexer failed: command [\"rust-analyzer\", \"scip\", \".\", \"--output\", \"<stage>/index.scip\"] exited with code 17; stderr:\nroot cause: cargo metadata π failed\nééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé\n... 7694 stderr bytes omitted ...\nééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé\n7: worker_pool\n8: __pthread_joiner_wake"
+        }
+      ]
+    },
+    "one_row": 1,
+    "pid": true,
+    "process": "rust-analyzer",
+    "reason": "failed",
+    "record": "scip_skip",
+    "status": "exited with code 17",
+    "tail": true,
+    "utf8": true
+  },
+  "9_empty_stderr": {
+    "detail": true,
+    "extract": {
+      "exit_code": 0,
+      "stdout": [
+        {
+          "record": "scip_skip",
+          "lang": "rust",
+          "bin": "rust-analyzer",
+          "reason": "failed",
+          "detail": "scip indexer failed: command [\"rust-analyzer\", \"scip\", \".\", \"--output\", \"<stage>/index.scip\"] exited with code 19; stderr was empty"
+        }
+      ]
+    },
+    "human": true,
+    "record": "scip_skip",
+    "telemetry": true
+  }
+}

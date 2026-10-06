@@ -1,0 +1,62 @@
+{
+  "steps": [
+    {
+      "action": "write",
+      "path": "$work/root/Cargo.toml",
+      "text": "[package]\nname='failed-indexer'\nversion='0.0.0'\nedition='2021'\n"
+    },
+    {
+      "action": "write",
+      "path": "$work/root/src/lib.rs",
+      "text": "pub fn probe() {}\n"
+    },
+    {
+      "action": "write",
+      "path": "$work/bin/rust-analyzer",
+      "text": "#!/bin/sh\nprintf 'small root cause\\n' >&2\nexit 21\n",
+      "executable": true
+    },
+    {
+      "action": "run",
+      "name": "extract",
+      "cwd": "$manifest",
+      "arguments": [
+        "scip",
+        "--scip-cache",
+        "$work/root/cache",
+        "$work/root"
+      ],
+      "expect_exit_code": 0,
+      "environment": {
+        "PATH": "$work/bin:$path",
+        "HAFLEY_LOG_FORMAT": "json",
+        "DL_TRAIL": "0",
+        "RUST_LOG": "off"
+      },
+      "env_remove": [],
+      "unasserted_stderr": false,
+      "stdout_redactions": [
+        {
+          "pattern": "/[^\" ]*/rust-analyzer-[0-9]+-[0-9]+/index\\.scip",
+          "replacement": "<stage>/index.scip"
+        }
+      ]
+    },
+    {
+      "action": "claim",
+      "name": "detail",
+      "cell": "extract.stdout",
+      "kind": "json_contains",
+      "pointer": "detail",
+      "expect": true,
+      "text": "small root cause"
+    },
+    {
+      "action": "claim",
+      "name": "quiet",
+      "cell": "extract.stderr",
+      "kind": "text_equals",
+      "text": ""
+    }
+  ]
+}

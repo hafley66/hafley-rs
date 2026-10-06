@@ -592,3 +592,6 @@ mod scip_families_support;
 #[cfg(feature = "cli")]
 #[path = "support/6_sqlite.rs"]
 mod sqlite_support;
+
+#[path = "support/8_cli_crawl.rs"]
+mod cli_crawl_support;

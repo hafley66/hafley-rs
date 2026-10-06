@@ -1,0 +1,20 @@
+{
+  "steps": [
+    {
+      "action": "directory",
+      "path": "$work/root"
+    },
+    {
+      "action": "run",
+      "name": "extract",
+      "cwd": "$manifest",
+      "arguments": [
+        "--resolve",
+        "$work/root"
+      ],
+      "expect_exit_code": 2,
+      "unasserted_stdout": true,
+      "unasserted_stderr": true
+    }
+  ]
+}
