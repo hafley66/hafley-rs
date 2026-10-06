@@ -1,0 +1,82 @@
+{
+  "steps": [
+    {
+      "action": "run",
+      "name": "walk",
+      "cwd": "$manifest",
+      "arguments": [
+        "--witness",
+        "--resolve",
+        "--arms",
+        "type",
+        "--root",
+        "tests/fixtures/tsi/rust_probe",
+        "--rust-checker",
+        "tests/fixtures/tsi/rust_probe/src/lib.rs"
+      ],
+      "expect_exit_code": 0,
+      "raw_stdout": true,
+      "unasserted_stderr": true,
+      "stdout_to": "$work/stream.jsonl",
+      "environment": {
+        "RUSTUP_TOOLCHAIN": "stable"
+      },
+      "stdout_redactions": [
+        {
+          "pattern": "/[^\"\\n]+/\\.rustup/toolchains/",
+          "replacement": "$$RUSTUP/toolchains/"
+        }
+      ]
+    },
+    {
+      "action": "run",
+      "name": "ingest_once",
+      "cwd": "$manifest",
+      "arguments": [
+        "ingest",
+        "$work/stream.jsonl"
+      ],
+      "expect_exit_code": 0,
+      "raw_stdout": true,
+      "unasserted_stderr": true,
+      "stdout_to": "$work/once.jsonl",
+      "environment": {
+        "RUSTUP_TOOLCHAIN": "stable"
+      },
+      "stdout_redactions": [
+        {
+          "pattern": "/[^\"\\n]+/\\.rustup/toolchains/",
+          "replacement": "$$RUSTUP/toolchains/"
+        }
+      ]
+    },
+    {
+      "action": "run",
+      "name": "ingest_twice",
+      "cwd": "$manifest",
+      "arguments": [
+        "ingest",
+        "$work/once.jsonl"
+      ],
+      "expect_exit_code": 0,
+      "raw_stdout": true,
+      "unasserted_stderr": true,
+      "environment": {
+        "RUSTUP_TOOLCHAIN": "stable"
+      },
+      "stdout_redactions": [
+        {
+          "pattern": "/[^\"\\n]+/\\.rustup/toolchains/",
+          "replacement": "$$RUSTUP/toolchains/"
+        }
+      ]
+    },
+    {
+      "action": "claim",
+      "name": "reverse_door_idempotent",
+      "kind": "cells_equal",
+      "left": "ingest_once.stdout",
+      "right": "ingest_twice.stdout"
+    }
+  ]
+}

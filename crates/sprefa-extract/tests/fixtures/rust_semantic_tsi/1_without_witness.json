@@ -1,0 +1,30 @@
+{
+  "steps": [
+    {
+      "action": "run",
+      "name": "extract",
+      "cwd": "$manifest",
+      "arguments": [
+        "--resolve",
+        "--arms",
+        "type",
+        "--root",
+        "tests/fixtures/tsi/rust_probe",
+        "--rust-checker",
+        "tests/fixtures/tsi/rust_probe/src/lib.rs"
+      ],
+      "expect_exit_code": 0,
+      "raw_stdout": true,
+      "unasserted_stderr": true,
+      "environment": {
+        "RUSTUP_TOOLCHAIN": "stable"
+      },
+      "stdout_redactions": [
+        {
+          "pattern": "/[^\"\\n]+/\\.rustup/toolchains/",
+          "replacement": "$$RUSTUP/toolchains/"
+        }
+      ]
+    }
+  ]
+}
