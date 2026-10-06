@@ -35,13 +35,17 @@ pub fn resolve_written_method(
     if super::names::module_places(host, file)?.len() != 1 {
         return Err(Abstain::NeedsTypes);
     }
-    let workspace = host.workspace.lock().unwrap();
+    let mut workspace = host.workspace.lock().unwrap();
+    let key = (host_path(file), offset, method.to_string());
+    if let Some(answer) = workspace.names.written.get(&key) {
+        return answer.clone();
+    }
     let (id, _) = workspace
         .vfs
         .file_id(&vfs_path(&host_path(file)))
         .ok_or(Abstain::NeedsTypes)?;
     let db = workspace.host.raw_database();
-    attach_db(db, || {
+    let answer = attach_db(db, || {
         let sema = Semantics::new(db);
         let parsed = sema.parse_guess_edition(ra_ap_ide::FileId::from_raw(id.index()));
         let call = parsed
@@ -86,7 +90,9 @@ pub fn resolve_written_method(
             end: range.end().into(),
             module: false,
         }])
-    })
+    });
+    workspace.names.written.insert(key, answer.clone());
+    answer
 }
 
 fn candidate<'db>(

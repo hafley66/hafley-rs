@@ -20,6 +20,7 @@ pub(super) struct CheckerWorkspace {
     /// The load's file-set partition: a file the load never saw joins its
     /// source root through it.
     pub(super) roots: SourceRootConfig,
+    pub(super) names: super::rust_checker_ra::names_cache::NamesCache,
     /// Supplied files the load left out (another Cargo workspace, no crate):
     /// their absence is known, so it does not force a reload.
     outside: HashSet<PathBuf>,
@@ -109,6 +110,7 @@ pub(super) fn checker_workspace_loaded(
                 outside: unloaded(&vfs, files),
                 vfs,
                 roots,
+                names: Default::default(),
             })),
         );
     }
@@ -125,6 +127,7 @@ pub(super) fn checker_workspace_loaded(
         workspace.outside = unloaded(&vfs, files);
         workspace.vfs = vfs;
         workspace.roots = roots;
+        workspace.names = Default::default();
         load = elapsed;
     }
     let refresh: HashSet<PathBuf> = files
@@ -180,6 +183,7 @@ impl CheckerWorkspace {
             change.set_roots(self.roots.partition(&self.vfs));
         }
         self.host.apply_change(change);
+        self.names = Default::default();
         Ok(())
     }
 }

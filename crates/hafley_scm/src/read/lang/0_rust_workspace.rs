@@ -2,6 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
+#[derive(Clone)]
 pub struct RustWorkspace {
     pub manifest: PathBuf,
     pub metadata: cargo_metadata::Metadata,
@@ -48,6 +49,13 @@ pub fn discover(source: &Path) -> Result<RustWorkspace, DiscoverError> {
         manifest: None,
         reason,
     })?;
+    let cache = WORKSPACES.get_or_init(Default::default);
+    let mut cached = cache.lock().unwrap();
+    if let Some((key, workspace)) = cached.get(&manifest) {
+        if workspace.manifest_key().as_ref() == Ok(key) {
+            return Ok(workspace.clone());
+        }
+    }
     let metadata = cargo_metadata::MetadataCommand::new()
         .manifest_path(&manifest)
         .no_deps()
@@ -57,8 +65,21 @@ pub fn discover(source: &Path) -> Result<RustWorkspace, DiscoverError> {
             manifest: Some(manifest.clone()),
             reason: error.to_string(),
         })?;
-    Ok(RustWorkspace { manifest, metadata })
+    let workspace = RustWorkspace {
+        manifest: manifest.clone(),
+        metadata,
+    };
+    let key = workspace.manifest_key().map_err(|reason| DiscoverError {
+        manifest: Some(manifest.clone()),
+        reason,
+    })?;
+    cached.insert(manifest, (key, workspace.clone()));
+    Ok(workspace)
 }
+
+type WorkspaceCache = std::collections::HashMap<PathBuf, (ManifestKey, RustWorkspace)>;
+static WORKSPACES: std::sync::OnceLock<std::sync::Mutex<WorkspaceCache>> =
+    std::sync::OnceLock::new();
 
 /// Content identity of the loaded workspace's manifests and lockfiles.
 /// Paths are canonical and sorted; creation and deletion change the key.

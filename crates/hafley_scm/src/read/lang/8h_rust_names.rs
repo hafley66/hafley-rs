@@ -1,6 +1,6 @@
 //! The Names provider beside body_edges. Module def maps only, no inference.
 
-use super::modules::{host_path, vfs_path, ModulePlace, RustModuleTree};
+use super::modules::{ModulePlace, RustModuleTree, host_path, vfs_path};
 use super::*;
 use ra_ap_hir::{AsAssocItem, AssocItem, HasVisibility, Module, ScopeDef};
 
@@ -60,12 +60,16 @@ pub fn resolve_path_at(
     path: &[String],
     offset: Option<u32>,
 ) -> Result<Vec<DefPlace>, Abstain> {
-    let workspace = host.workspace.lock().unwrap();
+    let mut workspace = host.workspace.lock().unwrap();
+    let key = (host_path(file), path.to_vec(), offset);
+    if let Some(answer) = workspace.names.paths.get(&key) {
+        return answer.clone();
+    }
     let Some((id, _)) = workspace.vfs.file_id(&vfs_path(&host_path(file))) else {
         return Err(Abstain::OutsideWorkspace);
     };
     let db = workspace.host.raw_database();
-    attach_db(db, || {
+    let answer = attach_db(db, || {
         let sema = Semantics::new(db);
         let modules: Vec<_> = sema
             .file_to_module_defs(ra_ap_ide::FileId::from_raw(id.index()))
@@ -87,12 +91,17 @@ pub fn resolve_path_at(
         // nested call spelling must not resolve the outer closure invocation.
         if offset.is_some_and(|offset| {
             node.as_ref().is_some_and(|node| {
-                node.ancestors().find_map(ast::CallExpr::cast).is_some_and(|call| {
-                    call.expr().is_some_and(|callee| {
-                        callee.syntax().text_range().contains(ra_ap_syntax::TextSize::from(offset))
-                            && !matches!(callee, ast::Expr::PathExpr(_))
+                node.ancestors()
+                    .find_map(ast::CallExpr::cast)
+                    .is_some_and(|call| {
+                        call.expr().is_some_and(|callee| {
+                            callee
+                                .syntax()
+                                .text_range()
+                                .contains(ra_ap_syntax::TextSize::from(offset))
+                                && !matches!(callee, ast::Expr::PathExpr(_))
+                        })
                     })
-                })
             })
         }) {
             return Err(Abstain::NeedsTypes);
@@ -292,7 +301,9 @@ pub fn resolve_path_at(
         } else {
             Ok(places)
         }
-    })
+    });
+    workspace.names.paths.insert(key, answer.clone());
+    answer
 }
 
 /// Compare RA answers for glob sources when its def map retained the first
@@ -426,7 +437,10 @@ pub(super) fn associated_defs(
             if let (AssocItem::Function(function), Some(trait_)) = (*item, item.container_trait(db))
             {
                 if trait_.type_or_const_param_count(db, false) == 0
-                    && ra_ap_hir::GenericDef::Trait(trait_).lifetime_params(db).is_empty() {
+                    && ra_ap_hir::GenericDef::Trait(trait_)
+                        .lifetime_params(db)
+                        .is_empty()
+                {
                     if let Some(implementation) = Semantics::new(db).resolve_trait_impl_method(
                         ty.clone(),
                         trait_,
@@ -607,9 +621,12 @@ pub fn resolve_prefix(
 
 /// Enumerate the engine's module graph, including inline modules.
 pub fn all_module_places(host: &NamesHost) -> Vec<ModulePlace> {
-    let workspace = host.workspace.lock().unwrap();
+    let mut workspace = host.workspace.lock().unwrap();
+    if let Some(places) = &workspace.names.all_places {
+        return places.clone();
+    }
     let db = workspace.host.raw_database();
-    attach_db(db, || {
+    let places = attach_db(db, || {
         let mut pending = Crate::all(db)
             .into_iter()
             .map(|krate| krate.root_module(db))
@@ -625,17 +642,23 @@ pub fn all_module_places(host: &NamesHost) -> Vec<ModulePlace> {
         places.sort();
         places.dedup();
         places
-    })
+    });
+    workspace.names.all_places = Some(places.clone());
+    places
 }
 
 /// Workspace dependency roots from RA's crate graph, including a bin's own library.
 pub fn dependency_places(host: &NamesHost, file: &Path) -> Vec<(String, ModulePlace)> {
-    let workspace = host.workspace.lock().unwrap();
+    let mut workspace = host.workspace.lock().unwrap();
+    let key = host_path(file);
+    if let Some(answer) = workspace.names.dependencies.get(&key) {
+        return answer.clone();
+    }
     let Some((id, _)) = workspace.vfs.file_id(&vfs_path(&host_path(file))) else {
         return Vec::new();
     };
     let db = workspace.host.raw_database();
-    attach_db(db, || {
+    let answer = attach_db(db, || {
         let sema = Semantics::new(db);
         let parsed = sema.parse_guess_edition(ra_ap_ide::FileId::from_raw(id.index()));
         let prefixes: std::collections::HashSet<String> = parsed
@@ -664,5 +687,7 @@ pub fn dependency_places(host: &NamesHost, file: &Path) -> Vec<(String, ModulePl
         places.sort();
         places.dedup();
         places
-    })
+    });
+    workspace.names.dependencies.insert(key, answer.clone());
+    answer
 }

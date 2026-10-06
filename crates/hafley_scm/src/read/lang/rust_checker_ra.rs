@@ -31,6 +31,8 @@ mod modules;
 pub use modules::{module_tree, module_tree_for_workspace, module_tree_for_workspace_files, ModulePlace, RustModuleTree};
 #[path = "8h_rust_names.rs"]
 mod names;
+#[path = "8k_rust_names_cache.rs"]
+pub(super) mod names_cache;
 pub use names::{
     all_module_places, dependency_places, module_places, resolve_method, resolve_path, resolve_path_at,
     resolve_prefix, scope_names, scope_names_at, Abstain, DefPlace, NamesHost,
