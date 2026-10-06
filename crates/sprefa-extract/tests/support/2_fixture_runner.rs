@@ -2,6 +2,56 @@ use serde_json::Value;
 use std::collections::BTreeMap;
 use std::path::Path;
 
+/// Run a fixture table in a process containing only its own test. Other suite
+/// tests replace process-wide PATH and SPREFA_SCIP_INDEX while probing indexers.
+/// The build environment supplies the tools; fixture steps supply overrides.
+pub fn run(directory: &str, case: impl Fn(&Value) -> Value) {
+    const WORKER: &str = "SPREFA_FIXTURE_WORKER";
+    let thread = std::thread::current();
+    let test = thread.name().expect("fixture runner is called from a test");
+    if std::env::var(WORKER).as_deref() == Ok(test) {
+        snapshot(directory, evaluate(directory, case));
+        return;
+    }
+    // SCIP stages are persistent within temp_dir and keyed by fixture root.
+    // Keep stages for this table separate from parallel tests of the same root.
+    let temporary = tempfile::tempdir().unwrap();
+    let mut command = std::process::Command::new(std::env::current_exe().unwrap());
+    command
+        .args(["--exact", test, "--nocapture", "--test-threads=1"])
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .env_clear()
+        .env(WORKER, test)
+        .env("PATH", env!("PATH"))
+        .env("HOME", env!("HOME"))
+        .env("TMPDIR", temporary.path())
+        .env("TMP", temporary.path())
+        .env("TEMP", temporary.path())
+        .env("LANG", "en_US.UTF-8")
+        .env("KACHE_DISABLED", "1")
+        .env("DL_TRACE", "0")
+        .env("DL_TRAIL", "0")
+        .env("RUST_LOG", "off")
+        .env("INSTA_UPDATE", "no");
+    for (key, value) in [
+        ("CARGO_HOME", option_env!("CARGO_HOME")),
+        ("RUSTUP_HOME", option_env!("RUSTUP_HOME")),
+        ("CARGO_TARGET_DIR", option_env!("CARGO_TARGET_DIR")),
+    ] {
+        if let Some(value) = value {
+            command.env(key, value);
+        }
+    }
+    let output = command.output().expect("isolated fixture test runs");
+    assert!(
+        output.status.success(),
+        "{test}: isolated fixture test failed ({:?})\n{}\n{}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
 pub fn evaluate(directory: &str, case: impl Fn(&Value) -> Value) -> BTreeMap<String, Value> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures")

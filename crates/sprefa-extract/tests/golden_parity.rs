@@ -3,7 +3,5 @@
 
 #[test]
 fn whole_output() {
-    let output =
-        crate::fixture_runner::evaluate("golden_parity", crate::golden_parity_support::evaluate);
-    crate::fixture_runner::snapshot("golden_parity", output);
+    crate::fixture_runner::run("golden_parity", crate::golden_parity_support::evaluate);
 }
