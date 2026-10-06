@@ -1,0 +1,87 @@
+{
+  "claim_test": "the_discrimination_holds_through_rust_analyzer_too",
+  "unasserted_index_fields": [
+    "index_mtime_unix_ms",
+    "staleness",
+    "tool_version"
+  ],
+  "steps": [
+    {
+      "action": "copy",
+      "source": "tests/fixtures/rust/Cargo.toml",
+      "path": "$work/root/Cargo.toml"
+    },
+    {
+      "action": "copy",
+      "source": "tests/fixtures/rust/lib.rs",
+      "path": "$work/root/lib.rs"
+    },
+    {
+      "action": "copy",
+      "source": "tests/fixtures/rust/docs.rs",
+      "path": "$work/root/docs.rs"
+    },
+    {
+      "action": "copy",
+      "source": "tests/fixtures/rust/sample.rs",
+      "path": "$work/root/sample.rs"
+    },
+    {
+      "action": "copy",
+      "source": "tests/fixtures/rust/scip/mod.rs",
+      "path": "$work/root/scip/mod.rs"
+    },
+    {
+      "action": "copy",
+      "source": "tests/fixtures/rust/scip/alpha.rs",
+      "path": "$work/root/scip/alpha.rs"
+    },
+    {
+      "action": "copy",
+      "source": "tests/fixtures/rust/scip/beta.rs",
+      "path": "$work/root/scip/beta.rs"
+    },
+    {
+      "action": "copy",
+      "source": "tests/fixtures/rust/scip/gamma.rs",
+      "path": "$work/root/scip/gamma.rs"
+    },
+    {
+      "action": "write",
+      "path": "$work/root/scip/gamma.rs",
+      "text": "//! Re-export discrimination fixture.\npub fn before_reexport() -> u32 { 0 }\npub use crate::scip::alpha::helper;\npub fn run() -> u32 {\n// A comment can say use without turning this executable reference into an import.\nhelper()\n}\n"
+    },
+    {
+      "action": "run",
+      "name": "fast",
+      "arguments": [
+        "fast",
+        "$work/root/scip/alpha.rs",
+        "$work/root/scip/beta.rs",
+        "$work/root/scip/gamma.rs"
+      ],
+      "success": true,
+      "environment": {
+        "RUST_LOG": "off",
+        "DL_TRACE": "0",
+        "DL_TRAIL": "0"
+      }
+    },
+    {
+      "action": "run",
+      "name": "scip",
+      "arguments": [
+        "scip",
+        "--scip-cache",
+        "$work/cache",
+        "$work/root"
+      ],
+      "success": true,
+      "environment": {
+        "RUST_LOG": "off",
+        "DL_TRACE": "0",
+        "DL_TRAIL": "0"
+      }
+    }
+  ]
+}

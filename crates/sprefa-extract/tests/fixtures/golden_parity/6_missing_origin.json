@@ -1,0 +1,6 @@
+{
+  "operation": "missing_origin",
+  "language": "rust",
+  "histogram": {},
+  "panic_contains": "rust/module_plane: true 0 below the pinned floor 5"
+}

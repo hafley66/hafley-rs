@@ -1,0 +1,56 @@
+{
+  "claim_test": "only_real_scip_resolves_the_cross_file_call_the_heuristic_cannot",
+  "unasserted_index_fields": [
+    "index_mtime_unix_ms",
+    "staleness"
+  ],
+  "steps": [
+    {
+      "action": "run",
+      "name": "receiver",
+      "arguments": [
+        "fast",
+        "tests/fixtures/ts/scip/delta.ts",
+        "tests/fixtures/ts/scip/epsilon.ts"
+      ],
+      "success": true,
+      "environment": {
+        "RUST_LOG": "off",
+        "DL_TRACE": "0",
+        "DL_TRAIL": "0"
+      }
+    },
+    {
+      "action": "run",
+      "name": "import",
+      "arguments": [
+        "fast",
+        "tests/fixtures/ts/scip/alpha.ts",
+        "tests/fixtures/ts/scip/beta.ts",
+        "tests/fixtures/ts/scip/gamma.ts"
+      ],
+      "success": true,
+      "environment": {
+        "RUST_LOG": "off",
+        "DL_TRACE": "0",
+        "DL_TRAIL": "0"
+      }
+    },
+    {
+      "action": "run",
+      "name": "scip",
+      "arguments": [
+        "scip",
+        "--scip-cache",
+        "$work/cache",
+        "tests/fixtures/ts"
+      ],
+      "success": true,
+      "environment": {
+        "RUST_LOG": "off",
+        "DL_TRACE": "0",
+        "DL_TRAIL": "0"
+      }
+    }
+  ]
+}

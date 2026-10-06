@@ -1,0 +1,10 @@
+{
+  "operation": "ratchet",
+  "language": "go",
+  "root": "tests/fixtures/go/scip",
+  "extension": "go",
+  "indexer": "go",
+  "committed_index": false,
+  "exclude_local_symbols": false,
+  "skip_directories": []
+}

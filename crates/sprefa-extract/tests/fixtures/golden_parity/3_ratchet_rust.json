@@ -1,0 +1,12 @@
+{
+  "operation": "ratchet",
+  "language": "rust",
+  "root": "tests/fixtures/rust",
+  "extension": "rs",
+  "indexer": "rust",
+  "committed_index": false,
+  "exclude_local_symbols": true,
+  "skip_directories": [
+    "target"
+  ]
+}

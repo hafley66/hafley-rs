@@ -1,0 +1,23 @@
+{
+  "operation": "followups",
+  "language": "rust",
+  "histogram": {
+    "same_file": [
+      8,
+      2,
+      0
+    ],
+    "receiver": [
+      4,
+      0,
+      0
+    ]
+  },
+  "statuses": [
+    null,
+    "open",
+    "obsolete"
+  ],
+  "title": "# Ratchet wrong-target follow-up: rust/same_file",
+  "body": "## Reproduction receipt\n\nTwo rows target a different corpus definition.\n"
+}

@@ -1,0 +1,55 @@
+{
+  "claim_test": "stale_cached_index_without_an_indexer_emits_only_a_skip",
+  "unasserted_index_fields": [
+    "index_mtime_unix_ms",
+    "staleness"
+  ],
+  "steps": [
+    {
+      "action": "copy",
+      "source": "tests/fixtures/scip_relationship/fixture.scip",
+      "path": "$work/cache/index.scip"
+    },
+    {
+      "action": "copy",
+      "source": "tests/fixtures/scip_relationship/animal.ts",
+      "path": "$work/root/animal.ts"
+    },
+    {
+      "action": "write",
+      "path": "$work/root/tsconfig.json",
+      "text": "{}\n"
+    },
+    {
+      "action": "directory",
+      "path": "$work/empty"
+    },
+    {
+      "action": "mtime",
+      "path": "$work/cache/index.scip",
+      "milliseconds": 1700000000000
+    },
+    {
+      "action": "mtime",
+      "path": "$work/root/animal.ts",
+      "milliseconds": 1700000005000
+    },
+    {
+      "action": "run",
+      "name": "skip",
+      "arguments": [
+        "scip",
+        "--scip-cache",
+        "$work/cache",
+        "$work/root"
+      ],
+      "success": true,
+      "environment": {
+        "PATH": "$work/empty",
+        "RUST_LOG": "off",
+        "DL_TRACE": "0",
+        "DL_TRAIL": "0"
+      }
+    }
+  ]
+}

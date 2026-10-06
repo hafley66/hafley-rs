@@ -1,0 +1,70 @@
+{
+  "claim_test": "missing_and_invalid_explicit_family_indexes_fail_without_rebuilding",
+  "unasserted_index_fields": [
+    "index_mtime_unix_ms",
+    "staleness"
+  ],
+  "steps": [
+    {
+      "action": "write",
+      "path": "$work/root/package.json",
+      "text": "{}\n"
+    },
+    {
+      "action": "write",
+      "path": "$work/root/bin/scip-typescript",
+      "text": "#!/bin/sh\n: > '$work/root/indexer-ran'\nexit 91\n",
+      "executable": true
+    },
+    {
+      "action": "run",
+      "name": "missing",
+      "arguments": [
+        "scip",
+        "--scip-index",
+        "$work/root/missing.scip",
+        "$work/root"
+      ],
+      "success": false,
+      "environment": {
+        "PATH": "$work/root/bin",
+        "RUST_LOG": "off",
+        "DL_TRACE": "0",
+        "DL_TRAIL": "0"
+      }
+    },
+    {
+      "action": "write",
+      "path": "$work/root/invalid.scip",
+      "bytes": [
+        10,
+        5,
+        120
+      ]
+    },
+    {
+      "action": "run",
+      "name": "invalid",
+      "arguments": [
+        "scip",
+        "--scip-index",
+        "$work/root/invalid.scip",
+        "$work/root"
+      ],
+      "success": false,
+      "environment": {
+        "PATH": "$work/root/bin",
+        "RUST_LOG": "off",
+        "DL_TRACE": "0",
+        "DL_TRAIL": "0"
+      }
+    },
+    {
+      "action": "exists",
+      "name": "indexer_sentinel",
+      "path": "$work/root/indexer-ran",
+      "expected": false
+    }
+  ],
+  "unix": true
+}

@@ -1,0 +1,30 @@
+{
+  "claim_test": "a_root_with_no_installed_indexer_emits_a_named_skip_and_exits_zero",
+  "unasserted_index_fields": [
+    "index_mtime_unix_ms",
+    "staleness"
+  ],
+  "steps": [
+    {
+      "action": "directory",
+      "path": "$work/empty"
+    },
+    {
+      "action": "run",
+      "name": "skip",
+      "arguments": [
+        "scip",
+        "--scip-cache",
+        "$work/cache",
+        "tests/fixtures/rust"
+      ],
+      "success": true,
+      "environment": {
+        "PATH": "$work/empty",
+        "RUST_LOG": "off",
+        "DL_TRACE": "0",
+        "DL_TRAIL": "0"
+      }
+    }
+  ]
+}

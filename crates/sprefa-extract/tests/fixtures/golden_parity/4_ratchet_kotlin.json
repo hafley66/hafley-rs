@@ -1,0 +1,12 @@
+{
+  "operation": "ratchet",
+  "language": "kotlin",
+  "root": "tests/fixtures/kotlin/scip",
+  "extension": "kt",
+  "indexer": "java",
+  "committed_index": true,
+  "exclude_local_symbols": true,
+  "skip_directories": [
+    "target"
+  ]
+}

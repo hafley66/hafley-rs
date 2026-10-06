@@ -1,0 +1,82 @@
+{
+  "claim_test": "diet_scip_is_the_resolve_pass_with_both_arms_plus_the_scm_rows",
+  "unasserted_index_fields": [
+    "index_mtime_unix_ms",
+    "staleness"
+  ],
+  "steps": [
+    {
+      "action": "run",
+      "name": "fast",
+      "arguments": [
+        "fast",
+        "tests/fixtures/ts/scip/alpha.ts",
+        "tests/fixtures/ts/scip/beta.ts",
+        "tests/fixtures/ts/scip/gamma.ts"
+      ],
+      "success": true,
+      "environment": {
+        "RUST_LOG": "off",
+        "DL_TRACE": "0",
+        "DL_TRAIL": "0"
+      }
+    },
+    {
+      "action": "run",
+      "name": "resolve",
+      "arguments": [
+        "--resolve",
+        "--arms",
+        "call,type",
+        "tests/fixtures/ts/scip/alpha.ts",
+        "tests/fixtures/ts/scip/beta.ts",
+        "tests/fixtures/ts/scip/gamma.ts"
+      ],
+      "success": true,
+      "environment": {
+        "RUST_LOG": "off",
+        "DL_TRACE": "0",
+        "DL_TRAIL": "0"
+      }
+    },
+    {
+      "action": "compare",
+      "name": "resolve_equivalence",
+      "left": "fast",
+      "projection": "resolved",
+      "right": "resolve",
+      "right_projection": "ported"
+    },
+    {
+      "action": "run",
+      "name": "default",
+      "arguments": [
+        "--resolve",
+        "tests/fixtures/ts/scip/alpha.ts",
+        "tests/fixtures/ts/scip/beta.ts",
+        "tests/fixtures/ts/scip/gamma.ts"
+      ],
+      "success": true,
+      "environment": {
+        "RUST_LOG": "off",
+        "DL_TRACE": "0",
+        "DL_TRAIL": "0"
+      }
+    },
+    {
+      "action": "run",
+      "name": "mask",
+      "arguments": [
+        "--kinds",
+        "cst",
+        "tests/fixtures/ts/scip/alpha.ts"
+      ],
+      "success": true,
+      "environment": {
+        "RUST_LOG": "off",
+        "DL_TRACE": "0",
+        "DL_TRAIL": "0"
+      }
+    }
+  ]
+}

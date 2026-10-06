@@ -1,0 +1,51 @@
+{
+  "claim_test": "an_indexer_past_its_budget_is_killed_with_its_whole_process_group",
+  "unasserted_index_fields": [
+    "index_mtime_unix_ms",
+    "staleness"
+  ],
+  "steps": [
+    {
+      "action": "write",
+      "path": "$work/root/Cargo.toml",
+      "text": "[package]\nname=\"slow\"\nversion=\"0.0.0\"\nedition=\"2021\"\n[workspace]\n"
+    },
+    {
+      "action": "write",
+      "path": "$work/root/src/lib.rs",
+      "text": "pub fn a() {}\n"
+    },
+    {
+      "action": "write",
+      "path": "$work/bin/rust-analyzer",
+      "text": "#!/bin/sh\n( while true; do date +%s > '$work/root/heartbeat'; sleep 0.2; done ) &\necho $! > '$work/root/grandchild.pid'\nsleep 120\n",
+      "executable": true
+    },
+    {
+      "action": "run",
+      "name": "timeout",
+      "arguments": [
+        "scip",
+        "--scip-cache",
+        "$work/cache",
+        "--scip-timeout",
+        "2",
+        "$work/root"
+      ],
+      "success": true,
+      "environment": {
+        "PATH": "$work/bin:/bin:/usr/bin",
+        "RUST_LOG": "off",
+        "DL_TRACE": "0",
+        "DL_TRAIL": "0"
+      },
+      "maximum_seconds": 20
+    },
+    {
+      "action": "process_dead",
+      "name": "grandchild",
+      "path": "$work/root/grandchild.pid"
+    }
+  ],
+  "unix": true
+}

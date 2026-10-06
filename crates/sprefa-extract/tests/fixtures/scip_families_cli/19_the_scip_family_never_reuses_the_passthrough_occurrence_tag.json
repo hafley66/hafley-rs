@@ -1,0 +1,46 @@
+{
+  "claim_test": "the_scip_family_never_reuses_the_passthrough_occurrence_tag",
+  "unasserted_index_fields": [
+    "index_mtime_unix_ms",
+    "staleness"
+  ],
+  "steps": [
+    {
+      "action": "run",
+      "name": "family",
+      "arguments": [
+        "scip",
+        "--scip-cache",
+        "$work/cache",
+        "tests/fixtures/scip_rel"
+      ],
+      "success": true,
+      "environment": {
+        "RUST_LOG": "off",
+        "DL_TRACE": "0",
+        "DL_TRAIL": "0"
+      }
+    },
+    {
+      "action": "run",
+      "name": "raw",
+      "arguments": [
+        "scip",
+        "--raw",
+        "--records",
+        "scip_occurrence",
+        "--root",
+        "tests/fixtures/scip_rel",
+        "--scip-index",
+        "$work/cache/index.scip",
+        "tests/fixtures/scip_rel/animal.ts"
+      ],
+      "success": true,
+      "environment": {
+        "RUST_LOG": "off",
+        "DL_TRACE": "0",
+        "DL_TRAIL": "0"
+      }
+    }
+  ]
+}
