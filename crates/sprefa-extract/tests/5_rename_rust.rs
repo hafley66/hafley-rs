@@ -38,7 +38,7 @@ fn run_rename(
 
 /// The verb run against this crate's own tree, judged by rustc, not by an
 /// assertion. MEASURED 2026-08-27: 25.2 s, over the 10-second cap, so it runs by
-/// hand: `cargo test --features cli --test 5_rename_rust -- --ignored`.
+/// hand: `cargo test --features cli --test all -- t_5_rename_rust --ignored`.
 /// @comment-ok: fail-first/measured receipt, repo law keeps these on the test
 #[test]
 #[ignore]
@@ -73,7 +73,7 @@ fn self_rename_is_judged_by_rustc() {
     );
 
     let check = Command::new("cargo")
-        .args(["check", "--features", "cli"])
+        .args(["check", "--features", "cli", "--offline"])
         .current_dir(&root)
         .output()
         .expect("cargo runs");
@@ -102,17 +102,17 @@ fn copy_crate(source: &Path, target: &Path) {
     }
 }
 
-/// A copy sits at a different depth, so its two sibling path dependencies are
-/// re-pointed at the originals before cargo reads them.
+/// Resolve the manifest's sibling dependencies before moving its directory.
 fn re_aim_path_deps(source: &Path, manifest: &Path) {
     let text = std::fs::read_to_string(manifest).expect("read manifest");
-    let mut out = text;
-    for (rel, name) in [
-        ("../../../hafley-rs/crates/soopy", "soopy"),
-        ("../../../hafley-rs/crates/hafley-observe", "hafley-observe"),
-    ] {
-        let absolute = source.join(rel).canonicalize().expect(name);
-        out = out.replace(rel, &absolute.to_string_lossy());
+    let mut out = text.clone();
+    for line in text.lines() {
+        let Some((_, tail)) = line.split_once("path = \"") else { continue };
+        let Some((rel, _)) = tail.split_once('"') else { continue };
+        if rel.starts_with("../") {
+            let absolute = source.join(rel).canonicalize().expect("sibling dependency");
+            out = out.replace(rel, &absolute.to_string_lossy());
+        }
     }
     std::fs::write(manifest, out).expect("write manifest");
 }
