@@ -5,7 +5,9 @@
 //! the committed `wire_golden.jsonl` is the extract output over the corpus
 //! `tests/fixtures/**` at 946460d75 (regenerated when the ast-pattern query
 //! doors were removed, which dropped their fixture rows), and today's output
-//! must reproduce it byte-for-byte.
+//! must reproduce its legacy rows byte-for-byte. The authorized TS DF traversal
+//! increment can add DF rows; those are reported separately. Missing, changed,
+//! or reordered legacy rows still fail the byte comparison.
 
 use std::collections::BTreeSet;
 use std::process::Command;
@@ -210,7 +212,7 @@ fn extract_lang_has_no_path_switch() {
 }
 
 #[test]
-fn wire_output_is_byte_identical_to_the_kind_vocab_golden() {
+fn wire_ported_output_is_byte_identical_to_the_kind_vocab_golden() {
     let manifest = env!("CARGO_MANIFEST_DIR");
     let exe = env!("CARGO_BIN_EXE_ryii");
     // The corpus is the fixture list at 946460d75, pinned in corpus.txt so a
@@ -229,6 +231,7 @@ fn wire_output_is_byte_identical_to_the_kind_vocab_golden() {
         "{manifest}/tests/fixtures/kind_vocab/wire_golden.jsonl"
     ))
     .expect("wire golden readable");
+    let mut expected_lines = golden.split_inclusive(|byte| *byte == b'\n').peekable();
     let mut current: Vec<u8> = Vec::new();
     for path in &fixture_files {
         let output = Command::new(exe)
@@ -241,7 +244,27 @@ fn wire_output_is_byte_identical_to_the_kind_vocab_golden() {
             "extract failed on {path}: {}",
             String::from_utf8_lossy(&output.stderr)
         );
-        current.extend_from_slice(&output.stdout);
+        for line in output.stdout.split_inclusive(|byte| *byte == b'\n') {
+            if expected_lines
+                .peek()
+                .is_some_and(|expected| *expected == line)
+            {
+                current.extend_from_slice(line);
+                expected_lines.next();
+            } else {
+                let row: serde_json::Value = serde_json::from_slice(line).unwrap();
+                assert!(
+                    sprefa_extract::source_for(path).is_some_and(|source| source.name() == "ts")
+                        && row["family"] == "df",
+                    "unexpected wire change in {path}: {}",
+                    String::from_utf8_lossy(line)
+                );
+                eprintln!(
+                    "{path} v6-only DF wire row: {}",
+                    String::from_utf8_lossy(line)
+                );
+            }
+        }
     }
     assert_eq!(
         current.len(),

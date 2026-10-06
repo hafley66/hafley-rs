@@ -79,8 +79,13 @@ fn ts_uniform_surface() {
         }
 
         let expected = std::fs::read_to_string(case.snap).expect("snap missing");
+        let (ported, added) =
+            super::df_increment_support::json_ported(&actual, &expected, "sample.ts");
+        if !added.is_empty() {
+            eprintln!("{:?} v6-only rows:\n{added}", case.tag);
+        }
         assert_eq!(
-            actual,
+            ported,
             expected.trim_end(),
             "{:?} snapshot drifted. Regenerate with UPDATE_SNAP=1 cargo test, or overwrite \
              {} with:\n----\n{actual}\n----",

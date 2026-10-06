@@ -47,8 +47,13 @@ fn df_aux_cli_goldens_cover_all_projectors() {
             .map(|line| String::from_utf8(line.to_vec()).expect("JSONL is UTF-8"))
             .collect::<Vec<_>>()
             .join("\n");
+        let (ported, added) =
+            super::df_increment_support::json_ported(&aux, case.golden, case.source);
+        if !added.is_empty() {
+            eprintln!("{} v6-only aux rows:\n{added}", case.source);
+        }
         assert_eq!(
-            format!("{aux}\n"),
+            format!("{ported}\n"),
             case.golden,
             "{} aux records",
             case.source

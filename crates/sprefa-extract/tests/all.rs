@@ -557,3 +557,6 @@ fn every_test_file_is_a_module_here() {
         .collect();
     assert!(missing.is_empty(), "add to tests/all.rs: {missing:?}");
 }
+
+#[path = "support/1_df_increment.rs"]
+mod df_increment_support;

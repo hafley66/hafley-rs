@@ -80,6 +80,20 @@ SELECT m.path, m.rule, m.hook, m.expected_count, m.actual_count,
     WHEN NOT EXISTS (SELECT 1 FROM scmpp_row q
       WHERE q.path = m.path AND q.invoked__text = m.hook) THEN
       'no query capture for the reference hook name'
+    WHEN m.rule = 'conditional' AND EXISTS (
+      SELECT 1 FROM scmpp_row q JOIN scmpp_dict_path p ON p.text = q.path
+      JOIN scmpp_node call ON call.file = p.id AND call.start = q.hook__start AND call."end" = q.hook__end
+      JOIN scmpp_node ancestor ON ancestor.file = call.file AND ancestor.pre < call.pre AND ancestor.last >= call.pre
+      JOIN scmpp_dict_kind kind ON kind.id = ancestor.kind AND kind.text = 'try_statement'
+      WHERE q.path = m.path AND q.invoked__text = m.hook) THEN
+      'try/catch control-flow alternative is outside the conditional syntax predicate'
+    WHEN m.rule = 'conditional' AND EXISTS (
+      SELECT 1 FROM scmpp_row q JOIN scmpp_dict_path p ON p.text = q.path
+      JOIN scmpp_node call ON call.file = p.id AND call.start = q.hook__start AND call."end" = q.hook__end
+      JOIN scmpp_node ancestor ON ancestor.file = call.file AND ancestor.pre < call.pre AND ancestor.last >= call.pre
+      JOIN scmpp_dict_kind kind ON kind.id = ancestor.kind AND kind.text = 'labeled_statement'
+      WHERE q.path = m.path AND q.invoked__text = m.hook) THEN
+      'labeled break can skip the call; break-based control flow is outside the conditional syntax predicate'
     ELSE 'call captured; no owning-function predicate matched this reference rule'
   END AS reason
 FROM matched_counts m WHERE m.actual_count <> m.expected_count;

@@ -50,8 +50,8 @@ expression: "query_fixtures(\"callbacks\")"
     "rows": [
       {
         "path": "5_wrapped_branch.tsx",
-        "start": 31,
-        "end": 40,
+        "start": 51,
+        "end": 60,
         "hook": "useHook",
         "owner": "<render>",
         "rule": "conditional",
@@ -60,8 +60,8 @@ expression: "query_fixtures(\"callbacks\")"
       },
       {
         "path": "5_wrapped_branch.tsx",
-        "start": 82,
-        "end": 91,
+        "start": 102,
+        "end": 111,
         "hook": "useHook",
         "owner": "<render>",
         "rule": "conditional",

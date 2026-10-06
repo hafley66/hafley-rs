@@ -1,86 +1,99 @@
-# Rules of hooks: pre-ryiii, 2026-10-05
+# Rules of hooks: pre-ryiii, revised 2026-10-05
 
-The worktree build and both extraction passes completed over all 114 non-Flow
-fixtures. The original upstream suite has 118 cases: 50 valid and 68 invalid;
-4 Flow cases are retained and excluded from this run. Reference messages come
-from React commit `ae74234eae6ebd62f19190731278e20bc1c37d51` (`v19.2.0`).
-
-## Per-rule results: pre-ryiii
+All 14 missing-owner rows are resolved. Callback false positives fell from 20
+to 0; early-return false positives fell from 7 to 0. The existing scoring query
+ran once after the three fixes over all 114 non-Flow fixtures.
 
 | rule | case_count | true_positive | false_positive | false_negative |
 | --- | ---: | ---: | ---: | ---: |
 | async | 114 | 0 | 0 | 6 |
-| caller | 114 | 22 | 3 | 9 |
+| caller | 114 | 28 | 0 | 3 |
 | class | 114 | 0 | 0 | 10 |
-| conditional | 114 | 11 | 2 | 5 |
-| early_return | 114 | 3 | 7 | 0 |
+| conditional | 114 | 14 | 0 | 2 |
+| early_return | 114 | 3 | 0 | 0 |
 | effect_event | 114 | 0 | 0 | 12 |
 | loop | 114 | 15 | 0 | 0 |
-| nested_callback | 114 | 4 | 20 | 0 |
+| nested_callback | 114 | 4 | 0 | 0 |
 | try_catch | 114 | 0 | 0 | 2 |
 
-The five implemented rules are caller, loop, conditional, early_return, and
-nested_callback. Async, class, try_catch, and effect_event rows retain additional
-reference behaviors. Bare `use` messages remain in their reference category;
-that name is excluded by the brief's `^use[A-Z0-9]` predicate.
+The table records 64 true positives, 0 false positives, and 35 false negatives.
+[Raw score](9_SCORE.json) is the unchanged output of `8_score.sql`. The upstream
+suite has 118 cases, with four Flow cases retained and excluded. All 118 metadata
+rows and the 99 non-Flow expected messages are in the query database. Reference:
+React commit `ae74234eae6ebd62f19190731278e20bc1c37d51`.
 
-`case_count` is 114 for each rule. Positive/negative counts are messages matched
-as a multiset by `(fixture path, rule, hook name)`, with actual calls deduplicated
-by span. Thus cases with repeated calls contribute multiple messages. The
-upstream declarations do not give expected source locations. A matching count
-cannot establish that the exact source calls match. Gap rows produce no
-violation; unmatched expected messages remain false negatives.
+Counts match messages as a multiset by `(fixture path, rule, hook name)`, with
+actual call spans deduplicated. `case_count` is the 114-case universe for every
+rule. Upstream messages have no expected source spans, so matching counts do not
+prove exact call-site identity. The `pre-ryiii` SQL comparison was explicitly
+authorized; registration in `ryiii` remains pending its implementation.
 
-Across all reported behaviors: 55 true positives, 32 false positives, and
-44 false negatives. [Raw table](9_SCORE.json) is the unchanged output of the
-single scoring query in `8_score.sql`.
+## Changes
 
-## Every disagreement and missing fact
+- `a4916801`: TS DF traversal visits nested declarations, labeled and try bodies,
+  destructuring defaults, class expressions and fields, exported variables, and
+  default-export expressions through shared lifts. Existing call-result rows
+  already had owners; skipped branches caused the 14 gaps.
+- `266ff281`: SQL derives explicit and inferred function names from byte-safe
+  CST source captures, recognizes memo/forwardRef render arguments, and requires
+  React ancestry for anonymous callback findings. Namespace filtering and class
+  frame exclusion remove the related caller and conditional false positives.
+- `61a11247`: direct returns suppress unreachable calls in a containing block;
+  loop findings take precedence over return-order findings. Guarded returns and
+  returns in nested functions retain their separate owning frames.
 
-There are 66 unequal `(path, rule, hook)` entries across 52 files: 29 false-positive
-entries and 37 false-negative entries. Counts within each entry preserve
-multiplicity. Every entry has a file and reason in
-[the filterable disagreement grid](11_DISAGREEMENTS.html) and
-[the complete JSON list](10_DISAGREEMENTS.json). Reasons are computed by SQL from
-findings, gaps, captures, and the reference behavior category.
+Framework conventions remain in the query and SQL. Rust changes extract generic
+syntax facts; Rust resolver files are unchanged. The benchmark uses the fast tier
+and enables no checker.
 
-There are 14 missing-owner rows across 12 files. Each lacks a matching
-`df.call_res` row for the full hook-call span. [Gap rows](12_GAPS.json) retain
-file, byte span, hook, and reason; [the gap grid](14_GAPS.html) displays them.
-These affect nested declarations, labeled statements, class-property initializers,
-and returned/export-default arrows in the vendored cases. No Rust fact workaround
-was added. There are no `missing_site` or parse-error rows in the final run.
+## Every disagreement and remaining limits
 
-Observed disagreements include anonymous memo/forwardRef render functions being
-classified as callbacks, lowercase namespace members matching the terminal-name
-predicate, class methods being treated according to owner naming, and extra
-return-order findings inside loops. `fixtures/valid/010_Case.tsx` contains an
-unreachable hook after an unconditional return: SQL reports early_return and the
-reference accepts it. Span order does not encode reachability or rule priority.
+There are 31 unequal `(path, rule, hook)` entries across 29 files, all false
+negatives. Every entry has a file and reason in the
+[disagreement grid](11_DISAGREEMENTS.html) and [complete JSON](10_DISAGREEMENTS.json).
+[Gap output](12_GAPS.json) is `[]`; no missing owner, missing site, or parse-error
+row remains. The obsolete nonempty gap grid was removed.
 
-## Run evidence and checks
+The remaining reference messages cover:
 
-- Built in this worktree with
-  `KACHE_DISABLED=1 cargo build --features cli,ts-checker --bin ryii`.
-  Build passed in 10m 46s. Build stamp: `c2299b190d87`, `2026-10-05T23:15:06Z`.
-- Used the lane's `$CARGO_TARGET_DIR/debug/ryii` for every new extraction and
-  adapter check. No installed `~/.cargo/bin/ryii` invocation occurred in this run.
-- Both passes used the same 114-path list. Database path inventories match it.
-  Fast extraction wrote 2,990 rows, including 13 `df_loop` and 20 `df_nest` rows.
-  The query store reported 8,573 written rows and materialized 182 hook captures.
-- The query database contains all 118 case metadata rows, 99 non-Flow expected
-  messages, and 101 actual rows: 87 violations and 14 gaps.
-- SQL imported `1_cases.json` directly with `readfile` and `json_each` into the
-  query database. The `pre-ryiii` exception was explicitly authorized for this run;
-  no separate scoring script or comparison runner was created.
-- Fixture regeneration is byte-stable. Both JavaScript files pass `node --check`.
-  The single-case adapter completes on invalid-024 with the worktree binary.
-  SQL count checks confirm that duplicate findings at one span count once.
-- `scripts/bench_grid.py --json` renders the SQL-exported disagreement and gap
-  rows without scoring them. The disagreement grid was opened for review.
-- Both earlier probe `.db` files were deleted. Runtime databases remain ignored
-  under `runs/`. No Rust source changed. No merge or push was performed.
+- 30 diagnostics for async, class, try/catch `use`, and effect-event behaviors
+  outside this query's implemented rule set.
+- Three bare `use` caller diagnostics, excluded by the brief's `^use[A-Z0-9]`.
+- `fixtures/invalid/028_Case.tsx`: a labeled break can skip a hook that is not
+  lexically inside the condition.
+- `fixtures/invalid/034_Case.tsx`: a catch path can bypass a hook in a try body.
 
-[Run provenance](13_RUN.json) records the binary SHA-256, source HEAD, program
-hashes, input-list hash, commands, and row counts. Reproduction commands are in
-[the README](5_README.md). `ryiii` registration remains pending its implementation.
+Both final control-flow cases now have DF owners. The conditional predicate
+models branch ancestry, rather than a complete control-flow graph. Return
+reachability likewise covers a direct return in a containing block.
+
+## Build and validation
+
+Built this worktree with
+`KACHE_DISABLED=1 cargo build --features cli,ts-checker --bin ryii` in 46.34 seconds. Both extraction commands used that binary over the
+same 114 paths: 3,038 fact rows, 13 loop rows, 20 nest rows, 8,802 query-store rows,
+182 captures, 64 violations, and 0 gaps. No installed binary was used.
+
+The owner fixture failed first with zero call-result rows. Its authored lexical
+owner expectation and whole-output snapshot now pass. Callback and return tests
+are table-driven over fixture directories and snapshot every SQL result column.
+
+The full `cargo test --features cli --no-fail-fast` gate ran once: integration
+results were 1,267 passed, 6 failed, and 19 ignored. Five failures reflected the
+added DF rows in legacy comparisons. Those comparisons now project the recorded
+V5 node spans or legacy JSON rows, preserving every legacy value and wire byte;
+added TS rows are reported separately. Other languages retain their original
+comparisons. No captured oracle was rewritten. The final combined targeted gate
+passes all 12 tests, including the wire comparison preserving all 1,270,869
+legacy bytes and positive render-wrapper findings after a UTF-8 prefix.
+
+The remaining failure is the unchanged Rust-only test
+`t_166_cleave_rust::an_unloadable_manifest_stops_the_rust_cleave_with_the_reason`.
+Its actual diagnostic omits `ROOT/Cargo.toml:` from the expected prefix. It is
+classified as base/unrelated to the TS and SQL changes; Rust resolver files were
+left unchanged. The full gate was not repeated after the projection changes.
+
+[Validation receipt](14_VALIDATION.json) lists every full-gate failure and its
+final disposition. [Run provenance](13_RUN.json) records the binary artifact,
+SHA-256, source commits, program hashes, commands, and counts. Reproduction is in
+[the README](5_README.md). No merge or push was performed.

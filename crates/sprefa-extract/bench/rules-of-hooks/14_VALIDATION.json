@@ -1,0 +1,84 @@
+{
+  "full_gate": {
+    "command": "KACHE_DISABLED=1 cargo test --features cli --no-fail-fast",
+    "exit_code": 101,
+    "integration_passed": 1267,
+    "integration_failed": 6,
+    "integration_ignored": 19,
+    "library_passed": 7,
+    "binary_unit_passed": 18,
+    "doctests": 0
+  },
+  "failures": [
+    {
+      "test": "t_166_cleave_rust::an_unloadable_manifest_stops_the_rust_cleave_with_the_reason",
+      "origin": "base / unrelated Rust path",
+      "disposition": "remaining; Rust resolver files unchanged",
+      "actual": "no cargo workspace: `cargo metadata` exited with an error: error: key with no value, expected `=`",
+      "expected": "no cargo workspace: ROOT/Cargo.toml: `cargo metadata` exited with an error: error: key with no value, expected `=`"
+    },
+    {
+      "test": "t_18_df_aux_fields_lits::df_aux_fields_lits_match_v5",
+      "origin": "new DF traversal coverage",
+      "disposition": "fixed legacy projection; unchanged oracle passes targeted check"
+    },
+    {
+      "test": "t_2_df_aux_cli::df_aux_cli_goldens_cover_all_projectors",
+      "origin": "new DF traversal coverage",
+      "disposition": "fixed legacy projection; unchanged oracle passes targeted check"
+    },
+    {
+      "test": "t_6_kind_vocab::wire_output_is_byte_identical_to_the_kind_vocab_golden",
+      "origin": "new DF traversal coverage",
+      "disposition": "fixed legacy projection; unchanged oracle passes targeted check"
+    },
+    {
+      "test": "t_golden_parity::ported_facets_match_v5",
+      "origin": "new DF traversal coverage",
+      "disposition": "fixed legacy projection; unchanged oracle passes targeted check"
+    },
+    {
+      "test": "t_snapshot::ts_uniform_surface",
+      "origin": "new DF traversal coverage",
+      "disposition": "fixed legacy projection; unchanged oracle passes targeted check"
+    }
+  ],
+  "targeted_gate": {
+    "filters": [
+      "df_aux",
+      "ts_uniform_surface",
+      "ported_facets",
+      "ts_df_lift_owners",
+      "hooks_"
+    ],
+    "passed": 11,
+    "failed": 0
+  },
+  "wire_gate": {
+    "test": "t_6_kind_vocab::wire_ported_output_is_byte_identical_to_the_kind_vocab_golden",
+    "passed": 1,
+    "failed": 0,
+    "legacy_bytes": 1270869
+  },
+  "owner_fail_first": {
+    "before": "zero call-result rows in all four fixtures",
+    "after": "authored lexical owners and whole-output snapshot pass"
+  },
+  "oracle_updates": false,
+  "scoring_runs": 1,
+  "final_combined_gate": {
+    "filters": [
+      "df_aux",
+      "ts_uniform_surface",
+      "ported_facets",
+      "wire_ported",
+      "ts_df_lift_owners",
+      "hooks_"
+    ],
+    "passed": 12,
+    "failed": 0,
+    "duration_seconds": 5.87
+  },
+  "projection_scope": "TS frontend only; other languages retain their original comparisons",
+  "utf8_fixture": "callbacks/5_wrapped_branch.tsx: conditional findings after a UTF-8 prefix"
+}

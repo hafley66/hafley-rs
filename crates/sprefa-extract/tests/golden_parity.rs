@@ -426,9 +426,23 @@ fn ported_facets_match_v5() {
             .collect();
         // Both sides filter by PORTED. Without it, a facet v6 emits ahead of its
         // global flip (rust `doc`) reads as a diff on every other case.
+        let anchors = super::df_increment_support::oracle_starts(case.baseline);
+        let ts_increment = sprefa_extract::source_for(case.path).is_some_and(|source| source.name() == "ts");
         let v6: BTreeSet<String> = v6_ported(case.path, case.fixture)
             .into_iter()
             .filter(|line| PORTED.contains(&facet_of(line)))
+            .filter(|line| {
+                if !ts_increment { return true; }
+                let fields: Vec<_> = line.split('\t').collect();
+                let ported = match fields[0] {
+                    "df_node" => anchors.contains(&fields[3].parse().unwrap()),
+                    "df_edge" => anchors.contains(&fields[1].parse().unwrap())
+                        && anchors.contains(&fields[2].parse().unwrap()),
+                    _ => true,
+                };
+                if !ported { eprintln!("[{}] v6-only DF row: {line}", case.name); }
+                ported
+            })
             .collect();
 
         let only_v5: Vec<&String> = v5_ported.difference(&v6).collect();

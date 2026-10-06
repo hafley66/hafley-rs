@@ -1,14 +1,1 @@
-[{"path":"fixtures/invalid/015_Case.tsx","start":198,"end":208,"hook":"useState","owner":null,"rule":"missing_owner","reason":"df call_res owner absent for a call inside a function"},
-{"path":"fixtures/invalid/016_Case.tsx","start":240,"end":250,"hook":"useState","owner":null,"rule":"missing_owner","reason":"df call_res owner absent for a call inside a function"},
-{"path":"fixtures/invalid/028_Case.tsx","start":160,"end":169,"hook":"useHook","owner":null,"rule":"missing_owner","reason":"df call_res owner absent for a call inside a function"},
-{"path":"fixtures/invalid/029_Case.tsx","start":504,"end":514,"hook":"useState","owner":null,"rule":"missing_owner","reason":"df call_res owner absent for a call inside a function"},
-{"path":"fixtures/invalid/029_Case.tsx","start":539,"end":549,"hook":"useState","owner":null,"rule":"missing_owner","reason":"df call_res owner absent for a call inside a function"},
-{"path":"fixtures/invalid/034_Case.tsx","start":134,"end":144,"hook":"useState","owner":null,"rule":"missing_owner","reason":"df call_res owner absent for a call inside a function"},
-{"path":"fixtures/invalid/044_Case.tsx","start":27,"end":37,"hook":"useState","owner":null,"rule":"missing_owner","reason":"df call_res owner absent for a call inside a function"},
-{"path":"fixtures/invalid/045_Case.tsx","start":21,"end":31,"hook":"useState","owner":null,"rule":"missing_owner","reason":"df call_res owner absent for a call inside a function"},
-{"path":"fixtures/invalid/046_Case.tsx","start":21,"end":31,"hook":"useState","owner":null,"rule":"missing_owner","reason":"df call_res owner absent for a call inside a function"},
-{"path":"fixtures/invalid/047_Case.tsx","start":15,"end":25,"hook":"useState","owner":null,"rule":"missing_owner","reason":"df call_res owner absent for a call inside a function"},
-{"path":"fixtures/valid/011_Case.tsx","start":328,"end":338,"hook":"useState","owner":null,"rule":"missing_owner","reason":"df call_res owner absent for a call inside a function"},
-{"path":"fixtures/valid/011_Case.tsx","start":369,"end":379,"hook":"useState","owner":null,"rule":"missing_owner","reason":"df call_res owner absent for a call inside a function"},
-{"path":"fixtures/valid/038_Case.tsx","start":60,"end":70,"hook":"useState","owner":null,"rule":"missing_owner","reason":"df call_res owner absent for a call inside a function"},
-{"path":"fixtures/valid/039_Case.tsx","start":43,"end":54,"hook":"useState","owner":null,"rule":"missing_owner","reason":"df call_res owner absent for a call inside a function"}]
+[]

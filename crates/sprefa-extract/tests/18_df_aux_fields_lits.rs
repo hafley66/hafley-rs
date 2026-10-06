@@ -88,10 +88,13 @@ const CASES: &[Case] = &[
 ];
 
 /// The `df_fields`/`df_lits` lines v6 folds to, in the oracle's dense-index
-/// shape. flatten_df emits the DfF nodes as one contiguous run in bundle order,
+/// shape, restricted to the oracle's recorded node starts. Added DF rows are
+/// reported separately. flatten_df emits the DfF nodes as one contiguous run in bundle order,
 /// so the nth Df node fact is index n — the same dense NodeIdx v5 keyed these
 /// rows on.
-fn v6_aux(path: &str, bytes: &[u8]) -> BTreeSet<String> {
+fn v6_aux(path: &str, bytes: &[u8], oracle: &str) -> BTreeSet<String> {
+    let anchors = super::df_increment_support::oracle_starts(oracle);
+    let ts_increment = sprefa_extract::source_for(path).is_some_and(|source| source.name() == "ts");
     let out = dispatch(path, bytes, FamilyMask::ALL).expect("a Source matches the fixture");
     let facts = flatten(&out);
     let df_index: BTreeMap<u32, u32> = facts
@@ -101,7 +104,7 @@ fn v6_aux(path: &str, bytes: &[u8]) -> BTreeSet<String> {
                 family: FamilyTag::Df,
                 span,
                 ..
-            } => Some(span.start),
+            } if !ts_increment || anchors.contains(&span.start) => Some(span.start),
             _ => None,
         })
         .enumerate()
@@ -112,7 +115,7 @@ fn v6_aux(path: &str, bytes: &[u8]) -> BTreeSet<String> {
         match fact {
             FlatFact::DfField {
                 owner, name, value, ..
-            } => {
+            } if df_index.contains_key(&owner.start) && df_index.contains_key(&value.start) => {
                 set.insert(format!(
                     "df_fields\t{}\t{name}\t{}",
                     df_index[&owner.start], df_index[&value.start]
@@ -120,11 +123,14 @@ fn v6_aux(path: &str, bytes: &[u8]) -> BTreeSet<String> {
             }
             FlatFact::DfLit {
                 node, kind, text, ..
-            } => {
+            } if df_index.contains_key(&node.start) => {
                 set.insert(format!(
                     "df_lits\t{}\t{kind}\t{text}",
                     df_index[&node.start]
                 ));
+            }
+            FlatFact::DfField { .. } | FlatFact::DfLit { .. } => {
+                eprintln!("v6-only DF auxiliary row: {fact:?}")
             }
             _ => {}
         }
@@ -141,7 +147,7 @@ fn df_aux_fields_lits_match_v5() {
             .filter(|line| line.starts_with("df_fields\t") || line.starts_with("df_lits\t"))
             .map(str::to_owned)
             .collect();
-        let v6 = v6_aux(case.path, case.fixture);
+        let v6 = v6_aux(case.path, case.fixture, case.baseline);
         let only_v5: Vec<&String> = oracle.difference(&v6).collect();
         let only_v6: Vec<&String> = v6.difference(&oracle).collect();
         assert!(
