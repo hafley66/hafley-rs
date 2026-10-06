@@ -1,0 +1,81 @@
+---
+source: tests/211_hooks_query.rs
+assertion_line: 74
+expression: "query_fixtures(\"callbacks\")"
+---
+[
+  {
+    "fixture": "0_named.tsx",
+    "rows": []
+  },
+  {
+    "fixture": "1_wrappers.tsx",
+    "rows": []
+  },
+  {
+    "fixture": "2_unrelated.tsx",
+    "rows": []
+  },
+  {
+    "fixture": "3_nested.tsx",
+    "rows": [
+      {
+        "path": "3_nested.tsx",
+        "start": 35,
+        "end": 44,
+        "hook": "useRead",
+        "owner": "App::closure::27",
+        "rule": "nested_callback",
+        "status": "violation",
+        "reason": "anonymous callback inside a component, hook, or render wrapper"
+      },
+      {
+        "path": "3_nested.tsx",
+        "start": 89,
+        "end": 98,
+        "hook": "useRead",
+        "owner": "<top>::closure::63::closure::81",
+        "rule": "nested_callback",
+        "status": "violation",
+        "reason": "anonymous callback inside a component, hook, or render wrapper"
+      }
+    ]
+  },
+  {
+    "fixture": "4_namespace.tsx",
+    "rows": []
+  },
+  {
+    "fixture": "5_wrapped_branch.tsx",
+    "rows": [
+      {
+        "path": "5_wrapped_branch.tsx",
+        "start": 31,
+        "end": 40,
+        "hook": "useHook",
+        "owner": "<render>",
+        "rule": "conditional",
+        "status": "violation",
+        "reason": "hook is in a conditional branch within its function"
+      },
+      {
+        "path": "5_wrapped_branch.tsx",
+        "start": 82,
+        "end": 91,
+        "hook": "useHook",
+        "owner": "<render>",
+        "rule": "conditional",
+        "status": "violation",
+        "reason": "hook is in a conditional branch within its function"
+      }
+    ]
+  },
+  {
+    "fixture": "6_namespaced_assignment.tsx",
+    "rows": []
+  },
+  {
+    "fixture": "7_class.tsx",
+    "rows": []
+  }
+]

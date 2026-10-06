@@ -20,7 +20,7 @@ are unavailable to the TypeScript fast adapter.
 
 ## Program and adapter
 
-`2_hooks.scm` selects hook calls and requests generic CST ancestor storage.
+`2_hooks.scm` selects hook calls and captures the program source while requesting generic CST ancestor storage.
 `3_violations.sql` reads that query database with a fast database attached as
 `facts`. Its result signature is:
 
@@ -65,9 +65,12 @@ both stores exist, attach `FACTS_DB` as `facts` in `QUERY_DB` and execute
 ## Lifetimes and reads
 
 Each attempt creates two stores and exits. Captures join by path: `@invoked` spans join callee-only `site` spans, and full
-`@hook` spans join `node(kind=call_res, family=df)` spans. Owner names come from `node.function`; a `::closure::` owner uses the
-matching frame's named lambda definition when present. CST preorder intervals choose the innermost function and
-exclude conditions, loops, and returns belonging to another function.
+`@hook` spans join `node(kind=call_res, family=df)` spans. `node.function` establishes DF ownership. SQL derives diagnostic frame names from
+explicit function identifiers, then variable bindings, assignments, properties,
+and destructuring defaults. Names are sliced from the program capture as byte
+ranges, including sources containing UTF-8. CST preorder intervals choose the
+innermost function and exclude conditions, loops, and returns belonging to another
+function. Missing DF ownership remains a gap even when syntax provides a name.
 
 JSX elements are excluded from the CST function-frame list. An attribute's
 ordinary hook call therefore uses its eager dataflow owner. A deferred JSX
@@ -75,8 +78,14 @@ component invocation is not a `call_expression` hook capture. This depends on
 the generic deferred JSX lift. Querying the vendored upstream suite exercises
 its JSX-bearing cases; the suite does not provide a dedicated JSX owner assertion.
 
-The query uses the terminal identifier of direct or member callees. The SQL
-recognizes component and hook owners by `[A-Z]` and `use[A-Z0-9]` prefixes.
+The query captures the terminal identifier of direct or member callees. SQL
+accepts namespace hook members only when the receiver is an uppercase identifier,
+matching the reference heuristic. Components and hooks use `[A-Z]` and
+`use[A-Z0-9]` prefixes. Direct function arguments to `memo`, `forwardRef`,
+`React.memo`, or `React.forwardRef` qualify as render functions. Anonymous
+callbacks produce findings only beneath a component, hook, or render function;
+callbacks with their own qualifying name use their own frame. Class diagnostics
+remain outside the implemented rule set.
 Loop rows require matching `df_nest` and `df_loop` facts inside the function.
 Conditional rows inspect branch fields and the right operand of `&&`, `||`,
 and `??`. Return rows use byte order within the same function.

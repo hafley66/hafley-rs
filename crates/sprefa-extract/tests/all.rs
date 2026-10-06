@@ -540,6 +540,9 @@ mod v5_parity {
 
     #[path = "210_ts_df_lift_owners.rs"]
     mod df_lift_owners;
+    #[cfg(feature = "cli")]
+    #[path = "211_hooks_query.rs"]
+    mod hooks_query;
 }
 
 #[test]
