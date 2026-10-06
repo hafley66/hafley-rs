@@ -1,0 +1,82 @@
+{
+  "steps": [
+    {
+      "action": "api",
+      "name": "setup",
+      "api": "guard",
+      "cache": "$work/nested/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "operation": "register"
+    },
+    {
+      "action": "api",
+      "name": "short_socket",
+      "api": "guard",
+      "cache": "$work/nested/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "operation": "inspect",
+      "fields": [
+        "socket_within_limit"
+      ],
+      "expect": {
+        "socket_within_limit": true
+      }
+    },
+    {
+      "action": "command",
+      "name": "start",
+      "program": "$ryii",
+      "arguments": [
+        "--daemon"
+      ],
+      "environment": {
+        "XDG_CACHE_HOME": "$work/nested/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "RYI_IDLE_SECS": "5"
+      },
+      "expect_exit_code": 0,
+      "raw_stdout": true,
+      "unasserted_stdout": true,
+      "unasserted_stderr": true
+    },
+    {
+      "action": "api",
+      "name": "long_cache_started",
+      "api": "guard",
+      "cache": "$work/nested/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "operation": "wait_pid",
+      "seconds": 5,
+      "poll_ms": 25,
+      "fields": [
+        "has_pid",
+        "alive"
+      ],
+      "expect": {
+        "has_pid": true,
+        "alive": true
+      }
+    },
+    {
+      "action": "api",
+      "name": "long_cache_stopped",
+      "api": "guard",
+      "cache": "$work/nested/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "operation": "stop",
+      "expect": {
+        "stopped": true
+      }
+    },
+    {
+      "action": "api",
+      "name": "long_cache_cleanup",
+      "api": "guard",
+      "cache": "$work/nested/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "operation": "inspect",
+      "fields": [
+        "recorded_pid_alive",
+        "socket_exists"
+      ],
+      "expect": {
+        "recorded_pid_alive": false,
+        "socket_exists": false
+      }
+    }
+  ]
+}

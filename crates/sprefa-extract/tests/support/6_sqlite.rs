@@ -12,7 +12,36 @@ use std::path::Path;
 use crate::t_0_sqlite::sqlite;
 
 pub fn evaluate(case: &Value) -> Value {
-    crate::fixture_runner::commands(case, api)
+    let mut output = crate::fixture_runner::commands(case, api);
+    let mut cells = Vec::new();
+    for value in output.as_object_mut().unwrap().values_mut() {
+        if let Some(rows) = value.get_mut("rows").filter(|r| r.as_array().is_some_and(|r| r.first().is_some_and(|r| r.get("values").is_some()))) {
+            *rows = compact_rows(rows.as_array().unwrap().iter().map(|row| &row["values"]), &mut cells);
+        }
+        if let Some(tables) = value.get_mut("uncoordinated").and_then(Value::as_object_mut) {
+            for rows in tables.values_mut() {
+                *rows = compact_rows(rows.as_array().unwrap().iter(), &mut cells);
+            }
+        }
+    }
+    if !cells.is_empty() { output["cells"] = json!(cells.chunks(16).map(|chunk| serde_json::to_string(chunk).unwrap()).collect::<Vec<_>>()); }
+    output
+}
+
+// Typed cell dictionary: strings are SQL text, integers SQL integers; null,
+// real/blob/redaction tags retain their original variants. Row order is exact.
+// Cell indices address 16-cell JSON chunks: chunk = index / 16, slot = index % 16.
+fn compact_rows<'a>(rows: impl Iterator<Item = &'a Value>, cells: &mut Vec<Value>) -> Value {
+    Value::Array(rows.map(|row| {
+        let indices: Vec<_> = row.as_array().unwrap().iter().map(|value| {
+            let cell = value.get("text").or_else(|| value.get("integer")).unwrap_or(value).clone();
+            match cells.iter().position(|stored| stored == &cell) {
+                Some(index) => index,
+                None => { cells.push(cell); cells.len() - 1 }
+            }
+        }).collect();
+        Value::String(serde_json::to_string(&indices).unwrap())
+    }).collect())
 }
 
 fn api(step: &Value) -> Value {

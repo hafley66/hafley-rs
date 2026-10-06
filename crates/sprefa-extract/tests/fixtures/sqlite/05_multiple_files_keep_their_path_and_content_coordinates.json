@@ -1,17 +1,1 @@
-{
-  "claim_test": "multiple_files_keep_their_path_and_content_coordinates",
-  "steps": [
-    {"action": "directory", "path": "$work/05"},
-    {
-      "action": "run", "name": "export",
-      "arguments": ["--sqlite", "$work/05/two.db", "--kinds", "call",
-        "tests/fixtures/ts/sample.ts", "tests/fixtures/rust/sample.rs"],
-      "raw_stdout": true, "success": true
-    },
-    {
-      "action": "sqlite_rows", "name": "file_coordinates",
-      "path": "$work/05/two.db",
-      "sql": "SELECT path, digest, _input_path, _content_id FROM file ORDER BY _row"
-    }
-  ]
-}
+{"claim_test":"multiple_files_keep_their_path_and_content_coordinates","steps":[{"action":"directory","path":"$work/05"},{"action":"run","name":"export","arguments":["--sqlite","$work/05/two.db","--kinds","call","tests/fixtures/ts/sample.ts","tests/fixtures/rust/sample.rs"],"raw_stdout":true,"success":true},{"action":"sqlite_rows","name":"file_coordinates","path":"$work/05/two.db","sql":"SELECT path, digest, _input_path, _content_id FROM file ORDER BY _row"}]}

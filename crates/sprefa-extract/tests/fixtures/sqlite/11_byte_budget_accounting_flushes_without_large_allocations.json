@@ -1,17 +1,1 @@
-{
-  "claim_test": "byte_budget_accounting_flushes_without_large_allocations",
-  "steps": [
-    {"action": "directory", "path": "$work/11"},
-    {
-      "action": "api", "name": "budget", "api": "byte_budget",
-      "database": "$work/11/facts.db",
-      "steps": [
-        {"fact": {"record": "protocol", "version": 1}, "bytes": 7},
-        {"fact": {"record": "protocol", "version": 2}, "bytes": {"batch_bytes_plus": 1}},
-        {"fact": {"record": "protocol", "version": 3}, "bytes": {"half_batch_bytes_plus": 1}},
-        {"fact": {"record": "protocol", "version": 4}, "bytes": {"half_batch_bytes_plus": 1}},
-        {"flush": true}
-      ]
-    }
-  ]
-}
+{"claim_test":"byte_budget_accounting_flushes_without_large_allocations","steps":[{"action":"directory","path":"$work/11"},{"action":"api","name":"budget","api":"byte_budget","database":"$work/11/facts.db","steps":[{"fact":{"record":"protocol","version":1},"bytes":7},{"fact":{"record":"protocol","version":2},"bytes":{"batch_bytes_plus":1}},{"fact":{"record":"protocol","version":3},"bytes":{"half_batch_bytes_plus":1}},{"fact":{"record":"protocol","version":4},"bytes":{"half_batch_bytes_plus":1}},{"flush":true}]}]}
