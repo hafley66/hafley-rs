@@ -1,0 +1,673 @@
+{
+  "steps": [
+    {
+      "action": "copy_tree",
+      "source": "$fixtures/type_ladder",
+      "target": "$work/type_ladder"
+    },
+    {
+      "action": "git",
+      "args": [
+        "init",
+        "-q",
+        "."
+      ],
+      "cwd": "$work/type_ladder",
+      "environment": {
+        "GIT_AUTHOR_DATE": "2000-01-01T00:00:00Z",
+        "GIT_COMMITTER_DATE": "2000-01-01T00:00:00Z"
+      }
+    },
+    {
+      "action": "git",
+      "args": [
+        "add",
+        "-A"
+      ],
+      "cwd": "$work/type_ladder",
+      "environment": {
+        "GIT_AUTHOR_DATE": "2000-01-01T00:00:00Z",
+        "GIT_COMMITTER_DATE": "2000-01-01T00:00:00Z"
+      }
+    },
+    {
+      "action": "git",
+      "args": [
+        "-c",
+        "user.email=t@t",
+        "-c",
+        "user.name=t",
+        "commit",
+        "-qm",
+        "base"
+      ],
+      "cwd": "$work/type_ladder",
+      "environment": {
+        "GIT_AUTHOR_DATE": "2000-01-01T00:00:00Z",
+        "GIT_COMMITTER_DATE": "2000-01-01T00:00:00Z"
+      }
+    },
+    {
+      "action": "write",
+      "path": "$work/type_ladder/region.rs",
+      "text": "// sprefa:auto-begin demo\nold\n// sprefa:auto-end demo\n"
+    },
+    {
+      "action": "write",
+      "path": "$work/type_ladder/region.txt",
+      "text": "old\n"
+    },
+    {
+      "action": "copy",
+      "source": "$ryii",
+      "path": "$work/ryii"
+    },
+    {
+      "action": "api",
+      "name": "server_main",
+      "api": "server",
+      "slot": "main",
+      "cache": "$work/cache",
+      "bootstrap": {
+        "action": "command",
+        "program": "$work/ryii",
+        "arguments": [
+          "--daemon"
+        ],
+        "environment": {
+          "XDG_CACHE_HOME": "$work/cache",
+          "RYI_IDLE_SECS": "30",
+          "HOME": "$work/home"
+        }
+      }
+    },
+    {
+      "action": "api",
+      "api": "parity",
+      "name": "fast",
+      "op": "fast",
+      "args": {
+        "paths": [
+          "$work/type_ladder/src"
+        ]
+      },
+      "slot": "main",
+      "root": "$work/type_ladder",
+      "scratch": "$work",
+      "cli": {
+        "action": "command",
+        "program": "$work/ryii",
+        "arguments": [
+          "fast",
+          "$work/type_ladder/src"
+        ],
+        "cwd": "$manifest",
+        "environment": {
+          "RUST_LOG": "off",
+          "DL_TRAIL": "0",
+          "HOME": "$work/home"
+        }
+      },
+      "reset_state": null,
+      "expect_table": [
+        "fast    cli     322 344a98fe4e87",
+        "fast    router  322 344a98fe4e87"
+      ]
+    },
+    {
+      "action": "api",
+      "api": "parity",
+      "name": "slow",
+      "op": "slow",
+      "args": {
+        "paths": [
+          "$work/type_ladder/src"
+        ],
+        "root": "$work/type_ladder",
+        "scip_index": "$work/type_ladder/index.scip",
+        "no_checker": true
+      },
+      "slot": "main",
+      "root": "$work/type_ladder",
+      "scratch": "$work",
+      "cli": {
+        "action": "command",
+        "program": "$work/ryii",
+        "arguments": [
+          "slow",
+          "$work/type_ladder/src",
+          "--root",
+          "$work/type_ladder",
+          "--scip-index",
+          "$work/type_ladder/index.scip",
+          "--no-checker"
+        ],
+        "cwd": "$manifest",
+        "environment": {
+          "RUST_LOG": "off",
+          "DL_TRAIL": "0",
+          "HOME": "$work/home"
+        }
+      },
+      "reset_state": null,
+      "expect_table": [
+        "slow    cli     371 834e48c2b5f1",
+        "slow    router  371 834e48c2b5f1"
+      ]
+    },
+    {
+      "action": "api",
+      "api": "parity",
+      "name": "scip",
+      "op": "scip",
+      "args": {
+        "paths": [
+          "$work/type_ladder"
+        ],
+        "scip_index": "$work/type_ladder/index.scip"
+      },
+      "slot": "main",
+      "root": "$work/type_ladder",
+      "scratch": "$work",
+      "cli": {
+        "action": "command",
+        "program": "$work/ryii",
+        "arguments": [
+          "scip",
+          "$work/type_ladder",
+          "--scip-index",
+          "$work/type_ladder/index.scip"
+        ],
+        "cwd": "$manifest",
+        "environment": {
+          "RUST_LOG": "off",
+          "DL_TRAIL": "0",
+          "HOME": "$work/home"
+        }
+      },
+      "reset_state": null,
+      "expect_table": [
+        "scip    cli     228 3cec8a59f4e0",
+        "scip    router  228 3cec8a59f4e0"
+      ]
+    },
+    {
+      "action": "api",
+      "api": "parity",
+      "name": "graph",
+      "op": "graph",
+      "args": {
+        "paths": [
+          "$work/type_ladder/src"
+        ],
+        "root": "$work/type_ladder",
+        "uses": "A"
+      },
+      "slot": "main",
+      "root": "$work/type_ladder",
+      "scratch": "$work",
+      "cli": {
+        "action": "command",
+        "program": "$work/ryii",
+        "arguments": [
+          "graph",
+          "--uses",
+          "A",
+          "--root",
+          "$work/type_ladder",
+          "$work/type_ladder/src"
+        ],
+        "cwd": "$manifest",
+        "environment": {
+          "RUST_LOG": "off",
+          "DL_TRAIL": "0",
+          "HOME": "$work/home"
+        }
+      },
+      "reset_state": null,
+      "expect_table": [
+        "graph   cli      14 7d486d030709",
+        "graph   router   14 7d486d030709"
+      ]
+    },
+    {
+      "action": "api",
+      "api": "parity",
+      "name": "cleave",
+      "op": "cleave",
+      "args": {
+        "target": "$work/type_ladder/src/_2_one.rs#OneField",
+        "dest": "$work/type_ladder/src/_6_cleave.rs",
+        "root": "$work/type_ladder",
+        "state": "$work/state"
+      },
+      "slot": "main",
+      "root": "$work/type_ladder",
+      "scratch": "$work",
+      "cli": {
+        "action": "command",
+        "program": "$work/ryii",
+        "arguments": [
+          "cleave",
+          "$work/type_ladder/src/_2_one.rs#OneField",
+          "$work/type_ladder/src/_6_cleave.rs",
+          "--root",
+          "$work/type_ladder",
+          "--state",
+          "$work/state"
+        ],
+        "cwd": "$manifest",
+        "environment": {
+          "RUST_LOG": "off",
+          "DL_TRAIL": "0",
+          "HOME": "$work/home"
+        }
+      },
+      "reset_state": "$work/state",
+      "expect_table": [
+        "cleave  cli       4 65889261c505",
+        "cleave  router    4 65889261c505"
+      ]
+    },
+    {
+      "action": "api",
+      "api": "parity",
+      "name": "move",
+      "op": "move",
+      "args": {
+        "old": "$work/type_ladder/src/_1_none.rs",
+        "new": "$work/type_ladder/src/_5_moved.rs",
+        "root": [
+          "$work/type_ladder"
+        ],
+        "state": "$work/state"
+      },
+      "slot": "main",
+      "root": "$work/type_ladder",
+      "scratch": "$work",
+      "cli": {
+        "action": "command",
+        "program": "$work/ryii",
+        "arguments": [
+          "move",
+          "$work/type_ladder/src/_1_none.rs",
+          "$work/type_ladder/src/_5_moved.rs",
+          "--root",
+          "$work/type_ladder",
+          "--state",
+          "$work/state"
+        ],
+        "cwd": "$manifest",
+        "environment": {
+          "RUST_LOG": "off",
+          "DL_TRAIL": "0",
+          "HOME": "$work/home"
+        }
+      },
+      "reset_state": "$work/state",
+      "expect_table": [
+        "move    cli      15 c907b28d1ebd",
+        "move    router   15 c907b28d1ebd"
+      ]
+    },
+    {
+      "action": "api",
+      "api": "parity",
+      "name": "rename",
+      "op": "rename",
+      "args": {
+        "target": "$work/type_ladder/src/_0_types.rs#A",
+        "new": "AZ",
+        "root": "$work/type_ladder",
+        "state": "$work/state"
+      },
+      "slot": "main",
+      "root": "$work/type_ladder",
+      "scratch": "$work",
+      "cli": {
+        "action": "command",
+        "program": "$work/ryii",
+        "arguments": [
+          "rename",
+          "$work/type_ladder/src/_0_types.rs#A",
+          "AZ",
+          "--root",
+          "$work/type_ladder",
+          "--state",
+          "$work/state"
+        ],
+        "cwd": "$manifest",
+        "environment": {
+          "RUST_LOG": "off",
+          "DL_TRAIL": "0",
+          "HOME": "$work/home"
+        }
+      },
+      "reset_state": "$work/state",
+      "expect_table": [
+        "rename  cli     115 9a847f2fdeb3",
+        "rename  router  115 9a847f2fdeb3"
+      ]
+    },
+    {
+      "action": "api",
+      "api": "parity",
+      "name": "query",
+      "op": "query",
+      "args": {
+        "paths": [
+          "$work/type_ladder/src/_1_none.rs"
+        ],
+        "query": "(function_item name: (identifier) @name)"
+      },
+      "slot": "main",
+      "root": "$work/type_ladder",
+      "scratch": "$work",
+      "cli": {
+        "action": "command",
+        "program": "$work/ryii",
+        "arguments": [
+          "query",
+          "$work/type_ladder/src/_1_none.rs",
+          "--query",
+          "(function_item name: (identifier) @name)"
+        ],
+        "cwd": "$manifest",
+        "environment": {
+          "RUST_LOG": "off",
+          "DL_TRAIL": "0",
+          "HOME": "$work/home"
+        }
+      },
+      "reset_state": null,
+      "expect_table": [
+        "query   cli       3 8f14e404ec42",
+        "query   router    3 8f14e404ec42"
+      ]
+    },
+    {
+      "action": "api",
+      "api": "parity",
+      "name": "region",
+      "op": "region",
+      "args": {
+        "target": "$work/type_ladder/region.rs",
+        "id": "demo",
+        "generated": "$work/type_ladder/region.txt"
+      },
+      "slot": "main",
+      "root": "$work/type_ladder",
+      "scratch": "$work",
+      "cli": {
+        "action": "command",
+        "program": "$work/ryii",
+        "arguments": [
+          "region",
+          "$work/type_ladder/region.rs",
+          "demo",
+          "--generated",
+          "$work/type_ladder/region.txt"
+        ],
+        "cwd": "$manifest",
+        "environment": {
+          "RUST_LOG": "off",
+          "DL_TRAIL": "0",
+          "HOME": "$work/home"
+        }
+      },
+      "reset_state": null,
+      "expect_table": [
+        "region  cli       1 6e64be8bc173",
+        "region  router    1 6e64be8bc173"
+      ]
+    },
+    {
+      "action": "api",
+      "api": "parity",
+      "name": "watch",
+      "op": "watch",
+      "args": {
+        "root": "$work/type_ladder",
+        "once": true,
+        "receipts": "$work/receipts.db",
+        "poll_ms": 500
+      },
+      "slot": "main",
+      "root": "$work/type_ladder",
+      "scratch": "$work",
+      "cli": {
+        "action": "command",
+        "program": "$work/ryii",
+        "arguments": [
+          "watch",
+          "--root",
+          "$work/type_ladder",
+          "--once",
+          "--receipts",
+          "$work/receipts.db"
+        ],
+        "cwd": "$manifest",
+        "environment": {
+          "RUST_LOG": "off",
+          "DL_TRAIL": "0",
+          "HOME": "$work/home"
+        }
+      },
+      "reset_state": null,
+      "expect_table": [
+        "watch   cli     459 c4f909b069cc",
+        "watch   router  459 c4f909b069cc"
+      ]
+    },
+    {
+      "action": "api",
+      "api": "parity",
+      "name": "diff",
+      "op": "diff",
+      "args": {
+        "root": "$work/type_ladder",
+        "from": "HEAD",
+        "to": "HEAD"
+      },
+      "slot": "main",
+      "root": "$work/type_ladder",
+      "scratch": "$work",
+      "cli": {
+        "action": "command",
+        "program": "$work/ryii",
+        "arguments": [
+          "diff",
+          "--root",
+          "$work/type_ladder",
+          "--from",
+          "HEAD",
+          "--to",
+          "HEAD"
+        ],
+        "cwd": "$manifest",
+        "environment": {
+          "RUST_LOG": "off",
+          "DL_TRAIL": "0",
+          "HOME": "$work/home"
+        }
+      },
+      "reset_state": null,
+      "expect_table": [
+        "diff    cli       1 750777a29f8d",
+        "diff    router    1 750777a29f8d"
+      ]
+    },
+    {
+      "action": "api",
+      "api": "parity",
+      "name": "ingest",
+      "op": "ingest",
+      "args": {
+        "paths": [
+          "$fixtures/tsi/foreign_probe.jsonl"
+        ]
+      },
+      "slot": "main",
+      "root": "$work/type_ladder",
+      "scratch": "$work",
+      "cli": {
+        "action": "command",
+        "program": "$work/ryii",
+        "arguments": [
+          "ingest",
+          "$fixtures/tsi/foreign_probe.jsonl"
+        ],
+        "cwd": "$manifest",
+        "environment": {
+          "RUST_LOG": "off",
+          "DL_TRAIL": "0",
+          "HOME": "$work/home"
+        }
+      },
+      "reset_state": null,
+      "expect_table": [
+        "ingest  cli      24 0239bab7fd61",
+        "ingest  router   24 0239bab7fd61"
+      ]
+    },
+    {
+      "action": "api",
+      "api": "parity",
+      "name": "schema",
+      "op": "schema",
+      "args": {},
+      "slot": "main",
+      "root": "$work/type_ladder",
+      "scratch": "$work",
+      "cli": {
+        "action": "command",
+        "program": "$work/ryii",
+        "arguments": [
+          "schema"
+        ],
+        "cwd": "$manifest",
+        "environment": {
+          "RUST_LOG": "off",
+          "DL_TRAIL": "0",
+          "HOME": "$work/home"
+        }
+      },
+      "reset_state": null,
+      "expect_table": [
+        "schema  cli     433 3a49710544ea",
+        "schema  router  433 3a49710544ea"
+      ]
+    },
+    {
+      "action": "api",
+      "api": "parity",
+      "name": "trail",
+      "op": "trail",
+      "args": {
+        "runs": 5
+      },
+      "slot": "main",
+      "root": "$work/type_ladder",
+      "scratch": "$work",
+      "cli": {
+        "action": "command",
+        "program": "$work/ryii",
+        "arguments": [
+          "trail"
+        ],
+        "cwd": "$manifest",
+        "environment": {
+          "RUST_LOG": "off",
+          "DL_TRAIL": "0",
+          "HOME": "$work/home"
+        }
+      },
+      "reset_state": null,
+      "expect_table": [
+        "trail   cli       1 cf5200e026ab",
+        "trail   router    1 cf5200e026ab"
+      ]
+    },
+    {
+      "action": "api",
+      "name": "socket",
+      "api": "request",
+      "slot": "main",
+      "op": "fast",
+      "args": {
+        "paths": [
+          "$work/type_ladder/src"
+        ]
+      },
+      "root": "$work/type_ladder",
+      "scratch": "$work",
+      "expect_table": "fast    socket  322 344a98fe4e87",
+      "transport": "socket",
+      "expect_success": true
+    },
+    {
+      "action": "api",
+      "name": "server_proof",
+      "api": "server",
+      "slot": "proof",
+      "cache": "$work/proof-cache",
+      "bootstrap": {
+        "action": "command",
+        "program": "$work/ryii",
+        "arguments": [
+          "--daemon"
+        ],
+        "environment": {
+          "XDG_CACHE_HOME": "$work/proof-cache",
+          "RYI_IDLE_SECS": "30",
+          "HOME": "$work/home"
+        }
+      }
+    },
+    {
+      "action": "remove",
+      "path": "$work/ryii"
+    },
+    {
+      "action": "api",
+      "name": "nochild",
+      "api": "request",
+      "slot": "proof",
+      "op": "fast",
+      "args": {
+        "paths": [
+          "$work/type_ladder/src"
+        ]
+      },
+      "root": "$work/type_ladder",
+      "scratch": "$work",
+      "equals_saved": "fast",
+      "system_path": "/usr/bin:/bin:/opt/homebrew/bin",
+      "expect_success": true
+    },
+    {
+      "action": "api",
+      "name": "sqlite",
+      "api": "request",
+      "slot": "main",
+      "op": "fast",
+      "args": {
+        "paths": [
+          "$work/type_ladder/src"
+        ],
+        "sqlite": "$work/fast-http.db"
+      },
+      "root": "$work/type_ladder",
+      "scratch": "$work",
+      "expect_status": 200,
+      "expect_prefix": "Wrote "
+    },
+    {
+      "action": "exists",
+      "name": "sqlite_published",
+      "path": "$work/fast-http.db",
+      "kind": "file",
+      "expected": true
+    }
+  ]
+}

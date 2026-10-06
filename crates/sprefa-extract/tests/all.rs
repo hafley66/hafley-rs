@@ -604,3 +604,7 @@ mod tsi_rows_support;
 
 #[path = "support/11_cfg.rs"]
 mod cfg_support;
+
+#[cfg(feature = "cli")]
+#[path = "support/12_http.rs"]
+mod http_support;

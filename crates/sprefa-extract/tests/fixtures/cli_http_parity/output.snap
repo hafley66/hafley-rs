@@ -1,0 +1,204 @@
+---
+source: tests/support/2_fixture_runner.rs
+---
+{
+  "0_contract": {
+    "cleave": {
+      "table": [
+        "cleave  cli       4 65889261c505",
+        "cleave  router    4 65889261c505"
+      ],
+      "cli_success": true,
+      "http_success": true
+    },
+    "diff": {
+      "table": [
+        "diff    cli       1 750777a29f8d",
+        "diff    router    1 750777a29f8d"
+      ],
+      "cli_success": true,
+      "http_success": true
+    },
+    "fast": {
+      "table": [
+        "fast    cli     322 344a98fe4e87",
+        "fast    router  322 344a98fe4e87"
+      ],
+      "cli_success": true,
+      "http_success": true
+    },
+    "graph": {
+      "table": [
+        "graph   cli      14 7d486d030709",
+        "graph   router   14 7d486d030709"
+      ],
+      "cli_success": true,
+      "http_success": true
+    },
+    "ingest": {
+      "table": [
+        "ingest  cli      24 0239bab7fd61",
+        "ingest  router   24 0239bab7fd61"
+      ],
+      "cli_success": true,
+      "http_success": true
+    },
+    "move": {
+      "table": [
+        "move    cli      15 c907b28d1ebd",
+        "move    router   15 c907b28d1ebd"
+      ],
+      "cli_success": true,
+      "http_success": true
+    },
+    "nochild": {
+      "http_success": true,
+      "table": "fast    nochild  322 344a98fe4e87"
+    },
+    "query": {
+      "table": [
+        "query   cli       3 8f14e404ec42",
+        "query   router    3 8f14e404ec42"
+      ],
+      "cli_success": true,
+      "http_success": true
+    },
+    "region": {
+      "table": [
+        "region  cli       1 6e64be8bc173",
+        "region  router    1 6e64be8bc173"
+      ],
+      "cli_success": true,
+      "http_success": true
+    },
+    "rename": {
+      "table": [
+        "rename  cli     115 9a847f2fdeb3",
+        "rename  router  115 9a847f2fdeb3"
+      ],
+      "cli_success": true,
+      "http_success": true
+    },
+    "schema": {
+      "table": [
+        "schema  cli     433 3a49710544ea",
+        "schema  router  433 3a49710544ea"
+      ],
+      "cli_success": true,
+      "http_success": true
+    },
+    "scip": {
+      "table": [
+        "scip    cli     228 3cec8a59f4e0",
+        "scip    router  228 3cec8a59f4e0"
+      ],
+      "cli_success": true,
+      "http_success": true
+    },
+    "server_main": {
+      "bound": true,
+      "pid_recorded": true
+    },
+    "server_proof": {
+      "bound": true,
+      "pid_recorded": true
+    },
+    "slow": {
+      "table": [
+        "slow    cli     371 834e48c2b5f1",
+        "slow    router  371 834e48c2b5f1"
+      ],
+      "cli_success": true,
+      "http_success": true
+    },
+    "socket": {
+      "http_success": true,
+      "table": "fast    socket  322 344a98fe4e87"
+    },
+    "sqlite": {
+      "status": 200,
+      "body_prefix": "Wrote "
+    },
+    "sqlite_published": {
+      "exists": true
+    },
+    "trail": {
+      "table": [
+        "trail   cli       1 cf5200e026ab",
+        "trail   router    1 cf5200e026ab"
+      ],
+      "cli_success": true,
+      "http_success": true
+    },
+    "watch": {
+      "table": [
+        "watch   cli     459 c4f909b069cc",
+        "watch   router  459 c4f909b069cc"
+      ],
+      "cli_success": true,
+      "http_success": true
+    }
+  },
+  "1_errors": {
+    "cli_error": {
+      "exit_code": 2
+    },
+    "cli_named_error": true,
+    "early_error": {
+      "status": 400,
+      "exit_header": "2",
+      "body": "",
+      "stderr_contains": "unknown language"
+    },
+    "late_error": {
+      "status": 200,
+      "rows": [
+        {
+          "name": "first"
+        },
+        {
+          "code": 2,
+          "error_contains": "no language"
+        }
+      ]
+    },
+    "next_request": {
+      "status": 200,
+      "body_prefix": "sprefa-extract JSONL contract:"
+    },
+    "server_main": {
+      "bound": true,
+      "pid_recorded": true
+    }
+  },
+  "2_watch": {
+    "server_main": {
+      "bound": true,
+      "pid_recorded": true
+    },
+    "watch": {
+      "watch_status": 200,
+      "first_frame_nonempty": true,
+      "requests": {
+        "after_disconnect": {
+          "status": 200
+        },
+        "move": {
+          "status": 200,
+          "body_contains": "plan "
+        },
+        "query": {
+          "status": 200,
+          "body_nonempty": true
+        }
+      }
+    }
+  },
+  "3_fast_roster": {
+    "bounded_sorted_roster": true,
+    "fast": {
+      "exit_code": 0
+    },
+    "no_corpus_sort": true
+  }
+}

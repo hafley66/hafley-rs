@@ -1,0 +1,133 @@
+{
+  "steps": [
+    {
+      "action": "copy_tree",
+      "source": "$fixtures/type_ladder",
+      "target": "$work/type_ladder"
+    },
+    {
+      "action": "git",
+      "args": [
+        "init",
+        "-q",
+        "."
+      ],
+      "cwd": "$work/type_ladder",
+      "environment": {
+        "GIT_AUTHOR_DATE": "2000-01-01T00:00:00Z",
+        "GIT_COMMITTER_DATE": "2000-01-01T00:00:00Z"
+      }
+    },
+    {
+      "action": "git",
+      "args": [
+        "add",
+        "-A"
+      ],
+      "cwd": "$work/type_ladder",
+      "environment": {
+        "GIT_AUTHOR_DATE": "2000-01-01T00:00:00Z",
+        "GIT_COMMITTER_DATE": "2000-01-01T00:00:00Z"
+      }
+    },
+    {
+      "action": "git",
+      "args": [
+        "-c",
+        "user.email=t@t",
+        "-c",
+        "user.name=t",
+        "commit",
+        "-qm",
+        "base"
+      ],
+      "cwd": "$work/type_ladder",
+      "environment": {
+        "GIT_AUTHOR_DATE": "2000-01-01T00:00:00Z",
+        "GIT_COMMITTER_DATE": "2000-01-01T00:00:00Z"
+      }
+    },
+    {
+      "action": "api",
+      "name": "server_main",
+      "api": "server",
+      "slot": "main",
+      "cache": "$work/cache",
+      "bootstrap": {
+        "action": "command",
+        "program": "$ryii",
+        "arguments": [
+          "--daemon"
+        ],
+        "environment": {
+          "XDG_CACHE_HOME": "$work/cache",
+          "RYI_IDLE_SECS": "30",
+          "HOME": "$work/home"
+        }
+      }
+    },
+    {
+      "action": "api",
+      "name": "watch",
+      "api": "watch",
+      "slot": "main",
+      "root": "$work/type_ladder",
+      "scratch": "$work",
+      "args": {
+        "root": "$work/type_ladder",
+        "receipts": "$work/watch.db",
+        "poll_ms": 50,
+        "once": false
+      },
+      "requests": [
+        {
+          "action": "api",
+          "name": "query",
+          "api": "request",
+          "slot": "main",
+          "op": "query",
+          "args": {
+            "paths": [
+              "$work/type_ladder/src/_1_none.rs"
+            ],
+            "query": "(function_item name: (identifier) @name)"
+          },
+          "root": "$work/type_ladder",
+          "scratch": "$work",
+          "expect_status": 200,
+          "expect_nonempty": true
+        },
+        {
+          "action": "api",
+          "name": "move",
+          "api": "request",
+          "slot": "main",
+          "op": "move",
+          "args": {
+            "old": "$work/type_ladder/src/_1_none.rs",
+            "new": "$work/type_ladder/src/_5_moved.rs",
+            "root": [
+              "$work/type_ladder"
+            ],
+            "state": "$work/state"
+          },
+          "root": "$work/type_ladder",
+          "scratch": "$work",
+          "expect_status": 200,
+          "expect_contains": "plan "
+        }
+      ],
+      "after": {
+        "action": "api",
+        "name": "after_disconnect",
+        "api": "request",
+        "slot": "main",
+        "op": "schema",
+        "args": {},
+        "root": "$work/type_ladder",
+        "scratch": "$work",
+        "expect_status": 200
+      }
+    }
+  ]
+}

@@ -246,6 +246,13 @@ pub fn commands(case: &Value, api: impl Fn(&Value) -> Value) -> Value {
                         .unwrap();
                 }
             }
+            "write_files" => {
+                std::fs::create_dir_all(path()).unwrap();
+                for index in 0..step["count"].as_u64().unwrap() {
+                    let filename = step["filename"].as_str().unwrap().replace("{index:04}", &format!("{index:04}")).replace("{index}", &index.to_string());
+                    std::fs::write(path().join(filename), step["text"].as_str().unwrap().replace("{index}", &index.to_string())).unwrap();
+                }
+            }
             "remove" => std::fs::remove_file(path()).unwrap(),
             "remove_tree" => std::fs::remove_dir_all(path()).unwrap(),
             "symlink" => {
@@ -623,6 +630,10 @@ fn claim(
     let text = value.as_str().unwrap_or("");
     let needle = || expand(step["text"].as_str().unwrap());
     let (actual, expected) = match kind {
+        "sorted_nonempty_lines" => {
+            let rows: Vec<_> = text.lines().filter(|line| !line.is_empty()).collect();
+            (Value::Bool(!rows.is_empty() && rows.windows(2).all(|pair| pair[0].as_bytes() <= pair[1].as_bytes())), Value::Bool(true))
+        },
         "nonempty_lines_equal" => (serde_json::json!(text.lines().filter(|line| !line.is_empty()).collect::<Vec<_>>()), step["expect"].clone()),
         "git_diff_lines" => {
             let mut rows = Vec::new(); let mut old_file = "";

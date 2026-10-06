@@ -1,0 +1,110 @@
+{
+  "steps": [
+    {
+      "action": "run",
+      "name": "cli_error",
+      "arguments": [
+        "scip",
+        "--indexer",
+        "not-a-language"
+      ],
+      "environment": {
+        "DL_TRAIL": "0"
+      },
+      "expect_exit_code": 2,
+      "raw_stdout": true,
+      "unasserted_stdout": true,
+      "unasserted_stderr": true
+    },
+    {
+      "action": "claim",
+      "name": "cli_named_error",
+      "cell": "cli_error.stderr",
+      "kind": "contains",
+      "text": "unknown language"
+    },
+    {
+      "action": "api",
+      "name": "server_main",
+      "api": "server",
+      "slot": "main",
+      "cache": "$work/cache",
+      "bootstrap": {
+        "action": "command",
+        "program": "$ryii",
+        "arguments": [
+          "--daemon"
+        ],
+        "environment": {
+          "XDG_CACHE_HOME": "$work/cache",
+          "RYI_IDLE_SECS": "30",
+          "HOME": "$work/home"
+        }
+      }
+    },
+    {
+      "action": "api",
+      "name": "early_error",
+      "api": "request",
+      "slot": "main",
+      "op": "scip",
+      "args": {
+        "indexer": "not-a-language"
+      },
+      "root": "$work",
+      "scratch": "$work",
+      "expect_status": 400,
+      "expect_body": "",
+      "expect_exit_header": "2",
+      "expect_stderr_contains": "unknown language"
+    },
+    {
+      "action": "write",
+      "path": "$work/first.rs",
+      "text": "fn first() {}\n"
+    },
+    {
+      "action": "write",
+      "path": "$work/second.txt",
+      "text": "second\n"
+    },
+    {
+      "action": "api",
+      "name": "late_error",
+      "api": "request",
+      "slot": "main",
+      "op": "query",
+      "args": {
+        "paths": [
+          "$work/first.rs",
+          "$work/second.txt"
+        ],
+        "query": "(function_item name: (identifier) @name)"
+      },
+      "root": "$work",
+      "scratch": "$work",
+      "expect_status": 200,
+      "expect_rows": [
+        {
+          "name": "first"
+        },
+        {
+          "code": 2,
+          "error_contains": "no language"
+        }
+      ]
+    },
+    {
+      "action": "api",
+      "name": "next_request",
+      "api": "request",
+      "slot": "main",
+      "op": "schema",
+      "args": {},
+      "root": "$work",
+      "scratch": "$work",
+      "expect_status": 200,
+      "expect_prefix": "sprefa-extract JSONL contract:"
+    }
+  ]
+}

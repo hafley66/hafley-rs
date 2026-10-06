@@ -1,0 +1,40 @@
+{
+  "steps": [
+    {
+      "action": "write_files",
+      "path": "$work/roster",
+      "count": 4097,
+      "filename": "{index:04}_fact.rs",
+      "text": "pub fn f_{index}() {}\n"
+    },
+    {
+      "action": "run",
+      "name": "fast",
+      "arguments": [
+        "fast",
+        "$work/roster"
+      ],
+      "environment": {
+        "DL_TRACE_SUMMARY": "1",
+        "DL_TRAIL": "0"
+      },
+      "expect_exit_code": 0,
+      "raw_stdout": true,
+      "unasserted_stdout": true,
+      "unasserted_stderr": true
+    },
+    {
+      "action": "claim",
+      "name": "bounded_sorted_roster",
+      "cell": "fast.stdout",
+      "kind": "sorted_nonempty_lines"
+    },
+    {
+      "action": "claim",
+      "name": "no_corpus_sort",
+      "cell": "fast.stderr",
+      "kind": "absent",
+      "text": "sorted_lines"
+    }
+  ]
+}
