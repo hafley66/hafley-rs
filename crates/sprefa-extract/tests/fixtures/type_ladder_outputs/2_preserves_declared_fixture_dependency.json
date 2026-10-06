@@ -1,0 +1,32 @@
+{
+  "steps": [
+    {
+      "action": "run",
+      "name": "fast_fast",
+      "cwd": "$manifest",
+      "arguments": [
+        "fast",
+        "$manifest/tests/fixtures/type_ladder_dependency",
+        "--sqlite",
+        "$work/fast.db"
+      ],
+      "expect_exit_code": 0,
+      "unasserted_stdout": true,
+      "unasserted_stderr": true,
+      "raw_stdout": true
+    },
+    {
+      "action": "sqlite_rows",
+      "name": "type_scope_ladder_preserves_declared_fixture_dependency",
+      "path": "$work/fast.db",
+      "sql": "select count(*) from resolved_type_edge\n         where owner_path like '%/type_ladder_dependency/%/src/lib.rs'\n           and target_path like '%/0_collector/src/0_collector.rs'\n           and target_name in ('BulkTrigger', 'RowChange')",
+      "expect": [
+        [
+          {
+            "integer": 6
+          }
+        ]
+      ]
+    }
+  ]
+}

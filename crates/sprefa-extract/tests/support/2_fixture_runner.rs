@@ -302,12 +302,19 @@ pub fn commands(case: &Value, api: impl Fn(&Value) -> Value) -> Value {
             }
             "sqlite_rows" => {
                 let connection = rusqlite::Connection::open(path()).unwrap();
+                if let Some(databases) = step["attach"].as_object() {
+                    for (alias, database) in databases {
+                        assert!(alias.chars().all(|c| c.is_ascii_alphanumeric() || c == '_'));
+                        connection.execute(&format!("attach ?1 as {alias}"), [expand(database.as_str().unwrap())]).unwrap();
+                    }
+                }
+                let parameters: Vec<String> = step["parameters"].as_array().into_iter().flatten().map(|v| expand(v.as_str().unwrap())).collect();
                 let mut statement = connection
                     .prepare(&expand(step["sql"].as_str().unwrap()))
                     .unwrap();
                 let columns = statement.column_count();
                 let mut rows = Vec::new();
-                let mut found = statement.query([]).unwrap();
+                let mut found = statement.query(rusqlite::params_from_iter(parameters.iter())).unwrap();
                 while let Some(row) = found.next().unwrap() {
                     let mut values = Vec::with_capacity(columns);
                     for column in 0..columns {
@@ -328,6 +335,9 @@ pub fn commands(case: &Value, api: impl Fn(&Value) -> Value) -> Value {
                         });
                     }
                     rows.push(Value::Array(values));
+                }
+                if let Some(expected) = step.get("expect") {
+                    assert_eq!(serde_json::json!(rows), *expected, "{name}");
                 }
                 observed.insert(name.to_string(), serde_json::json!({"rows":rows}));
             }

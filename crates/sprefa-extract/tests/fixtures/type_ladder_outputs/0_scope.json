@@ -1,0 +1,358 @@
+{
+  "steps": [
+    {
+      "action": "run",
+      "name": "fast_fast",
+      "cwd": "$manifest",
+      "arguments": [
+        "fast",
+        "tests/fixtures/type_ladder_scope/src",
+        "--sqlite",
+        "$work/fast.db"
+      ],
+      "expect_exit_code": 0,
+      "unasserted_stdout": true,
+      "unasserted_stderr": true,
+      "raw_stdout": true
+    },
+    {
+      "action": "run",
+      "name": "slow_slow",
+      "cwd": "$manifest",
+      "arguments": [
+        "slow",
+        "tests/fixtures/type_ladder_scope/src",
+        "--root",
+        "tests/fixtures/type_ladder_scope",
+        "--scip-index",
+        "tests/fixtures/type_ladder_scope/index.scip",
+        "--no-checker",
+        "--sqlite",
+        "$work/slow.db"
+      ],
+      "expect_exit_code": 0,
+      "unasserted_stdout": true,
+      "unasserted_stderr": true,
+      "raw_stdout": true
+    },
+    {
+      "action": "run",
+      "name": "fast_absolute",
+      "cwd": "$manifest",
+      "arguments": [
+        "fast",
+        "$manifest/tests/fixtures/type_ladder_scope/src",
+        "--sqlite",
+        "$work/absolute.db"
+      ],
+      "expect_exit_code": 0,
+      "unasserted_stdout": true,
+      "unasserted_stderr": true,
+      "raw_stdout": true
+    },
+    {
+      "action": "sqlite_rows",
+      "name": "residual_type_candidates_have_declared_targets",
+      "path": "$work/fast.db",
+      "sql": "select distinct kind, owner_name,\n           replace(target_path, rtrim(target_path, replace(target_path, '/', '')), '') target_file,\n           target_name from resolved_type_edge\n         where owner_path like '%/_15_residual.rs'\n         order by kind, owner_name, target_file, target_name",
+      "expect": [
+        [
+          {
+            "text": "generic"
+          },
+          {
+            "text": "NestedGeneric"
+          },
+          {
+            "text": "_15_residual.rs"
+          },
+          {
+            "text": "ResidualTarget"
+          }
+        ],
+        [
+          {
+            "text": "impl"
+          },
+          {
+            "text": "Residual"
+          },
+          {
+            "text": "_15_residual.rs"
+          },
+          {
+            "text": "AliasSlot"
+          }
+        ],
+        [
+          {
+            "text": "impl"
+          },
+          {
+            "text": "Shared"
+          },
+          {
+            "text": "_0_alias.rs"
+          },
+          {
+            "text": "SharedTrait"
+          }
+        ],
+        [
+          {
+            "text": "param"
+          },
+          {
+            "text": "cross_module"
+          },
+          {
+            "text": "_0_alias.rs"
+          },
+          {
+            "text": "Shared"
+          }
+        ],
+        [
+          {
+            "text": "param"
+          },
+          {
+            "text": "explicit"
+          },
+          {
+            "text": "_15_residual.rs"
+          },
+          {
+            "text": "Residual"
+          }
+        ],
+        [
+          {
+            "text": "uses"
+          },
+          {
+            "text": "Item"
+          },
+          {
+            "text": "_15_residual.rs"
+          },
+          {
+            "text": "ResidualTarget"
+          }
+        ],
+        [
+          {
+            "text": "uses"
+          },
+          {
+            "text": "Residual"
+          },
+          {
+            "text": "_15_residual.rs"
+          },
+          {
+            "text": "Residual"
+          }
+        ],
+        [
+          {
+            "text": "uses"
+          },
+          {
+            "text": "Shared"
+          },
+          {
+            "text": "_0_alias.rs"
+          },
+          {
+            "text": "Shared"
+          }
+        ]
+      ]
+    },
+    {
+      "action": "sqlite_rows",
+      "name": "type_scope_ladder_keeps_prelude_result_external",
+      "path": "$work/fast.db",
+      "sql": "select\n           (select count(*) from resolved_type_edge where owner_name = 'prelude_result' and target_name = 'Result'),\n           (select count(*) from resolved_type_edge where owner_name = 'local_result' and target_name = 'Result'),\n           (select count(*) from slow.resolved_type_edge where owner_name = 'local_result' and target_name = 'Result'),\n           (select count(*) from resolved_type_edge where owner_name = 'external_output' and target_name = 'Output'),\n           (select count(*) from resolved_type_edge where owner_name = 'bridged' and target_name = 'LocalThing'),\n           (select count(*) from slow.resolved_type_edge where owner_name = 'bridged' and target_name = 'LocalThing'),\n           (select count(*) from resolved_type_edge where owner_name = 'Generic' and target_name = 'Outer'),\n           (select count(*) from resolved_type_edge where owner_name = 'nested' and target_name = 'Output' and target_path like '%/_6_nested.rs')",
+      "expect": [
+        [
+          {
+            "integer": 0
+          },
+          {
+            "integer": 1
+          },
+          {
+            "integer": 1
+          },
+          {
+            "integer": 0
+          },
+          {
+            "integer": 1
+          },
+          {
+            "integer": 1
+          },
+          {
+            "integer": 0
+          },
+          {
+            "integer": 0
+          }
+        ]
+      ],
+      "attach": {
+        "slow": "$work/slow.db",
+        "absolute": "$work/absolute.db"
+      }
+    },
+    {
+      "action": "sqlite_rows",
+      "name": "type_scope_ladder_finds_local_body_annotation",
+      "path": "$work/fast.db",
+      "sql": "select\n           (select count(*) from resolved_type_edge where owner_name = 'local_annotation'\n              and target_name = 'LocalThing' and target_path like '%/_0_alias.rs'),\n           (select count(*) from slow.resolved_type_edge where owner_name = 'local_annotation'\n              and target_name = 'LocalThing' and target_path like '%/_0_alias.rs')",
+      "expect": [
+        [
+          {
+            "integer": 1
+          },
+          {
+            "integer": 1
+          }
+        ]
+      ],
+      "attach": {
+        "slow": "$work/slow.db",
+        "absolute": "$work/absolute.db"
+      }
+    },
+    {
+      "action": "sqlite_rows",
+      "name": "type_scope_ladder_finds_required_trait_signature",
+      "path": "$work/fast.db",
+      "sql": "select\n           (select count(*) from resolved_type_edge where owner_name = 'read'\n              and target_name = 'LocalThing' and target_path like '%/_0_alias.rs'),\n           (select count(*) from slow.resolved_type_edge where owner_name = 'read'\n              and target_name = 'LocalThing' and target_path like '%/_0_alias.rs')",
+      "expect": [
+        [
+          {
+            "integer": 2
+          },
+          {
+            "integer": 2
+          }
+        ]
+      ],
+      "attach": {
+        "slow": "$work/slow.db",
+        "absolute": "$work/absolute.db"
+      }
+    },
+    {
+      "action": "sqlite_rows",
+      "name": "type_scope_ladder_finds_impl_associated_type",
+      "path": "$work/fast.db",
+      "sql": "select\n           (select count(*) from resolved_type_edge where owner_name = 'Item'\n              and owner_path like '%/_9_assoc.rs' and target_name = 'LocalThing'\n              and target_path like '%/_0_alias.rs'),\n           (select count(*) from slow.resolved_type_edge where owner_name = 'Item'\n              and owner_path like '%/_9_assoc.rs' and target_name = 'LocalThing'\n              and target_path like '%/_0_alias.rs')",
+      "expect": [
+        [
+          {
+            "integer": 1
+          },
+          {
+            "integer": 1
+          }
+        ]
+      ],
+      "attach": {
+        "slow": "$work/slow.db",
+        "absolute": "$work/absolute.db"
+      }
+    },
+    {
+      "action": "sqlite_rows",
+      "name": "type_scope_ladder_finds_qualified_variant_field",
+      "path": "$work/fast.db",
+      "sql": "select\n           (select count(*) from resolved_type_edge where owner_name = 'Item'\n              and owner_path like '%/_10_variant.rs' and target_name = 'LocalThing'\n              and target_path like '%/_0_alias.rs'),\n           (select count(*) from slow.resolved_type_edge where owner_name = 'Item'\n              and owner_path like '%/_10_variant.rs' and target_name = 'LocalThing'\n              and target_path like '%/_0_alias.rs')",
+      "expect": [
+        [
+          {
+            "integer": 1
+          },
+          {
+            "integer": 1
+          }
+        ]
+      ],
+      "attach": {
+        "slow": "$work/slow.db",
+        "absolute": "$work/absolute.db"
+      }
+    },
+    {
+      "action": "sqlite_rows",
+      "name": "type_scope_ladder_follows_crate_module_reexport",
+      "path": "$work/fast.db",
+      "sql": "select\n           (select count(*) from resolved_type_edge where owner_name = 'reexport_chain'\n              and target_name = 'PubThing' and target_path like '%/_11_reexport.rs'),\n           (select count(*) from slow.resolved_type_edge where owner_name = 'reexport_chain'\n              and target_name = 'PubThing' and target_path like '%/_11_reexport.rs'),\n           (select count(*) from absolute.resolved_type_edge where owner_name = 'reexport_chain'\n              and target_name = 'PubThing' and target_path like '%/_11_reexport.rs'),\n           (select count(*) from absolute.resolved_type_edge where owner_name = 'external_shadow'\n              and target_name = 'String' and target_path like '%/_12_other.rs')",
+      "expect": [
+        [
+          {
+            "integer": 1
+          },
+          {
+            "integer": 1
+          },
+          {
+            "integer": 1
+          },
+          {
+            "integer": 0
+          }
+        ]
+      ],
+      "attach": {
+        "slow": "$work/slow.db",
+        "absolute": "$work/absolute.db"
+      }
+    },
+    {
+      "action": "sqlite_rows",
+      "name": "type_scope_ladder_resolves_impl_self_references",
+      "path": "$work/fast.db",
+      "sql": "select\n           (select count(*) from resolved_type_edge where owner_name = 'wrap'\n              and target_name = 'SelfType' and target_path like '%/_13_self.rs'),\n           (select count(*) from resolved_type_edge where owner_name = 'annotate'\n              and target_name = 'SelfType' and target_path like '%/_13_self.rs')",
+      "expect": [
+        [
+          {
+            "integer": 2
+          },
+          {
+            "integer": 1
+          }
+        ]
+      ],
+      "attach": {
+        "slow": "$work/slow.db",
+        "absolute": "$work/absolute.db"
+      }
+    },
+    {
+      "action": "sqlite_rows",
+      "name": "type_scope_ladder_collects_expression_type_arguments",
+      "path": "$work/fast.db",
+      "sql": "select\n           (select count(*) from resolved_type_edge where owner_name = 'turbofish'\n              and target_name = 'LocalThing' and target_path like '%/_0_alias.rs'),\n           (select count(*) from resolved_type_edge where owner_name = 'turbofish'\n              and target_name = 'String' and target_path like '%/_12_other.rs')",
+      "expect": [
+        [
+          {
+            "integer": 1
+          },
+          {
+            "integer": 0
+          }
+        ]
+      ],
+      "attach": {
+        "slow": "$work/slow.db",
+        "absolute": "$work/absolute.db"
+      }
+    }
+  ]
+}

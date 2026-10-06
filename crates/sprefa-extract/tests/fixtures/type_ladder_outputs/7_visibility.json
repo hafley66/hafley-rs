@@ -1,0 +1,209 @@
+{
+  "steps": [
+    {
+      "action": "run",
+      "name": "fast_fast",
+      "cwd": "$manifest",
+      "arguments": [
+        "fast",
+        "$manifest/tests/fixtures/rust_visibility",
+        "--sqlite",
+        "$work/fast.db"
+      ],
+      "expect_exit_code": 0,
+      "unasserted_stdout": true,
+      "unasserted_stderr": true,
+      "raw_stdout": true
+    },
+    {
+      "action": "sqlite_rows",
+      "name": "00_normal_type_probe",
+      "path": "$work/fast.db",
+      "sql": "select count(*) from resolved_type_edge where owner_name = ?1 and target_name = ?2\n                   and owner_path like '%' || ?3 and target_path like '%' || ?4",
+      "expect": [
+        [
+          {
+            "integer": 1
+          }
+        ]
+      ],
+      "parameters": [
+        "normal_type_probe",
+        "NormalType",
+        "/rust_visibility/app/src/lib.rs",
+        "/normal_dep/src/lib.rs"
+      ]
+    },
+    {
+      "action": "sqlite_rows",
+      "name": "01_dev_type_probe",
+      "path": "$work/fast.db",
+      "sql": "select count(*) from resolved_type_edge where owner_name = ?1 and target_name = ?2\n                   and owner_path like '%' || ?3 and target_path like '%' || ?4",
+      "expect": [
+        [
+          {
+            "integer": 0
+          }
+        ]
+      ],
+      "parameters": [
+        "dev_type_probe",
+        "DevType",
+        "/rust_visibility/app/src/lib.rs",
+        "/dev_dep/src/lib.rs"
+      ]
+    },
+    {
+      "action": "sqlite_rows",
+      "name": "02_build_type_probe",
+      "path": "$work/fast.db",
+      "sql": "select count(*) from resolved_type_edge where owner_name = ?1 and target_name = ?2\n                   and owner_path like '%' || ?3 and target_path like '%' || ?4",
+      "expect": [
+        [
+          {
+            "integer": 0
+          }
+        ]
+      ],
+      "parameters": [
+        "build_type_probe",
+        "BuildType",
+        "/rust_visibility/app/src/lib.rs",
+        "/build_dep/src/lib.rs"
+      ]
+    },
+    {
+      "action": "sqlite_rows",
+      "name": "03_build_type_probe",
+      "path": "$work/fast.db",
+      "sql": "select count(*) from resolved_type_edge where owner_name = ?1 and target_name = ?2\n                   and owner_path like '%' || ?3 and target_path like '%' || ?4",
+      "expect": [
+        [
+          {
+            "integer": 1
+          }
+        ]
+      ],
+      "parameters": [
+        "build_type_probe",
+        "BuildType",
+        "/rust_visibility/app/build.rs",
+        "/build_dep/src/lib.rs"
+      ]
+    },
+    {
+      "action": "sqlite_rows",
+      "name": "04_dev_probe",
+      "path": "$work/fast.db",
+      "sql": "select count(*) from resolved_type_edge where owner_name = ?1 and target_name = ?2\n                   and owner_path like '%' || ?3 and target_path like '%' || ?4",
+      "expect": [
+        [
+          {
+            "integer": 1
+          }
+        ]
+      ],
+      "parameters": [
+        "dev_probe",
+        "DevType",
+        "/rust_visibility/app/tests/0_dev.rs",
+        "/dev_dep/src/lib.rs"
+      ]
+    },
+    {
+      "action": "sqlite_rows",
+      "name": "05_ForeignSlot",
+      "path": "$work/fast.db",
+      "sql": "select count(*) from resolved_type_edge where owner_name = ?1 and target_name = ?2\n                   and owner_path like '%' || ?3 and target_path like '%' || ?4",
+      "expect": [
+        [
+          {
+            "integer": 0
+          }
+        ]
+      ],
+      "parameters": [
+        "ForeignSlot",
+        "Item",
+        "/rust_visibility/app/src/lib.rs",
+        "/dev_dep/src/lib.rs"
+      ]
+    },
+    {
+      "action": "sqlite_rows",
+      "name": "06_LocalSlot",
+      "path": "$work/fast.db",
+      "sql": "select count(*) from resolved_type_edge where owner_name = ?1 and target_name = ?2\n                   and owner_path like '%' || ?3 and target_path like '%' || ?4",
+      "expect": [
+        [
+          {
+            "integer": 1
+          }
+        ]
+      ],
+      "parameters": [
+        "LocalSlot",
+        "Item",
+        "/rust_visibility/app/src/lib.rs",
+        "/rust_visibility/app/src/lib.rs"
+      ]
+    },
+    {
+      "action": "sqlite_rows",
+      "name": "07_wrong_branch",
+      "path": "$work/fast.db",
+      "sql": "select count(*) from resolved_type_edge where owner_name = ?1 and target_name = ?2\n                   and owner_path like '%' || ?3 and target_path like '%' || ?4",
+      "expect": [
+        [
+          {
+            "integer": 0
+          }
+        ]
+      ],
+      "parameters": [
+        "wrong_branch",
+        "Widget",
+        "/rust_visibility/app/src/lib.rs",
+        "/rust_visibility/app/src/c/0_b.rs"
+      ]
+    },
+    {
+      "action": "sqlite_rows",
+      "name": "08_missing_branch",
+      "path": "$work/fast.db",
+      "sql": "select count(*) from resolved_type_edge where owner_name = ?1 and target_name = ?2\n                   and owner_path like '%' || ?3 and target_path like '%' || ?4",
+      "expect": [
+        [
+          {
+            "integer": 0
+          }
+        ]
+      ],
+      "parameters": [
+        "missing_branch",
+        "Widget",
+        "/rust_visibility/app/src/lib.rs",
+        "/rust_visibility/app/src/c/0_b.rs"
+      ]
+    },
+    {
+      "action": "sqlite_rows",
+      "name": "09_right_branch",
+      "path": "$work/fast.db",
+      "sql": "select count(*) from resolved_type_edge where owner_name = ?1 and target_name = ?2\n                   and owner_path like '%' || ?3 and target_path like '%' || ?4",
+      "expect": [
+        [
+          {
+            "integer": 1
+          }
+        ]
+      ],
+      "parameters": [
+        "right_branch",
+        "Widget",
+        "/rust_visibility/app/src/lib.rs",
+        "/rust_visibility/app/src/c/0_b.rs"
+      ]
+    }
+  ]
+}

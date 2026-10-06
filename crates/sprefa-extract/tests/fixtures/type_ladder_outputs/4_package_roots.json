@@ -1,0 +1,35 @@
+{
+  "steps": [
+    {
+      "action": "run",
+      "name": "fast_fast",
+      "cwd": "$manifest",
+      "arguments": [
+        "fast",
+        "tests/fixtures/rust_rename",
+        "--sqlite",
+        "$work/fast.db"
+      ],
+      "expect_exit_code": 0,
+      "unasserted_stdout": true,
+      "unasserted_stderr": true,
+      "raw_stdout": true
+    },
+    {
+      "action": "sqlite_rows",
+      "name": "displaced_module_types_respect_cargo_package_roots",
+      "path": "$work/fast.db",
+      "sql": "select\n           (select count(*) from resolved_type_edge where owner_name = 'build'\n              and owner_path like '%/path/after/src/lib.rs' and target_name = 'Tool'\n              and target_path like '%/path/after/src/elsewhere/impl.rs'),\n           (select count(*) from resolved_type_edge where owner_name = 'build'\n              and owner_path like '%/path/after/src/lib.rs' and target_name = 'Tool'\n              and target_path like '%/fnuse/after/src/util.rs')",
+      "expect": [
+        [
+          {
+            "integer": 0
+          },
+          {
+            "integer": 0
+          }
+        ]
+      ]
+    }
+  ]
+}

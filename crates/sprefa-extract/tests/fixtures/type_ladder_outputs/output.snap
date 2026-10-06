@@ -1,0 +1,521 @@
+---
+source: tests/support/2_fixture_runner.rs
+---
+{
+  "0_scope": {
+    "fast_absolute": {
+      "exit_code": 0
+    },
+    "fast_fast": {
+      "exit_code": 0
+    },
+    "residual_type_candidates_have_declared_targets": {
+      "rows": [
+        [
+          {
+            "text": "generic"
+          },
+          {
+            "text": "NestedGeneric"
+          },
+          {
+            "text": "_15_residual.rs"
+          },
+          {
+            "text": "ResidualTarget"
+          }
+        ],
+        [
+          {
+            "text": "impl"
+          },
+          {
+            "text": "Residual"
+          },
+          {
+            "text": "_15_residual.rs"
+          },
+          {
+            "text": "AliasSlot"
+          }
+        ],
+        [
+          {
+            "text": "impl"
+          },
+          {
+            "text": "Shared"
+          },
+          {
+            "text": "_0_alias.rs"
+          },
+          {
+            "text": "SharedTrait"
+          }
+        ],
+        [
+          {
+            "text": "param"
+          },
+          {
+            "text": "cross_module"
+          },
+          {
+            "text": "_0_alias.rs"
+          },
+          {
+            "text": "Shared"
+          }
+        ],
+        [
+          {
+            "text": "param"
+          },
+          {
+            "text": "explicit"
+          },
+          {
+            "text": "_15_residual.rs"
+          },
+          {
+            "text": "Residual"
+          }
+        ],
+        [
+          {
+            "text": "uses"
+          },
+          {
+            "text": "Item"
+          },
+          {
+            "text": "_15_residual.rs"
+          },
+          {
+            "text": "ResidualTarget"
+          }
+        ],
+        [
+          {
+            "text": "uses"
+          },
+          {
+            "text": "Residual"
+          },
+          {
+            "text": "_15_residual.rs"
+          },
+          {
+            "text": "Residual"
+          }
+        ],
+        [
+          {
+            "text": "uses"
+          },
+          {
+            "text": "Shared"
+          },
+          {
+            "text": "_0_alias.rs"
+          },
+          {
+            "text": "Shared"
+          }
+        ]
+      ]
+    },
+    "slow_slow": {
+      "exit_code": 0
+    },
+    "type_scope_ladder_collects_expression_type_arguments": {
+      "rows": [
+        [
+          {
+            "integer": 1
+          },
+          {
+            "integer": 0
+          }
+        ]
+      ]
+    },
+    "type_scope_ladder_finds_impl_associated_type": {
+      "rows": [
+        [
+          {
+            "integer": 1
+          },
+          {
+            "integer": 1
+          }
+        ]
+      ]
+    },
+    "type_scope_ladder_finds_local_body_annotation": {
+      "rows": [
+        [
+          {
+            "integer": 1
+          },
+          {
+            "integer": 1
+          }
+        ]
+      ]
+    },
+    "type_scope_ladder_finds_qualified_variant_field": {
+      "rows": [
+        [
+          {
+            "integer": 1
+          },
+          {
+            "integer": 1
+          }
+        ]
+      ]
+    },
+    "type_scope_ladder_finds_required_trait_signature": {
+      "rows": [
+        [
+          {
+            "integer": 2
+          },
+          {
+            "integer": 2
+          }
+        ]
+      ]
+    },
+    "type_scope_ladder_follows_crate_module_reexport": {
+      "rows": [
+        [
+          {
+            "integer": 1
+          },
+          {
+            "integer": 1
+          },
+          {
+            "integer": 1
+          },
+          {
+            "integer": 0
+          }
+        ]
+      ]
+    },
+    "type_scope_ladder_keeps_prelude_result_external": {
+      "rows": [
+        [
+          {
+            "integer": 0
+          },
+          {
+            "integer": 1
+          },
+          {
+            "integer": 1
+          },
+          {
+            "integer": 0
+          },
+          {
+            "integer": 1
+          },
+          {
+            "integer": 1
+          },
+          {
+            "integer": 0
+          },
+          {
+            "integer": 0
+          }
+        ]
+      ]
+    },
+    "type_scope_ladder_resolves_impl_self_references": {
+      "rows": [
+        [
+          {
+            "integer": 2
+          },
+          {
+            "integer": 1
+          }
+        ]
+      ]
+    }
+  },
+  "1_ladder": {
+    "fast_fast": {
+      "exit_code": 0
+    },
+    "slow_slow": {
+      "exit_code": 0
+    },
+    "type_ladder_fast_and_slow": {
+      "rows": [
+        [
+          {
+            "text": "_1_none.rs  returns  clone         -> _1_none.rs:NoField fs\n_1_none.rs  uses     NoField       -> _1_none.rs:NoField f-\n_1_none.rs  uses     clone         -> _1_none.rs:NoField fs\n_2_one.rs   field    OneField      -> _0_types.rs:A  fs\n_2_one.rs   field    OneVariant    -> _0_types.rs:A  fs\n_2_one.rs   generic  OneBound      -> _0_types.rs:T  fs\n_2_one.rs   generic  OneField      -> _0_types.rs:A  fs\n_2_one.rs   generic  one_bound     -> _0_types.rs:T  fs\n_2_one.rs   impl     OneField      -> _0_types.rs:T  fs\n_2_one.rs   param    from          -> _0_types.rs:A  fs\n_2_one.rs   param    one_param     -> _0_types.rs:A  fs\n_2_one.rs   returns  from          -> _2_one.rs:OneField fs\n_2_one.rs   returns  one_return    -> _0_types.rs:A  fs\n_2_one.rs   uses     OneAlias      -> _0_types.rs:A  fs\n_2_one.rs   uses     OneField      -> _2_one.rs:OneField f-\n_2_one.rs   uses     from          -> _2_one.rs:OneField fs\n_3_many.rs  field    ManyFields    -> _0_types.rs:A  fs\n_3_many.rs  field    ManyFields    -> _0_types.rs:B  fs\n_3_many.rs  field    ManyFields    -> _0_types.rs:C  fs\n_3_many.rs  field    ManyVariants  -> _0_types.rs:A  fs\n_3_many.rs  field    ManyVariants  -> _0_types.rs:B  fs\n_3_many.rs  field    ManyVariants  -> _0_types.rs:C  fs\n_3_many.rs  generic  ManyBounds    -> _0_types.rs:T  fs\n_3_many.rs  generic  ManyBounds    -> _0_types.rs:U  fs\n_3_many.rs  generic  many_bounds   -> _0_types.rs:T  fs\n_3_many.rs  generic  many_bounds   -> _0_types.rs:U  fs\n_3_many.rs  impl     ManyFields    -> _0_types.rs:T  fs\n_3_many.rs  impl     ManyFields    -> _0_types.rs:U  fs\n_3_many.rs  param    many_params   -> _0_types.rs:A  fs\n_3_many.rs  param    many_params   -> _0_types.rs:B  fs\n_3_many.rs  param    many_params   -> _0_types.rs:C  fs\n_3_many.rs  param    method        -> _0_types.rs:B  fs\n_3_many.rs  returns  many_returns  -> _0_types.rs:A  fs\n_3_many.rs  returns  many_returns  -> _0_types.rs:B  fs\n_3_many.rs  returns  method        -> _0_types.rs:C  fs\n_3_many.rs  uses     ManyAliasA    -> _0_types.rs:A  fs\n_3_many.rs  uses     ManyAliasB    -> _0_types.rs:B  fs\n_3_many.rs  uses     ManyFields    -> _3_many.rs:ManyFields f-\n_4_nested.rs field    Nest          -> _0_types.rs:A  fs\n_4_nested.rs field    Nest          -> _0_types.rs:B  fs\n_4_nested.rs field    Nest          -> _0_types.rs:C  fs\n_4_nested.rs generic  assoc_bound   -> _0_types.rs:B  fs\n_4_nested.rs generic  assoc_bound   -> _0_types.rs:V  fs\n_4_nested.rs generic  gat_use       -> _0_types.rs:W  fs\n_4_nested.rs generic  projection    -> _0_types.rs:V  fs\n_4_nested.rs impl     Nest          -> _0_types.rs:V  fs\n_4_nested.rs impl     Nest          -> _0_types.rs:W  fs\n_4_nested.rs param    gat_use       -> _0_types.rs:C  fs\n_4_nested.rs param    gat_use       -> _0_types.rs:Out fs\n_4_nested.rs param    projection    -> _0_types.rs:Out fs\n_4_nested.rs uses     Nest          -> _4_nested.rs:Nest fs\n_4_nested.rs uses     Out           -> _0_types.rs:A  fs"
+          }
+        ]
+      ]
+    }
+  },
+  "2_preserves_declared_fixture_dependency": {
+    "fast_fast": {
+      "exit_code": 0
+    },
+    "type_scope_ladder_preserves_declared_fixture_dependency": {
+      "rows": [
+        [
+          {
+            "integer": 6
+          }
+        ]
+      ]
+    }
+  },
+  "3_keeps_uncrated_std_import_external": {
+    "fast_fast": {
+      "exit_code": 0
+    },
+    "type_scope_ladder_keeps_uncrated_std_import_external": {
+      "rows": [
+        [
+          {
+            "integer": 0
+          }
+        ]
+      ]
+    }
+  },
+  "4_package_roots": {
+    "displaced_module_types_respect_cargo_package_roots": {
+      "rows": [
+        [
+          {
+            "integer": 0
+          },
+          {
+            "integer": 0
+          }
+        ]
+      ]
+    },
+    "fast_fast": {
+      "exit_code": 0
+    }
+  },
+  "5_package_roots": {
+    "displaced_module_types_respect_cargo_package_roots": {
+      "rows": [
+        [
+          {
+            "integer": 0
+          },
+          {
+            "integer": 0
+          }
+        ]
+      ]
+    },
+    "fast_fast": {
+      "exit_code": 0
+    }
+  },
+  "6_visibility": {
+    "00_normal_type_probe": {
+      "rows": [
+        [
+          {
+            "integer": 1
+          }
+        ]
+      ]
+    },
+    "01_dev_type_probe": {
+      "rows": [
+        [
+          {
+            "integer": 0
+          }
+        ]
+      ]
+    },
+    "02_build_type_probe": {
+      "rows": [
+        [
+          {
+            "integer": 0
+          }
+        ]
+      ]
+    },
+    "03_build_type_probe": {
+      "rows": [
+        [
+          {
+            "integer": 1
+          }
+        ]
+      ]
+    },
+    "04_dev_probe": {
+      "rows": [
+        [
+          {
+            "integer": 1
+          }
+        ]
+      ]
+    },
+    "05_ForeignSlot": {
+      "rows": [
+        [
+          {
+            "integer": 0
+          }
+        ]
+      ]
+    },
+    "06_LocalSlot": {
+      "rows": [
+        [
+          {
+            "integer": 1
+          }
+        ]
+      ]
+    },
+    "07_wrong_branch": {
+      "rows": [
+        [
+          {
+            "integer": 0
+          }
+        ]
+      ]
+    },
+    "08_missing_branch": {
+      "rows": [
+        [
+          {
+            "integer": 0
+          }
+        ]
+      ]
+    },
+    "09_right_branch": {
+      "rows": [
+        [
+          {
+            "integer": 1
+          }
+        ]
+      ]
+    },
+    "fast_fast": {
+      "exit_code": 0
+    }
+  },
+  "7_visibility": {
+    "00_normal_type_probe": {
+      "rows": [
+        [
+          {
+            "integer": 1
+          }
+        ]
+      ]
+    },
+    "01_dev_type_probe": {
+      "rows": [
+        [
+          {
+            "integer": 0
+          }
+        ]
+      ]
+    },
+    "02_build_type_probe": {
+      "rows": [
+        [
+          {
+            "integer": 0
+          }
+        ]
+      ]
+    },
+    "03_build_type_probe": {
+      "rows": [
+        [
+          {
+            "integer": 1
+          }
+        ]
+      ]
+    },
+    "04_dev_probe": {
+      "rows": [
+        [
+          {
+            "integer": 1
+          }
+        ]
+      ]
+    },
+    "05_ForeignSlot": {
+      "rows": [
+        [
+          {
+            "integer": 0
+          }
+        ]
+      ]
+    },
+    "06_LocalSlot": {
+      "rows": [
+        [
+          {
+            "integer": 1
+          }
+        ]
+      ]
+    },
+    "07_wrong_branch": {
+      "rows": [
+        [
+          {
+            "integer": 0
+          }
+        ]
+      ]
+    },
+    "08_missing_branch": {
+      "rows": [
+        [
+          {
+            "integer": 0
+          }
+        ]
+      ]
+    },
+    "09_right_branch": {
+      "rows": [
+        [
+          {
+            "integer": 1
+          }
+        ]
+      ]
+    },
+    "fast_fast": {
+      "exit_code": 0
+    }
+  }
+}

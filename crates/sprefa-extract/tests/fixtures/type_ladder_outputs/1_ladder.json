@@ -1,0 +1,55 @@
+{
+  "steps": [
+    {
+      "action": "run",
+      "name": "fast_fast",
+      "cwd": "$manifest",
+      "arguments": [
+        "fast",
+        "tests/fixtures/type_ladder/src",
+        "--sqlite",
+        "$work/fast.db"
+      ],
+      "expect_exit_code": 0,
+      "unasserted_stdout": true,
+      "unasserted_stderr": true,
+      "raw_stdout": true
+    },
+    {
+      "action": "run",
+      "name": "slow_slow",
+      "cwd": "$manifest",
+      "arguments": [
+        "slow",
+        "tests/fixtures/type_ladder/src",
+        "--root",
+        "tests/fixtures/type_ladder",
+        "--scip-index",
+        "tests/fixtures/type_ladder/index.scip",
+        "--no-checker",
+        "--sqlite",
+        "$work/slow.db"
+      ],
+      "expect_exit_code": 0,
+      "unasserted_stdout": true,
+      "unasserted_stderr": true,
+      "raw_stdout": true
+    },
+    {
+      "action": "sqlite_rows",
+      "name": "type_ladder_fast_and_slow",
+      "path": "$work/fast.db",
+      "sql": "\nwith f as (select distinct replace(owner_path, rtrim(owner_path, replace(owner_path, '/', '')), '') file,\n                  kind, owner_name, replace(target_path, rtrim(target_path, replace(target_path, '/', '')), '') || ':' || target_name target\n           from resolved_type_edge),\n     s as (select distinct replace(owner_path, rtrim(owner_path, replace(owner_path, '/', '')), '') file,\n                  kind, owner_name, replace(target_path, rtrim(target_path, replace(target_path, '/', '')), '') || ':' || target_name target\n           from slow.resolved_type_edge),\n     u as (select * from f union select * from s)\nselect group_concat(line, char(10)) from (\n  select printf('%-11s %-8s %-13s -> %-14s %s%s', file, kind, owner_name, target,\n                iif((file, kind, owner_name, target) in (select * from f), 'f', '-'),\n                iif((file, kind, owner_name, target) in (select * from s), 's', '-')) line\n  from u order by file, kind, owner_name, target)",
+      "expect": [
+        [
+          {
+            "text": "_1_none.rs  returns  clone         -> _1_none.rs:NoField fs\n_1_none.rs  uses     NoField       -> _1_none.rs:NoField f-\n_1_none.rs  uses     clone         -> _1_none.rs:NoField fs\n_2_one.rs   field    OneField      -> _0_types.rs:A  fs\n_2_one.rs   field    OneVariant    -> _0_types.rs:A  fs\n_2_one.rs   generic  OneBound      -> _0_types.rs:T  fs\n_2_one.rs   generic  OneField      -> _0_types.rs:A  fs\n_2_one.rs   generic  one_bound     -> _0_types.rs:T  fs\n_2_one.rs   impl     OneField      -> _0_types.rs:T  fs\n_2_one.rs   param    from          -> _0_types.rs:A  fs\n_2_one.rs   param    one_param     -> _0_types.rs:A  fs\n_2_one.rs   returns  from          -> _2_one.rs:OneField fs\n_2_one.rs   returns  one_return    -> _0_types.rs:A  fs\n_2_one.rs   uses     OneAlias      -> _0_types.rs:A  fs\n_2_one.rs   uses     OneField      -> _2_one.rs:OneField f-\n_2_one.rs   uses     from          -> _2_one.rs:OneField fs\n_3_many.rs  field    ManyFields    -> _0_types.rs:A  fs\n_3_many.rs  field    ManyFields    -> _0_types.rs:B  fs\n_3_many.rs  field    ManyFields    -> _0_types.rs:C  fs\n_3_many.rs  field    ManyVariants  -> _0_types.rs:A  fs\n_3_many.rs  field    ManyVariants  -> _0_types.rs:B  fs\n_3_many.rs  field    ManyVariants  -> _0_types.rs:C  fs\n_3_many.rs  generic  ManyBounds    -> _0_types.rs:T  fs\n_3_many.rs  generic  ManyBounds    -> _0_types.rs:U  fs\n_3_many.rs  generic  many_bounds   -> _0_types.rs:T  fs\n_3_many.rs  generic  many_bounds   -> _0_types.rs:U  fs\n_3_many.rs  impl     ManyFields    -> _0_types.rs:T  fs\n_3_many.rs  impl     ManyFields    -> _0_types.rs:U  fs\n_3_many.rs  param    many_params   -> _0_types.rs:A  fs\n_3_many.rs  param    many_params   -> _0_types.rs:B  fs\n_3_many.rs  param    many_params   -> _0_types.rs:C  fs\n_3_many.rs  param    method        -> _0_types.rs:B  fs\n_3_many.rs  returns  many_returns  -> _0_types.rs:A  fs\n_3_many.rs  returns  many_returns  -> _0_types.rs:B  fs\n_3_many.rs  returns  method        -> _0_types.rs:C  fs\n_3_many.rs  uses     ManyAliasA    -> _0_types.rs:A  fs\n_3_many.rs  uses     ManyAliasB    -> _0_types.rs:B  fs\n_3_many.rs  uses     ManyFields    -> _3_many.rs:ManyFields f-\n_4_nested.rs field    Nest          -> _0_types.rs:A  fs\n_4_nested.rs field    Nest          -> _0_types.rs:B  fs\n_4_nested.rs field    Nest          -> _0_types.rs:C  fs\n_4_nested.rs generic  assoc_bound   -> _0_types.rs:B  fs\n_4_nested.rs generic  assoc_bound   -> _0_types.rs:V  fs\n_4_nested.rs generic  gat_use       -> _0_types.rs:W  fs\n_4_nested.rs generic  projection    -> _0_types.rs:V  fs\n_4_nested.rs impl     Nest          -> _0_types.rs:V  fs\n_4_nested.rs impl     Nest          -> _0_types.rs:W  fs\n_4_nested.rs param    gat_use       -> _0_types.rs:C  fs\n_4_nested.rs param    gat_use       -> _0_types.rs:Out fs\n_4_nested.rs param    projection    -> _0_types.rs:Out fs\n_4_nested.rs uses     Nest          -> _4_nested.rs:Nest fs\n_4_nested.rs uses     Out           -> _0_types.rs:A  fs"
+          }
+        ]
+      ],
+      "attach": {
+        "slow": "$work/slow.db"
+      }
+    }
+  ]
+}

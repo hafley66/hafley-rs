@@ -1,0 +1,32 @@
+{
+  "steps": [
+    {
+      "action": "run",
+      "name": "fast_fast",
+      "cwd": "$manifest",
+      "arguments": [
+        "fast",
+        "tests/fixtures/type_ladder_uncrated",
+        "--sqlite",
+        "$work/fast.db"
+      ],
+      "expect_exit_code": 0,
+      "unasserted_stdout": true,
+      "unasserted_stderr": true,
+      "raw_stdout": true
+    },
+    {
+      "action": "sqlite_rows",
+      "name": "type_scope_ladder_keeps_uncrated_std_import_external",
+      "path": "$work/fast.db",
+      "sql": "select count(*) from resolved_type_edge where owner_name = 'probe' and target_name = 'Output'",
+      "expect": [
+        [
+          {
+            "integer": 0
+          }
+        ]
+      ]
+    }
+  ]
+}
