@@ -113,6 +113,92 @@ impl RustModulePlaces {
         }
     }
 
+    /// Spell an out-of-line declaration against the Names module directory.
+    /// `declarer` is its pre-edit file; `lands_at` is that file after the batch.
+    /// Preserve other attributes and the written visibility while re-aiming or
+    /// removing `#[path]`. A rename changes the identifier and keeps the file.
+    pub fn declaration(
+        &self,
+        declarer: &str,
+        lands_at: &str,
+        chain: &[String],
+        name: &str,
+        target: &str,
+        written: &str,
+    ) -> Option<String> {
+        use crate::lang::rust::syn_span;
+        use crate::move_cx::relative_between;
+        use syn::spanned::Spanned;
+
+        let module: syn::ItemMod = syn::parse_str(written).ok()?;
+        if module.content.is_some() {
+            return None;
+        }
+        let directory = self.directory(declarer)?;
+        let old_file = Path::new(declarer);
+        let new_file = Path::new(lands_at);
+        let old_parent = old_file.parent()?.to_str()?;
+        let new_parent = new_file.parent()?.to_str()?;
+        let directory = if directory == old_file.with_extension("").to_str()? {
+            new_file.with_extension("").to_str()?.to_string()
+        } else {
+            let suffix = Path::new(&directory).strip_prefix(old_parent).ok()?;
+            Path::new(new_parent).join(suffix).to_str()?.to_string()
+        };
+        let base = chain
+            .iter()
+            .fold(PathBuf::from(directory), |dir, block| dir.join(block));
+        let natural = [
+            base.join(format!("{}.rs", name.trim_start_matches("r#"))),
+            base.join(name.trim_start_matches("r#")).join("mod.rs"),
+        ]
+        .contains(&PathBuf::from(target));
+        let aim = (!natural).then(|| {
+            let base = if chain.is_empty() {
+                Path::new(new_parent)
+            } else {
+                base.as_path()
+            };
+            format!("{:?}", relative_between(base.to_str().unwrap(), target))
+        });
+        let mut edits = Vec::new();
+        let ident = syn_span(module.ident.span());
+        edits.push((ident.start as usize, ident.end() as usize, name.to_string()));
+        let attr = module
+            .attrs
+            .iter()
+            .find(|attr| attr.path().is_ident("path"));
+        match (attr, &aim) {
+            (Some(attr), Some(aim)) => {
+                let syn::Meta::NameValue(pair) = &attr.meta else {
+                    return None;
+                };
+                let span = syn_span(pair.value.span());
+                edits.push((span.start as usize, span.end() as usize, aim.clone()));
+            }
+            (Some(attr), None) => {
+                let span = syn_span(attr.span());
+                let end = written[span.end() as usize..]
+                    .char_indices()
+                    .find(|(_, ch)| !ch.is_whitespace())
+                    .map_or(written.len(), |(at, _)| span.end() as usize + at);
+                edits.push((span.start as usize, end, String::new()));
+            }
+            _ => {}
+        }
+        edits.sort_by_key(|(start, _, _)| std::cmp::Reverse(*start));
+        let mut declaration = written.to_string();
+        for (start, end, text) in edits {
+            declaration.replace_range(start..end, &text);
+        }
+        if attr.is_none() {
+            if let Some(aim) = aim {
+                declaration = format!("#[path = {aim}] {declaration}");
+            }
+        }
+        Some(declaration)
+    }
+
     pub fn files(&self, root: &str, module: &[String]) -> Vec<String> {
         let root = self.root.join(root);
         let mut files: Vec<_> = self

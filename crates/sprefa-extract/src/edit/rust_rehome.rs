@@ -29,7 +29,7 @@ use syn::spanned::Spanned;
 
 use crate::edit::rust_module_places::RustModulePlaces;
 use crate::lang::rust::{syn_span, RustSource};
-use crate::move_cx::{dirname, join_rel, relative_between, stem, MoveCx};
+use crate::move_cx::{dirname, join_rel, relative_between, MoveCx};
 use crate::project::extract_pool;
 use crate::types::LangKind;
 
@@ -640,40 +640,6 @@ fn use_runs(
 
 // ── rustc's module-file law ─────────────────────────────────────────────────
 
-/// The directory a file's child `mod` decls resolve against: a crate root and a
-/// `mod.rs` own theirs, every other file owns one named after itself.
-fn module_dir(rel: &str, roots: &RustModulePlaces) -> String {
-    if let Some(directory) = roots.directory(rel) {
-        return directory;
-    }
-    if is_mod_rs(rel, roots) {
-        dirname(rel).to_string()
-    } else {
-        join_rel(dirname(rel), &stem(rel))
-    }
-}
-
-fn is_mod_rs(rel: &str, roots: &RustModulePlaces) -> bool {
-    stem(rel) == "mod" || roots.contains(rel)
-}
-
-/// The directory the decl itself resolves against: the declaring file's module
-/// directory, one level deeper per enclosing inline `mod` block.
-fn decl_base(rel: &str, chain: &[String], roots: &RustModulePlaces) -> String {
-    chain
-        .iter()
-        .fold(module_dir(rel, roots), |dir, block| join_rel(&dir, block))
-}
-
-/// The directory a `#[path]` on the decl resolves against. Outside an inline
-/// block that is the declaring FILE's directory, not its module directory.
-fn attr_base(rel: &str, chain: &[String], roots: &RustModulePlaces) -> String {
-    match chain.is_empty() {
-        true => dirname(rel).to_string(),
-        false => decl_base(rel, chain, roots),
-    }
-}
-
 /// Where rustc looks for `mod name;` declared against `base`, in probe order.
 fn natural_paths(base: &str, name: &str) -> [String; 2] {
     [
@@ -694,30 +660,13 @@ fn resolve_decl(
 }
 
 fn decl_ref(rel: &str, decl: &ModDecl, target: &str) -> ImportRef {
-    match &decl.attr {
-        Some((span, _)) => ImportRef {
-            importer: rel.to_string(),
-            literal: *span,
-            text: slice_of(&decl.text, decl.item, *span),
-            target: target.to_string(),
-            kind: PATH_ATTR,
-        },
-        None => ImportRef {
-            importer: rel.to_string(),
-            literal: decl.item,
-            text: decl.text.clone(),
-            target: target.to_string(),
-            kind: MOD_DECL,
-        },
+    ImportRef {
+        importer: rel.to_string(),
+        literal: decl.item,
+        text: decl.text.clone(),
+        target: target.to_string(),
+        kind: if decl.attr.is_some() { PATH_ATTR } else { MOD_DECL },
     }
-}
-
-/// `inner`'s bytes, read out of the item text `outer` spans.
-fn slice_of(text: &str, outer: Span, inner: Span) -> String {
-    let start = inner.start.saturating_sub(outer.start) as usize;
-    text.get(start..start + inner.len as usize)
-        .map(str::to_string)
-        .unwrap_or_default()
 }
 
 /// The decl `import_refs` recorded at `reference.literal`, re-derived off the
@@ -725,31 +674,19 @@ fn slice_of(text: &str, outer: Span, inner: Span) -> String {
 fn decl_at(cx: &MoveCx, reference: &ImportRef) -> Option<ModDecl> {
     let text = cx.text(&reference.importer)?;
     let scan = scan_file(&text)?;
-    scan.decls.into_iter().find(|decl| match &decl.attr {
-        Some((span, _)) => span.start == reference.literal.start,
-        None => decl.item.start == reference.literal.start,
-    })
+    scan.decls.into_iter().find(|decl| decl.item.start == reference.literal.start)
 }
 
 // ── the respells ────────────────────────────────────────────────────────────
 
-/// A `mod` decl whose file leaves the place rustc looks for it grows a
-/// `#[path]`; one that already carries a `#[path]` keeps it, re-aimed.
+/// Every declaration rewrite uses the Names-backed spelling, including
+/// removing an attribute when either default location holds the target.
 fn mod_respell(cx: &MoveCx, reference: &ImportRef) -> Option<String> {
-    let roots = crate_roots(cx);
     let decl = decl_at(cx, reference)?;
-    let importer = cx.after(&reference.importer);
-    let target = cx.after(&reference.target);
-    let aimed = relative_between(&attr_base(importer, &decl.chain, roots), target);
-    match reference.kind {
-        PATH_ATTR => Some(format!("\"{aimed}\"")),
-        _ => match natural_paths(&decl_base(importer, &decl.chain, roots), &decl.name)
-            .contains(&target.to_string())
-        {
-            true => None,
-            false => Some(format!("#[path = \"{aimed}\"] {}", decl.text)),
-        },
-    }
+    crate_roots(cx).declaration(
+        &reference.importer, cx.after(&reference.importer), &decl.chain,
+        &decl.name, cx.after(&reference.target), &decl.text,
+    )
 }
 
 /// An `include!` argument resolves against the including file's own directory,
@@ -796,9 +733,7 @@ struct Relocation {
     vis: String,
     /// The module name changes while its declaring parent stays in place.
     rename_in_place: bool,
-    /// The `#[path = ".."] ` the new parent needs when the destination file's
-    /// name is not the module's; empty when rustc's own probe finds it.
-    aim: String,
+    chain: Vec<String>,
 }
 
 /// The ref `import_refs` publishes and the bytes `respell` answers it with. A
@@ -988,10 +923,10 @@ fn build_relocate_plan(cx: &MoveCx) -> RelocatePlan {
 
     for (target, relocation) in &moves {
         if relocation.rename_in_place {
-            let replacement = relocation.decl_text.replace(
-                &format!("mod {}", relocation.old_name),
-                &format!("mod {}", relocation.name),
-            );
+            let Some(replacement) = crate_roots(cx).declaration(
+                &relocation.old_parent, cx.after(&relocation.old_parent), &relocation.chain,
+                &relocation.name, cx.after(target), &relocation.decl_text,
+            ) else { continue };
             plan.edits.insert(
                 (relocation.old_parent.clone(), relocation.decl.start),
                 RelocateEdit {
@@ -1178,10 +1113,11 @@ fn insert_decls(
                 (true, false) => String::new(),
             };
             let offset = insertion_offset(&text, &scan, &relocation.name);
-            lines
-                .entry(offset)
-                .or_default()
-                .push(format!("{}{vis}mod {};\n", relocation.aim, relocation.name));
+            let Some(declaration) = crate_roots(cx).declaration(
+                parent, cx.after(parent), &[], &relocation.name, cx.after(target),
+                &format!("{vis}mod {};", relocation.name),
+            ) else { continue };
+            lines.entry(offset).or_default().push(format!("{declaration}\n"));
             owners.entry(offset).or_insert_with(|| {
                 (
                     target.clone(),
@@ -1282,20 +1218,11 @@ fn plan_relocation(
         false => new_path.last().cloned().unwrap_or_else(|| old_name.clone()),
     };
     let candidates = parent_files(roots, &root, &new_path[..new_path.len() - 1]);
-    let Some((edit_at, lands_at)) = candidates
+    let Some(edit_at) = candidates
         .iter()
-        .find_map(|candidate| editable(cx, candidate).map(|pre| (pre, candidate.clone())))
+        .find_map(|candidate| editable(cx, candidate))
     else {
         return Err(no_parent_module(target, new_target, &candidates));
-    };
-    let aim = match natural_paths(&module_dir(&lands_at, roots), &decl.name)
-        .contains(&new_target.to_string())
-    {
-        true => String::new(),
-        false => format!(
-            "#[path = \"{}\"] ",
-            relative_between(dirname(&lands_at), new_target)
-        ),
     };
     let Some((span, text)) = whole_lines(parent_text, decl.item) else {
         return Ok(None);
@@ -1311,7 +1238,7 @@ fn plan_relocation(
         decl_text: text,
         vis: decl.vis.clone(),
         rename_in_place,
-        aim,
+        chain: decl.chain.clone(),
     }))
 }
 
@@ -1676,7 +1603,7 @@ fn quote_of(literal: &str) -> char {
 
 /// Crate roots are mod-rs files and a `[[bin]] path` can put one anywhere, so
 /// the manifests are read. ONE read per root per process, `ts_rehome::resolver`'s law.
-fn crate_roots(cx: &MoveCx) -> &RustModulePlaces {
+pub(crate) fn crate_roots(cx: &MoveCx) -> &RustModulePlaces {
     cx.crate_roots.get_or_init(|| {
         let mut texts: BTreeMap<_, _> = cx
             .files_of(&RustSource)

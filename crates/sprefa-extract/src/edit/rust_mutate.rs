@@ -191,7 +191,7 @@ impl Cleave for RustSource {
         }
         let text = cx.text(&parent)?;
         let parsed = hafley_scm::lang::rust::parse_rust_file(&text).ok()?;
-        let (name, numbered) = module_name(file);
+        let name = module_name(file);
         if parsed
             .items
             .iter()
@@ -199,21 +199,14 @@ impl Cleave for RustSource {
         {
             return None;
         }
-        let aim = match numbered || !parent_candidates(dir).contains(&parent) {
-            true => format!(
-                "#[path = \"{}\"] ",
-                crate::move_cx::relative_between(
-                    parent.rsplit_once('/').map_or("", |(dir, _)| dir),
-                    dest
-                )
-            ),
-            false => String::new(),
-        };
         let foreign = foreign_crate(cx, src, dest).is_some();
         let vis = match foreign || declared_public(cx, src) {
             true => "pub ",
             false => "pub(crate) ",
         };
+        let declaration = crate::edit::rust_rehome::crate_roots(cx).declaration(
+            &parent, &parent, &[], &name, dest, &format!("{vis}mod {name};"),
+        )?;
         let last_mod = parsed
             .items
             .iter()
@@ -246,7 +239,7 @@ impl Cleave for RustSource {
             parent,
             Edit {
                 span: Span::anchor(at as u32),
-                text: format!("{lead}{aim}{vis}mod {name};\n"),
+                text: format!("{lead}{declaration}\n"),
             },
         ))
     }
@@ -412,15 +405,15 @@ fn parent_candidates(dir: &str) -> Vec<String> {
 
 /// A new file's module name: its stem, minus a `3_` / `3a_` ordering prefix,
 /// which a `#[path]` then carries.
-fn module_name(file: &str) -> (String, bool) {
+fn module_name(file: &str) -> String {
     let stem = file.strip_suffix(".rs").unwrap_or(file);
     if let Some((head, tail)) = stem.split_once('_') {
         let digits = head.trim_end_matches(|ch: char| ch.is_ascii_lowercase());
         if !digits.is_empty() && digits.chars().all(|ch| ch.is_ascii_digit()) && !tail.is_empty() {
-            return (tail.to_string(), true);
+            return tail.to_string();
         }
     }
-    (stem.to_string(), false)
+    stem.to_string()
 }
 
 /// A module path without its own last segment.

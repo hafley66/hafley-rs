@@ -200,6 +200,59 @@ impl Rename for RustSource {
         request: &RenameRequest,
         reference: &SymbolRef,
     ) -> Option<Respell> {
+        if reference.role == RefRole::Definition {
+            let source = cx.text(&reference.file)?;
+            let parsed = hafley_scm::lang::rust::parse_rust_file(&source).ok()?;
+            fn module_at<'a>(
+                items: &'a [syn::Item],
+                span: Span,
+                chain: &mut Vec<String>,
+            ) -> Option<(&'a syn::ItemMod, Vec<String>)> {
+                for item in items {
+                    if let syn::Item::Mod(module) = item {
+                        if module.content.is_none() && syn_span(module.ident.span()) == span {
+                            return Some((module, chain.clone()));
+                        }
+                        if let Some((_, items)) = &module.content {
+                            chain.push(module.ident.to_string());
+                            let found = module_at(items, span, chain);
+                            chain.pop();
+                            if found.is_some() {
+                                return found;
+                            }
+                        }
+                    }
+                }
+                None
+            }
+            if let Some((module, chain)) = module_at(&parsed.items, reference.span, &mut Vec::new())
+            {
+                let texts: Vec<_> = cx
+                    .files_of(self)
+                    .into_iter()
+                    .filter_map(|rel| Some((cx.abs(rel), cx.text(rel)?)))
+                    .collect();
+                let modules =
+                    crate::edit::rust_module_places::RustModulePlaces::open(cx.root(), &texts);
+                let target = modules.declared(&reference.file, &chain, &request.old)?;
+                let span = syn_span(module.span());
+                let written = &source[span.start as usize..span.end() as usize];
+                let text = modules.declaration(
+                    &reference.file,
+                    &reference.file,
+                    &chain,
+                    &request.new,
+                    &target,
+                    written,
+                )?;
+                return Some(Respell {
+                    file: reference.file.clone(),
+                    span,
+                    text,
+                    receipt: None,
+                });
+            }
+        }
         if let Some(text) = cx
             .slow()
             .then(|| cx.slow_edit(&reference.file, reference.span))

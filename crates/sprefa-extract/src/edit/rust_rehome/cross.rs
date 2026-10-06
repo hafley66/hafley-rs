@@ -660,7 +660,6 @@ struct Moved {
     /// Pre-move rel of the file the decl lands in, and its post-move rel.
     parent_pre: String,
     parent_after: String,
-    aim: String,
     vis: String,
     decl_item: Option<(String, Span, String)>,
 }
@@ -972,7 +971,7 @@ pub(super) fn build(cx: &MoveCx) -> RelocatePlan {
                 decl_text: text.clone(),
                 vis: one.vis.clone(),
                 rename_in_place: false,
-                aim: one.aim.clone(),
+                chain: Vec::new(),
             },
         );
         plan.relocated.insert(one.old.clone());
@@ -1618,13 +1617,6 @@ fn place_moves(
                 ));
                 continue;
             }
-            let aim = match (lift, natural) {
-                (true, false) => format!(
-                    "#[path = \"{}\"] ",
-                    relative_between(dirname(&parent_after), new)
-                ),
-                _ => String::new(),
-            };
             let owns_dir = stem(new) == "mod" || decl.attr.is_some() || !natural;
             let mut new_path = parent_path.clone();
             new_path.push(decl.name.clone());
@@ -1651,7 +1643,6 @@ fn place_moves(
                 lift,
                 parent_pre,
                 parent_after,
-                aim,
                 vis: decl.vis.clone(),
                 decl_item,
             });
