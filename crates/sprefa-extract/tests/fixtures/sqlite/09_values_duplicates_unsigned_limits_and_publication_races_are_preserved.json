@@ -1,0 +1,25 @@
+{
+  "claim_test": "values_duplicates_unsigned_limits_and_publication_races_are_preserved",
+  "steps": [
+    {"action": "directory", "path": "$work/09"},
+    {
+      "action": "api", "name": "values_roundtrip", "api": "roundtrip",
+      "database": "$work/09/values.db",
+      "rows": [
+        {"record": "size_skip", "path": "quotes'\"\nλ", "bytes": 18446744073709551615, "limit": 0, "reason": "over_max_bytes"},
+        {"record": "size_skip", "path": "signed-max", "bytes": 9223372036854775807, "limit": 9223372036854775808, "reason": "over_max_bytes"},
+        {"record": "scip_index", "reused": false, "tool_name": "fixture", "tool_version": "1", "documents": 0, "index_mtime_unix_ms": 18446744073709551615, "staleness": "fixture"},
+        {"record": "scip_index", "reused": true, "tool_name": "fixture", "tool_version": "1", "documents": 0, "index_mtime_unix_ms": null, "staleness": "fixture"},
+        {"record": "protocol", "version": 1},
+        {"record": "protocol", "version": 1},
+        {"record": "data_doc", "family": "data", "ordinal": 0, "span": {"start": 0, "end": 4}, "format": "json", "doc": null},
+        {"record": "fact", "fact": 1, "relation": "x.y", "args": [{"id": 4294967295}, {"span": ["digest", 0, 4294967295]}, {"int": -9223372036854775808}, {"text": "λ"}, {"atom": "x"}]}
+      ]
+    },
+    {
+      "action": "api", "name": "publication_race", "api": "finish_race",
+      "database": "$work/09/race.db",
+      "contents": "concurrent owner"
+    }
+  ]
+}

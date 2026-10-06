@@ -86,6 +86,30 @@ pub fn snapshot(directory: &str, output: BTreeMap<String, Value>) {
     });
 }
 
+/// Map fixture placeholders and private scratch roots in JSON values.
+pub fn replace_strings(value: &Value, replacements: &[(&str, &str)]) -> Value {
+    match value {
+        Value::String(text) => Value::String(
+            replacements
+                .iter()
+                .fold(text.clone(), |text, (from, to)| text.replace(from, to)),
+        ),
+        Value::Array(items) => Value::Array(
+            items
+                .iter()
+                .map(|item| replace_strings(item, replacements))
+                .collect(),
+        ),
+        Value::Object(entries) => Value::Object(
+            entries
+                .iter()
+                .map(|(key, item)| (key.clone(), replace_strings(item, replacements)))
+                .collect(),
+        ),
+        other => other.clone(),
+    }
+}
+
 pub fn commands(case: &Value, api: impl Fn(&Value) -> Value) -> Value {
     use std::process::Command;
     let temporary = tempfile::tempdir().unwrap();
@@ -115,6 +139,15 @@ pub fn commands(case: &Value, api: impl Fn(&Value) -> Value) -> Value {
                         .iter()
                         .map(|byte| byte.as_u64().unwrap() as u8)
                         .collect()
+                } else if let Some(repeat) = step["repeat"].as_object() {
+                    let unit = expand(repeat["text"].as_str().unwrap());
+                    let count = repeat["count"].as_u64().unwrap();
+                    let mut composed = expand(step["prefix"].as_str().unwrap_or(""));
+                    for _ in 0..count {
+                        composed.push_str(&unit);
+                    }
+                    composed.push_str(&expand(step["suffix"].as_str().unwrap_or("")));
+                    composed.into_bytes()
                 } else {
                     expand(step["text"].as_str().unwrap()).into_bytes()
                 };
@@ -146,6 +179,71 @@ pub fn commands(case: &Value, api: impl Fn(&Value) -> Value) -> Value {
                 assert_eq!(Value::Bool(exists), step["expected"], "{name}");
                 observed.insert(name.to_string(), serde_json::json!({"exists":exists}));
             }
+            "file_equals" => {
+                let stored = std::fs::read(path()).unwrap();
+                let expected: Vec<u8> = if let Some(bytes) = step["bytes"].as_array() {
+                    bytes
+                        .iter()
+                        .map(|byte| byte.as_u64().unwrap() as u8)
+                        .collect()
+                } else {
+                    expand(step["text"].as_str().unwrap()).into_bytes()
+                };
+                assert_eq!(stored, expected, "{name}");
+                let observation = match std::str::from_utf8(&stored) {
+                    Ok(text) => serde_json::json!({"stored_text":text}),
+                    Err(_) => serde_json::json!({"stored_bytes":stored}),
+                };
+                observed.insert(name.to_string(), observation);
+            }
+            "directory_empty" => {
+                let leftovers: Vec<String> = std::fs::read_dir(path())
+                    .unwrap()
+                    .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+                    .collect();
+                assert!(leftovers.is_empty(), "{name}: {leftovers:?}");
+                observed.insert(name.to_string(), serde_json::json!({"empty":true}));
+            }
+            "absent_prefix" => {
+                let survivors: Vec<String> = std::fs::read_dir(path())
+                    .unwrap()
+                    .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+                    .filter(|file| file.starts_with(step["prefix"].as_str().unwrap()))
+                    .collect();
+                assert!(survivors.is_empty(), "{name}: {survivors:?}");
+                observed.insert(name.to_string(), serde_json::json!({"absent":true}));
+            }
+            "sqlite_rows" => {
+                let connection = rusqlite::Connection::open(path()).unwrap();
+                let mut statement = connection
+                    .prepare(&expand(step["sql"].as_str().unwrap()))
+                    .unwrap();
+                let columns = statement.column_count();
+                let mut rows = Vec::new();
+                let mut found = statement.query([]).unwrap();
+                while let Some(row) = found.next().unwrap() {
+                    let mut values = Vec::with_capacity(columns);
+                    for column in 0..columns {
+                        values.push(match row.get_ref(column).unwrap() {
+                            rusqlite::types::ValueRef::Null => Value::Null,
+                            rusqlite::types::ValueRef::Integer(value) => {
+                                serde_json::json!({"integer":value})
+                            }
+                            rusqlite::types::ValueRef::Real(value) => {
+                                serde_json::json!({"real":value})
+                            }
+                            rusqlite::types::ValueRef::Text(value) => serde_json::json!(
+                                {"text":String::from_utf8(value.to_vec()).unwrap().replace(work, "$work")}
+                            ),
+                            rusqlite::types::ValueRef::Blob(value) => {
+                                serde_json::json!({"blob":value.len()})
+                            }
+                        });
+                    }
+                    rows.push(Value::Array(values));
+                }
+                observed.insert(name.to_string(), serde_json::json!({"rows":rows}));
+            }
             "run" => {
                 let mut command = Command::new(env!("CARGO_BIN_EXE_ryii"));
                 command.args(
@@ -171,6 +269,9 @@ pub fn commands(case: &Value, api: impl Fn(&Value) -> Value) -> Value {
                     "{name}: {stderr}"
                 );
                 outputs.insert(name.to_string(), (stdout.clone(), stderr.clone()));
+                if let Some(target) = step["stdout_to"].as_str() {
+                    std::fs::write(expand(target), &stdout).unwrap();
+                }
                 let mut result = serde_json::json!({"exit_code":output.status.code(),"stdout":stdout,"stderr":stderr});
                 if let Some(limit) = step["maximum_seconds"].as_u64() {
                     let within_budget = elapsed.as_secs() < limit;
@@ -242,28 +343,46 @@ pub fn commands(case: &Value, api: impl Fn(&Value) -> Value) -> Value {
                 observed.insert(name.to_string(), serde_json::json!({"alive":alive}));
             }
             "api" => {
-                observed.insert(name.to_string(), api(step));
+                observed.insert(
+                    name.to_string(),
+                    replace_strings(
+                        &api(&replace_strings(step, &[("$work", work)])),
+                        &[(work, "$work")],
+                    ),
+                );
             }
             _ => panic!("unknown fixture action: {step}"),
         }
     }
+    let raw: std::collections::BTreeSet<String> = case["steps"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|step| step["raw_stdout"].as_bool().unwrap_or(false))
+        .map(|step| step["name"].as_str().unwrap_or("setup").to_string())
+        .collect();
     // Keep record order and every stable field. Per-case exclusions remove only
     // timestamp/version evidence that the old test explicitly left unpinned.
-    for result in observed.values_mut() {
+    for (name, result) in observed.iter_mut() {
         if let Some(stream) = result["stdout"].as_str() {
-            let mut records = Vec::new();
-            for line in stream.lines() {
-                let mut row: Value = serde_json::from_str(&line.replace(work, "$work")).unwrap();
-                if row["record"] == "scip_index" {
-                    if let Some(fields) = case["unasserted_index_fields"].as_array() {
-                        for field in fields {
-                            row.as_object_mut().unwrap().remove(field.as_str().unwrap());
+            if raw.contains(name) {
+                result["stdout"] = Value::String(stream.replace(work, "$work"));
+            } else {
+                let mut records = Vec::new();
+                for line in stream.lines() {
+                    let mut row: Value =
+                        serde_json::from_str(&line.replace(work, "$work")).unwrap();
+                    if row["record"] == "scip_index" {
+                        if let Some(fields) = case["unasserted_index_fields"].as_array() {
+                            for field in fields {
+                                row.as_object_mut().unwrap().remove(field.as_str().unwrap());
+                            }
                         }
                     }
+                    records.push(row);
                 }
-                records.push(row);
+                result["stdout"] = Value::Array(records);
             }
-            result["stdout"] = Value::Array(records);
             result["stderr"] =
                 Value::String(result["stderr"].as_str().unwrap().replace(work, "$work"));
         }

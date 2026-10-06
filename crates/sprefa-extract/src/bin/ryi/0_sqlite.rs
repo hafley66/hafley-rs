@@ -677,48 +677,23 @@ const OWNED_SPANS: [(&str, &str, &str, &str, &str); 4] = [
 ];
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
-    fn protocol(version: u32) -> writers::Fact {
-        serde_json::from_value(serde_json::json!({"record": "protocol", "version": version}))
-            .unwrap()
+
+    pub(crate) const BATCH_BYTES: usize = super::BATCH_BYTES;
+
+    pub(crate) fn accounting(database: &Database) -> (usize, usize) {
+        (database.pending.len(), database.pending_bytes)
     }
-    fn stored_rows(database: &Database) -> i64 {
+
+    pub(crate) fn stored_rows(database: &Database) -> i64 {
         database
             .connection()
             .query_row("SELECT count(*) FROM protocol", [], |row| row.get(0))
             .unwrap()
     }
-    #[test]
-    fn byte_budget_accounting_flushes_without_large_allocations() {
-        // Declared encoded sizes exercise accounting; facts stay small.
-        let directory = tempfile::tempdir().unwrap();
-        let mut database = Database::create(&directory.path().join("facts.db")).unwrap();
-        database.insert_fact(protocol(1), 7).unwrap();
-        assert_eq!((database.pending.len(), database.pending_bytes), (1, 7));
-        assert_eq!(stored_rows(&database), 0);
 
-        database.insert_fact(protocol(2), BATCH_BYTES + 1).unwrap();
-        assert_eq!((database.pending.len(), database.pending_bytes), (0, 0));
-        assert_eq!(stored_rows(&database), 2);
-
-        let sub_cap = BATCH_BYTES / 2 + 1;
-        database.insert_fact(protocol(3), sub_cap).unwrap();
-        assert_eq!(
-            (database.pending.len(), database.pending_bytes),
-            (1, sub_cap)
-        );
-        assert_eq!(stored_rows(&database), 2);
-
-        database.insert_fact(protocol(4), sub_cap).unwrap();
-        assert_eq!(
-            (database.pending.len(), database.pending_bytes),
-            (1, sub_cap)
-        );
-        assert_eq!(stored_rows(&database), 3);
-
-        database.flush_pending().unwrap();
-        assert_eq!((database.pending.len(), database.pending_bytes), (0, 0));
-        assert_eq!(stored_rows(&database), 4);
+    pub(crate) fn flush_pending(database: &mut Database) -> Result<()> {
+        database.flush_pending()
     }
 }

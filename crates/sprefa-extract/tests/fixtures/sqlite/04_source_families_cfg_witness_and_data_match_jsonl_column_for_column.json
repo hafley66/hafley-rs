@@ -1,0 +1,133 @@
+{
+  "claim_test": "source_families_cfg_witness_and_data_match_jsonl_column_for_column",
+  "steps": [
+    {"action": "directory", "path": "$work/04"},
+    {
+      "action": "run", "name": "00_plain",
+      "arguments": ["--file-fact", "tests/fixtures/ts/sample.ts"],
+      "stdout_to": "$work/04/0.jsonl", "success": true
+    },
+    {
+      "action": "run", "name": "00_export",
+      "arguments": ["--sqlite", "$work/04/0.db", "--file-fact", "tests/fixtures/ts/sample.ts"],
+      "raw_stdout": true, "success": true
+    },
+    {
+      "action": "api", "name": "00_match", "api": "jsonl_matches",
+      "database": "$work/04/0.db", "jsonl": "$work/04/0.jsonl", "mode": "exact"
+    },
+    {
+      "action": "run", "name": "01_plain",
+      "arguments": ["--file-fact", "tests/fixtures/rust/sample.rs"],
+      "stdout_to": "$work/04/1.jsonl", "success": true
+    },
+    {
+      "action": "run", "name": "01_export",
+      "arguments": ["--sqlite", "$work/04/1.db", "--file-fact", "tests/fixtures/rust/sample.rs"],
+      "raw_stdout": true, "success": true
+    },
+    {
+      "action": "api", "name": "01_match", "api": "jsonl_matches",
+      "database": "$work/04/1.db", "jsonl": "$work/04/1.jsonl", "mode": "exact"
+    },
+    {
+      "action": "run", "name": "02_plain",
+      "arguments": ["--file-fact", "tests/fixtures/go/sample.go"],
+      "stdout_to": "$work/04/2.jsonl", "success": true
+    },
+    {
+      "action": "run", "name": "02_export",
+      "arguments": ["--sqlite", "$work/04/2.db", "--file-fact", "tests/fixtures/go/sample.go"],
+      "raw_stdout": true, "success": true
+    },
+    {
+      "action": "api", "name": "02_match", "api": "jsonl_matches",
+      "database": "$work/04/2.db", "jsonl": "$work/04/2.jsonl", "mode": "exact"
+    },
+    {
+      "action": "run", "name": "03_plain",
+      "arguments": ["--file-fact", "tests/fixtures/kotlin/sample.kt"],
+      "stdout_to": "$work/04/3.jsonl", "success": true
+    },
+    {
+      "action": "run", "name": "03_export",
+      "arguments": ["--sqlite", "$work/04/3.db", "--file-fact", "tests/fixtures/kotlin/sample.kt"],
+      "raw_stdout": true, "success": true
+    },
+    {
+      "action": "api", "name": "03_match", "api": "jsonl_matches",
+      "database": "$work/04/3.db", "jsonl": "$work/04/3.jsonl", "mode": "exact"
+    },
+    {
+      "action": "run", "name": "04_plain",
+      "arguments": ["--file-fact", "tests/fixtures/prolog/0_sample.pl"],
+      "stdout_to": "$work/04/4.jsonl", "success": true
+    },
+    {
+      "action": "run", "name": "04_export",
+      "arguments": ["--sqlite", "$work/04/4.db", "--file-fact", "tests/fixtures/prolog/0_sample.pl"],
+      "raw_stdout": true, "success": true
+    },
+    {
+      "action": "api", "name": "04_match", "api": "jsonl_matches",
+      "database": "$work/04/4.db", "jsonl": "$work/04/4.jsonl", "mode": "exact"
+    },
+    {
+      "action": "run", "name": "05_plain",
+      "arguments": ["--file-fact", "tests/fixtures/markdown/0_sample.md"],
+      "stdout_to": "$work/04/5.jsonl", "success": true
+    },
+    {
+      "action": "run", "name": "05_export",
+      "arguments": ["--sqlite", "$work/04/5.db", "--file-fact", "tests/fixtures/markdown/0_sample.md"],
+      "raw_stdout": true, "success": true
+    },
+    {
+      "action": "api", "name": "05_match", "api": "jsonl_matches",
+      "database": "$work/04/5.db", "jsonl": "$work/04/5.jsonl", "mode": "exact"
+    },
+    {
+      "action": "run", "name": "06_plain",
+      "arguments": ["--file-fact", "tests/fixtures/data/nested.json"],
+      "stdout_to": "$work/04/6.jsonl", "success": true
+    },
+    {
+      "action": "run", "name": "06_export",
+      "arguments": ["--sqlite", "$work/04/6.db", "--file-fact", "tests/fixtures/data/nested.json"],
+      "raw_stdout": true, "success": true
+    },
+    {
+      "action": "api", "name": "06_match", "api": "jsonl_matches",
+      "database": "$work/04/6.db", "jsonl": "$work/04/6.jsonl", "mode": "exact"
+    },
+    {
+      "action": "run", "name": "07_plain",
+      "arguments": ["--file-fact", "--kinds", "cfg", "tests/fixtures/rust/sample.rs"],
+      "stdout_to": "$work/04/7.jsonl", "success": true
+    },
+    {
+      "action": "run", "name": "07_export",
+      "arguments": ["--sqlite", "$work/04/7.db", "--file-fact", "--kinds", "cfg", "tests/fixtures/rust/sample.rs"],
+      "raw_stdout": true, "success": true
+    },
+    {
+      "action": "api", "name": "07_match", "api": "jsonl_matches",
+      "database": "$work/04/7.db", "jsonl": "$work/04/7.jsonl", "mode": "exact"
+    },
+    {
+      "action": "run", "name": "08_plain",
+      "arguments": ["--witness", "tests/fixtures/ts/sample.ts"],
+      "stdout_to": "$work/04/8.jsonl", "success": true
+    },
+    {
+      "action": "run", "name": "08_export",
+      "arguments": ["--sqlite", "$work/04/8.db", "--witness", "tests/fixtures/ts/sample.ts"],
+      "raw_stdout": true, "success": true
+    },
+    {
+      "action": "api", "name": "08_match", "api": "jsonl_matches",
+      "database": "$work/04/8.db", "jsonl": "$work/04/8.jsonl", "mode": "exact",
+      "witness": "tests/fixtures/ts/sample.ts"
+    }
+  ]
+}

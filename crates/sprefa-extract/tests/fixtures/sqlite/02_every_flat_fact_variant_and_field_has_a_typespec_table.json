@@ -1,0 +1,15 @@
+{
+  "claim_test": "every_flat_fact_variant_and_field_has_a_typespec_table",
+  "steps": [
+    {
+      "action": "api",
+      "name": "catalog",
+      "api": "catalog_covers",
+      "enums": [
+        ["atoms", "FamilyTag", "node", "family", false],
+        ["tsi", "Mode", "run", "mode", false],
+        ["tsi", "Method", "witness", "method", true]
+      ]
+    }
+  ]
+}

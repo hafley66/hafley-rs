@@ -578,4 +578,9 @@ mod v5_normalize;
 mod golden_parity_support;
 
 #[path = "support/5_scip_families.rs"]
+
 mod scip_families_support;
+
+#[cfg(feature = "cli")]
+#[path = "support/6_sqlite.rs"]
+mod sqlite_support;
