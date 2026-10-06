@@ -1,0 +1,33 @@
+{
+  "steps": [
+    {
+      "action": "copy",
+      "source": "$fixtures/scip_facts_cli/unterminated.ts",
+      "path": "$work/unterminated.ts"
+    },
+    {
+      "action": "run",
+      "name": "file",
+      "arguments": [
+        "--file-fact",
+        "--kinds",
+        "cst",
+        "$work/unterminated.ts"
+      ],
+      "cwd": "$work",
+      "assert_success": true,
+      "unasserted_exit": true,
+      "unasserted_stderr": true,
+      "raw_stdout": true
+    },
+    {
+      "action": "claim",
+      "name": "size_lines",
+      "kind": "line_matches",
+      "cell": "file.stdout",
+      "texts": [
+        "\"bytes\":10,\"lines\":1"
+      ]
+    }
+  ]
+}

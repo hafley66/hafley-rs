@@ -1,0 +1,68 @@
+{
+  "steps": [
+    {
+      "action": "copy_tree",
+      "source": "$fixtures/ts",
+      "target": "$work/tests/fixtures/ts"
+    },
+    {
+      "action": "git",
+      "args": [
+        "init",
+        "-q",
+        "."
+      ],
+      "cwd": "$work"
+    },
+    {
+      "action": "git",
+      "args": [
+        "add",
+        "tests"
+      ],
+      "cwd": "$work"
+    },
+    {
+      "action": "run",
+      "name": "raw",
+      "arguments": [
+        "scip",
+        "--raw",
+        "--root",
+        "tests/fixtures/ts",
+        "--scip-build",
+        "tests/fixtures/ts/scip/alpha.ts"
+      ],
+      "cwd": "$work",
+      "assert_success": true,
+      "unasserted_exit": true,
+      "unasserted_stderr": true,
+      "raw_stdout": true,
+      "stdout_to": "$work/raw.jsonl",
+      "unasserted_stdout": true
+    },
+    {
+      "action": "api",
+      "name": "locals",
+      "api": "locals",
+      "path": "$work/raw.jsonl",
+      "minimum": 50
+    },
+    {
+      "action": "run",
+      "name": "edges",
+      "arguments": [
+        "--scip-deps",
+        "--root",
+        "tests/fixtures/ts",
+        "--scip-build",
+        "tests/fixtures/ts/scip/alpha.ts"
+      ],
+      "cwd": "$work",
+      "assert_success": true,
+      "unasserted_exit": true,
+      "unasserted_stderr": true,
+      "raw_stdout": true
+    }
+  ]
+}

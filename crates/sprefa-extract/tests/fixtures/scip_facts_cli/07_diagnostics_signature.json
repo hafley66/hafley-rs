@@ -1,0 +1,65 @@
+{
+  "steps": [
+    {
+      "action": "api",
+      "name": "wire",
+      "api": "flatten",
+      "path": "animal.ts",
+      "source": "sound(): string\n",
+      "occurrences": [
+        {
+          "symbol": "Dog#sound().",
+          "range": [
+            0,
+            0,
+            0,
+            5
+          ],
+          "roles": 1,
+          "syntax_kind": 7,
+          "override_documentation": [
+            "narrowed to string"
+          ],
+          "diagnostics": [
+            {
+              "severity": 2,
+              "code": "TS7006",
+              "message": "implicitly has an any type",
+              "source": "typescript",
+              "tags": [
+                1
+              ]
+            }
+          ]
+        }
+      ],
+      "symbols": [
+        {
+          "symbol": "Dog#sound().",
+          "display_name": "sound",
+          "kind": 26,
+          "enclosing_symbol": "Dog#",
+          "signature": {
+            "language": "typescript",
+            "text": "sound(): string",
+            "occurrences": [
+              {
+                "symbol": "string#",
+                "range": [
+                  0,
+                  9,
+                  0,
+                  15
+                ],
+                "roles": 0,
+                "syntax_kind": 0,
+                "override_documentation": [],
+                "diagnostics": []
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

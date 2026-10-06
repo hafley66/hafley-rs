@@ -1,0 +1,33 @@
+{
+  "steps": [
+    {
+      "action": "copy",
+      "source": "$fixtures/scip_facts_cli/three.ts",
+      "path": "$work/three.ts"
+    },
+    {
+      "action": "run",
+      "name": "file",
+      "arguments": [
+        "--file-fact",
+        "--kinds",
+        "cst",
+        "$work/three.ts"
+      ],
+      "cwd": "$work",
+      "assert_success": true,
+      "unasserted_exit": true,
+      "unasserted_stderr": true,
+      "raw_stdout": true
+    },
+    {
+      "action": "claim",
+      "name": "size_lines",
+      "kind": "line_matches",
+      "cell": "file.stdout",
+      "texts": [
+        "\"bytes\":33,\"lines\":3"
+      ]
+    }
+  ]
+}

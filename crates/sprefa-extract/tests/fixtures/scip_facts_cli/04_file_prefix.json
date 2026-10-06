@@ -1,0 +1,61 @@
+{
+  "steps": [
+    {
+      "action": "copy_tree",
+      "source": "$fixtures/scip_rel",
+      "target": "$work/tests/fixtures/scip_rel"
+    },
+    {
+      "action": "git",
+      "args": [
+        "init",
+        "-q",
+        "."
+      ],
+      "cwd": "$work"
+    },
+    {
+      "action": "git",
+      "args": [
+        "add",
+        "tests"
+      ],
+      "cwd": "$work"
+    },
+    {
+      "action": "run",
+      "name": "plain",
+      "arguments": [
+        "tests/fixtures/scip_rel/animal.ts"
+      ],
+      "cwd": "$work",
+      "assert_success": true,
+      "unasserted_exit": true,
+      "unasserted_stderr": true,
+      "raw_stdout": true,
+      "stdout_to": "$work/plain.jsonl"
+    },
+    {
+      "action": "run",
+      "name": "with_file",
+      "arguments": [
+        "--file-fact",
+        "tests/fixtures/scip_rel/animal.ts"
+      ],
+      "cwd": "$work",
+      "assert_success": true,
+      "unasserted_exit": true,
+      "unasserted_stderr": true,
+      "raw_stdout": true,
+      "stdout_to": "$work/file.jsonl"
+    },
+    {
+      "action": "api",
+      "name": "prefix",
+      "api": "prefix",
+      "plain": "$work/plain.jsonl",
+      "path": "$work/file.jsonl",
+      "expected": "{\"record\":\"file\",\"path\":\"tests/fixtures/scip_rel/animal.ts\",\"digest\":\"blake3:baafb5a5209830bda1b0dd4a9265e014b895256daee5e9252e3cb71bff3e3968\",\"bytes\":137,\"lines\":9}"
+    }
+  ]
+}

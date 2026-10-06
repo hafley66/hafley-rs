@@ -1,0 +1,61 @@
+{
+  "steps": [
+    {
+      "action": "copy_tree",
+      "source": "$fixtures/scip_rel",
+      "target": "$work/tests/fixtures/scip_rel"
+    },
+    {
+      "action": "git",
+      "args": [
+        "init",
+        "-q",
+        "."
+      ],
+      "cwd": "$work"
+    },
+    {
+      "action": "git",
+      "args": [
+        "add",
+        "tests"
+      ],
+      "cwd": "$work"
+    },
+    {
+      "action": "run",
+      "name": "error",
+      "arguments": [
+        "scip",
+        "--raw",
+        "--root",
+        "tests/fixtures/scip_rel",
+        "tests/fixtures/scip_rel/animal.ts"
+      ],
+      "cwd": "$work",
+      "assert_success": false,
+      "unasserted_exit": true,
+      "unasserted_stderr": false,
+      "raw_stdout": true,
+      "stdout_to": "$work/out.txt"
+    },
+    {
+      "action": "claim",
+      "name": "index_option",
+      "kind": "any_contains",
+      "cell": "error.stderr",
+      "texts": [
+        "--scip-index"
+      ]
+    },
+    {
+      "action": "claim",
+      "name": "build_option",
+      "kind": "any_contains",
+      "cell": "error.stderr",
+      "texts": [
+        "--scip-build"
+      ]
+    }
+  ]
+}

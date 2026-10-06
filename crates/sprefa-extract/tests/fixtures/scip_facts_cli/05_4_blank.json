@@ -1,0 +1,33 @@
+{
+  "steps": [
+    {
+      "action": "copy",
+      "source": "$fixtures/scip_facts_cli/blank.ts",
+      "path": "$work/blank.ts"
+    },
+    {
+      "action": "run",
+      "name": "file",
+      "arguments": [
+        "--file-fact",
+        "--kinds",
+        "cst",
+        "$work/blank.ts"
+      ],
+      "cwd": "$work",
+      "assert_success": true,
+      "unasserted_exit": true,
+      "unasserted_stderr": true,
+      "raw_stdout": true
+    },
+    {
+      "action": "claim",
+      "name": "size_lines",
+      "kind": "line_matches",
+      "cell": "file.stdout",
+      "texts": [
+        "\"bytes\":12,\"lines\":2"
+      ]
+    }
+  ]
+}

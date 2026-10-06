@@ -1,0 +1,42 @@
+{
+  "steps": [
+    {
+      "action": "copy_tree",
+      "source": "$fixtures/kotlin/scip",
+      "target": "$work/tests/fixtures/kotlin/scip"
+    },
+    {
+      "action": "git",
+      "args": [
+        "init",
+        "-q",
+        "."
+      ],
+      "cwd": "$work"
+    },
+    {
+      "action": "git",
+      "args": [
+        "add",
+        "tests"
+      ],
+      "cwd": "$work"
+    },
+    {
+      "action": "run",
+      "name": "slow",
+      "arguments": [
+        "slow",
+        "--no-checker",
+        "--scip-index",
+        "$work/tests/fixtures/kotlin/scip/index.scip",
+        "tests/fixtures/kotlin/scip"
+      ],
+      "cwd": "$work",
+      "assert_success": true,
+      "unasserted_exit": true,
+      "unasserted_stderr": true,
+      "raw_stdout": true
+    }
+  ]
+}

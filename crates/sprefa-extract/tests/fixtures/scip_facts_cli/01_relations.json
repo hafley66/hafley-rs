@@ -1,0 +1,89 @@
+{
+  "steps": [
+    {
+      "action": "copy_tree",
+      "source": "$fixtures/scip_rel",
+      "target": "$work/tests/fixtures/scip_rel"
+    },
+    {
+      "action": "git",
+      "args": [
+        "init",
+        "-q",
+        "."
+      ],
+      "cwd": "$work"
+    },
+    {
+      "action": "git",
+      "args": [
+        "add",
+        "tests"
+      ],
+      "cwd": "$work"
+    },
+    {
+      "action": "run",
+      "name": "raw",
+      "arguments": [
+        "scip",
+        "--raw",
+        "--root",
+        "tests/fixtures/scip_rel",
+        "--scip-build",
+        "tests/fixtures/scip_rel/animal.ts"
+      ],
+      "cwd": "$work",
+      "assert_success": true,
+      "unasserted_exit": true,
+      "unasserted_stderr": true,
+      "raw_stdout": true,
+      "stdout_to": "$work/raw.jsonl"
+    },
+    {
+      "action": "api",
+      "name": "golden",
+      "api": "golden",
+      "path": "$work/raw.jsonl",
+      "expected": "$fixtures/scip_rel/expected.jsonl"
+    },
+    {
+      "action": "run",
+      "name": "relationships",
+      "arguments": [
+        "scip",
+        "--raw",
+        "--records",
+        "scip_relationship",
+        "--root",
+        "tests/fixtures/scip_rel",
+        "--scip-build",
+        "tests/fixtures/scip_rel/animal.ts"
+      ],
+      "cwd": "$work",
+      "assert_success": true,
+      "unasserted_exit": true,
+      "unasserted_stderr": true,
+      "raw_stdout": true
+    },
+    {
+      "action": "run",
+      "name": "two_kinds",
+      "arguments": [
+        "scip",
+        "--raw",
+        "--records",
+        "scip_metadata,scip_document",
+        "--root",
+        "tests/fixtures/scip_rel",
+        "--scip-build",
+        "tests/fixtures/scip_rel/animal.ts"
+      ],
+      "cwd": "$work",
+      "assert_success": true,
+      "unasserted_exit": true,
+      "unasserted_stderr": true,
+      "raw_stdout": true
+    }
+  ]
+}
