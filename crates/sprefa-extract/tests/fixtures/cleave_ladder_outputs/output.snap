@@ -1,0 +1,460 @@
+---
+source: tests/support/2_fixture_runner.rs
+---
+{
+  "0_cleave": {
+    "check": {
+      "exit_code": 0
+    },
+    "cleave": {
+      "exit_code": 0
+    },
+    "diff": {
+      "stdout": "diff --git a/src/_2_dest.rs b/src/_2_dest.rs\ndeleted file mode 100644\nindex c34f524..0000000\n--- a/src/_2_dest.rs\n+++ /dev/null\n@@ -1 +0,0 @@\n-pub struct Existing;\ndiff --git a/src/_3_new.rs b/src/_3_new.rs\nnew file mode 100644\nindex 0000000..c34f524\n--- /dev/null\n+++ b/src/_3_new.rs\n@@ -0,0 +1 @@\n+pub struct Existing;\ndiff --git a/src/lib.rs b/src/lib.rs\nindex 7f70b3b..d0cea62 100644\n--- a/src/lib.rs\n+++ b/src/lib.rs\n@@ -3 +2,0 @@ pub mod _1_src;\n-pub mod _2_dest;\n@@ -7,0 +7 @@ mod _7_counts;\n+pub mod _3_new;\n"
+    },
+    "original_diff": [
+      "  src/_2_dest.rs (deleted)",
+      "    -pub struct Existing;",
+      "  src/_3_new.rs",
+      "    +pub struct Existing;",
+      "  src/lib.rs",
+      "    -pub mod _2_dest;",
+      "    +pub mod _3_new;"
+    ],
+    "tree": {
+      "Cargo.toml": "[package]\nname = \"cleave_ladder\"\nversion = \"0.0.0\"\nedition = \"2021\"\npublish = false\n\n[workspace]\n",
+      "src/": {
+        "directory": true
+      },
+      "src/_0_base.rs": "#[derive(Debug, Clone)]\npub struct Base;\n\npub trait Show {\n    fn show(&self) -> u32;\n}\n",
+      "src/_1_src.rs": "use crate::_0_base::{\n    Base,\n    Show,\n};\n\n/// Documented item.\n/// Second doc line.\n#[derive(Debug, Clone)]\npub struct Documented {\n    pub base: Base,\n}\n\npub struct Plain;\n\nimpl Show for Plain {\n    fn show(&self) -> u32 {\n        1\n    }\n}\n\npub fn keeps_using() -> u32 {\n    use crate::_0_base::Base as Local;\n    let _local = Local;\n    Plain.show()\n}\n",
+      "src/_3_new.rs": "pub struct Existing;\n",
+      "src/_4_types.rs": "pub struct Span4 {\n    pub at: u32,\n}\n\npub struct Req4 {\n    pub span: Span4,\n}\n\npub struct Stays;\n\nmod helper {\n    use super::*;\n\n    pub fn width(span: &Span4) -> u32 {\n        span.at\n    }\n}\n",
+      "src/_5_user.rs": "use crate::Req4;\n\npub fn start(req: &Req4) -> u32 {\n    req.span.at\n}\n\n#[cfg(test)]\nmod tests {\n    use crate::_4_types::{Req4, Span4};\n\n    #[test]\n    fn starts_at_zero() {\n        let req = Req4 { span: Span4 { at: 0 } };\n        assert_eq!(super::start(&req), 0);\n    }\n}\n",
+      "src/_6_pattern.rs": "use std::fmt::{Display, Formatter};\n\n#[derive(Clone)]\npub struct Pattern(pub String);\n\nimpl Display for Pattern {\n    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {\n        f.write_str(&self.0)\n    }\n}\n\npub fn compile(pattern: &Pattern) -> String {\n    pattern.to_string()\n}\n",
+      "src/_7_counts.rs": "pub struct Counts(pub u32);\n\nimpl Counts {\n    pub fn value(&self) -> u32 {\n        self.0\n    }\n}\n",
+      "src/lib.rs": "pub mod _0_base;\npub mod _1_src;\nmod _4_types;\npub mod _5_user;\nmod _6_pattern;\nmod _7_counts;\npub mod _3_new;\n\npub use _1_src::{\n    Documented,\n    Plain,\n};\npub use _4_types::*;\npub use _6_pattern::Pattern;\npub use _7_counts::Counts;\n",
+      "tests/": {
+        "directory": true
+      },
+      "tests/uses.rs": "use cleave_ladder::_1_src::Plain;\nuse cleave_ladder::Documented;\n\n#[test]\nfn both_reachable() {\n    let _plain = Plain;\n    let _documented: Option<Documented> = None;\n}\n"
+    }
+  },
+  "1_cleave": {
+    "check": {
+      "exit_code": 0
+    },
+    "cleave": {
+      "exit_code": 0
+    },
+    "diff": {
+      "stdout": "diff --git a/src/_1_src.rs b/src/_1_src.rs\nindex 7755da9..66ecb22 100644\n--- a/src/_1_src.rs\n+++ b/src/_1_src.rs\n@@ -2 +1,0 @@ use crate::_0_base::{\n-    Base,\n@@ -6,7 +4,0 @@ use crate::_0_base::{\n-/// Documented item.\n-/// Second doc line.\n-#[derive(Debug, Clone)]\n-pub struct Documented {\n-    pub base: Base,\n-}\n-\ndiff --git a/src/_2_dest.rs b/src/_2_dest.rs\nindex c34f524..a89be5d 100644\n--- a/src/_2_dest.rs\n+++ b/src/_2_dest.rs\n@@ -0,0 +1 @@\n+use crate::_0_base::Base;\n@@ -1,0 +3,7 @@ pub struct Existing;\n+\n+/// Documented item.\n+/// Second doc line.\n+#[derive(Debug, Clone)]\n+pub struct Documented {\n+    pub base: Base,\n+}\ndiff --git a/src/lib.rs b/src/lib.rs\nindex 7f70b3b..5b722ee 100644\n--- a/src/lib.rs\n+++ b/src/lib.rs\n@@ -10 +9,0 @@ pub use _1_src::{\n-    Documented,\n@@ -15,0 +15 @@ pub use _7_counts::Counts;\n+pub use crate::_2_dest::Documented;\n"
+    },
+    "original_diff": [
+      "  src/_1_src.rs",
+      "    -    Base,",
+      "    -/// Documented item.",
+      "    -/// Second doc line.",
+      "    -#[derive(Debug, Clone)]",
+      "    -pub struct Documented {",
+      "    -    pub base: Base,",
+      "    -}",
+      "    -",
+      "  src/_2_dest.rs",
+      "    +use crate::_0_base::Base;",
+      "    +",
+      "    +/// Documented item.",
+      "    +/// Second doc line.",
+      "    +#[derive(Debug, Clone)]",
+      "    +pub struct Documented {",
+      "    +    pub base: Base,",
+      "    +}",
+      "  src/lib.rs",
+      "    -    Documented,",
+      "    +pub use crate::_2_dest::Documented;"
+    ],
+    "tree": {
+      "Cargo.toml": "[package]\nname = \"cleave_ladder\"\nversion = \"0.0.0\"\nedition = \"2021\"\npublish = false\n\n[workspace]\n",
+      "src/": {
+        "directory": true
+      },
+      "src/_0_base.rs": "#[derive(Debug, Clone)]\npub struct Base;\n\npub trait Show {\n    fn show(&self) -> u32;\n}\n",
+      "src/_1_src.rs": "use crate::_0_base::{\n    Show,\n};\n\npub struct Plain;\n\nimpl Show for Plain {\n    fn show(&self) -> u32 {\n        1\n    }\n}\n\npub fn keeps_using() -> u32 {\n    use crate::_0_base::Base as Local;\n    let _local = Local;\n    Plain.show()\n}\n",
+      "src/_2_dest.rs": "use crate::_0_base::Base;\npub struct Existing;\n\n/// Documented item.\n/// Second doc line.\n#[derive(Debug, Clone)]\npub struct Documented {\n    pub base: Base,\n}\n",
+      "src/_4_types.rs": "pub struct Span4 {\n    pub at: u32,\n}\n\npub struct Req4 {\n    pub span: Span4,\n}\n\npub struct Stays;\n\nmod helper {\n    use super::*;\n\n    pub fn width(span: &Span4) -> u32 {\n        span.at\n    }\n}\n",
+      "src/_5_user.rs": "use crate::Req4;\n\npub fn start(req: &Req4) -> u32 {\n    req.span.at\n}\n\n#[cfg(test)]\nmod tests {\n    use crate::_4_types::{Req4, Span4};\n\n    #[test]\n    fn starts_at_zero() {\n        let req = Req4 { span: Span4 { at: 0 } };\n        assert_eq!(super::start(&req), 0);\n    }\n}\n",
+      "src/_6_pattern.rs": "use std::fmt::{Display, Formatter};\n\n#[derive(Clone)]\npub struct Pattern(pub String);\n\nimpl Display for Pattern {\n    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {\n        f.write_str(&self.0)\n    }\n}\n\npub fn compile(pattern: &Pattern) -> String {\n    pattern.to_string()\n}\n",
+      "src/_7_counts.rs": "pub struct Counts(pub u32);\n\nimpl Counts {\n    pub fn value(&self) -> u32 {\n        self.0\n    }\n}\n",
+      "src/lib.rs": "pub mod _0_base;\npub mod _1_src;\npub mod _2_dest;\nmod _4_types;\npub mod _5_user;\nmod _6_pattern;\nmod _7_counts;\n\npub use _1_src::{\n    Plain,\n};\npub use _4_types::*;\npub use _6_pattern::Pattern;\npub use _7_counts::Counts;\npub use crate::_2_dest::Documented;\n",
+      "tests/": {
+        "directory": true
+      },
+      "tests/uses.rs": "use cleave_ladder::_1_src::Plain;\nuse cleave_ladder::Documented;\n\n#[test]\nfn both_reachable() {\n    let _plain = Plain;\n    let _documented: Option<Documented> = None;\n}\n"
+    }
+  },
+  "2_cleave": {
+    "check": {
+      "exit_code": 0
+    },
+    "cleave": {
+      "exit_code": 0
+    },
+    "diff": {
+      "stdout": "diff --git a/src/_1_src.rs b/src/_1_src.rs\nindex 7755da9..f04b621 100644\n--- a/src/_1_src.rs\n+++ b/src/_1_src.rs\n@@ -4,0 +5 @@ use crate::_0_base::{\n+use crate::_2_dest::Plain;\n@@ -13,8 +13,0 @@ pub struct Documented {\n-pub struct Plain;\n-\n-impl Show for Plain {\n-    fn show(&self) -> u32 {\n-        1\n-    }\n-}\n-\ndiff --git a/src/_2_dest.rs b/src/_2_dest.rs\nindex c34f524..cc2d774 100644\n--- a/src/_2_dest.rs\n+++ b/src/_2_dest.rs\n@@ -0,0 +1 @@\n+use crate::_0_base::Show;\n@@ -1,0 +3,8 @@ pub struct Existing;\n+\n+pub struct Plain;\n+\n+impl Show for Plain {\n+    fn show(&self) -> u32 {\n+        1\n+    }\n+}\ndiff --git a/src/lib.rs b/src/lib.rs\nindex 7f70b3b..f11f423 100644\n--- a/src/lib.rs\n+++ b/src/lib.rs\n@@ -11 +10,0 @@ pub use _1_src::{\n-    Plain,\n@@ -15,0 +15 @@ pub use _7_counts::Counts;\n+pub use crate::_2_dest::Plain;\ndiff --git a/tests/uses.rs b/tests/uses.rs\nindex b5676f3..84aadbe 100644\n--- a/tests/uses.rs\n+++ b/tests/uses.rs\n@@ -1 +0,0 @@\n-use cleave_ladder::_1_src::Plain;\n@@ -2,0 +2 @@ use cleave_ladder::Documented;\n+use cleave_ladder::_2_dest::Plain;\n"
+    },
+    "original_diff": [
+      "  src/_1_src.rs",
+      "    +use crate::_2_dest::Plain;",
+      "    -pub struct Plain;",
+      "    -",
+      "    -impl Show for Plain {",
+      "    -    fn show(&self) -> u32 {",
+      "    -        1",
+      "    -    }",
+      "    -}",
+      "    -",
+      "  src/_2_dest.rs",
+      "    +use crate::_0_base::Show;",
+      "    +",
+      "    +pub struct Plain;",
+      "    +",
+      "    +impl Show for Plain {",
+      "    +    fn show(&self) -> u32 {",
+      "    +        1",
+      "    +    }",
+      "    +}",
+      "  src/lib.rs",
+      "    -    Plain,",
+      "    +pub use crate::_2_dest::Plain;",
+      "  tests/uses.rs",
+      "    -use cleave_ladder::_1_src::Plain;",
+      "    +use cleave_ladder::_2_dest::Plain;"
+    ],
+    "tree": {
+      "Cargo.toml": "[package]\nname = \"cleave_ladder\"\nversion = \"0.0.0\"\nedition = \"2021\"\npublish = false\n\n[workspace]\n",
+      "src/": {
+        "directory": true
+      },
+      "src/_0_base.rs": "#[derive(Debug, Clone)]\npub struct Base;\n\npub trait Show {\n    fn show(&self) -> u32;\n}\n",
+      "src/_1_src.rs": "use crate::_0_base::{\n    Base,\n    Show,\n};\nuse crate::_2_dest::Plain;\n\n/// Documented item.\n/// Second doc line.\n#[derive(Debug, Clone)]\npub struct Documented {\n    pub base: Base,\n}\n\npub fn keeps_using() -> u32 {\n    use crate::_0_base::Base as Local;\n    let _local = Local;\n    Plain.show()\n}\n",
+      "src/_2_dest.rs": "use crate::_0_base::Show;\npub struct Existing;\n\npub struct Plain;\n\nimpl Show for Plain {\n    fn show(&self) -> u32 {\n        1\n    }\n}\n",
+      "src/_4_types.rs": "pub struct Span4 {\n    pub at: u32,\n}\n\npub struct Req4 {\n    pub span: Span4,\n}\n\npub struct Stays;\n\nmod helper {\n    use super::*;\n\n    pub fn width(span: &Span4) -> u32 {\n        span.at\n    }\n}\n",
+      "src/_5_user.rs": "use crate::Req4;\n\npub fn start(req: &Req4) -> u32 {\n    req.span.at\n}\n\n#[cfg(test)]\nmod tests {\n    use crate::_4_types::{Req4, Span4};\n\n    #[test]\n    fn starts_at_zero() {\n        let req = Req4 { span: Span4 { at: 0 } };\n        assert_eq!(super::start(&req), 0);\n    }\n}\n",
+      "src/_6_pattern.rs": "use std::fmt::{Display, Formatter};\n\n#[derive(Clone)]\npub struct Pattern(pub String);\n\nimpl Display for Pattern {\n    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {\n        f.write_str(&self.0)\n    }\n}\n\npub fn compile(pattern: &Pattern) -> String {\n    pattern.to_string()\n}\n",
+      "src/_7_counts.rs": "pub struct Counts(pub u32);\n\nimpl Counts {\n    pub fn value(&self) -> u32 {\n        self.0\n    }\n}\n",
+      "src/lib.rs": "pub mod _0_base;\npub mod _1_src;\npub mod _2_dest;\nmod _4_types;\npub mod _5_user;\nmod _6_pattern;\nmod _7_counts;\n\npub use _1_src::{\n    Documented,\n};\npub use _4_types::*;\npub use _6_pattern::Pattern;\npub use _7_counts::Counts;\npub use crate::_2_dest::Plain;\n",
+      "tests/": {
+        "directory": true
+      },
+      "tests/uses.rs": "use cleave_ladder::Documented;\nuse cleave_ladder::_2_dest::Plain;\n\n#[test]\nfn both_reachable() {\n    let _plain = Plain;\n    let _documented: Option<Documented> = None;\n}\n"
+    }
+  },
+  "3_cleave": {
+    "check": {
+      "exit_code": 0
+    },
+    "cleave": {
+      "exit_code": 0
+    },
+    "diff": {
+      "stdout": "diff --git a/src/_1_src.rs b/src/_1_src.rs\nindex 7755da9..742be4a 100644\n--- a/src/_1_src.rs\n+++ b/src/_1_src.rs\n@@ -2 +1,0 @@ use crate::_0_base::{\n-    Base,\n@@ -5,15 +4 @@ use crate::_0_base::{\n-\n-/// Documented item.\n-/// Second doc line.\n-#[derive(Debug, Clone)]\n-pub struct Documented {\n-    pub base: Base,\n-}\n-\n-pub struct Plain;\n-\n-impl Show for Plain {\n-    fn show(&self) -> u32 {\n-        1\n-    }\n-}\n+use crate::_2_dest::Plain;\ndiff --git a/src/_2_dest.rs b/src/_2_dest.rs\nindex c34f524..dc79a41 100644\n--- a/src/_2_dest.rs\n+++ b/src/_2_dest.rs\n@@ -1 +1,17 @@\n-pub struct Existing;\n+use crate::_0_base::Base;\n+use crate::_0_base::Show;\n+\n+/// Documented item.\n+/// Second doc line.\n+#[derive(Debug, Clone)]\n+pub struct Documented {\n+    pub base: Base,\n+}\n+\n+pub struct Plain;\n+\n+impl Show for Plain {\n+    fn show(&self) -> u32 {\n+        1\n+    }\n+}\ndiff --git a/src/_3_new.rs b/src/_3_new.rs\nnew file mode 100644\nindex 0000000..c34f524\n--- /dev/null\n+++ b/src/_3_new.rs\n@@ -0,0 +1 @@\n+pub struct Existing;\ndiff --git a/src/lib.rs b/src/lib.rs\nindex 7f70b3b..3c7613f 100644\n--- a/src/lib.rs\n+++ b/src/lib.rs\n@@ -7,0 +8 @@ mod _7_counts;\n+pub mod _3_new;\n@@ -9,4 +9,0 @@ mod _7_counts;\n-pub use _1_src::{\n-    Documented,\n-    Plain,\n-};\n@@ -15,0 +13,2 @@ pub use _7_counts::Counts;\n+pub use crate::_2_dest::Documented;\n+pub use crate::_2_dest::Plain;\ndiff --git a/tests/uses.rs b/tests/uses.rs\nindex b5676f3..84aadbe 100644\n--- a/tests/uses.rs\n+++ b/tests/uses.rs\n@@ -1 +0,0 @@\n-use cleave_ladder::_1_src::Plain;\n@@ -2,0 +2 @@ use cleave_ladder::Documented;\n+use cleave_ladder::_2_dest::Plain;\n"
+    },
+    "original_diff": [
+      "  src/_1_src.rs",
+      "    -    Base,",
+      "    -",
+      "    -/// Documented item.",
+      "    -/// Second doc line.",
+      "    -#[derive(Debug, Clone)]",
+      "    -pub struct Documented {",
+      "    -    pub base: Base,",
+      "    -}",
+      "    -",
+      "    -pub struct Plain;",
+      "    -",
+      "    -impl Show for Plain {",
+      "    -    fn show(&self) -> u32 {",
+      "    -        1",
+      "    -    }",
+      "    -}",
+      "    +use crate::_2_dest::Plain;",
+      "  src/_2_dest.rs",
+      "    -pub struct Existing;",
+      "    +use crate::_0_base::Base;",
+      "    +use crate::_0_base::Show;",
+      "    +",
+      "    +/// Documented item.",
+      "    +/// Second doc line.",
+      "    +#[derive(Debug, Clone)]",
+      "    +pub struct Documented {",
+      "    +    pub base: Base,",
+      "    +}",
+      "    +",
+      "    +pub struct Plain;",
+      "    +",
+      "    +impl Show for Plain {",
+      "    +    fn show(&self) -> u32 {",
+      "    +        1",
+      "    +    }",
+      "    +}",
+      "  src/_3_new.rs",
+      "    +pub struct Existing;",
+      "  src/lib.rs",
+      "    +pub mod _3_new;",
+      "    -pub use _1_src::{",
+      "    -    Documented,",
+      "    -    Plain,",
+      "    -};",
+      "    +pub use crate::_2_dest::Documented;",
+      "    +pub use crate::_2_dest::Plain;",
+      "  tests/uses.rs",
+      "    -use cleave_ladder::_1_src::Plain;",
+      "    +use cleave_ladder::_2_dest::Plain;"
+    ],
+    "tree": {
+      "Cargo.toml": "[package]\nname = \"cleave_ladder\"\nversion = \"0.0.0\"\nedition = \"2021\"\npublish = false\n\n[workspace]\n",
+      "src/": {
+        "directory": true
+      },
+      "src/_0_base.rs": "#[derive(Debug, Clone)]\npub struct Base;\n\npub trait Show {\n    fn show(&self) -> u32;\n}\n",
+      "src/_1_src.rs": "use crate::_0_base::{\n    Show,\n};\nuse crate::_2_dest::Plain;\n\npub fn keeps_using() -> u32 {\n    use crate::_0_base::Base as Local;\n    let _local = Local;\n    Plain.show()\n}\n",
+      "src/_2_dest.rs": "use crate::_0_base::Base;\nuse crate::_0_base::Show;\n\n/// Documented item.\n/// Second doc line.\n#[derive(Debug, Clone)]\npub struct Documented {\n    pub base: Base,\n}\n\npub struct Plain;\n\nimpl Show for Plain {\n    fn show(&self) -> u32 {\n        1\n    }\n}\n",
+      "src/_3_new.rs": "pub struct Existing;\n",
+      "src/_4_types.rs": "pub struct Span4 {\n    pub at: u32,\n}\n\npub struct Req4 {\n    pub span: Span4,\n}\n\npub struct Stays;\n\nmod helper {\n    use super::*;\n\n    pub fn width(span: &Span4) -> u32 {\n        span.at\n    }\n}\n",
+      "src/_5_user.rs": "use crate::Req4;\n\npub fn start(req: &Req4) -> u32 {\n    req.span.at\n}\n\n#[cfg(test)]\nmod tests {\n    use crate::_4_types::{Req4, Span4};\n\n    #[test]\n    fn starts_at_zero() {\n        let req = Req4 { span: Span4 { at: 0 } };\n        assert_eq!(super::start(&req), 0);\n    }\n}\n",
+      "src/_6_pattern.rs": "use std::fmt::{Display, Formatter};\n\n#[derive(Clone)]\npub struct Pattern(pub String);\n\nimpl Display for Pattern {\n    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {\n        f.write_str(&self.0)\n    }\n}\n\npub fn compile(pattern: &Pattern) -> String {\n    pattern.to_string()\n}\n",
+      "src/_7_counts.rs": "pub struct Counts(pub u32);\n\nimpl Counts {\n    pub fn value(&self) -> u32 {\n        self.0\n    }\n}\n",
+      "src/lib.rs": "pub mod _0_base;\npub mod _1_src;\npub mod _2_dest;\nmod _4_types;\npub mod _5_user;\nmod _6_pattern;\nmod _7_counts;\npub mod _3_new;\n\npub use _4_types::*;\npub use _6_pattern::Pattern;\npub use _7_counts::Counts;\npub use crate::_2_dest::Documented;\npub use crate::_2_dest::Plain;\n",
+      "tests/": {
+        "directory": true
+      },
+      "tests/uses.rs": "use cleave_ladder::Documented;\nuse cleave_ladder::_2_dest::Plain;\n\n#[test]\nfn both_reachable() {\n    let _plain = Plain;\n    let _documented: Option<Documented> = None;\n}\n"
+    }
+  },
+  "4_cleave": {
+    "check": {
+      "exit_code": 0
+    },
+    "cleave": {
+      "exit_code": 0
+    },
+    "diff": {
+      "stdout": "diff --git a/src/_4_types.rs b/src/_4_types.rs\nindex 6266985..835bd7e 100644\n--- a/src/_4_types.rs\n+++ b/src/_4_types.rs\n@@ -1,8 +1 @@\n-pub struct Span4 {\n-    pub at: u32,\n-}\n-\n-pub struct Req4 {\n-    pub span: Span4,\n-}\n-\n+use crate::_6_moved::Span4;\ndiff --git a/src/_5_user.rs b/src/_5_user.rs\nindex 4668d0f..6d55472 100644\n--- a/src/_5_user.rs\n+++ b/src/_5_user.rs\n@@ -9 +9,2 @@ mod tests {\n-    use crate::_4_types::{Req4, Span4};\n+    use crate::_6_moved::Req4;\n+    use crate::_6_moved::Span4;\ndiff --git a/src/_6_moved.rs b/src/_6_moved.rs\nnew file mode 100644\nindex 0000000..2842528\n--- /dev/null\n+++ b/src/_6_moved.rs\n@@ -0,0 +1,7 @@\n+pub struct Span4 {\n+    pub at: u32,\n+}\n+\n+pub struct Req4 {\n+    pub span: Span4,\n+}\ndiff --git a/src/lib.rs b/src/lib.rs\nindex 7f70b3b..da7bc5b 100644\n--- a/src/lib.rs\n+++ b/src/lib.rs\n@@ -7,0 +8 @@ mod _7_counts;\n+pub(crate) mod _6_moved;\n@@ -13,0 +15,2 @@ pub use _4_types::*;\n+pub use crate::_6_moved::Req4;\n+pub use crate::_6_moved::Span4;\n"
+    },
+    "original_diff": [
+      "  src/_4_types.rs",
+      "    -pub struct Span4 {",
+      "    -    pub at: u32,",
+      "    -}",
+      "    -",
+      "    -pub struct Req4 {",
+      "    -    pub span: Span4,",
+      "    -}",
+      "    -",
+      "    +use crate::_6_moved::Span4;",
+      "  src/_5_user.rs",
+      "    -    use crate::_4_types::{Req4, Span4};",
+      "    +    use crate::_6_moved::Req4;",
+      "    +    use crate::_6_moved::Span4;",
+      "  src/_6_moved.rs",
+      "    +pub struct Span4 {",
+      "    +    pub at: u32,",
+      "    +}",
+      "    +",
+      "    +pub struct Req4 {",
+      "    +    pub span: Span4,",
+      "    +}",
+      "  src/lib.rs",
+      "    +pub(crate) mod _6_moved;",
+      "    +pub use crate::_6_moved::Req4;",
+      "    +pub use crate::_6_moved::Span4;"
+    ],
+    "tree": {
+      "Cargo.toml": "[package]\nname = \"cleave_ladder\"\nversion = \"0.0.0\"\nedition = \"2021\"\npublish = false\n\n[workspace]\n",
+      "src/": {
+        "directory": true
+      },
+      "src/_0_base.rs": "#[derive(Debug, Clone)]\npub struct Base;\n\npub trait Show {\n    fn show(&self) -> u32;\n}\n",
+      "src/_1_src.rs": "use crate::_0_base::{\n    Base,\n    Show,\n};\n\n/// Documented item.\n/// Second doc line.\n#[derive(Debug, Clone)]\npub struct Documented {\n    pub base: Base,\n}\n\npub struct Plain;\n\nimpl Show for Plain {\n    fn show(&self) -> u32 {\n        1\n    }\n}\n\npub fn keeps_using() -> u32 {\n    use crate::_0_base::Base as Local;\n    let _local = Local;\n    Plain.show()\n}\n",
+      "src/_2_dest.rs": "pub struct Existing;\n",
+      "src/_4_types.rs": "use crate::_6_moved::Span4;\npub struct Stays;\n\nmod helper {\n    use super::*;\n\n    pub fn width(span: &Span4) -> u32 {\n        span.at\n    }\n}\n",
+      "src/_5_user.rs": "use crate::Req4;\n\npub fn start(req: &Req4) -> u32 {\n    req.span.at\n}\n\n#[cfg(test)]\nmod tests {\n    use crate::_6_moved::Req4;\n    use crate::_6_moved::Span4;\n\n    #[test]\n    fn starts_at_zero() {\n        let req = Req4 { span: Span4 { at: 0 } };\n        assert_eq!(super::start(&req), 0);\n    }\n}\n",
+      "src/_6_moved.rs": "pub struct Span4 {\n    pub at: u32,\n}\n\npub struct Req4 {\n    pub span: Span4,\n}\n",
+      "src/_6_pattern.rs": "use std::fmt::{Display, Formatter};\n\n#[derive(Clone)]\npub struct Pattern(pub String);\n\nimpl Display for Pattern {\n    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {\n        f.write_str(&self.0)\n    }\n}\n\npub fn compile(pattern: &Pattern) -> String {\n    pattern.to_string()\n}\n",
+      "src/_7_counts.rs": "pub struct Counts(pub u32);\n\nimpl Counts {\n    pub fn value(&self) -> u32 {\n        self.0\n    }\n}\n",
+      "src/lib.rs": "pub mod _0_base;\npub mod _1_src;\npub mod _2_dest;\nmod _4_types;\npub mod _5_user;\nmod _6_pattern;\nmod _7_counts;\npub(crate) mod _6_moved;\n\npub use _1_src::{\n    Documented,\n    Plain,\n};\npub use _4_types::*;\npub use crate::_6_moved::Req4;\npub use crate::_6_moved::Span4;\npub use _6_pattern::Pattern;\npub use _7_counts::Counts;\n",
+      "tests/": {
+        "directory": true
+      },
+      "tests/uses.rs": "use cleave_ladder::_1_src::Plain;\nuse cleave_ladder::Documented;\n\n#[test]\nfn both_reachable() {\n    let _plain = Plain;\n    let _documented: Option<Documented> = None;\n}\n"
+    }
+  },
+  "5_cleave": {
+    "check": {
+      "exit_code": 0
+    },
+    "cleave": {
+      "exit_code": 0
+    },
+    "diff": {
+      "stdout": "diff --git a/src/_1_src.rs b/src/_1_src.rs\ndeleted file mode 100644\nindex bfb87ff..0000000\n--- a/src/_1_src.rs\n+++ /dev/null\n@@ -1,20 +0,0 @@\n-use crate::_0_base::{\n-    Base,\n-    Show,\n-};\n-\n-/// Documented item.\n-/// Second doc line.\n-#[derive(Debug, Clone)]\n-pub struct Documented {\n-    pub base: Base,\n-}\n-\n-pub struct Plain;\n-\n-impl Show for Plain {\n-    fn show(&self) -> u32 {\n-        1\n-    }\n-}\n-\ndiff --git a/src/_2_dest.rs b/src/_2_dest.rs\nindex c34f524..2e3cd53 100644\n--- a/src/_2_dest.rs\n+++ b/src/_2_dest.rs\n@@ -0,0 +1,2 @@\n+use crate::_0_base::Base;\n+use crate::_0_base::Show;\n@@ -1,0 +4,15 @@ pub struct Existing;\n+\n+/// Documented item.\n+/// Second doc line.\n+#[derive(Debug, Clone)]\n+pub struct Documented {\n+    pub base: Base,\n+}\n+\n+pub struct Plain;\n+\n+impl Show for Plain {\n+    fn show(&self) -> u32 {\n+        1\n+    }\n+}\ndiff --git a/src/lib.rs b/src/lib.rs\nindex 7f70b3b..51c81bd 100644\n--- a/src/lib.rs\n+++ b/src/lib.rs\n@@ -2 +1,0 @@ pub mod _0_base;\n-pub mod _1_src;\n@@ -9,4 +7,0 @@ mod _7_counts;\n-pub use _1_src::{\n-    Documented,\n-    Plain,\n-};\n@@ -15,0 +11,2 @@ pub use _7_counts::Counts;\n+pub use crate::_2_dest::Documented;\n+pub use crate::_2_dest::Plain;\ndiff --git a/tests/uses.rs b/tests/uses.rs\nindex b5676f3..84aadbe 100644\n--- a/tests/uses.rs\n+++ b/tests/uses.rs\n@@ -1 +0,0 @@\n-use cleave_ladder::_1_src::Plain;\n@@ -2,0 +2 @@ use cleave_ladder::Documented;\n+use cleave_ladder::_2_dest::Plain;\n"
+    },
+    "original_diff": [
+      "  src/_1_src.rs (deleted)",
+      "    -use crate::_0_base::{",
+      "    -    Base,",
+      "    -    Show,",
+      "    -};",
+      "    -",
+      "    -/// Documented item.",
+      "    -/// Second doc line.",
+      "    -#[derive(Debug, Clone)]",
+      "    -pub struct Documented {",
+      "    -    pub base: Base,",
+      "    -}",
+      "    -",
+      "    -pub struct Plain;",
+      "    -",
+      "    -impl Show for Plain {",
+      "    -    fn show(&self) -> u32 {",
+      "    -        1",
+      "    -    }",
+      "    -}",
+      "    -",
+      "  src/_2_dest.rs",
+      "    +use crate::_0_base::Base;",
+      "    +use crate::_0_base::Show;",
+      "    +",
+      "    +/// Documented item.",
+      "    +/// Second doc line.",
+      "    +#[derive(Debug, Clone)]",
+      "    +pub struct Documented {",
+      "    +    pub base: Base,",
+      "    +}",
+      "    +",
+      "    +pub struct Plain;",
+      "    +",
+      "    +impl Show for Plain {",
+      "    +    fn show(&self) -> u32 {",
+      "    +        1",
+      "    +    }",
+      "    +}",
+      "  src/lib.rs",
+      "    -pub mod _1_src;",
+      "    -pub use _1_src::{",
+      "    -    Documented,",
+      "    -    Plain,",
+      "    -};",
+      "    +pub use crate::_2_dest::Documented;",
+      "    +pub use crate::_2_dest::Plain;",
+      "  tests/uses.rs",
+      "    -use cleave_ladder::_1_src::Plain;",
+      "    +use cleave_ladder::_2_dest::Plain;"
+    ],
+    "tree": {
+      "Cargo.toml": "[package]\nname = \"cleave_ladder\"\nversion = \"0.0.0\"\nedition = \"2021\"\npublish = false\n\n[workspace]\n",
+      "src/": {
+        "directory": true
+      },
+      "src/_0_base.rs": "#[derive(Debug, Clone)]\npub struct Base;\n\npub trait Show {\n    fn show(&self) -> u32;\n}\n",
+      "src/_2_dest.rs": "use crate::_0_base::Base;\nuse crate::_0_base::Show;\npub struct Existing;\n\n/// Documented item.\n/// Second doc line.\n#[derive(Debug, Clone)]\npub struct Documented {\n    pub base: Base,\n}\n\npub struct Plain;\n\nimpl Show for Plain {\n    fn show(&self) -> u32 {\n        1\n    }\n}\n",
+      "src/_4_types.rs": "pub struct Span4 {\n    pub at: u32,\n}\n\npub struct Req4 {\n    pub span: Span4,\n}\n\npub struct Stays;\n\nmod helper {\n    use super::*;\n\n    pub fn width(span: &Span4) -> u32 {\n        span.at\n    }\n}\n",
+      "src/_5_user.rs": "use crate::Req4;\n\npub fn start(req: &Req4) -> u32 {\n    req.span.at\n}\n\n#[cfg(test)]\nmod tests {\n    use crate::_4_types::{Req4, Span4};\n\n    #[test]\n    fn starts_at_zero() {\n        let req = Req4 { span: Span4 { at: 0 } };\n        assert_eq!(super::start(&req), 0);\n    }\n}\n",
+      "src/_6_pattern.rs": "use std::fmt::{Display, Formatter};\n\n#[derive(Clone)]\npub struct Pattern(pub String);\n\nimpl Display for Pattern {\n    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {\n        f.write_str(&self.0)\n    }\n}\n\npub fn compile(pattern: &Pattern) -> String {\n    pattern.to_string()\n}\n",
+      "src/_7_counts.rs": "pub struct Counts(pub u32);\n\nimpl Counts {\n    pub fn value(&self) -> u32 {\n        self.0\n    }\n}\n",
+      "src/lib.rs": "pub mod _0_base;\npub mod _2_dest;\nmod _4_types;\npub mod _5_user;\nmod _6_pattern;\nmod _7_counts;\n\npub use _4_types::*;\npub use _6_pattern::Pattern;\npub use _7_counts::Counts;\npub use crate::_2_dest::Documented;\npub use crate::_2_dest::Plain;\n",
+      "tests/": {
+        "directory": true
+      },
+      "tests/uses.rs": "use cleave_ladder::Documented;\nuse cleave_ladder::_2_dest::Plain;\n\n#[test]\nfn both_reachable() {\n    let _plain = Plain;\n    let _documented: Option<Documented> = None;\n}\n"
+    }
+  },
+  "6_cleave": {
+    "check": {
+      "exit_code": 0
+    },
+    "cleave": {
+      "exit_code": 0
+    },
+    "diff": {
+      "stdout": "diff --git a/src/_1_src.rs b/src/_1_src.rs\nindex 374e84b..4b169a6 100644\n--- a/src/_1_src.rs\n+++ b/src/_1_src.rs\n@@ -2 +1,0 @@ use crate::_0_base::{\n-    Base,\n@@ -7,7 +5,0 @@ use crate::_0_base::{\n-/// Documented item.\n-/// Second doc line.\n-#[derive(Debug, Clone)]\n-pub struct Documented {\n-    pub base: Base,\n-}\n-\ndiff --git a/src/_2_dest.rs b/src/_2_dest.rs\nindex c34f524..a89be5d 100644\n--- a/src/_2_dest.rs\n+++ b/src/_2_dest.rs\n@@ -0,0 +1 @@\n+use crate::_0_base::Base;\n@@ -1,0 +3,7 @@ pub struct Existing;\n+\n+/// Documented item.\n+/// Second doc line.\n+#[derive(Debug, Clone)]\n+pub struct Documented {\n+    pub base: Base,\n+}\ndiff --git a/src/lib.rs b/src/lib.rs\nindex 7f70b3b..5b722ee 100644\n--- a/src/lib.rs\n+++ b/src/lib.rs\n@@ -10 +9,0 @@ pub use _1_src::{\n-    Documented,\n@@ -15,0 +15 @@ pub use _7_counts::Counts;\n+pub use crate::_2_dest::Documented;\n"
+    },
+    "original_diff": [
+      "  src/_1_src.rs",
+      "    -    Base,",
+      "    -/// Documented item.",
+      "    -/// Second doc line.",
+      "    -#[derive(Debug, Clone)]",
+      "    -pub struct Documented {",
+      "    -    pub base: Base,",
+      "    -}",
+      "    -",
+      "  src/_2_dest.rs",
+      "    +use crate::_0_base::Base;",
+      "    +",
+      "    +/// Documented item.",
+      "    +/// Second doc line.",
+      "    +#[derive(Debug, Clone)]",
+      "    +pub struct Documented {",
+      "    +    pub base: Base,",
+      "    +}",
+      "  src/lib.rs",
+      "    -    Documented,",
+      "    +pub use crate::_2_dest::Documented;"
+    ],
+    "tree": {
+      "Cargo.toml": "[package]\nname = \"cleave_ladder\"\nversion = \"0.0.0\"\nedition = \"2021\"\npublish = false\n\n[workspace]\n",
+      "src/": {
+        "directory": true
+      },
+      "src/_0_base.rs": "#[derive(Debug, Clone)]\npub struct Base;\n\npub trait Show {\n    fn show(&self) -> u32;\n}\n\npub struct Marker;\n",
+      "src/_1_src.rs": "use crate::_0_base::{\n    Show,\n    Marker,\n};\n\npub struct Plain;\n\nimpl Show for Plain {\n    fn show(&self) -> u32 {\n        1\n    }\n}\n\npub fn keeps_using() -> u32 {\n    use crate::_0_base::Base as Local;\n    let _local = Local;\n    Plain.show()\n}\n\npub fn marker() -> Marker { Marker }\n",
+      "src/_2_dest.rs": "use crate::_0_base::Base;\npub struct Existing;\n\n/// Documented item.\n/// Second doc line.\n#[derive(Debug, Clone)]\npub struct Documented {\n    pub base: Base,\n}\n",
+      "src/_4_types.rs": "pub struct Span4 {\n    pub at: u32,\n}\n\npub struct Req4 {\n    pub span: Span4,\n}\n\npub struct Stays;\n\nmod helper {\n    use super::*;\n\n    pub fn width(span: &Span4) -> u32 {\n        span.at\n    }\n}\n",
+      "src/_5_user.rs": "use crate::Req4;\n\npub fn start(req: &Req4) -> u32 {\n    req.span.at\n}\n\n#[cfg(test)]\nmod tests {\n    use crate::_4_types::{Req4, Span4};\n\n    #[test]\n    fn starts_at_zero() {\n        let req = Req4 { span: Span4 { at: 0 } };\n        assert_eq!(super::start(&req), 0);\n    }\n}\n",
+      "src/_6_pattern.rs": "use std::fmt::{Display, Formatter};\n\n#[derive(Clone)]\npub struct Pattern(pub String);\n\nimpl Display for Pattern {\n    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {\n        f.write_str(&self.0)\n    }\n}\n\npub fn compile(pattern: &Pattern) -> String {\n    pattern.to_string()\n}\n",
+      "src/_7_counts.rs": "pub struct Counts(pub u32);\n\nimpl Counts {\n    pub fn value(&self) -> u32 {\n        self.0\n    }\n}\n",
+      "src/lib.rs": "pub mod _0_base;\npub mod _1_src;\npub mod _2_dest;\nmod _4_types;\npub mod _5_user;\nmod _6_pattern;\nmod _7_counts;\n\npub use _1_src::{\n    Plain,\n};\npub use _4_types::*;\npub use _6_pattern::Pattern;\npub use _7_counts::Counts;\npub use crate::_2_dest::Documented;\n",
+      "tests/": {
+        "directory": true
+      },
+      "tests/uses.rs": "use cleave_ladder::_1_src::Plain;\nuse cleave_ladder::Documented;\n\n#[test]\nfn both_reachable() {\n    let _plain = Plain;\n    let _documented: Option<Documented> = None;\n}\n"
+    }
+  },
+  "7_cleave": {
+    "check": {
+      "exit_code": 0
+    },
+    "cleave": {
+      "exit_code": 0
+    },
+    "display_impl": true,
+    "extracted": "use std::fmt::Display;\nuse std::fmt::Formatter;\n\n#[derive(Clone)]\npub struct Pattern(pub String);\n\nimpl Display for Pattern {\n    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {\n        f.write_str(&self.0)\n    }\n}\n",
+    "pattern_lines": [
+      "use crate::_8_extract::Pattern;",
+      "pub fn compile(pattern: &Pattern) -> String {",
+      "    pattern.to_string()",
+      "}"
+    ],
+    "pattern_source": "use crate::_8_extract::Pattern;\npub fn compile(pattern: &Pattern) -> String {\n    pattern.to_string()\n}\n",
+    "tree": {
+      "Cargo.toml": "[package]\nname = \"cleave_ladder\"\nversion = \"0.0.0\"\nedition = \"2021\"\npublish = false\n\n[workspace]\n",
+      "src/": {
+        "directory": true
+      },
+      "src/_0_base.rs": "#[derive(Debug, Clone)]\npub struct Base;\n\npub trait Show {\n    fn show(&self) -> u32;\n}\n",
+      "src/_1_src.rs": "use crate::_0_base::{\n    Base,\n    Show,\n};\n\n/// Documented item.\n/// Second doc line.\n#[derive(Debug, Clone)]\npub struct Documented {\n    pub base: Base,\n}\n\npub struct Plain;\n\nimpl Show for Plain {\n    fn show(&self) -> u32 {\n        1\n    }\n}\n\npub fn keeps_using() -> u32 {\n    use crate::_0_base::Base as Local;\n    let _local = Local;\n    Plain.show()\n}\n",
+      "src/_2_dest.rs": "pub struct Existing;\n",
+      "src/_4_types.rs": "pub struct Span4 {\n    pub at: u32,\n}\n\npub struct Req4 {\n    pub span: Span4,\n}\n\npub struct Stays;\n\nmod helper {\n    use super::*;\n\n    pub fn width(span: &Span4) -> u32 {\n        span.at\n    }\n}\n",
+      "src/_5_user.rs": "use crate::Req4;\n\npub fn start(req: &Req4) -> u32 {\n    req.span.at\n}\n\n#[cfg(test)]\nmod tests {\n    use crate::_4_types::{Req4, Span4};\n\n    #[test]\n    fn starts_at_zero() {\n        let req = Req4 { span: Span4 { at: 0 } };\n        assert_eq!(super::start(&req), 0);\n    }\n}\n",
+      "src/_6_pattern.rs": "use crate::_8_extract::Pattern;\npub fn compile(pattern: &Pattern) -> String {\n    pattern.to_string()\n}\n",
+      "src/_8_extract.rs": "use std::fmt::Display;\nuse std::fmt::Formatter;\n\n#[derive(Clone)]\npub struct Pattern(pub String);\n\nimpl Display for Pattern {\n    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {\n        f.write_str(&self.0)\n    }\n}\n",
+      "src/_9_counts.rs": "pub struct Counts(pub u32);\n\nimpl Counts {\n    pub fn value(&self) -> u32 {\n        self.0\n    }\n}\n",
+      "src/lib.rs": "pub mod _0_base;\npub mod _1_src;\npub mod _2_dest;\nmod _4_types;\npub mod _5_user;\nmod _6_pattern;\npub(crate) mod _8_extract;\npub(crate) mod _9_counts;\n\npub use _1_src::{\n    Documented,\n    Plain,\n};\npub use _4_types::*;\npub use crate::_8_extract::Pattern;\npub use crate::_9_counts::Counts;\n",
+      "tests/": {
+        "directory": true
+      },
+      "tests/uses.rs": "use cleave_ladder::_1_src::Plain;\nuse cleave_ladder::Documented;\n\n#[test]\nfn both_reachable() {\n    let _plain = Plain;\n    let _documented: Option<Documented> = None;\n}\n"
+    }
+  }
+}

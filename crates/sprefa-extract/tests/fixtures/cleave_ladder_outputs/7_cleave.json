@@ -1,0 +1,154 @@
+{
+  "steps": [
+    {
+      "action": "copy_tree",
+      "source": "$fixtures/cleave_ladder",
+      "target": "$work/repo"
+    },
+    {
+      "action": "git",
+      "args": [
+        "init",
+        "-q",
+        "."
+      ],
+      "cwd": "$work/repo",
+      "environment": {
+        "CARGO_TARGET_DIR": "$work/target",
+        "RUST_LOG": "off",
+        "KACHE_DISABLED": "1"
+      }
+    },
+    {
+      "action": "git",
+      "args": [
+        "add",
+        "-A"
+      ],
+      "cwd": "$work/repo",
+      "environment": {
+        "CARGO_TARGET_DIR": "$work/target",
+        "RUST_LOG": "off",
+        "KACHE_DISABLED": "1"
+      }
+    },
+    {
+      "action": "git",
+      "args": [
+        "-c",
+        "user.email=l@l",
+        "-c",
+        "user.name=l",
+        "commit",
+        "-qm",
+        "l"
+      ],
+      "cwd": "$work/repo",
+      "environment": {
+        "CARGO_TARGET_DIR": "$work/target",
+        "RUST_LOG": "off",
+        "KACHE_DISABLED": "1"
+      }
+    },
+    {
+      "action": "run",
+      "name": "cleave",
+      "arguments": [
+        "cleave",
+        "--list",
+        "$fixtures/cleave_ladder_outputs/inputs/pattern.tsv",
+        "--root",
+        "$work/repo",
+        "--state",
+        "$work/state",
+        "--commit"
+      ],
+      "cwd": "$work/repo",
+      "environment": {
+        "CARGO_TARGET_DIR": "$work/target",
+        "RUST_LOG": "off",
+        "KACHE_DISABLED": "1"
+      },
+      "expect_exit_code": 0,
+      "unasserted_stdout": true,
+      "unasserted_stderr": true,
+      "raw_stdout": true
+    },
+    {
+      "action": "git",
+      "args": [
+        "add",
+        "-A"
+      ],
+      "cwd": "$work/repo",
+      "environment": {
+        "CARGO_TARGET_DIR": "$work/target",
+        "RUST_LOG": "off",
+        "KACHE_DISABLED": "1"
+      },
+      "unasserted_exit": true
+    },
+    {
+      "action": "command",
+      "name": "check",
+      "program": "$cargo",
+      "arguments": [
+        "check",
+        "--offline",
+        "--all-targets",
+        "-q"
+      ],
+      "cwd": "$work/repo",
+      "environment": {
+        "CARGO_TARGET_DIR": "$work/target",
+        "RUST_LOG": "off",
+        "KACHE_DISABLED": "1"
+      },
+      "expect_exit_code": 0,
+      "unasserted_stdout": true,
+      "unasserted_stderr": true,
+      "raw_stdout": true
+    },
+    {
+      "action": "read_tree",
+      "name": "pattern_source",
+      "path": "$work/repo/src/_6_pattern.rs"
+    },
+    {
+      "action": "claim",
+      "name": "pattern_lines",
+      "cell": "pattern_source",
+      "kind": "nonempty_lines_equal",
+      "expect": [
+        "use crate::_8_extract::Pattern;",
+        "pub fn compile(pattern: &Pattern) -> String {",
+        "    pattern.to_string()",
+        "}"
+      ]
+    },
+    {
+      "action": "read_tree",
+      "name": "extracted",
+      "path": "$work/repo/src/_8_extract.rs"
+    },
+    {
+      "action": "claim",
+      "name": "display_impl",
+      "cell": "extracted",
+      "kind": "contains",
+      "text": "impl Display for Pattern"
+    },
+    {
+      "action": "read_tree",
+      "name": "tree",
+      "path": "$work/repo",
+      "directory": true,
+      "exclude_prefixes": [
+        ".git/",
+        "target/",
+        "Cargo.lock",
+        ".dl/"
+      ]
+    }
+  ]
+}

@@ -623,6 +623,17 @@ fn claim(
     let text = value.as_str().unwrap_or("");
     let needle = || expand(step["text"].as_str().unwrap());
     let (actual, expected) = match kind {
+        "nonempty_lines_equal" => (serde_json::json!(text.lines().filter(|line| !line.is_empty()).collect::<Vec<_>>()), step["expect"].clone()),
+        "git_diff_lines" => {
+            let mut rows = Vec::new(); let mut old_file = "";
+            for line in text.lines() {
+                if let Some(file) = line.strip_prefix("--- a/") { old_file = file; }
+                else if line == "+++ /dev/null" { rows.push(format!("  {old_file} (deleted)")); }
+                else if let Some(file) = line.strip_prefix("+++ b/") { rows.push(format!("  {file}")); }
+                else if (line.starts_with('+') || line.starts_with('-')) && !line.starts_with("+++") && !line.starts_with("---") { rows.push(format!("    {line}")); }
+            }
+            (serde_json::json!(rows), step["expect"].clone())
+        },
         "not_json" => (Value::Bool(serde_json::from_str::<Value>(text.trim()).is_err()), Value::Bool(true)),
         "contains" => (
             serde_json::json!(text.contains(&needle())),

@@ -1,0 +1,182 @@
+{
+  "steps": [
+    {
+      "action": "copy_tree",
+      "source": "$fixtures/cleave_ladder",
+      "target": "$work/repo"
+    },
+    {
+      "action": "git",
+      "args": [
+        "init",
+        "-q",
+        "."
+      ],
+      "cwd": "$work/repo",
+      "environment": {
+        "CARGO_TARGET_DIR": "$work/target",
+        "RUST_LOG": "off",
+        "KACHE_DISABLED": "1"
+      }
+    },
+    {
+      "action": "git",
+      "args": [
+        "add",
+        "-A"
+      ],
+      "cwd": "$work/repo",
+      "environment": {
+        "CARGO_TARGET_DIR": "$work/target",
+        "RUST_LOG": "off",
+        "KACHE_DISABLED": "1"
+      }
+    },
+    {
+      "action": "git",
+      "args": [
+        "-c",
+        "user.email=l@l",
+        "-c",
+        "user.name=l",
+        "commit",
+        "-qm",
+        "l"
+      ],
+      "cwd": "$work/repo",
+      "environment": {
+        "CARGO_TARGET_DIR": "$work/target",
+        "RUST_LOG": "off",
+        "KACHE_DISABLED": "1"
+      }
+    },
+    {
+      "action": "run",
+      "name": "cleave",
+      "arguments": [
+        "cleave",
+        "$work/repo/src/_1_src.rs#Plain",
+        "$work/repo/src/_2_dest.rs",
+        "--root",
+        "$work/repo",
+        "--state",
+        "$work/state",
+        "--commit"
+      ],
+      "cwd": "$work/repo",
+      "environment": {
+        "CARGO_TARGET_DIR": "$work/target",
+        "RUST_LOG": "off",
+        "KACHE_DISABLED": "1"
+      },
+      "expect_exit_code": 0,
+      "unasserted_stdout": true,
+      "unasserted_stderr": true,
+      "raw_stdout": true
+    },
+    {
+      "action": "git",
+      "args": [
+        "add",
+        "-A"
+      ],
+      "cwd": "$work/repo",
+      "environment": {
+        "CARGO_TARGET_DIR": "$work/target",
+        "RUST_LOG": "off",
+        "KACHE_DISABLED": "1"
+      },
+      "unasserted_exit": true
+    },
+    {
+      "action": "command",
+      "name": "check",
+      "program": "$cargo",
+      "arguments": [
+        "check",
+        "--offline",
+        "--all-targets",
+        "-q",
+        "--message-format",
+        "short"
+      ],
+      "cwd": "$work/repo",
+      "environment": {
+        "CARGO_TARGET_DIR": "$work/target",
+        "RUST_LOG": "off",
+        "KACHE_DISABLED": "1"
+      },
+      "expect_exit_code": 0,
+      "unasserted_stdout": true,
+      "unasserted_stderr": true,
+      "raw_stdout": true
+    },
+    {
+      "action": "command",
+      "name": "diff",
+      "program": "git",
+      "arguments": [
+        "diff",
+        "--cached",
+        "-U0",
+        "--no-color",
+        "--no-renames"
+      ],
+      "cwd": "$work/repo",
+      "environment": {
+        "CARGO_TARGET_DIR": "$work/target",
+        "RUST_LOG": "off",
+        "KACHE_DISABLED": "1"
+      },
+      "unasserted_exit": true,
+      "raw_stdout": true,
+      "unasserted_stderr": true
+    },
+    {
+      "action": "claim",
+      "name": "original_diff",
+      "cell": "diff.stdout",
+      "kind": "git_diff_lines",
+      "expect": [
+        "  src/_1_src.rs",
+        "    +use crate::_2_dest::Plain;",
+        "    -pub struct Plain;",
+        "    -",
+        "    -impl Show for Plain {",
+        "    -    fn show(&self) -> u32 {",
+        "    -        1",
+        "    -    }",
+        "    -}",
+        "    -",
+        "  src/_2_dest.rs",
+        "    +use crate::_0_base::Show;",
+        "    +",
+        "    +pub struct Plain;",
+        "    +",
+        "    +impl Show for Plain {",
+        "    +    fn show(&self) -> u32 {",
+        "    +        1",
+        "    +    }",
+        "    +}",
+        "  src/lib.rs",
+        "    -    Plain,",
+        "    +pub use crate::_2_dest::Plain;",
+        "  tests/uses.rs",
+        "    -use cleave_ladder::_1_src::Plain;",
+        "    +use cleave_ladder::_2_dest::Plain;"
+      ]
+    },
+    {
+      "action": "read_tree",
+      "name": "tree",
+      "path": "$work/repo",
+      "directory": true,
+      "exclude_prefixes": [
+        ".git/",
+        "target/",
+        "Cargo.lock",
+        ".dl/"
+      ]
+    }
+  ]
+}
