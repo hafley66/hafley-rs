@@ -148,7 +148,10 @@ impl RustNamesIndex {
                                 &workspace,
                                 Duration::from_secs(120),
                             )
-                            .map(Arc::new)
+                            .map(|host| {
+                                host.places_for_files(&files);
+                                Arc::new(host)
+                            })
                             .map_err(|error| error.to_string())
                         })
                         .clone()
@@ -678,15 +681,7 @@ impl RustNamesIndex {
         }
         #[cfg(feature = "rust-checker")]
         if let Some(host) = self.hosts.get(file) {
-            for place in super::rust_checker::all_module_places(host) {
-                if place.file == self.source_paths[file]
-                    || !place
-                        .decl
-                        .as_ref()
-                        .is_some_and(|(parent, _, _)| parent == &self.source_paths[file])
-                {
-                    continue;
-                }
+            for place in host.declared_places(&self.source_paths[file]) {
                 if let Some(target_path) = self.paths.get(&place.file) {
                     rows.push(ImportRow {
                         local: String::new(),

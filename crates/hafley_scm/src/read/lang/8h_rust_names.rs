@@ -622,29 +622,8 @@ pub fn resolve_prefix(
 /// Enumerate the engine's module graph, including inline modules.
 pub fn all_module_places(host: &NamesHost) -> Vec<ModulePlace> {
     let mut workspace = host.workspace.lock().unwrap();
-    if let Some(places) = &workspace.names.all_places {
-        return places.clone();
-    }
-    let db = workspace.host.raw_database();
-    let places = attach_db(db, || {
-        let mut pending = Crate::all(db)
-            .into_iter()
-            .map(|krate| krate.root_module(db))
-            .collect::<Vec<_>>();
-        let mut places = Vec::new();
-        while let Some(module) = pending.pop() {
-            let Some(place) = host.place_of(&workspace, db, module) else {
-                continue;
-            };
-            places.push(place);
-            pending.extend(module.children(db));
-        }
-        places.sort();
-        places.dedup();
-        places
-    });
-    workspace.names.all_places = Some(places.clone());
-    places
+    super::names_cache::ensure_all_places(host, &mut workspace);
+    workspace.names.all_places.as_ref().unwrap().clone()
 }
 
 /// Workspace dependency roots from RA's crate graph, including a bin's own library.

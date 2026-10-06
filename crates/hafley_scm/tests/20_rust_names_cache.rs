@@ -20,6 +20,9 @@ fn names_answers_follow_workspace_content() {
         let text = std::fs::read_to_string(fixture.join(file)).unwrap();
         std::fs::write(&source, &text).unwrap();
         let host = module_tree(&source, Duration::from_secs(120)).unwrap();
+        let batch = host.places_for_files(&[source.clone(), root.join("outside.rs")]);
+        assert_eq!(batch.iter().map(Vec::len).collect::<Vec<_>>(), vec![1, 0]);
+        assert_eq!(batch[0], host.places(&source));
         let offset = text.find(".hit()").unwrap() as u32 + 1;
         let definitions = resolve_written_method(&host, &source, offset, "hit").unwrap();
         let declaration = text.find(&format!("impl {expected}")).unwrap();

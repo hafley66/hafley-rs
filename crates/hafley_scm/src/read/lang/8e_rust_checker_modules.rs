@@ -259,19 +259,7 @@ impl RustModuleTree {
 
     /// Every module the def maps place `file` at, in crate-root order.
     pub fn places(&self, file: &Path) -> Vec<ModulePlace> {
-        let workspace = self.workspace.lock().unwrap();
-        let Some((id, _)) = workspace.vfs.file_id(&vfs_path(&host_path(file))) else {
-            return Vec::new();
-        };
-        let db = workspace.host.raw_database();
-        let mut places: Vec<ModulePlace> = attach_db(db, || {
-            let sema = Semantics::new(db);
-            sema.file_to_module_defs(ra_ap_ide::FileId::from_raw(id.index()))
-                .filter_map(|module| self.place_of(&workspace, db, module))
-                .collect()
-        });
-        places.sort();
-        places
+        self.places_for_files(&[file.to_path_buf()]).pop().unwrap()
     }
 
     pub(super) fn place_of(
