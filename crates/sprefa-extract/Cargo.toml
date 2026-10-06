@@ -336,6 +336,11 @@ go-checker = ["go", "hafley_scm/go-checker"]
 name = "all"
 path = "tests/all.rs"
 
+[[test]]
+name = "215_rust_path_decl"
+path = "tests/rust_path_decl/0_table.rs"
+required-features = ["cli"]
+
 [[bin]]
 name = "ryii"
 path = "src/bin/ryi.rs"
