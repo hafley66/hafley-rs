@@ -569,3 +569,10 @@ fn every_test_file_is_a_module_here() {
 mod df_increment_support;
 #[path = "211_rust_names.rs"]
 mod t_211_rust_names;
+
+#[path = "support/2_fixture_runner.rs"]
+mod fixture_runner;
+#[path = "support/3_v5_normalize.rs"]
+mod v5_normalize;
+#[path = "support/4_golden_parity.rs"]
+mod golden_parity_support;

@@ -1,0 +1,10 @@
+{
+  "operation": "ratchet",
+  "language": "ts",
+  "root": "tests/fixtures/ts",
+  "extension": "ts",
+  "indexer": "typescript",
+  "committed_index": false,
+  "exclude_local_symbols": false,
+  "skip_directories": []
+}

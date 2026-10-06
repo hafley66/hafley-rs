@@ -1,0 +1,108 @@
+{
+  "operation": "corpus",
+  "cases": [
+    {
+      "name": "sample",
+      "path": "crates/sprefa-extract/tests/fixtures/ts/sample.ts",
+      "fixture": "fixtures/ts/sample.ts",
+      "baseline": "fixtures/ts/sample.v5.jsonl",
+      "fixture_dir": "ts"
+    },
+    {
+      "name": "consts",
+      "path": "crates/sprefa-extract/tests/fixtures/ts/consts.ts",
+      "fixture": "fixtures/ts/consts.ts",
+      "baseline": "fixtures/ts/consts.v5.jsonl",
+      "fixture_dir": "ts"
+    },
+    {
+      "name": "docs",
+      "path": "crates/sprefa-extract/tests/fixtures/ts/docs.ts",
+      "fixture": "fixtures/ts/docs.ts",
+      "baseline": "fixtures/ts/docs.v5.jsonl",
+      "fixture_dir": "ts"
+    },
+    {
+      "name": "lambdas",
+      "path": "crates/sprefa-extract/tests/fixtures/ts/lambdas.ts",
+      "fixture": "fixtures/ts/lambdas.ts",
+      "baseline": "fixtures/ts/lambdas.v5.jsonl",
+      "fixture_dir": "ts"
+    },
+    {
+      "name": "rust_sample",
+      "path": "crates/sprefa-extract/tests/fixtures/rust/sample.rs",
+      "fixture": "fixtures/rust/sample.rs",
+      "baseline": "fixtures/rust/sample.v5.jsonl",
+      "fixture_dir": "rust"
+    },
+    {
+      "name": "rust_docs",
+      "path": "crates/sprefa-extract/tests/fixtures/rust/docs.rs",
+      "fixture": "fixtures/rust/docs.rs",
+      "baseline": "fixtures/rust/docs.v5.jsonl",
+      "fixture_dir": "rust"
+    },
+    {
+      "name": "go_sample",
+      "path": "crates/sprefa-extract/tests/fixtures/go/sample.go",
+      "fixture": "fixtures/go/sample.go",
+      "baseline": "fixtures/go/sample.v5.jsonl",
+      "fixture_dir": "go"
+    },
+    {
+      "name": "go_docs",
+      "path": "crates/sprefa-extract/tests/fixtures/go/docs.go",
+      "fixture": "fixtures/go/docs.go",
+      "baseline": "fixtures/go/docs.v5.jsonl",
+      "fixture_dir": "go"
+    },
+    {
+      "name": "sample",
+      "path": "crates/sprefa-extract/tests/fixtures/python/sample.py",
+      "fixture": "fixtures/python/sample.py",
+      "baseline": "fixtures/python/sample.v5.jsonl",
+      "fixture_dir": "python"
+    },
+    {
+      "name": "docs",
+      "path": "crates/sprefa-extract/tests/fixtures/python/docs.py",
+      "fixture": "fixtures/python/docs.py",
+      "baseline": "fixtures/python/docs.v5.jsonl",
+      "fixture_dir": "python"
+    },
+    {
+      "name": "flow",
+      "path": "crates/sprefa-extract/tests/fixtures/python/flow.py",
+      "fixture": "fixtures/python/flow.py",
+      "baseline": "fixtures/python/flow.v5.jsonl",
+      "fixture_dir": "python"
+    },
+    {
+      "name": "go_edges",
+      "path": "crates/sprefa-extract/tests/fixtures/go/edges.go",
+      "fixture": "fixtures/go/edges.go",
+      "baseline": "fixtures/go/edges.v5.jsonl",
+      "fixture_dir": "go"
+    },
+    {
+      "name": "kotlin_sample",
+      "path": "crates/sprefa-extract/tests/fixtures/kotlin/sample.kt",
+      "fixture": "fixtures/kotlin/sample.kt",
+      "baseline": "fixtures/kotlin/sample.v5.jsonl",
+      "fixture_dir": "kotlin"
+    }
+  ],
+  "rust_type_exclusions": {
+    "uses": [
+      [
+        "make_engine",
+        "Engine"
+      ]
+    ],
+    "kinds": [
+      "param",
+      "returns"
+    ]
+  }
+}
