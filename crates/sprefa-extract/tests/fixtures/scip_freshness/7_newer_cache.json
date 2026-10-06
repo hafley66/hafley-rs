@@ -1,0 +1,34 @@
+{
+  "steps": [
+    {
+      "action": "write",
+      "path": "$work/root/elsewhere.scip",
+      "text": "old index"
+    },
+    {
+      "action": "write",
+      "path": "$work/root/.dl/.state/index.scip",
+      "text": "not a real index, only a path to find"
+    },
+    {
+      "action": "mtime",
+      "path": "$work/root/elsewhere.scip",
+      "milliseconds": 1700000000000
+    },
+    {
+      "action": "mtime",
+      "path": "$work/root/.dl/.state/index.scip",
+      "milliseconds": 1700000010000
+    },
+    {
+      "action": "api",
+      "name": "newest",
+      "api": "lookup",
+      "root": "$work/root",
+      "cache": "$work/root/.dl/.state",
+      "set": null,
+      "override": "$work/root/elsewhere.scip",
+      "expect": "$work/root/.dl/.state/index.scip"
+    }
+  ]
+}

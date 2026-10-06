@@ -1,0 +1,60 @@
+{
+  "steps": [
+    {
+      "action": "write",
+      "path": "$work/root/.dl/.state/index.scip",
+      "text": "not a real index, only a path to find"
+    },
+    {
+      "action": "api",
+      "name": "built",
+      "api": "define_set",
+      "entries": [
+        [
+          "a.rs",
+          "digest-a"
+        ]
+      ]
+    },
+    {
+      "action": "api",
+      "name": "record",
+      "api": "record_set",
+      "index": "$work/root/.dl/.state/index.scip",
+      "set": "built"
+    },
+    {
+      "action": "api",
+      "name": "reused",
+      "api": "ensure",
+      "root": "$work/root",
+      "cache": "$work/root/.dl/.state",
+      "set": "built",
+      "expect_reused": true,
+      "budget_seconds": 1
+    },
+    {
+      "action": "api",
+      "name": "moved",
+      "api": "define_set",
+      "entries": [
+        [
+          "a.rs",
+          "digest-a-MOVED"
+        ]
+      ]
+    },
+    {
+      "action": "api",
+      "name": "rebuilt",
+      "api": "ensure",
+      "root": "$work/root",
+      "cache": "$work/root/.dl/.state",
+      "set": "moved",
+      "expect_reused": false,
+      "expect_no_index": true,
+      "expect_first_skip": "no_markers",
+      "budget_seconds": 1
+    }
+  ]
+}

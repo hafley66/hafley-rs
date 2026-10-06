@@ -247,6 +247,10 @@ pub fn commands(case: &Value, api: impl Fn(&Value) -> Value) -> Value {
                 }
             }
             "remove" => std::fs::remove_file(path()).unwrap(),
+            "remove_tree" => std::fs::remove_dir_all(path()).unwrap(),
+            "symlink" => {
+                std::os::unix::fs::symlink(expand(step["source"].as_str().unwrap()), path()).unwrap();
+            }
             "mtime" => {
                 let modified = std::time::UNIX_EPOCH
                     + std::time::Duration::from_millis(step["milliseconds"].as_u64().unwrap());
@@ -669,6 +673,7 @@ fn claim(
         _ if kind.starts_with("json_") => {
             let row: Value = serde_json::from_str(
                 text.lines().enumerate()
+                    .inspect(|(_, line)| { if step["line_contains"].is_string() { serde_json::from_str::<Value>(line).unwrap(); } })
                     .find(|(index, line)| if let Some(needle) = step["line_contains"].as_str() { line.contains(needle) } else { step["line"].as_u64().map_or_else(|| line.starts_with(step["line_prefix"].as_str().unwrap_or("{")), |wanted| *index == wanted as usize) })
                     .unwrap().1,
             )

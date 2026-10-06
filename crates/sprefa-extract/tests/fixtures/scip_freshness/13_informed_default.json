@@ -1,0 +1,74 @@
+{
+  "steps": [
+    {
+      "action": "write",
+      "path": "$work/root/.dl/.state/index.scip",
+      "text": "not a real index, only a path to find"
+    },
+    {
+      "action": "api",
+      "name": "built",
+      "api": "define_set",
+      "entries": [
+        [
+          "a.ts",
+          "digest-a"
+        ],
+        [
+          "b.ts",
+          "digest-b"
+        ]
+      ]
+    },
+    {
+      "action": "api",
+      "name": "record",
+      "api": "record_set",
+      "index": "$work/root/.dl/.state/index.scip",
+      "set": "built"
+    },
+    {
+      "action": "api",
+      "name": "matching",
+      "api": "fresh",
+      "root": "$work/root",
+      "cache": "$work/root/.dl/.state",
+      "set": "built",
+      "expect": "$work/root/.dl/.state/index.scip"
+    },
+    {
+      "action": "api",
+      "name": "other",
+      "api": "define_set",
+      "entries": [
+        [
+          "a.ts",
+          "digest-a"
+        ],
+        [
+          "b.ts",
+          "digest-b-MOVED"
+        ]
+      ]
+    },
+    {
+      "action": "api",
+      "name": "stale",
+      "api": "fresh",
+      "root": "$work/root",
+      "cache": "$work/root/.dl/.state",
+      "set": "other",
+      "expect": null
+    },
+    {
+      "action": "api",
+      "name": "absent",
+      "api": "fresh",
+      "root": "$work/root",
+      "cache": "$work/root/.dl/.state",
+      "set": null,
+      "digest": "no-sidecar-anywhere",
+      "expect": null
+    }
+  ]
+}

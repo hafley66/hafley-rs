@@ -595,3 +595,6 @@ mod sqlite_support;
 
 #[path = "support/8_cli_crawl.rs"]
 mod cli_crawl_support;
+
+#[path = "support/9_scip_freshness.rs"]
+mod freshness_support;

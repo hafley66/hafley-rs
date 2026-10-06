@@ -1,0 +1,28 @@
+{
+  "steps": [
+    {
+      "action": "write",
+      "path": "$work/root/go.mod",
+      "text": "module fake\n"
+    },
+    {
+      "action": "write",
+      "path": "$work/root/bin/scip-go",
+      "text": "#!/bin/sh\nsleep 120\n",
+      "executable": true
+    },
+    {
+      "action": "api",
+      "name": "timed_out",
+      "api": "ensure",
+      "root": "$work/root",
+      "cache": "$work/root/.dl/.state",
+      "set": null,
+      "path": "$work/root/bin:$path",
+      "limit_seconds": 30,
+      "expect_no_index": true,
+      "budget_seconds": 1,
+      "expect_timed_out_seconds": 1
+    }
+  ]
+}

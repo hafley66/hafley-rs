@@ -1,0 +1,94 @@
+{
+  "steps": [
+    {
+      "action": "write",
+      "path": "$work/root/a.ts",
+      "text": "export const a = 1;\n"
+    },
+    {
+      "action": "api",
+      "name": "first",
+      "api": "source_set",
+      "root": "$work/root",
+      "expect_length": 1
+    },
+    {
+      "action": "write",
+      "path": "$work/root/a.ts",
+      "text": "export const a = 2;\n",
+      "preserve_mtime": true
+    },
+    {
+      "action": "api",
+      "name": "edited",
+      "api": "source_set",
+      "root": "$work/root"
+    },
+    {
+      "action": "api",
+      "name": "edit_changed",
+      "api": "digest_compare",
+      "left": "first",
+      "right": "edited",
+      "expect": false
+    },
+    {
+      "action": "write",
+      "path": "$work/root/b.ts",
+      "text": "export const b = 3;\n"
+    },
+    {
+      "action": "api",
+      "name": "added",
+      "api": "source_set",
+      "root": "$work/root",
+      "expect_length": 2
+    },
+    {
+      "action": "api",
+      "name": "addition_changed",
+      "api": "digest_compare",
+      "left": "edited",
+      "right": "added",
+      "expect": false
+    },
+    {
+      "action": "remove",
+      "path": "$work/root/a.ts"
+    },
+    {
+      "action": "api",
+      "name": "removed",
+      "api": "source_set",
+      "root": "$work/root",
+      "expect_length": 1
+    },
+    {
+      "action": "api",
+      "name": "removal_changed",
+      "api": "digest_compare",
+      "left": "added",
+      "right": "removed",
+      "expect": false
+    },
+    {
+      "action": "write",
+      "path": "$work/root/target/generated.ts",
+      "text": "generated"
+    },
+    {
+      "action": "api",
+      "name": "with_generated",
+      "api": "source_set",
+      "root": "$work/root"
+    },
+    {
+      "action": "api",
+      "name": "generated_ignored",
+      "api": "digest_compare",
+      "left": "removed",
+      "right": "with_generated",
+      "expect": true
+    }
+  ]
+}

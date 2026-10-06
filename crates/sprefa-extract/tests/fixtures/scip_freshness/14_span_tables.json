@@ -1,0 +1,38 @@
+{
+  "steps": [
+    {
+      "action": "api",
+      "name": "tables",
+      "api": "span_tables",
+      "relative_path": "same.ts",
+      "range": [
+        0,
+        0,
+        0,
+        2
+      ],
+      "site": {
+        "start": 0,
+        "len": 2
+      },
+      "documents": [
+        {
+          "symbol": "alpha",
+          "content": "al\nzz\n",
+          "name": "al"
+        },
+        {
+          "symbol": "beta",
+          "content": "be\nzz\n",
+          "name": "be"
+        }
+      ],
+      "requests": [
+        1,
+        0,
+        1
+      ],
+      "roles": 1
+    }
+  ]
+}

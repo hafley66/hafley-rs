@@ -1,0 +1,343 @@
+---
+source: tests/support/2_fixture_runner.rs
+---
+{
+  "0_stale_set": {
+    "built": {
+      "len": 2,
+      "digest": "28e919a28e3bc6f2a1c0ace476a9ac4556c38fa7d10363f74b641105c086e1fa",
+      "paths": [
+        "a.rs",
+        "b.rs"
+      ]
+    },
+    "digest_changed": false,
+    "legacy": "$work/root/.dl/.state/index.scip",
+    "matching": "$work/root/.dl/.state/index.scip",
+    "moved": {
+      "len": 2,
+      "digest": "20337b285f9ae1497ea71bd3f6c8977254d24c032b74cd935bfd104423f8ff81",
+      "paths": [
+        "a.rs",
+        "b.rs"
+      ]
+    },
+    "original": "$work/root/.dl/.state/index.scip",
+    "record": null,
+    "stale": null
+  },
+  "10_lockfile": {
+    "copy": null,
+    "with_lock": {
+      "Cargo.lock": "version = 4\n",
+      "Cargo.toml": "[workspace]\nmembers=[]\n"
+    },
+    "without_lock": {
+      "Cargo.toml": "[workspace]\nmembers=[]\n"
+    }
+  },
+  "11_prune_source": {
+    "after": {
+      "src/": {
+        "directory": true
+      },
+      "src/a.rs": "pub fn a() {}\n",
+      "target/": {
+        "directory": true
+      },
+      "target/debug/": {
+        "directory": true
+      },
+      "target/debug/marker.rs": "kept\n"
+    },
+    "before": {
+      "src/": {
+        "directory": true
+      },
+      "src/a.rs": "pub fn a() {}\n",
+      "src/b.rs": "pub fn b() {}\n"
+    },
+    "copy": null
+  },
+  "12_prune_member": {
+    "after": {
+      "Cargo.toml": "[workspace]\nmembers = [\"crates/*\"]\nresolver = \"2\"\n",
+      "crates/": {
+        "directory": true
+      },
+      "crates/live/": {
+        "directory": true
+      },
+      "crates/live/Cargo.toml": "[package]\nname = \"live\"\nversion = \"0.0.0\"\n",
+      "crates/live/src/": {
+        "directory": true
+      },
+      "crates/live/src/lib.rs": "pub fn member() {}\n",
+      "indexer-state/": {
+        "directory": true
+      },
+      "indexer-state/cache.bin": "kept\n",
+      "target/": {
+        "directory": true
+      },
+      "target/debug/": {
+        "directory": true
+      },
+      "target/debug/marker.rs": "kept\n"
+    },
+    "before": {
+      "Cargo.toml": "[workspace]\nmembers = [\"crates/*\"]\nresolver = \"2\"\n",
+      "crates/": {
+        "directory": true
+      },
+      "crates/live/": {
+        "directory": true
+      },
+      "crates/live/Cargo.toml": "[package]\nname = \"live\"\nversion = \"0.0.0\"\n",
+      "crates/live/src/": {
+        "directory": true
+      },
+      "crates/live/src/lib.rs": "pub fn member() {}\n",
+      "crates/removed/": {
+        "directory": true
+      },
+      "crates/removed/Cargo.toml": "[package]\nname = \"removed\"\nversion = \"0.0.0\"\n",
+      "crates/removed/src/": {
+        "directory": true
+      },
+      "crates/removed/src/lib.rs": "pub fn member() {}\n"
+    },
+    "copy": null
+  },
+  "13_informed_default": {
+    "absent": null,
+    "built": {
+      "len": 2,
+      "digest": "019afdb710de85824372effa679181299341f0060579d51774d631e0dd81d57c",
+      "paths": [
+        "a.ts",
+        "b.ts"
+      ]
+    },
+    "matching": "$work/root/.dl/.state/index.scip",
+    "other": {
+      "len": 2,
+      "digest": "9c232d121f0aa4af499ce7f0479ddb872e8a472b8d4b23c1212292059adb97e8",
+      "paths": [
+        "a.ts",
+        "b.ts"
+      ]
+    },
+    "record": null,
+    "stale": null
+  },
+  "14_span_tables": {
+    "tables": {
+      "answers": [
+        "beta",
+        "alpha",
+        "beta"
+      ],
+      "tables": [
+        [
+          {
+            "start": 0,
+            "end": 2,
+            "symbol": "alpha"
+          }
+        ],
+        [
+          {
+            "start": 0,
+            "end": 2,
+            "symbol": "beta"
+          }
+        ]
+      ]
+    }
+  },
+  "1_set_order": {
+    "content": false,
+    "extra": {
+      "len": 3,
+      "digest": "cf8280e15644bcf71f3d0aac213b39bface0825fb3517cb57f48a3a0f250f1fb",
+      "paths": [
+        "a.rs",
+        "b.rs",
+        "c.rs"
+      ]
+    },
+    "one": {
+      "len": 2,
+      "digest": "af73415f341449811af09f607571dc0cc0c06a1ba6850ea36383891068419a7a",
+      "paths": [
+        "a.rs",
+        "b.rs"
+      ]
+    },
+    "order": true,
+    "other": {
+      "len": 2,
+      "digest": "af73415f341449811af09f607571dc0cc0c06a1ba6850ea36383891068419a7a",
+      "paths": [
+        "a.rs",
+        "b.rs"
+      ]
+    }
+  },
+  "2_root_changes": {
+    "added": {
+      "len": 2,
+      "digest": "92642960fdc1841f78aed7b5905e94b86c6408828baabb1a014a8877781c0384",
+      "paths": [
+        "a.ts",
+        "b.ts"
+      ]
+    },
+    "addition_changed": false,
+    "edit_changed": false,
+    "edited": {
+      "len": 1,
+      "digest": "073b9b6685f2675053938f4e10b5befa1df78b7e192ffa3eb860b548cfe84b48",
+      "paths": [
+        "a.ts"
+      ]
+    },
+    "first": {
+      "len": 1,
+      "digest": "61969612a51807846d260f86c12803466df7238058cee5babc713ea04a51fa63",
+      "paths": [
+        "a.ts"
+      ]
+    },
+    "generated_ignored": true,
+    "removal_changed": false,
+    "removed": {
+      "len": 1,
+      "digest": "d65b270396eede71abd8375c92039cdb4dcd46ffd50422688679bba182621fb0",
+      "paths": [
+        "b.ts"
+      ]
+    },
+    "with_generated": {
+      "len": 1,
+      "digest": "d65b270396eede71abd8375c92039cdb4dcd46ffd50422688679bba182621fb0",
+      "paths": [
+        "b.ts"
+      ]
+    }
+  },
+  "3_symlink": {
+    "after": {
+      "len": 1,
+      "digest": "3bbb8f0b6404b519c7dcd6ea8c388f1349ce2e5c40cd69e357dfbf919a625cc0",
+      "paths": [
+        "shared.ts"
+      ]
+    },
+    "before": {
+      "len": 1,
+      "digest": "5713a4a8b715a50821e0c42e9ee9ac91500b7a982244ebdcb3ac29920d058218",
+      "paths": [
+        "shared.ts"
+      ]
+    },
+    "linked_edit": false
+  },
+  "4_ensure_rebuild": {
+    "built": {
+      "len": 1,
+      "digest": "6a8711e3f4c13d3231fbd4c14274a00d06d2b3e64796e57709b2a23608fb6f91",
+      "paths": [
+        "a.rs"
+      ]
+    },
+    "moved": {
+      "len": 1,
+      "digest": "ae01f8dfd75317126412514d7312c9e966e06bf2223d87a5ab85351e959eadd3",
+      "paths": [
+        "a.rs"
+      ]
+    },
+    "rebuilt": {
+      "reused": false,
+      "index": null,
+      "skips": [
+        "no_markers"
+      ],
+      "budget": {
+        "seconds": 1,
+        "wait_under_seconds": null,
+        "timed_out_seconds": null
+      }
+    },
+    "record": null,
+    "reused": {
+      "reused": true,
+      "index": "$work/root/.dl/.state/index.scip",
+      "skips": [],
+      "budget": {
+        "seconds": 1,
+        "wait_under_seconds": null,
+        "timed_out_seconds": null
+      }
+    }
+  },
+  "5_replaced_index": {
+    "after": null,
+    "before": "$work/root/.dl/.state/index.scip",
+    "built": {
+      "len": 1,
+      "digest": "6a8711e3f4c13d3231fbd4c14274a00d06d2b3e64796e57709b2a23608fb6f91",
+      "paths": [
+        "a.rs"
+      ]
+    },
+    "record": null
+  },
+  "6_explicit_override": {
+    "matching": "$work/root/elsewhere.scip",
+    "never": {
+      "len": 1,
+      "digest": "d15fdd2b09f0e9e81f0cd65ce200d769bae978fcf2505abd4045e1c06ef72e86",
+      "paths": [
+        "nothing.rs"
+      ]
+    },
+    "record": null,
+    "unbuilt": null
+  },
+  "7_newer_cache": {
+    "newest": "$work/root/.dl/.state/index.scip"
+  },
+  "8_budget": {
+    "timed_out": {
+      "reused": false,
+      "index": null,
+      "skips": [
+        "timed_out"
+      ],
+      "budget": {
+        "seconds": 1,
+        "wait_under_seconds": 30,
+        "timed_out_seconds": 1
+      }
+    }
+  },
+  "9_nested_checkout": {
+    "copy": null,
+    "staged": {
+      "Cargo.toml": "[package]\nname='mine'\n",
+      "crates/": {
+        "directory": true
+      },
+      "crates/mine/": {
+        "directory": true
+      },
+      "crates/mine/src/": {
+        "directory": true
+      },
+      "crates/mine/src/lib.rs": "pub fn mine() {}\n"
+    }
+  }
+}

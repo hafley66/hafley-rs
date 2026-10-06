@@ -1,0 +1,52 @@
+{
+  "steps": [
+    {
+      "action": "write",
+      "path": "$work/root/crates/mine/src/lib.rs",
+      "text": "pub fn mine() {}\n"
+    },
+    {
+      "action": "write",
+      "path": "$work/root/Cargo.toml",
+      "text": "[package]\nname='mine'\n"
+    },
+    {
+      "action": "write",
+      "path": "$work/root/.boop-worktrees/fix/lane/.git",
+      "text": "gitdir: /elsewhere\n"
+    },
+    {
+      "action": "write",
+      "path": "$work/root/.boop-worktrees/fix/lane/src/lib.rs",
+      "text": "pub fn theirs() {}\n"
+    },
+    {
+      "action": "directory",
+      "path": "$work/root/vendor/dep/.git"
+    },
+    {
+      "action": "write",
+      "path": "$work/root/vendor/dep/lib.rs",
+      "text": "pub fn vendored() {}\n"
+    },
+    {
+      "action": "api",
+      "name": "copy",
+      "api": "copy_sources",
+      "root": "$work/root",
+      "stage": "$work/stage",
+      "extensions": [
+        "rs"
+      ],
+      "markers": [
+        "Cargo.toml"
+      ]
+    },
+    {
+      "action": "read_tree",
+      "name": "staged",
+      "path": "$work/stage",
+      "directory": true
+    }
+  ]
+}

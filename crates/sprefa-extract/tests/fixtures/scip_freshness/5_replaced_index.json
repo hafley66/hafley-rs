@@ -1,0 +1,50 @@
+{
+  "steps": [
+    {
+      "action": "write",
+      "path": "$work/root/.dl/.state/index.scip",
+      "text": "not a real index, only a path to find"
+    },
+    {
+      "action": "api",
+      "name": "built",
+      "api": "define_set",
+      "entries": [
+        [
+          "a.rs",
+          "digest-a"
+        ]
+      ]
+    },
+    {
+      "action": "api",
+      "name": "record",
+      "api": "record_set",
+      "index": "$work/root/.dl/.state/index.scip",
+      "set": "built"
+    },
+    {
+      "action": "api",
+      "name": "before",
+      "api": "lookup",
+      "root": "$work/root",
+      "cache": "$work/root/.dl/.state",
+      "set": "built",
+      "expect": "$work/root/.dl/.state/index.scip"
+    },
+    {
+      "action": "write",
+      "path": "$work/root/.dl/.state/index.scip",
+      "text": "different index bytes"
+    },
+    {
+      "action": "api",
+      "name": "after",
+      "api": "lookup",
+      "root": "$work/root",
+      "cache": "$work/root/.dl/.state",
+      "set": "built",
+      "expect": null
+    }
+  ]
+}

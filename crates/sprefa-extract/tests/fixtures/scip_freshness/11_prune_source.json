@@ -1,0 +1,57 @@
+{
+  "steps": [
+    {
+      "action": "write",
+      "path": "$work/root/src/a.rs",
+      "text": "pub fn a() {}\n"
+    },
+    {
+      "action": "write",
+      "path": "$work/root/src/b.rs",
+      "text": "pub fn b() {}\n"
+    },
+    {
+      "action": "api",
+      "name": "copy",
+      "api": "copy_sources",
+      "root": "$work/root",
+      "stage": "$work/stage",
+      "extensions": [
+        "rs"
+      ],
+      "markers": []
+    },
+    {
+      "action": "read_tree",
+      "name": "before",
+      "path": "$work/stage",
+      "directory": true
+    },
+    {
+      "action": "remove",
+      "path": "$work/root/src/b.rs"
+    },
+    {
+      "action": "write",
+      "path": "$work/stage/target/debug/marker.rs",
+      "text": "kept\n"
+    },
+    {
+      "action": "api",
+      "name": "copy",
+      "api": "copy_sources",
+      "root": "$work/root",
+      "stage": "$work/stage",
+      "extensions": [
+        "rs"
+      ],
+      "markers": []
+    },
+    {
+      "action": "read_tree",
+      "name": "after",
+      "path": "$work/stage",
+      "directory": true
+    }
+  ]
+}

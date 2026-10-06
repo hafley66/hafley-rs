@@ -1,0 +1,70 @@
+{
+  "steps": [
+    {
+      "action": "api",
+      "name": "one",
+      "api": "define_set",
+      "entries": [
+        [
+          "a.rs",
+          "one"
+        ],
+        [
+          "b.rs",
+          "two"
+        ]
+      ]
+    },
+    {
+      "action": "api",
+      "name": "other",
+      "api": "define_set",
+      "entries": [
+        [
+          "b.rs",
+          "two"
+        ],
+        [
+          "a.rs",
+          "one"
+        ]
+      ]
+    },
+    {
+      "action": "api",
+      "name": "order",
+      "api": "digest_compare",
+      "left": "one",
+      "right": "other",
+      "expect": true
+    },
+    {
+      "action": "api",
+      "name": "extra",
+      "api": "define_set",
+      "entries": [
+        [
+          "a.rs",
+          "one"
+        ],
+        [
+          "b.rs",
+          "two"
+        ],
+        [
+          "c.rs",
+          "three"
+        ]
+      ],
+      "expect_length": 3
+    },
+    {
+      "action": "api",
+      "name": "content",
+      "api": "digest_compare",
+      "left": "one",
+      "right": "extra",
+      "expect": false
+    }
+  ]
+}

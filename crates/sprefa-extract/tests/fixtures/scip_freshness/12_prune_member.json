@@ -1,0 +1,81 @@
+{
+  "steps": [
+    {
+      "action": "write",
+      "path": "$work/root/Cargo.toml",
+      "text": "[workspace]\nmembers = [\"crates/*\"]\nresolver = \"2\"\n"
+    },
+    {
+      "action": "write",
+      "path": "$work/root/crates/live/Cargo.toml",
+      "text": "[package]\nname = \"live\"\nversion = \"0.0.0\"\n"
+    },
+    {
+      "action": "write",
+      "path": "$work/root/crates/live/src/lib.rs",
+      "text": "pub fn member() {}\n"
+    },
+    {
+      "action": "write",
+      "path": "$work/root/crates/removed/Cargo.toml",
+      "text": "[package]\nname = \"removed\"\nversion = \"0.0.0\"\n"
+    },
+    {
+      "action": "write",
+      "path": "$work/root/crates/removed/src/lib.rs",
+      "text": "pub fn member() {}\n"
+    },
+    {
+      "action": "api",
+      "name": "copy",
+      "api": "copy_sources",
+      "root": "$work/root",
+      "stage": "$work/stage",
+      "extensions": [
+        "rs"
+      ],
+      "markers": [
+        "Cargo.toml"
+      ]
+    },
+    {
+      "action": "read_tree",
+      "name": "before",
+      "path": "$work/stage",
+      "directory": true
+    },
+    {
+      "action": "remove_tree",
+      "path": "$work/root/crates/removed"
+    },
+    {
+      "action": "write",
+      "path": "$work/stage/target/debug/marker.rs",
+      "text": "kept\n"
+    },
+    {
+      "action": "write",
+      "path": "$work/stage/indexer-state/cache.bin",
+      "text": "kept\n"
+    },
+    {
+      "action": "api",
+      "name": "copy",
+      "api": "copy_sources",
+      "root": "$work/root",
+      "stage": "$work/stage",
+      "extensions": [
+        "rs"
+      ],
+      "markers": [
+        "Cargo.toml"
+      ]
+    },
+    {
+      "action": "read_tree",
+      "name": "after",
+      "path": "$work/stage",
+      "directory": true
+    }
+  ]
+}

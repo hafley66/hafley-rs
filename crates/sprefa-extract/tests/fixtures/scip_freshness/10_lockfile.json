@@ -1,0 +1,58 @@
+{
+  "steps": [
+    {
+      "action": "write",
+      "path": "$work/root/Cargo.toml",
+      "text": "[workspace]\nmembers=[]\n"
+    },
+    {
+      "action": "write",
+      "path": "$work/root/Cargo.lock",
+      "text": "version = 4\n"
+    },
+    {
+      "action": "api",
+      "name": "copy",
+      "api": "copy_sources",
+      "root": "$work/root",
+      "stage": "$work/stage",
+      "extensions": [
+        "rs"
+      ],
+      "markers": [
+        "Cargo.toml",
+        "Cargo.lock"
+      ]
+    },
+    {
+      "action": "read_tree",
+      "name": "with_lock",
+      "path": "$work/stage",
+      "directory": true
+    },
+    {
+      "action": "remove",
+      "path": "$work/root/Cargo.lock"
+    },
+    {
+      "action": "api",
+      "name": "copy",
+      "api": "copy_sources",
+      "root": "$work/root",
+      "stage": "$work/stage",
+      "extensions": [
+        "rs"
+      ],
+      "markers": [
+        "Cargo.toml",
+        "Cargo.lock"
+      ]
+    },
+    {
+      "action": "read_tree",
+      "name": "without_lock",
+      "path": "$work/stage",
+      "directory": true
+    }
+  ]
+}

@@ -1,0 +1,44 @@
+{
+  "steps": [
+    {
+      "action": "directory",
+      "path": "$work/root"
+    },
+    {
+      "action": "write",
+      "path": "$work/external/shared.ts",
+      "text": "export const a = 1;\n"
+    },
+    {
+      "action": "symlink",
+      "source": "$work/external/shared.ts",
+      "path": "$work/root/shared.ts"
+    },
+    {
+      "action": "api",
+      "name": "before",
+      "api": "source_set",
+      "root": "$work/root",
+      "expect_length": 1
+    },
+    {
+      "action": "write",
+      "path": "$work/external/shared.ts",
+      "text": "export const a = 2;\n"
+    },
+    {
+      "action": "api",
+      "name": "after",
+      "api": "source_set",
+      "root": "$work/root"
+    },
+    {
+      "action": "api",
+      "name": "linked_edit",
+      "api": "digest_compare",
+      "left": "before",
+      "right": "after",
+      "expect": false
+    }
+  ]
+}

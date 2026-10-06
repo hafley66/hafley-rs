@@ -1,0 +1,47 @@
+{
+  "steps": [
+    {
+      "action": "write",
+      "path": "$work/root/elsewhere.scip",
+      "text": "explicit"
+    },
+    {
+      "action": "api",
+      "name": "never",
+      "api": "define_set",
+      "entries": [
+        [
+          "nothing.rs",
+          "nothing"
+        ]
+      ]
+    },
+    {
+      "action": "api",
+      "name": "unbuilt",
+      "api": "lookup",
+      "root": "$work/root",
+      "cache": "$work/root/.dl/.state",
+      "set": "never",
+      "override": "$work/root/elsewhere.scip",
+      "expect": null
+    },
+    {
+      "action": "api",
+      "name": "record",
+      "api": "record_set",
+      "index": "$work/root/elsewhere.scip",
+      "set": "never"
+    },
+    {
+      "action": "api",
+      "name": "matching",
+      "api": "lookup",
+      "root": "$work/root",
+      "cache": "$work/root/.dl/.state",
+      "set": "never",
+      "override": "$work/root/elsewhere.scip",
+      "expect": "$work/root/elsewhere.scip"
+    }
+  ]
+}
