@@ -88,7 +88,10 @@ callbacks with their own qualifying name use their own frame. Class diagnostics
 remain outside the implemented rule set.
 Loop rows require matching `df_nest` and `df_loop` facts inside the function.
 Conditional rows inspect branch fields and the right operand of `&&`, `||`,
-and `??`. Return rows use byte order within the same function.
+and `??`. Return rows use byte order within the same function. A direct return in a
+containing block suppresses unreachable calls. Loop findings take precedence over
+return-order findings, matching the reference diagnostics in the loop cases.
+This syntax predicate does not compute full control-flow reachability.
 
 No file name or validity label participates in violation computation.
 `7_expected.sql` imports case metadata and expected messages with SQLite JSON

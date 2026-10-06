@@ -73,8 +73,16 @@ hooks AS (
       AND ancestor.last >= h.pre AND ancestor.react) AS inside_react
   FROM raw_hooks h LEFT JOIN frames f ON f.file = h.file AND f.pre = h.frame
 ),
+reachable AS (
+  -- A direct return makes later calls in its containing block unreachable.
+  -- A return under an if does not make calls outside that branch unreachable.
+  SELECT * FROM hooks h WHERE NOT EXISTS (
+    SELECT 1 FROM returns r JOIN cst block ON block.file = r.file AND block.pre = r.parent
+    WHERE r.file = h.file AND r.frame = h.frame AND r."end" <= h.start
+      AND block.kind_name = 'statement_block' AND block.pre < h.pre AND block.last >= h.pre)
+),
 eligible AS (
-  SELECT * FROM hooks WHERE has_site AND raw_owner IS NOT NULL AND react
+  SELECT * FROM reachable WHERE has_site AND raw_owner IS NOT NULL AND react
 ),
 branches AS (
   SELECT h.path, h.start, h."end", h.hook, h.owner, a.pre
@@ -97,22 +105,8 @@ returns AS (
     ORDER BY f.depth DESC LIMIT 1) AS frame
   FROM cst r WHERE kind_name = 'return_statement'
 ),
-violations AS (
-  SELECT path, start, "end", hook, owner, 'caller' AS rule,
-    'owner name does not match component or hook convention' AS reason
-  FROM hooks WHERE has_site AND raw_owner IS NOT NULL AND NOT class_context
-    AND function_name IS NOT NULL AND NOT react
-  UNION
-  SELECT path, start, "end", hook, owner, 'nested_callback',
-    'anonymous callback inside a component, hook, or render wrapper'
-  FROM hooks WHERE has_site AND raw_owner IS NOT NULL AND NOT class_context
-    AND function_name IS NULL AND NOT react AND inside_react
-  UNION
-  SELECT path, start, "end", hook, owner, 'caller', 'hook at top level'
-  FROM hooks WHERE has_site AND frame IS NULL
-  UNION
-  SELECT h.path, h.start, h."end", h.hook, h.owner, 'loop',
-    'df_nest joins a loop within the owning function'
+looped AS (
+  SELECT DISTINCT h.path, h.start, h."end", h.hook, h.owner
   FROM eligible h JOIN facts.df_nest nest ON nest._input_path = h.path
     AND nest.call__start = h.start AND nest.call__end = h."end"
   JOIN facts.df_loop loop ON loop._input_path = nest._input_path
@@ -120,6 +114,24 @@ violations AS (
   JOIN cst l ON l.file = h.file AND l.start = loop.span__start
     AND l."end" = loop.span__end AND l.pre > h.frame
     AND l.kind_name IN ('for_statement', 'for_in_statement', 'while_statement', 'do_statement')
+),
+violations AS (
+  SELECT path, start, "end", hook, owner, 'caller' AS rule,
+    'owner name does not match component or hook convention' AS reason
+  FROM reachable WHERE has_site AND raw_owner IS NOT NULL AND NOT class_context
+    AND function_name IS NOT NULL AND NOT react
+  UNION
+  SELECT path, start, "end", hook, owner, 'nested_callback',
+    'anonymous callback inside a component, hook, or render wrapper'
+  FROM reachable WHERE has_site AND raw_owner IS NOT NULL AND NOT class_context
+    AND function_name IS NULL AND NOT react AND inside_react
+  UNION
+  SELECT path, start, "end", hook, owner, 'caller', 'hook at top level'
+  FROM reachable WHERE has_site AND frame IS NULL
+  UNION
+  SELECT path, start, "end", hook, owner, 'loop',
+    'df_nest joins a loop within the owning function'
+  FROM looped
   UNION
   SELECT path, start, "end", hook, owner, 'conditional',
     'hook is in a conditional branch within its function'
@@ -129,6 +141,7 @@ violations AS (
     'a return precedes this call within the same function'
   FROM eligible h JOIN returns r ON r.file = h.file AND r.frame = h.frame
     AND r."end" <= h.start
+  WHERE NOT EXISTS (SELECT 1 FROM looped l WHERE l.path = h.path AND l.start = h.start)
   UNION
   SELECT path, start, "end", hook, owner, 'missing_owner',
     'df call_res owner absent for a call inside a function'

@@ -73,3 +73,9 @@ fn hooks_callback_whole_output() {
     let _snapshots = snapshots();
     insta::assert_json_snapshot!("hooks_callback_whole_output", query_fixtures("callbacks"));
 }
+
+#[test]
+fn hooks_return_whole_output() {
+    let _snapshots = snapshots();
+    insta::assert_json_snapshot!("hooks_return_whole_output", query_fixtures("returns"));
+}

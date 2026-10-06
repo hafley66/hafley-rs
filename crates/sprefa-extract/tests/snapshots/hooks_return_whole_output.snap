@@ -1,0 +1,59 @@
+---
+source: tests/211_hooks_query.rs
+assertion_line: 80
+expression: "query_fixtures(\"returns\")"
+---
+[
+  {
+    "fixture": "0_unreachable.tsx",
+    "rows": []
+  },
+  {
+    "fixture": "1_loops.tsx",
+    "rows": [
+      {
+        "path": "1_loops.tsx",
+        "start": 38,
+        "end": 46,
+        "hook": "useOne",
+        "owner": "useRead",
+        "rule": "loop",
+        "status": "violation",
+        "reason": "df_nest joins a loop within the owning function"
+      },
+      {
+        "path": "1_loops.tsx",
+        "start": 66,
+        "end": 74,
+        "hook": "useTwo",
+        "owner": "useRead",
+        "rule": "loop",
+        "status": "violation",
+        "reason": "df_nest joins a loop within the owning function"
+      }
+    ]
+  },
+  {
+    "fixture": "2_guarded.tsx",
+    "rows": [
+      {
+        "path": "2_guarded.tsx",
+        "start": 35,
+        "end": 44,
+        "hook": "useHook",
+        "owner": "App",
+        "rule": "early_return",
+        "status": "violation",
+        "reason": "a return precedes this call within the same function"
+      }
+    ]
+  },
+  {
+    "fixture": "3_nested_return.tsx",
+    "rows": []
+  },
+  {
+    "fixture": "4_nested_block.tsx",
+    "rows": []
+  }
+]
