@@ -12,7 +12,12 @@ sqlite3 -header -column facts.db 'SELECT _input_path, family, kind, name FROM no
 
 `--sqlite PATH` requires a new database path. It also works with existing
 `fast`, `slow`, `scip`, `--resolve`, dependency, pattern, and ingest
-modes. Syntax/semantic computation and existing JSONL contracts are unchanged.
+modes. Export modes retain their existing syntax/semantic computation. TS DF nodes carry
+`function`, `is_async`, and `owner_kind` for the innermost owning callable in
+both JSONL and SQLite. Owner kinds are `function`, `class_method`, `class_field`
+(for field initialization), and `top_level`. Nested functions use their own async
+flag and kind; synthesized deferred JSX functions are synchronous. Other
+language producers omit these two new columns, yielding SQL NULL.
 Plain per-file SQLite output accepts multiple explicit source file paths.
 
 ## Authored contracts, in reading order

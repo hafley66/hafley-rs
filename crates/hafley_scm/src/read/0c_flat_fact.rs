@@ -27,6 +27,10 @@ pub enum FlatFact {
         function: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none", default)]
         named: Option<bool>,
+        #[serde(skip_serializing_if = "Option::is_none", default)]
+        is_async: Option<bool>,
+        #[serde(skip_serializing_if = "Option::is_none", default)]
+        owner_kind: Option<String>,
     },
     /// `from_kind`/`to_kind` spell the endpoints' node kinds, so a consumer
     /// keyed on the wire alone carries the whole `(span, kind)` node identity.

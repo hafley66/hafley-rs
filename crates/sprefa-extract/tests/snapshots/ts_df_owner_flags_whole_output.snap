@@ -1,0 +1,412 @@
+---
+source: tests/212_ts_df_owner_flags.rs
+assertion_line: 94
+expression: whole
+---
+[
+  {
+    "fixture": "0_functions.ts",
+    "nodes": [
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 25,
+          "end": 36
+        },
+        "kind": "call_res",
+        "name": null,
+        "function": "outer",
+        "is_async": true,
+        "owner_kind": "function"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 57,
+          "end": 67
+        },
+        "kind": "call_res",
+        "name": null,
+        "function": "inner",
+        "is_async": false,
+        "owner_kind": "function"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 108,
+          "end": 120
+        },
+        "kind": "call_res",
+        "name": null,
+        "function": "exported",
+        "is_async": true,
+        "owner_kind": "function"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 150,
+          "end": 161
+        },
+        "kind": "call_res",
+        "name": null,
+        "function": "arrow",
+        "is_async": true,
+        "owner_kind": "function"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 150,
+          "end": 161
+        },
+        "kind": "ret",
+        "name": null,
+        "function": "arrow",
+        "is_async": true,
+        "owner_kind": "function"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 203,
+          "end": 216
+        },
+        "kind": "call_res",
+        "name": null,
+        "function": "named",
+        "is_async": true,
+        "owner_kind": "function"
+      }
+    ]
+  },
+  {
+    "fixture": "1_class.ts",
+    "nodes": [
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 29,
+          "end": 41
+        },
+        "kind": "call_res",
+        "name": null,
+        "function": "Store.load",
+        "is_async": true,
+        "owner_kind": "class_method"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 66,
+          "end": 80
+        },
+        "kind": "call_res",
+        "name": null,
+        "function": "callback",
+        "is_async": false,
+        "owner_kind": "function"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 66,
+          "end": 80
+        },
+        "kind": "ret",
+        "name": null,
+        "function": "callback",
+        "is_async": false,
+        "owner_kind": "function"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 92,
+          "end": 115
+        },
+        "kind": "closure",
+        "name": "1_class.ts::method::Store.field::closure::92",
+        "function": "Store.field",
+        "is_async": false,
+        "owner_kind": "class_field"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 104,
+          "end": 115
+        },
+        "kind": "call_res",
+        "name": null,
+        "function": "Store.field::closure::92",
+        "is_async": true,
+        "owner_kind": "function"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 104,
+          "end": 115
+        },
+        "kind": "ret",
+        "name": null,
+        "function": "Store.field::closure::92",
+        "is_async": true,
+        "owner_kind": "function"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 125,
+          "end": 168
+        },
+        "kind": "let_bind",
+        "name": "object",
+        "function": "<top>",
+        "is_async": false,
+        "owner_kind": "top_level"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 134,
+          "end": 168
+        },
+        "kind": "new",
+        "name": null,
+        "function": "<top>",
+        "is_async": false,
+        "owner_kind": "top_level"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 146,
+          "end": 166
+        },
+        "kind": "closure",
+        "name": "1_class.ts::function::<top>::closure::146",
+        "function": "<top>",
+        "is_async": false,
+        "owner_kind": "top_level"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 151,
+          "end": 163
+        },
+        "kind": "call_res",
+        "name": null,
+        "function": "<top>::closure::146",
+        "is_async": true,
+        "owner_kind": "function"
+      }
+    ]
+  },
+  {
+    "fixture": "2_closures.tsx",
+    "nodes": [
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 25,
+          "end": 56
+        },
+        "kind": "call_res",
+        "name": null,
+        "function": "outer",
+        "is_async": true,
+        "owner_kind": "function"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 30,
+          "end": 55
+        },
+        "kind": "closure",
+        "name": "2_closures.tsx::function::outer::closure::30",
+        "function": "outer",
+        "is_async": true,
+        "owner_kind": "function"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 42,
+          "end": 55
+        },
+        "kind": "call_res",
+        "name": null,
+        "function": "outer::closure::30",
+        "is_async": true,
+        "owner_kind": "function"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 42,
+          "end": 55
+        },
+        "kind": "ret",
+        "name": null,
+        "function": "outer::closure::30",
+        "is_async": true,
+        "owner_kind": "function"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 58,
+          "end": 93
+        },
+        "kind": "call_res",
+        "name": null,
+        "function": "outer",
+        "is_async": true,
+        "owner_kind": "function"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 63,
+          "end": 92
+        },
+        "kind": "closure",
+        "name": "2_closures.tsx::function::outer::closure::63",
+        "function": "outer",
+        "is_async": true,
+        "owner_kind": "function"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 77,
+          "end": 89
+        },
+        "kind": "call_res",
+        "name": null,
+        "function": "outer::closure::63",
+        "is_async": false,
+        "owner_kind": "function"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 95,
+          "end": 136
+        },
+        "kind": "ret",
+        "name": null,
+        "function": "outer",
+        "is_async": true,
+        "owner_kind": "function"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 102,
+          "end": 135
+        },
+        "kind": "call_res",
+        "name": null,
+        "function": "outer::closure::102",
+        "is_async": false,
+        "owner_kind": "function"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 102,
+          "end": 135
+        },
+        "kind": "closure",
+        "name": "2_closures.tsx::function::outer::closure::102",
+        "function": "outer",
+        "is_async": true,
+        "owner_kind": "function"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 102,
+          "end": 135
+        },
+        "kind": "ret",
+        "name": null,
+        "function": "outer::closure::102",
+        "is_async": false,
+        "owner_kind": "function"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 103,
+          "end": 108
+        },
+        "kind": "var_read",
+        "name": null,
+        "function": "outer::closure::102",
+        "is_async": false,
+        "owner_kind": "function"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 109,
+          "end": 132
+        },
+        "kind": "new",
+        "name": null,
+        "function": "outer",
+        "is_async": true,
+        "owner_kind": "function"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 116,
+          "end": 131
+        },
+        "kind": "call_res",
+        "name": null,
+        "function": "outer",
+        "is_async": true,
+        "owner_kind": "function"
+      }
+    ]
+  }
+]

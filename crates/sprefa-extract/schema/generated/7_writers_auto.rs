@@ -308,6 +308,10 @@ pub mod models {
         pub function: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "super::optional_non_null")]
         pub named: Option<bool>,
+        #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "super::optional_non_null")]
+        pub is_async: Option<bool>,
+        #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "super::optional_non_null")]
+        pub owner_kind: Option<String>,
     }
 
     #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -1861,7 +1865,7 @@ pub fn insert_all(conn: &rusqlite::Connection, source: &Source<'_>, rows: &[Fact
 
     let diagnostic_capacity = if diagnostic.is_empty() { 1 } else { statement_capacity(conn, 7, "INSERT INTO \"diagnostic\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"run\", \"relation\", \"detail\") VALUES ", "(?, ?, ?, ?, ?, ?, ?)")? };
 
-    let node_capacity = if node.is_empty() { 1 } else { statement_capacity(conn, 12, "INSERT INTO \"node\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"span__start\", \"span__end\", \"kind\", \"name\", \"function\", \"named\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let node_capacity = if node.is_empty() { 1 } else { statement_capacity(conn, 14, "INSERT INTO \"node\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"span__start\", \"span__end\", \"kind\", \"name\", \"function\", \"named\", \"is_async\", \"owner_kind\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
 
     let edge_capacity = if edge.is_empty() { 1 } else { statement_capacity(conn, 16, "INSERT INTO \"edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"kind\", \"from__start\", \"from__end\", \"from_kind\", \"to__start\", \"to__end\", \"to_kind\", \"field\", \"index\", \"named_index\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
 
@@ -2068,7 +2072,7 @@ pub fn insert_all(conn: &rusqlite::Connection, source: &Source<'_>, rows: &[Fact
     }
 
     for chunk in node.chunks(node_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"node\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"span__start\", \"span__end\", \"kind\", \"name\", \"function\", \"named\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"node\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"span__start\", \"span__end\", \"kind\", \"name\", \"function\", \"named\", \"is_async\", \"owner_kind\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
@@ -3014,11 +3018,15 @@ impl models::Node {
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.named)?;
         parameter += 1;
+        statement.raw_bind_parameter(parameter, self.is_async)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.owner_kind.as_deref())?;
+        parameter += 1;
         Ok(parameter)
     }
     #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"node\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"span__start\", \"span__end\", \"kind\", \"name\", \"function\", \"named\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+        let mut statement = conn.prepare_cached("INSERT INTO \"node\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"span__start\", \"span__end\", \"kind\", \"name\", \"function\", \"named\", \"is_async\", \"owner_kind\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }

@@ -25,15 +25,43 @@ pub fn json_ported(actual: &str, expected: &str, path: &str) -> (String, String)
                 .collect::<Vec<_>>()
         })
         .collect();
-    let (ported, added): (Vec<_>, Vec<_>) = actual.lines().partition(|line| {
-        let row: serde_json::Value = serde_json::from_str(line).unwrap();
-        row["family"] != "df"
-            || row
-                .as_object()
-                .unwrap()
-                .values()
-                .filter_map(|value| value["start"].as_u64())
-                .all(|start| anchors.contains(&start))
-    });
+    let projected: Vec<_> = actual.lines().map(legacy_owner_columns).collect();
+    let (ported, added): (Vec<_>, Vec<_>) =
+        projected.iter().map(String::as_str).partition(|line| {
+            let row: serde_json::Value = serde_json::from_str(line).unwrap();
+            row["family"] != "df"
+                || row
+                    .as_object()
+                    .unwrap()
+                    .values()
+                    .filter_map(|value| value["start"].as_u64())
+                    .all(|start| anchors.contains(&start))
+        });
     (ported.join("\n"), added.join("\n"))
+}
+
+// The declared owner-metadata increment appends these two TS DF node columns.
+// Remove only that suffix for historical byte comparisons; new fixtures assert
+// every column through both JSONL and SQLite. All original bytes remain intact.
+pub fn legacy_owner_columns(line: &str) -> String {
+    let Some((original, _)) = line.rsplit_once(",\"is_async\":") else {
+        return line.to_owned();
+    };
+    let row: serde_json::Value = serde_json::from_str(line).unwrap();
+    assert_eq!(row["record"], "node");
+    assert_eq!(row["family"], "df");
+    assert!(row["is_async"].is_boolean());
+    assert!(matches!(
+        row["owner_kind"].as_str(),
+        Some("function" | "class_method" | "class_field" | "top_level")
+    ));
+    let suffix = format!(
+        ",\"is_async\":{},\"owner_kind\":{}}}",
+        row["is_async"], row["owner_kind"]
+    );
+    assert_eq!(line.trim_end(), format!("{original}{suffix}"));
+    format!(
+        "{original}}}{}",
+        if line.ends_with('\n') { "\n" } else { "" }
+    )
 }

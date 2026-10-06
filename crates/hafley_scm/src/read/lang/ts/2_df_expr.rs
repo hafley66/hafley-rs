@@ -180,6 +180,8 @@ pub(super) fn df_flow_expr(
             let lam_sym = DfOwner {
                 kind: fn_sym.kind,
                 name: format!("{}::closure::{}", fn_sym.name, span.start),
+                is_async: arrow.r#async,
+                owner_kind: "function",
             };
             df_lift_arrow(
                 &arrow.params,
@@ -203,6 +205,8 @@ pub(super) fn df_flow_expr(
                 let lam_sym = DfOwner {
                     kind: fn_sym.kind,
                     name: format!("{}::closure::{}", fn_sym.name, span.start),
+                    is_async: func.r#async,
+                    owner_kind: "function",
                 };
                 df_lift_fn(&func.params, body, file, &lam_sym, strings, sink, scope);
                 df_push(

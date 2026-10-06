@@ -3,6 +3,9 @@ use super::*;
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct DfFAux {
     pub functions: Vec<Option<NameId>>,
+    /// Owning callable properties, aligned with `functions` and DF nodes.
+    pub is_async: Vec<Option<bool>>,
+    pub owner_kinds: Vec<Option<&'static str>>,
     pub param_fields: Vec<(NodeRef, String)>,
     pub params: Vec<DfParam>,
     pub args: Vec<DfArg>,

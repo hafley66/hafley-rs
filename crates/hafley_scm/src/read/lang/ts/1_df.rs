@@ -44,6 +44,8 @@ impl Project<DfF> for DfProjector<'_> {
 struct DfOwner {
     kind: &'static str,
     name: String,
+    is_async: bool,
+    owner_kind: &'static str,
 }
 
 type Scope = std::collections::HashMap<String, NodeRef>;
@@ -67,6 +69,8 @@ fn df_flow_stmt(
                 let fn_sym = DfOwner {
                     kind: "function",
                     name,
+                    is_async: func.r#async,
+                    owner_kind: "function",
                 };
                 let mark = sink.nodes.len();
                 let mut scope = Scope::new();
@@ -87,6 +91,8 @@ fn df_flow_stmt(
                     let fn_sym = DfOwner {
                         kind: "function",
                         name,
+                        is_async: func.r#async,
+                        owner_kind: "function",
                     };
                     let mark = sink.nodes.len();
                     let mut scope = Scope::new();
@@ -103,6 +109,8 @@ fn df_flow_stmt(
                     let owner = DfOwner {
                         kind: "function",
                         name: "<top>".into(),
+                        is_async: false,
+                        owner_kind: "top_level",
                     };
                     df_flow_expr(expression, file, &owner, strings, &mut Scope::new(), sink);
                 }
@@ -113,6 +121,8 @@ fn df_flow_stmt(
             let fn_sym = DfOwner {
                 kind: "function",
                 name: "<top>".into(),
+                is_async: false,
+                owner_kind: "top_level",
             };
             let mut scope = Scope::new();
             df_flow_body_stmt(stmt, file, &fn_sym, strings, &mut scope, sink);
@@ -126,6 +136,8 @@ fn df_flow_stmt(
         &DfOwner {
             kind: "function",
             name: "<top>".into(),
+            is_async: false,
+            owner_kind: "top_level",
         },
     );
 }
@@ -148,6 +160,8 @@ fn df_flow_decl(
                 let fn_sym = DfOwner {
                     kind: "function",
                     name,
+                    is_async: func.r#async,
+                    owner_kind: "function",
                 };
                 let mark = sink.nodes.len();
                 let mut scope = Scope::new();
@@ -161,6 +175,8 @@ fn df_flow_decl(
             let owner = DfOwner {
                 kind: "function",
                 name: "<top>".into(),
+                is_async: false,
+                owner_kind: "top_level",
             };
             df_flow_var(var, file, &owner, strings, &mut Scope::new(), sink);
         }
@@ -180,15 +196,16 @@ fn df_flow_class(
         .map(|id| id.name.to_string())
         .unwrap_or_default();
     for element in &class.body.body {
-        let (key, params, body, value) = match element {
+        let (key, params, body, value, is_async) = match element {
             ts::ClassElement::MethodDefinition(method) => (
                 &method.key,
                 Some(&method.value.params),
                 method.value.body.as_deref(),
                 None,
+                method.value.r#async,
             ),
             ts::ClassElement::PropertyDefinition(property) => {
-                (&property.key, None, None, property.value.as_ref())
+                (&property.key, None, None, property.value.as_ref(), false)
             }
             _ => continue,
         };
@@ -199,6 +216,12 @@ fn df_flow_class(
         let fn_sym = DfOwner {
             kind: "method",
             name: format!("{owner}.{name}"),
+            is_async,
+            owner_kind: if params.is_some() {
+                "class_method"
+            } else {
+                "class_field"
+            },
         };
         let mark = sink.nodes.len();
         let mut scope = Scope::new();
@@ -279,6 +302,8 @@ fn df_flow_body_stmt(
             if let Some(body) = func.body.as_deref() {
                 let owner = DfOwner {
                     kind: "function",
+                    is_async: func.r#async,
+                    owner_kind: "function",
                     name: func
                         .id
                         .as_ref()
@@ -527,6 +552,8 @@ fn df_flow_var(
                     let sym = DfOwner {
                         kind: "function",
                         name: binding.name.to_string(),
+                        is_async: arrow.r#async,
+                        owner_kind: "function",
                     };
                     df_lift_arrow(&arrow.params, &arrow.body, file, &sym, strings, sink, scope);
                     continue;
@@ -536,6 +563,8 @@ fn df_flow_var(
                         let sym = DfOwner {
                             kind: "function",
                             name: binding.name.to_string(),
+                            is_async: func.r#async,
+                            owner_kind: "function",
                         };
                         df_lift_fn(&func.params, body, file, &sym, strings, sink, scope);
                     }

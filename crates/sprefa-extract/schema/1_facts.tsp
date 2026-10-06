@@ -25,6 +25,8 @@ model Node {
   span: Extract.SpanOut; kind: string; name: string | null;
   function?: string;
   named?: boolean;
+  is_async?: boolean;
+  owner_kind?: string;
 }
 model Edge {
   ...ExportRow; record: "edge"; ...LocatedFact;

@@ -825,6 +825,8 @@ fn slice_at(seed: &str) -> Result<Vec<FlatFact>, Box<dyn std::error::Error>> {
                     (span.start, span.end, kind.clone()),
                     FlatFact::Node {
                         function: None,
+                        is_async: None,
+                        owner_kind: None,
                         fact: None,
                         family: FamilyTag::Cfg,
                         span,

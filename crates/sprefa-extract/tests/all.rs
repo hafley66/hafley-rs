@@ -538,6 +538,10 @@ mod v5_parity {
     #[path = "198_v5_support.rs"]
     pub mod v5_support;
 
+    #[cfg(feature = "cli")]
+    #[path = "212_ts_df_owner_flags.rs"]
+    mod df_owner_flags;
+
     #[path = "210_ts_df_lift_owners.rs"]
     mod df_lift_owners;
     #[cfg(feature = "cli")]

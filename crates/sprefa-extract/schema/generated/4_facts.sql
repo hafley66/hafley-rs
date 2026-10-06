@@ -71,7 +71,9 @@ CREATE TABLE IF NOT EXISTS "node" (
     "kind" TEXT NOT NULL,
     "name" TEXT,
     "function" TEXT,
-    "named" INTEGER
+    "named" INTEGER,
+    "is_async" INTEGER,
+    "owner_kind" TEXT
 );
 
 CREATE TABLE IF NOT EXISTS "edge" (

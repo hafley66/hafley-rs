@@ -99,6 +99,8 @@ pub(super) fn df_jsx_element(
     let lam_sym = DfOwner {
         kind: fn_sym.kind,
         name: format!("{}::closure::{}", fn_sym.name, el.span.start),
+        is_async: false,
+        owner_kind: "function",
     };
     let captured = df_push(
         sink,

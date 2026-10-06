@@ -244,7 +244,13 @@ fn wire_ported_output_is_byte_identical_to_the_kind_vocab_golden() {
             "extract failed on {path}: {}",
             String::from_utf8_lossy(&output.stderr)
         );
-        for line in output.stdout.split_inclusive(|byte| *byte == b'\n') {
+        for emitted in output.stdout.split_inclusive(|byte| *byte == b'\n') {
+            let projected = if sprefa_extract::source_for(path).is_some_and(|source| source.name() == "ts") {
+                crate::df_increment_support::legacy_owner_columns(std::str::from_utf8(emitted).unwrap())
+            } else {
+                std::str::from_utf8(emitted).unwrap().to_owned()
+            };
+            let line = projected.as_bytes();
             if expected_lines
                 .peek()
                 .is_some_and(|expected| *expected == line)

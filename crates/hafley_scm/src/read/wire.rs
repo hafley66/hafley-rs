@@ -264,6 +264,8 @@ fn flatten_cst<E>(
     for node in &bundle.nodes {
         push(FlatFact::Node {
             function: None,
+            is_async: None,
+            owner_kind: None,
             fact: None,
             family: CstF::TAG,
             span: SpanOut::new(node.span.start, node.span.end()),
@@ -309,6 +311,8 @@ fn flatten_type<E>(
     for node in &bundle.nodes {
         push(FlatFact::Node {
             function: None,
+            is_async: None,
+            owner_kind: None,
             fact: None,
             family: TypeF::TAG,
             span: SpanOut::new(node.span.start, node.span.end()),
@@ -401,6 +405,8 @@ fn flatten_call<E>(
         }
         push(FlatFact::Node {
             function: None,
+            is_async: None,
+            owner_kind: None,
             fact: None,
             family: CallF::TAG,
             span: SpanOut::new(node.span.start, node.span.end()),
@@ -492,6 +498,8 @@ pub fn flatten_cfg_each<E>(
     for node in &bundle.nodes {
         push(FlatFact::Node {
             function: None,
+            is_async: None,
+            owner_kind: None,
             fact: None,
             family: CfgF::TAG,
             span: SpanOut::new(node.span.start, node.span.end()),
@@ -648,6 +656,8 @@ fn flatten_df<E>(
     for (index, node) in bundle.nodes.iter().enumerate() {
         push(FlatFact::Node {
             function: bundle.aux.functions.get(index).copied().flatten().map(|id| strings.lookup(id).to_string()),
+            is_async: bundle.aux.is_async.get(index).copied().flatten(),
+            owner_kind: bundle.aux.owner_kinds.get(index).copied().flatten().map(str::to_string),
             fact: None,
             family: DfF::TAG,
             span: SpanOut::new(node.span.start, node.span.end()),

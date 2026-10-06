@@ -98,11 +98,15 @@ pub(super) fn df_owner(
     mark: usize,
     owner: &DfOwner,
 ) {
-    let owner = strings.intern(&owner.name);
+    let name = strings.intern(&owner.name);
     sink.aux.functions.resize(sink.nodes.len(), None);
-    for slot in &mut sink.aux.functions[mark..] {
-        if slot.is_none() {
-            *slot = Some(owner);
+    sink.aux.is_async.resize(sink.nodes.len(), None);
+    sink.aux.owner_kinds.resize(sink.nodes.len(), None);
+    for index in mark..sink.nodes.len() {
+        if sink.aux.functions[index].is_none() {
+            sink.aux.functions[index] = Some(name);
+            sink.aux.is_async[index] = Some(owner.is_async);
+            sink.aux.owner_kinds[index] = Some(owner.owner_kind);
         }
     }
 }
