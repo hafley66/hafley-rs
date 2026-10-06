@@ -1,0 +1,1 @@
+{"steps":[{"action":"copy_tree","source":"$fixtures/go_module_plane/inputs/tab","target":"$work/tab"},{"action":"run","name":"extract","arguments":["--resolve","$work/tab/caller.go","$work/tab/pkg/pkg.go"],"cwd":"$manifest","expect_exit_code":0}]}

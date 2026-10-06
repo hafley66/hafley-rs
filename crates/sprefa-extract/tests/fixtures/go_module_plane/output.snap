@@ -1,0 +1,331 @@
+---
+source: tests/support/2_fixture_runner.rs
+---
+{
+  "0_workspace_call": {
+    "extract": {
+      "exit_code": 0,
+      "stdout": [
+        {
+          "record": "resolved_edge",
+          "caller_path": "tests/fixtures/go_modules/module_a/main.go",
+          "caller_name": "UseDot",
+          "callee_path": "tests/fixtures/go_modules/module_a/pkgutil2/widget.go",
+          "callee_name": "Widget",
+          "caller_site_start": 472,
+          "caller_site_end": 478,
+          "callee_start": 16,
+          "callee_end": 47,
+          "kind": "import_resolve",
+          "resolution_origin": "module_plane"
+        },
+        {
+          "record": "resolved_edge",
+          "caller_path": "tests/fixtures/go_modules/module_a/shadowpkg/shadow.go",
+          "caller_name": "UseShadowed",
+          "callee_path": "tests/fixtures/go_modules/module_a/shadowpkg/shadow.go",
+          "callee_name": "Widget",
+          "caller_site_start": 262,
+          "caller_site_end": 268,
+          "callee_start": 197,
+          "callee_end": 228,
+          "kind": "name_resolve",
+          "resolution_origin": "same_file"
+        },
+        {
+          "record": "resolved_edge",
+          "caller_path": "tests/fixtures/go_modules/module_b/main.go",
+          "caller_name": "UseAlias",
+          "callee_path": "tests/fixtures/go_modules/module_b/pkgutil/util.go",
+          "callee_name": "Helper",
+          "caller_site_start": 81,
+          "caller_site_end": 93,
+          "callee_start": 14,
+          "callee_end": 44,
+          "kind": "import_resolve",
+          "resolution_origin": "module_plane"
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/go_modules/module_a/main.go",
+          "name": "*",
+          "local": ".",
+          "target_path": "tests/fixtures/go_modules/module_a/pkgutil2",
+          "target_name": "putil2",
+          "kind": "namespace",
+          "hops": 0
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/go_modules/module_a/main.go",
+          "name": "*",
+          "local": "yaml",
+          "target_path": "tests/fixtures/go_modules/module_a/vendorlike/yaml.v3",
+          "target_name": "yaml",
+          "kind": "local",
+          "hops": 0
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/go_modules/module_a/shadowpkg/shadow.go",
+          "name": "*",
+          "local": ".",
+          "target_path": "tests/fixtures/go_modules/module_a/pkgutil2",
+          "target_name": "putil2",
+          "kind": "namespace",
+          "hops": 0
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/go_modules/module_b/main.go",
+          "name": "*",
+          "local": "alias",
+          "target_path": "tests/fixtures/go_modules/module_b/pkgutil",
+          "target_name": "util",
+          "kind": "local",
+          "hops": 0
+        },
+        {
+          "record": "unresolved",
+          "family": "call",
+          "path": "tests/fixtures/go_modules/module_a/main.go",
+          "span": {
+            "start": 116,
+            "end": 139
+          },
+          "reason": "external",
+          "detail": "github.com/pkg/errors"
+        }
+      ],
+      "stderr": ""
+    }
+  },
+  "1_workspace_type": {
+    "extract": {
+      "exit_code": 0,
+      "stdout": [
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/go_modules/module_a/main.go",
+          "name": "*",
+          "local": ".",
+          "target_path": "tests/fixtures/go_modules/module_a/pkgutil2",
+          "target_name": "putil2",
+          "kind": "namespace",
+          "hops": 0
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/go_modules/module_a/main.go",
+          "name": "*",
+          "local": "yaml",
+          "target_path": "tests/fixtures/go_modules/module_a/vendorlike/yaml.v3",
+          "target_name": "yaml",
+          "kind": "local",
+          "hops": 0
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/go_modules/module_a/shadowpkg/shadow.go",
+          "name": "*",
+          "local": ".",
+          "target_path": "tests/fixtures/go_modules/module_a/pkgutil2",
+          "target_name": "putil2",
+          "kind": "namespace",
+          "hops": 0
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/go_modules/module_b/main.go",
+          "name": "*",
+          "local": "alias",
+          "target_path": "tests/fixtures/go_modules/module_b/pkgutil",
+          "target_name": "util",
+          "kind": "local",
+          "hops": 0
+        },
+        {
+          "record": "resolved_type_edge",
+          "owner_path": "tests/fixtures/go_modules/module_a/main.go",
+          "owner_name": "Wrapper",
+          "owner_start": 287,
+          "owner_end": 318,
+          "target_path": "tests/fixtures/go_modules/module_a/vendorlike/yaml.v3/yaml.go",
+          "target_name": "Node",
+          "kind": "field",
+          "resolution_origin": "module_plane"
+        }
+      ],
+      "stderr": ""
+    }
+  },
+  "2_tab_module": {
+    "extract": {
+      "exit_code": 0,
+      "stdout": [
+        {
+          "record": "resolved_edge",
+          "caller_path": "$work/tab/caller.go",
+          "caller_name": "Use",
+          "callee_path": "$work/tab/pkg/pkg.go",
+          "callee_name": "Answer",
+          "caller_site_start": 72,
+          "caller_site_end": 80,
+          "callee_start": 13,
+          "callee_end": 43,
+          "kind": "import_resolve",
+          "resolution_origin": "module_plane"
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "$work/tab/caller.go",
+          "name": "*",
+          "local": "p",
+          "target_path": "$work/tab/pkg",
+          "target_name": "pkg",
+          "kind": "local",
+          "hops": 0
+        }
+      ],
+      "stderr": ""
+    }
+  },
+  "3_caller_only": {
+    "extract": {
+      "exit_code": 0,
+      "stdout": [
+        {
+          "record": "resolved_import",
+          "src_path": "$work/twin/caller/caller.go",
+          "name": "*",
+          "local": "debug",
+          "target_path": "$work/twin/debug",
+          "target_name": "debug",
+          "kind": "local",
+          "hops": 0
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "$work/twin/caller/caller.go",
+          "name": "*",
+          "local": "p",
+          "target_path": "$work/twin/poison",
+          "target_name": "poison",
+          "kind": "local",
+          "hops": 0
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "$work/twin/caller/caller.go",
+          "name": "*",
+          "local": "q",
+          "target_path": "$work/twin/other",
+          "target_name": "other",
+          "kind": "local",
+          "hops": 0
+        }
+      ],
+      "stderr": ""
+    }
+  },
+  "4_twin_module": {
+    "extract": {
+      "exit_code": 0,
+      "stdout": [
+        {
+          "record": "resolved_edge",
+          "caller_path": "$work/twin/caller/caller.go",
+          "caller_name": "Use",
+          "callee_path": "$work/twin/other/debug.go",
+          "callee_name": "Helper",
+          "caller_site_start": 127,
+          "caller_site_end": 139,
+          "callee_start": 15,
+          "callee_end": 45,
+          "kind": "name_resolve",
+          "resolution_origin": "corpus_unique"
+        },
+        {
+          "record": "resolved_edge",
+          "caller_path": "$work/twin/caller/caller.go",
+          "caller_name": "Use",
+          "callee_path": "$work/twin/other/debug.go",
+          "callee_name": "Helper",
+          "caller_site_start": 144,
+          "caller_site_end": 152,
+          "callee_start": 15,
+          "callee_end": 45,
+          "kind": "import_resolve",
+          "resolution_origin": "module_plane"
+        },
+        {
+          "record": "resolved_edge",
+          "caller_path": "$work/twin/caller/caller.go",
+          "caller_name": "Use",
+          "callee_path": "$work/twin/poison/alpha.go",
+          "callee_name": "Pick",
+          "caller_site_start": 157,
+          "caller_site_end": 163,
+          "callee_start": 15,
+          "callee_end": 43,
+          "kind": "import_resolve",
+          "resolution_origin": "module_plane"
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "$work/twin/caller/caller.go",
+          "name": "*",
+          "local": "debug",
+          "target_path": "$work/twin/debug",
+          "target_name": "debug",
+          "kind": "local",
+          "hops": 0
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "$work/twin/caller/caller.go",
+          "name": "*",
+          "local": "p",
+          "target_path": "$work/twin/poison",
+          "target_name": "alpha",
+          "kind": "local",
+          "hops": 0
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "$work/twin/caller/caller.go",
+          "name": "*",
+          "local": "q",
+          "target_path": "$work/twin/other",
+          "target_name": "debug",
+          "kind": "local",
+          "hops": 0
+        },
+        {
+          "record": "unresolved",
+          "family": "call",
+          "path": "$work/twin/poison/alpha_test.go",
+          "span": {
+            "start": 27,
+            "end": 36
+          },
+          "reason": "external",
+          "detail": "testing"
+        }
+      ],
+      "stderr": ""
+    }
+  },
+  "5_scaling": {
+    "200": {
+      "exit_code": 0
+    },
+    "400": {
+      "exit_code": 0
+    },
+    "linear_cost": {
+      "below_limit": true,
+      "limit": 2.5
+    }
+  }
+}

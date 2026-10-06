@@ -1,0 +1,1 @@
+{"steps":[{"action":"copy_tree","source":"$fixtures/go_module_plane/inputs/twin","target":"$work/twin"},{"action":"run","name":"extract","arguments":["--resolve","$work/twin/poison/alpha_test.go","$work/twin/poison/alpha.go","$work/twin/debug/debug.go","$work/twin/other/debug.go","$work/twin/caller/caller.go"],"cwd":"$manifest","expect_exit_code":0}]}
