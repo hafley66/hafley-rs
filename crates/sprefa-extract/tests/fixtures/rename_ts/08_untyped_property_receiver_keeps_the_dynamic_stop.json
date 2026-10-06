@@ -1,0 +1,56 @@
+{
+  "claim_test": "untyped_property_receiver_keeps_the_dynamic_stop",
+  "steps": [
+    {
+      "action": "directory",
+      "name": "state",
+      "path": "$work/state"
+    },
+    {
+      "action": "copy",
+      "name": "copy_src_box.ts",
+      "source": "tests/fixtures/ts_rename/property/before/src/box.ts",
+      "path": "$work/repo/src/box.ts"
+    },
+    {
+      "action": "copy",
+      "name": "copy_src_use.ts",
+      "source": "tests/fixtures/ts_rename/property/before/src/use.ts",
+      "path": "$work/repo/src/use.ts"
+    },
+    {
+      "action": "write",
+      "name": "append_unknown_receiver",
+      "path": "$work/repo/src/use.ts",
+      "text": "import { Box } from \"./box\";\n\nexport function read(box: Box): number {\n  const { old } = box;\n  return box.old + old;\n}\n\nexport function unknown(probe: unknown) { return probe.old; }\n"
+    },
+    {
+      "action": "run",
+      "name": "stopped",
+      "arguments": [
+        "rename",
+        "src/box.ts#old",
+        "fresh",
+        "--root",
+        "$work/repo",
+        "--state",
+        "$work/state"
+      ],
+      "success": false,
+      "environment": {
+        "RUST_LOG": "off",
+        "DL_TRACE": "0",
+        "DL_TRAIL": "0"
+      },
+      "cwd": "$work/repo",
+      "raw_stdout": true,
+      "expect_exit_code": 6,
+      "stdout_redactions": [
+        {
+          "pattern": "(?m)^(stage )[0-9a-f]{64}( committed| dry run, tree untouched)$",
+          "replacement": "${1}$$STAGE${2}"
+        }
+      ]
+    }
+  ]
+}

@@ -163,6 +163,17 @@ pub fn commands(case: &Value, api: impl Fn(&Value) -> Value) -> Value {
                 };
                 std::fs::write(path(), replacement).unwrap();
             }
+            "tree_matches" => {
+                let actual = tree_contents(Path::new(&expand(step["left"].as_str().unwrap())));
+                let expected = tree_contents(Path::new(&expand(
+                    step["fixture"]
+                        .as_str()
+                        .or_else(|| step["right"].as_str())
+                        .unwrap(),
+                )));
+                assert_eq!(actual, expected, "{step}");
+                observed.insert(name.to_string(), serde_json::json!({"files":actual}));
+            }
             "sql_query" => {
                 let db =
                     rusqlite::Connection::open(expand(step["database"].as_str().unwrap())).unwrap();
@@ -370,6 +381,17 @@ pub fn commands(case: &Value, api: impl Fn(&Value) -> Value) -> Value {
             "compare" => {
                 let left = &outputs[step["left"].as_str().unwrap()].0;
                 let mut projected = match step["projection"].as_str() {
+                    Some("prefix") | Some("plan_lines") => left
+                        .lines()
+                        .filter(|line| {
+                            if step["projection"] == "prefix" {
+                                line.starts_with(step["prefix"].as_str().unwrap())
+                            } else {
+                                line.starts_with("plan ") || line.starts_with("  ")
+                            }
+                        })
+                        .map(|line| format!("{line}\n"))
+                        .collect(),
                     Some("ported") => crate::v6_only::ported(left),
                     Some("written") => left
                         .lines()
@@ -404,9 +426,17 @@ pub fn commands(case: &Value, api: impl Fn(&Value) -> Value) -> Value {
                 }
                 let expected = if let Some(file) = step["fixture"].as_str() {
                     std::fs::read_to_string(file).unwrap()
+                } else if let Some(text) = step["text"].as_str() {
+                    text.to_string()
                 } else {
                     let stream = &outputs[step["right"].as_str().unwrap()].0;
-                    if step["right_projection"] == "ported" {
+                    if step["projection"] == "plan_lines" {
+                        stream
+                            .lines()
+                            .filter(|line| line.starts_with("plan ") || line.starts_with("  "))
+                            .map(|line| format!("{line}\n"))
+                            .collect()
+                    } else if step["right_projection"] == "ported" {
                         crate::v6_only::ported(stream)
                     } else {
                         stream.clone()
@@ -731,4 +761,61 @@ pub fn resolved_rows(step: &Value) -> Value {
         rows.dedup();
     }
     serde_json::json!({"calls":calls,"types":types})
+}
+
+fn tree_contents(root: &Path) -> BTreeMap<String, Value> {
+    fn read(root: &Path, path: &Path, files: &mut BTreeMap<String, Value>) {
+        for entry in std::fs::read_dir(path).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                files.insert(
+                    format!("{}/", path.strip_prefix(root).unwrap().to_string_lossy()),
+                    serde_json::json!({"directory":true}),
+                );
+                read(root, &path, files);
+            } else {
+                let bytes = std::fs::read(&path).unwrap();
+                let value = match String::from_utf8(bytes) {
+                    Ok(text) => Value::String(text),
+                    Err(error) => serde_json::json!({"bytes":error.into_bytes()}),
+                };
+                files.insert(
+                    path.strip_prefix(root)
+                        .unwrap()
+                        .to_string_lossy()
+                        .into_owned(),
+                    value,
+                );
+            }
+        }
+    }
+    let mut files = BTreeMap::new();
+    read(root, root, &mut files);
+    files
+}
+
+pub fn editing_api(step: &Value) -> Value {
+    use sprefa_extract::ScipSource;
+    match step["api"].as_str().unwrap() {
+        "source_absent" => {
+            let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(step["path"].as_str().unwrap());
+            let text = std::fs::read_to_string(path).unwrap();
+            let needle = step["needle"].as_str().unwrap();
+            let hits: Vec<_> = text
+                .lines()
+                .enumerate()
+                .filter(|(_, line)| line.contains(needle))
+                .collect();
+            assert!(hits.is_empty(), "{step}: {hits:?}");
+            serde_json::json!({"path":step["path"],"needle":needle,"hits":hits})
+        }
+        "scip_index" => {
+            let root = Path::new(step["root"].as_str().unwrap());
+            let index = sprefa_extract::ScipTypescript.build(root).unwrap();
+            let target = Path::new(step["into"].as_str().unwrap());
+            std::fs::copy(index, target).unwrap();
+            serde_json::json!({"index":target.to_str().unwrap(),"is_file":target.is_file()})
+        }
+        _ => panic!("unknown editing API: {step}"),
+    }
 }

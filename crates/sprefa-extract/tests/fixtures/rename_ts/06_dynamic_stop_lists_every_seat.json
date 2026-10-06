@@ -1,0 +1,51 @@
+{
+  "claim_test": "dynamic_stop_lists_every_seat",
+  "steps": [
+    {
+      "action": "directory",
+      "name": "state",
+      "path": "$work/state"
+    },
+    {
+      "action": "copy",
+      "name": "copy_src_app.ts",
+      "source": "tests/fixtures/ts_rename/stops/dynamic/before/src/app.ts",
+      "path": "$work/repo/src/app.ts"
+    },
+    {
+      "action": "run",
+      "name": "stopped",
+      "arguments": [
+        "rename",
+        "src/app.ts#Foo",
+        "Bar",
+        "--root",
+        "$work/repo",
+        "--state",
+        "$work/state",
+        "--commit"
+      ],
+      "success": false,
+      "environment": {
+        "RUST_LOG": "off",
+        "DL_TRACE": "0",
+        "DL_TRAIL": "0"
+      },
+      "cwd": "$work/repo",
+      "raw_stdout": true,
+      "expect_exit_code": 6,
+      "stdout_redactions": [
+        {
+          "pattern": "(?m)^(stage )[0-9a-f]{64}( committed| dry run, tree untouched)$",
+          "replacement": "${1}$$STAGE${2}"
+        }
+      ]
+    },
+    {
+      "action": "tree_matches",
+      "name": "tree",
+      "left": "$work/repo",
+      "fixture": "tests/fixtures/ts_rename/stops/dynamic/before"
+    }
+  ]
+}

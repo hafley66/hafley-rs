@@ -1,0 +1,103 @@
+{
+  "claim_test": "aliased_import_moves_only_the_imported_seat",
+  "steps": [
+    {
+      "action": "directory",
+      "name": "state",
+      "path": "$work/state"
+    },
+    {
+      "action": "copy",
+      "name": "copy_tsconfig.json",
+      "source": "tests/fixtures/ts_rename/exports/before/tsconfig.json",
+      "path": "$work/repo/tsconfig.json"
+    },
+    {
+      "action": "copy",
+      "name": "copy_README.md",
+      "source": "tests/fixtures/ts_rename/exports/before/README.md",
+      "path": "$work/repo/README.md"
+    },
+    {
+      "action": "copy",
+      "name": "copy_src_a.ts",
+      "source": "tests/fixtures/ts_rename/exports/before/src/a.ts",
+      "path": "$work/repo/src/a.ts"
+    },
+    {
+      "action": "copy",
+      "name": "copy_src_b.ts",
+      "source": "tests/fixtures/ts_rename/exports/before/src/b.ts",
+      "path": "$work/repo/src/b.ts"
+    },
+    {
+      "action": "copy",
+      "name": "copy_src_barrel.ts",
+      "source": "tests/fixtures/ts_rename/exports/before/src/barrel.ts",
+      "path": "$work/repo/src/barrel.ts"
+    },
+    {
+      "action": "copy",
+      "name": "copy_src_c.ts",
+      "source": "tests/fixtures/ts_rename/exports/before/src/c.ts",
+      "path": "$work/repo/src/c.ts"
+    },
+    {
+      "action": "copy",
+      "name": "copy_src_d.ts",
+      "source": "tests/fixtures/ts_rename/exports/before/src/d.ts",
+      "path": "$work/repo/src/d.ts"
+    },
+    {
+      "action": "copy",
+      "name": "copy_src_e.ts",
+      "source": "tests/fixtures/ts_rename/exports/before/src/e.ts",
+      "path": "$work/repo/src/e.ts"
+    },
+    {
+      "action": "copy",
+      "name": "copy_src_lib.ts",
+      "source": "tests/fixtures/ts_rename/exports/before/src/lib.ts",
+      "path": "$work/repo/src/lib.ts"
+    },
+    {
+      "action": "copy",
+      "name": "copy_src_star.ts",
+      "source": "tests/fixtures/ts_rename/exports/before/src/star.ts",
+      "path": "$work/repo/src/star.ts"
+    },
+    {
+      "action": "run",
+      "name": "commit",
+      "arguments": [
+        "rename",
+        "src/lib.ts#Foo",
+        "Baz",
+        "--root",
+        "$work/repo",
+        "--state",
+        "$work/state",
+        "--commit"
+      ],
+      "success": true,
+      "environment": {
+        "RUST_LOG": "off",
+        "DL_TRACE": "0",
+        "DL_TRAIL": "0"
+      },
+      "cwd": "$work/repo",
+      "raw_stdout": true,
+      "stdout_redactions": [
+        {
+          "pattern": "(?m)^(stage )[0-9a-f]{64}( committed| dry run, tree untouched)$",
+          "replacement": "${1}$$STAGE${2}"
+        }
+      ]
+    },
+    {
+      "action": "read_tree",
+      "name": "b_text",
+      "path": "$work/repo/src/b.ts"
+    }
+  ]
+}

@@ -1,0 +1,441 @@
+---
+source: tests/support/2_fixture_runner.rs
+---
+{
+  "00_commit_renames_the_anchor_file": {
+    "commit": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/app.ts oldName -> newName\n  src/app.ts  4 uses\nreplace src/app.ts -> src/app.ts  update src/app.ts (490 bytes)\n    --- original\n    +++ modified\n    @@ -1,13 +1,13 @@\n     // The rename anchor. The string literal, this comment, and the shadowed\n     // binding inside runShadowed all spell oldName and must survive untouched.\n    \n    -function oldName(input: number): number {\n    +function newName(input: number): number {\n       return input + 1;\n     }\n    \n    -const viaCall = oldName(1);\n    +const viaCall = newName(1);\n    \n    -const viaValue: (input: number) => number = oldName;\n    +const viaValue: (input: number) => number = newName;\n    \n     function runShadowed(): number {\n       const oldName = 41;\n    @@ -16,4 +16,4 @@\n    \n     export const registryKey = \"oldName\";\n    \n    -export const total = viaCall + viaValue(2) + oldName(3) + runShadowed();\n    +export const total = viaCall + viaValue(2) + newName(3) + runShadowed();\nstage $STAGE committed\n",
+      "stderr": ""
+    },
+    "tree": {
+      "files": {
+        "src/": {
+          "directory": true
+        },
+        "src/app.ts": "// The rename anchor. The string literal, this comment, and the shadowed\n// binding inside runShadowed all spell oldName and must survive untouched.\n\nfunction newName(input: number): number {\n  return input + 1;\n}\n\nconst viaCall = newName(1);\n\nconst viaValue: (input: number) => number = newName;\n\nfunction runShadowed(): number {\n  const oldName = 41;\n  return oldName + 1;\n}\n\nexport const registryKey = \"oldName\";\n\nexport const total = viaCall + viaValue(2) + newName(3) + runShadowed();\n"
+      }
+    }
+  },
+  "01_dry_run_touches_nothing": {
+    "dry": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/app.ts oldName -> newName\n  src/app.ts  4 uses\nreplace src/app.ts -> src/app.ts  update src/app.ts (490 bytes)\n    --- original\n    +++ modified\n    @@ -1,13 +1,13 @@\n     // The rename anchor. The string literal, this comment, and the shadowed\n     // binding inside runShadowed all spell oldName and must survive untouched.\n    \n    -function oldName(input: number): number {\n    +function newName(input: number): number {\n       return input + 1;\n     }\n    \n    -const viaCall = oldName(1);\n    +const viaCall = newName(1);\n    \n    -const viaValue: (input: number) => number = oldName;\n    +const viaValue: (input: number) => number = newName;\n    \n     function runShadowed(): number {\n       const oldName = 41;\n    @@ -16,4 +16,4 @@\n    \n     export const registryKey = \"oldName\";\n    \n    -export const total = viaCall + viaValue(2) + oldName(3) + runShadowed();\n    +export const total = viaCall + viaValue(2) + newName(3) + runShadowed();\nstage $STAGE dry run, tree untouched\n",
+      "stderr": ""
+    },
+    "tree": {
+      "files": {
+        "src/": {
+          "directory": true
+        },
+        "src/app.ts": "// The rename anchor. The string literal, this comment, and the shadowed\n// binding inside runShadowed all spell oldName and must survive untouched.\n\nfunction oldName(input: number): number {\n  return input + 1;\n}\n\nconst viaCall = oldName(1);\n\nconst viaValue: (input: number) => number = oldName;\n\nfunction runShadowed(): number {\n  const oldName = 41;\n  return oldName + 1;\n}\n\nexport const registryKey = \"oldName\";\n\nexport const total = viaCall + viaValue(2) + oldName(3) + runShadowed();\n"
+      }
+    }
+  },
+  "02_unknown_symbol_stops_and_writes_nothing": {
+    "stopped": {
+      "exit_code": 4,
+      "stdout": "",
+      "stderr": "src/app.ts declares no absentName\n"
+    },
+    "tree": {
+      "files": {
+        "src/": {
+          "directory": true
+        },
+        "src/app.ts": "// The rename anchor. The string literal, this comment, and the shadowed\n// binding inside runShadowed all spell oldName and must survive untouched.\n\nfunction oldName(input: number): number {\n  return input + 1;\n}\n\nconst viaCall = oldName(1);\n\nconst viaValue: (input: number) => number = oldName;\n\nfunction runShadowed(): number {\n  const oldName = 41;\n  return oldName + 1;\n}\n\nexport const registryKey = \"oldName\";\n\nexport const total = viaCall + viaValue(2) + oldName(3) + runShadowed();\n"
+      }
+    }
+  },
+  "03_shadowed_inner_binding_needs_no_at": {
+    "picked": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/app.ts Foo -> Bar\n  src/app.ts  2 uses\nreplace src/app.ts -> src/app.ts  update src/app.ts (194 bytes)\n    --- original\n    +++ modified\n    @@ -5,8 +5,8 @@\n     }\n    \n     function wrap(): number {\n    -  const Foo = 7;\n    -  return Foo + 1;\n    +  const Bar = 7;\n    +  return Bar + 1;\n     }\n    \n     const greeter = new Foo().greet();\nstage $STAGE committed\n",
+      "stderr": ""
+    },
+    "picked_anchor_text": "class Foo {\n  greet(): string {\n    return \"hi\";\n  }\n}\n\nfunction wrap(): number {\n  const Bar = 7;\n  return Bar + 1;\n}\n\nconst greeter = new Foo().greet();\nconst total = greeter.length + wrap();\n",
+    "root_wins": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/app.ts Foo -> Bar\n  src/app.ts  2 uses\nreplace src/app.ts -> src/app.ts  update src/app.ts (194 bytes)\n    --- original\n    +++ modified\n    @@ -1,4 +1,4 @@\n    -class Foo {\n    +class Bar {\n       greet(): string {\n         return \"hi\";\n       }\n    @@ -9,5 +9,5 @@\n       return Foo + 1;\n     }\n    \n    -const greeter = new Foo().greet();\n    +const greeter = new Bar().greet();\n     const total = greeter.length + wrap();\nstage $STAGE committed\n",
+      "stderr": ""
+    },
+    "root_wins_tree": {
+      "files": {
+        "src/": {
+          "directory": true
+        },
+        "src/app.ts": "class Bar {\n  greet(): string {\n    return \"hi\";\n  }\n}\n\nfunction wrap(): number {\n  const Foo = 7;\n  return Foo + 1;\n}\n\nconst greeter = new Bar().greet();\nconst total = greeter.length + wrap();\n"
+      }
+    }
+  },
+  "04_nested_only_candidates_stop_then_at_selects": {
+    "select": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/app.ts Foo -> Bar\n  src/app.ts  2 uses\nreplace src/app.ts -> src/app.ts  update src/app.ts (172 bytes)\n    --- original\n    +++ modified\n    @@ -4,8 +4,8 @@\n     }\n    \n     function second(): number {\n    -  const Foo = 2;\n    -  return Foo * 2;\n    +  const Bar = 2;\n    +  return Bar * 2;\n     }\n    \n     export const total = first() + second();\nstage $STAGE committed\n",
+      "stderr": ""
+    },
+    "select_tree": {
+      "files": {
+        "src/": {
+          "directory": true
+        },
+        "src/app.ts": "function first(): number {\n  const Foo = 1;\n  return Foo + 1;\n}\n\nfunction second(): number {\n  const Bar = 2;\n  return Bar * 2;\n}\n\nexport const total = first() + second();\n"
+      }
+    },
+    "stopped": {
+      "exit_code": 3,
+      "stdout": "",
+      "stderr": "src/app.ts declares Foo more than once, at bytes 35, 101\n"
+    },
+    "stopped_tree": {
+      "files": {
+        "src/": {
+          "directory": true
+        },
+        "src/app.ts": "function first(): number {\n  const Foo = 1;\n  return Foo + 1;\n}\n\nfunction second(): number {\n  const Foo = 2;\n  return Foo * 2;\n}\n\nexport const total = first() + second();\n"
+      }
+    }
+  },
+  "05_inexact_is_unreachable_from_the_ts_arm": {
+    "commit": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/app.ts Foo -> Bar\n  src/app.ts  6 uses\nreplace src/app.ts -> src/app.ts  update src/app.ts (137 bytes)\n    --- original\n    +++ modified\n    @@ -1,9 +1,9 @@\n    -class Foo {}\n    +class Bar {}\n    \n    -let value: Foo | null = null;\n    +let value: Bar | null = null;\n    \n    -value = new Foo();\n    +value = new Bar();\n    \n    -const aliased: Foo | null = value;\n    +const aliased: Bar | null = value;\n    \n    -const list: Foo[] = [value as Foo];\n    +const list: Bar[] = [value as Bar];\nstage $STAGE committed\n",
+      "stderr": ""
+    },
+    "inexact_unconstructed": {
+      "path": "src/edit/ts_rename.rs",
+      "needle": "Inexact",
+      "hits": []
+    },
+    "tree": {
+      "files": {
+        "src/": {
+          "directory": true
+        },
+        "src/app.ts": "class Bar {}\n\nlet value: Bar | null = null;\n\nvalue = new Bar();\n\nconst aliased: Bar | null = value;\n\nconst list: Bar[] = [value as Bar];\n"
+      }
+    }
+  },
+  "06_dynamic_stop_lists_every_seat": {
+    "stopped": {
+      "exit_code": 6,
+      "stdout": "",
+      "stderr": "src/app.ts:3: computed member reaches the symbol at runtime\nsrc/app.ts:6: member access reaches the symbol at runtime\n"
+    },
+    "tree": {
+      "files": {
+        "src/": {
+          "directory": true
+        },
+        "src/app.ts": "class Foo {}\n\nconst viaComputed = { mark: 1 }[\"Foo\"];\n\nimport(\"./m\").then(module => {\n  const viaDynamic = module.Foo;\n  return viaDynamic;\n});\n\nexport const used = new Foo();\n"
+      }
+    }
+  },
+  "07_typed_class_property_renames_across_files": {
+    "box_text": "export class Box {\n  fresh = 1;\n\n  current() {\n    return this.fresh;\n  }\n}\n",
+    "commit": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/box.ts old -> fresh\n  src/box.ts  2 uses\n  src/use.ts  2 uses\nscip-merge 0 sites from $work/ts.index\nshorthand\nscip-verify disagreements=0\nreplace src/box.ts -> src/box.ts  update src/box.ts (76 bytes)\n    --- original\n    +++ modified\n    @@ -1,7 +1,7 @@\n     export class Box {\n    -  old = 1;\n    +  fresh = 1;\n    \n       current() {\n    -    return this.old;\n    +    return this.fresh;\n       }\n     }\nreplace src/use.ts -> src/use.ts  update src/use.ts (129 bytes)\n    --- original\n    +++ modified\n    @@ -1,6 +1,6 @@\n     import { Box } from \"./box\";\n    \n     export function read(box: Box): number {\n    -  const { old } = box;\n    -  return box.old + old;\n    +  const { fresh: old } = box;\n    +  return box.fresh + old;\n     }\nstage $STAGE committed\n",
+      "stderr": ""
+    },
+    "scip_index": {
+      "index": "$work/ts.index",
+      "is_file": true
+    },
+    "use_text": "import { Box } from \"./box\";\n\nexport function read(box: Box): number {\n  const { fresh: old } = box;\n  return box.fresh + old;\n}\n"
+  },
+  "08_untyped_property_receiver_keeps_the_dynamic_stop": {
+    "stopped": {
+      "exit_code": 6,
+      "stdout": "",
+      "stderr": "src/use.ts:8: untyped property access reaches the symbol at runtime\n"
+    }
+  },
+  "09_object_literal_property_key_renames_with_typed_access": {
+    "app_text": "export const box = { fresh: 1 };\n\nexport function read(): number {\n  return box.fresh;\n}\n",
+    "commit": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/app.ts old -> fresh\n  src/app.ts  2 uses\nreplace src/app.ts -> src/app.ts  update src/app.ts (89 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,5 @@\n    -export const box = { old: 1 };\n    +export const box = { fresh: 1 };\n    \n     export function read(): number {\n    -  return box.old;\n    +  return box.fresh;\n     }\nstage $STAGE committed\n",
+      "stderr": ""
+    }
+  },
+  "10_exported_symbol_renames_every_importer": {
+    "commit": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/lib.ts Foo -> Baz\n  src/a.ts  3 uses\n  src/b.ts  1 uses\n  src/barrel.ts  1 uses\n  src/c.ts  2 uses\n  src/d.ts  2 uses\n  src/lib.ts  3 uses\nreplace src/a.ts -> src/a.ts  update src/a.ts (92 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,5 @@\n    -import { Foo } from \"./lib\";\n    +import { Baz } from \"./lib\";\n    \n    -export function firstUse(value: Foo): Foo {\n    +export function firstUse(value: Baz): Baz {\n       return value;\n     }\nreplace src/b.ts -> src/b.ts  update src/b.ts (143 bytes)\n    --- original\n    +++ modified\n    @@ -1,4 +1,4 @@\n    -import { Foo as Bar } from \"./lib\";\n    +import { Baz as Bar } from \"./lib\";\n    \n     export function secondUse(left: Bar, right: Bar): Bar {\n       return left.tag === right.tag ? left : right;\nreplace src/barrel.ts -> src/barrel.ts  update src/barrel.ts (29 bytes)\n    --- original\n    +++ modified\n    @@ -1 +1 @@\n    -export { Foo } from \"./lib\";\n    +export { Baz } from \"./lib\";\nreplace src/c.ts -> src/c.ts  update src/c.ts (104 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,5 @@\n    -import { Foo } from \"./barrel\";\n    +import { Baz } from \"./barrel\";\n    \n    -export function fromBarrel(value: Foo): string {\n    +export function fromBarrel(value: Baz): string {\n       return value.tag;\n     }\nreplace src/d.ts -> src/d.ts  update src/d.ts (110 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,5 @@\n    -import { Foo } from \"./star\";\n    +import { Baz } from \"./star\";\n    \n    -export function viaStar(value: Foo): boolean {\n    +export function viaStar(value: Baz): boolean {\n       return value.tag === \"foo\";\n     }\nreplace src/lib.ts -> src/lib.ts  update src/lib.ts (101 bytes)\n    --- original\n    +++ modified\n    @@ -1,7 +1,7 @@\n    -export class Foo {\n    +export class Baz {\n       readonly tag = \"foo\";\n     }\n    \n    -export function makeFoo(): Foo {\n    -  return new Foo();\n    +export function makeFoo(): Baz {\n    +  return new Baz();\n     }\nstage $STAGE committed\n",
+      "stderr": ""
+    },
+    "tree": {
+      "files": {
+        "README.md": "# exports fixture\n\nThe Foo symbol exported by src/lib.ts is renamed across this fixture by the\ntests in 4_rename_ts.rs; this file carries a prose mention of the name so the\nrename verb's --text-refs report sees a carrier outside any source file.\n",
+        "src/": {
+          "directory": true
+        },
+        "src/a.ts": "import { Baz } from \"./lib\";\n\nexport function firstUse(value: Baz): Baz {\n  return value;\n}\n",
+        "src/b.ts": "import { Baz as Bar } from \"./lib\";\n\nexport function secondUse(left: Bar, right: Bar): Bar {\n  return left.tag === right.tag ? left : right;\n}\n",
+        "src/barrel.ts": "export { Baz } from \"./lib\";\n",
+        "src/c.ts": "import { Baz } from \"./barrel\";\n\nexport function fromBarrel(value: Baz): string {\n  return value.tag;\n}\n",
+        "src/d.ts": "import { Baz } from \"./star\";\n\nexport function viaStar(value: Baz): boolean {\n  return value.tag === \"foo\";\n}\n",
+        "src/e.ts": "export const key = \"Foo\";\n",
+        "src/lib.ts": "export class Baz {\n  readonly tag = \"foo\";\n}\n\nexport function makeFoo(): Baz {\n  return new Baz();\n}\n",
+        "src/star.ts": "export * from \"./lib\";\n",
+        "tsconfig.json": "{\n  \"compilerOptions\": {\n    \"target\": \"ES2020\",\n    \"module\": \"ESNext\",\n    \"moduleResolution\": \"bundler\",\n    \"strict\": true,\n    \"noEmit\": true\n  },\n  \"include\": [\"src\"]\n}\n"
+      }
+    }
+  },
+  "11_aliased_import_moves_only_the_imported_seat": {
+    "b_text": "import { Baz as Bar } from \"./lib\";\n\nexport function secondUse(left: Bar, right: Bar): Bar {\n  return left.tag === right.tag ? left : right;\n}\n",
+    "commit": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/lib.ts Foo -> Baz\n  src/a.ts  3 uses\n  src/b.ts  1 uses\n  src/barrel.ts  1 uses\n  src/c.ts  2 uses\n  src/d.ts  2 uses\n  src/lib.ts  3 uses\nreplace src/a.ts -> src/a.ts  update src/a.ts (92 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,5 @@\n    -import { Foo } from \"./lib\";\n    +import { Baz } from \"./lib\";\n    \n    -export function firstUse(value: Foo): Foo {\n    +export function firstUse(value: Baz): Baz {\n       return value;\n     }\nreplace src/b.ts -> src/b.ts  update src/b.ts (143 bytes)\n    --- original\n    +++ modified\n    @@ -1,4 +1,4 @@\n    -import { Foo as Bar } from \"./lib\";\n    +import { Baz as Bar } from \"./lib\";\n    \n     export function secondUse(left: Bar, right: Bar): Bar {\n       return left.tag === right.tag ? left : right;\nreplace src/barrel.ts -> src/barrel.ts  update src/barrel.ts (29 bytes)\n    --- original\n    +++ modified\n    @@ -1 +1 @@\n    -export { Foo } from \"./lib\";\n    +export { Baz } from \"./lib\";\nreplace src/c.ts -> src/c.ts  update src/c.ts (104 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,5 @@\n    -import { Foo } from \"./barrel\";\n    +import { Baz } from \"./barrel\";\n    \n    -export function fromBarrel(value: Foo): string {\n    +export function fromBarrel(value: Baz): string {\n       return value.tag;\n     }\nreplace src/d.ts -> src/d.ts  update src/d.ts (110 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,5 @@\n    -import { Foo } from \"./star\";\n    +import { Baz } from \"./star\";\n    \n    -export function viaStar(value: Foo): boolean {\n    +export function viaStar(value: Baz): boolean {\n       return value.tag === \"foo\";\n     }\nreplace src/lib.ts -> src/lib.ts  update src/lib.ts (101 bytes)\n    --- original\n    +++ modified\n    @@ -1,7 +1,7 @@\n    -export class Foo {\n    +export class Baz {\n       readonly tag = \"foo\";\n     }\n    \n    -export function makeFoo(): Foo {\n    -  return new Foo();\n    +export function makeFoo(): Baz {\n    +  return new Baz();\n     }\nstage $STAGE committed\n",
+      "stderr": ""
+    }
+  },
+  "12_dry_run_prints_per_file_counts": {
+    "dry": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/lib.ts Foo -> Baz\n  src/a.ts  3 uses\n  src/b.ts  1 uses\n  src/barrel.ts  1 uses\n  src/c.ts  2 uses\n  src/d.ts  2 uses\n  src/lib.ts  3 uses\nreplace src/a.ts -> src/a.ts  update src/a.ts (92 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,5 @@\n    -import { Foo } from \"./lib\";\n    +import { Baz } from \"./lib\";\n    \n    -export function firstUse(value: Foo): Foo {\n    +export function firstUse(value: Baz): Baz {\n       return value;\n     }\nreplace src/b.ts -> src/b.ts  update src/b.ts (143 bytes)\n    --- original\n    +++ modified\n    @@ -1,4 +1,4 @@\n    -import { Foo as Bar } from \"./lib\";\n    +import { Baz as Bar } from \"./lib\";\n    \n     export function secondUse(left: Bar, right: Bar): Bar {\n       return left.tag === right.tag ? left : right;\nreplace src/barrel.ts -> src/barrel.ts  update src/barrel.ts (29 bytes)\n    --- original\n    +++ modified\n    @@ -1 +1 @@\n    -export { Foo } from \"./lib\";\n    +export { Baz } from \"./lib\";\nreplace src/c.ts -> src/c.ts  update src/c.ts (104 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,5 @@\n    -import { Foo } from \"./barrel\";\n    +import { Baz } from \"./barrel\";\n    \n    -export function fromBarrel(value: Foo): string {\n    +export function fromBarrel(value: Baz): string {\n       return value.tag;\n     }\nreplace src/d.ts -> src/d.ts  update src/d.ts (110 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,5 @@\n    -import { Foo } from \"./star\";\n    +import { Baz } from \"./star\";\n    \n    -export function viaStar(value: Foo): boolean {\n    +export function viaStar(value: Baz): boolean {\n       return value.tag === \"foo\";\n     }\nreplace src/lib.ts -> src/lib.ts  update src/lib.ts (101 bytes)\n    --- original\n    +++ modified\n    @@ -1,7 +1,7 @@\n    -export class Foo {\n    +export class Baz {\n       readonly tag = \"foo\";\n     }\n    \n    -export function makeFoo(): Foo {\n    -  return new Foo();\n    +export function makeFoo(): Baz {\n    +  return new Baz();\n     }\nstage $STAGE dry run, tree untouched\n",
+      "stderr": ""
+    },
+    "tree": {
+      "files": {
+        "README.md": "# exports fixture\n\nThe Foo symbol exported by src/lib.ts is renamed across this fixture by the\ntests in 4_rename_ts.rs; this file carries a prose mention of the name so the\nrename verb's --text-refs report sees a carrier outside any source file.\n",
+        "src/": {
+          "directory": true
+        },
+        "src/a.ts": "import { Foo } from \"./lib\";\n\nexport function firstUse(value: Foo): Foo {\n  return value;\n}\n",
+        "src/b.ts": "import { Foo as Bar } from \"./lib\";\n\nexport function secondUse(left: Bar, right: Bar): Bar {\n  return left.tag === right.tag ? left : right;\n}\n",
+        "src/barrel.ts": "export { Foo } from \"./lib\";\n",
+        "src/c.ts": "import { Foo } from \"./barrel\";\n\nexport function fromBarrel(value: Foo): string {\n  return value.tag;\n}\n",
+        "src/d.ts": "import { Foo } from \"./star\";\n\nexport function viaStar(value: Foo): boolean {\n  return value.tag === \"foo\";\n}\n",
+        "src/e.ts": "export const key = \"Foo\";\n",
+        "src/lib.ts": "export class Foo {\n  readonly tag = \"foo\";\n}\n\nexport function makeFoo(): Foo {\n  return new Foo();\n}\n",
+        "src/star.ts": "export * from \"./lib\";\n",
+        "tsconfig.json": "{\n  \"compilerOptions\": {\n    \"target\": \"ES2020\",\n    \"module\": \"ESNext\",\n    \"moduleResolution\": \"bundler\",\n    \"strict\": true,\n    \"noEmit\": true\n  },\n  \"include\": [\"src\"]\n}\n"
+      }
+    }
+  },
+  "13_text_refs_reports_the_string_and_the_readme": {
+    "rows": {
+      "equal": true
+    },
+    "textrefs": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/lib.ts Foo -> Baz\n  src/a.ts  3 uses\n  src/b.ts  1 uses\n  src/barrel.ts  1 uses\n  src/c.ts  2 uses\n  src/d.ts  2 uses\n  src/lib.ts  3 uses\nreplace src/a.ts -> src/a.ts  update src/a.ts (92 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,5 @@\n    -import { Foo } from \"./lib\";\n    +import { Baz } from \"./lib\";\n    \n    -export function firstUse(value: Foo): Foo {\n    +export function firstUse(value: Baz): Baz {\n       return value;\n     }\nreplace src/b.ts -> src/b.ts  update src/b.ts (143 bytes)\n    --- original\n    +++ modified\n    @@ -1,4 +1,4 @@\n    -import { Foo as Bar } from \"./lib\";\n    +import { Baz as Bar } from \"./lib\";\n    \n     export function secondUse(left: Bar, right: Bar): Bar {\n       return left.tag === right.tag ? left : right;\nreplace src/barrel.ts -> src/barrel.ts  update src/barrel.ts (29 bytes)\n    --- original\n    +++ modified\n    @@ -1 +1 @@\n    -export { Foo } from \"./lib\";\n    +export { Baz } from \"./lib\";\nreplace src/c.ts -> src/c.ts  update src/c.ts (104 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,5 @@\n    -import { Foo } from \"./barrel\";\n    +import { Baz } from \"./barrel\";\n    \n    -export function fromBarrel(value: Foo): string {\n    +export function fromBarrel(value: Baz): string {\n       return value.tag;\n     }\nreplace src/d.ts -> src/d.ts  update src/d.ts (110 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,5 @@\n    -import { Foo } from \"./star\";\n    +import { Baz } from \"./star\";\n    \n    -export function viaStar(value: Foo): boolean {\n    +export function viaStar(value: Baz): boolean {\n       return value.tag === \"foo\";\n     }\nreplace src/lib.ts -> src/lib.ts  update src/lib.ts (101 bytes)\n    --- original\n    +++ modified\n    @@ -1,7 +1,7 @@\n    -export class Foo {\n    +export class Baz {\n       readonly tag = \"foo\";\n     }\n    \n    -export function makeFoo(): Foo {\n    -  return new Foo();\n    +export function makeFoo(): Baz {\n    +  return new Baz();\n     }\nstage $STAGE dry run, tree untouched\ntext-ref README.md:3 Foo -> Baz\ntext-ref src/e.ts:1 \"Foo\" -> \"Baz\"\n",
+      "stderr": ""
+    },
+    "tree": {
+      "files": {
+        "README.md": "# exports fixture\n\nThe Foo symbol exported by src/lib.ts is renamed across this fixture by the\ntests in 4_rename_ts.rs; this file carries a prose mention of the name so the\nrename verb's --text-refs report sees a carrier outside any source file.\n",
+        "src/": {
+          "directory": true
+        },
+        "src/a.ts": "import { Foo } from \"./lib\";\n\nexport function firstUse(value: Foo): Foo {\n  return value;\n}\n",
+        "src/b.ts": "import { Foo as Bar } from \"./lib\";\n\nexport function secondUse(left: Bar, right: Bar): Bar {\n  return left.tag === right.tag ? left : right;\n}\n",
+        "src/barrel.ts": "export { Foo } from \"./lib\";\n",
+        "src/c.ts": "import { Foo } from \"./barrel\";\n\nexport function fromBarrel(value: Foo): string {\n  return value.tag;\n}\n",
+        "src/d.ts": "import { Foo } from \"./star\";\n\nexport function viaStar(value: Foo): boolean {\n  return value.tag === \"foo\";\n}\n",
+        "src/e.ts": "export const key = \"Foo\";\n",
+        "src/lib.ts": "export class Foo {\n  readonly tag = \"foo\";\n}\n\nexport function makeFoo(): Foo {\n  return new Foo();\n}\n",
+        "src/star.ts": "export * from \"./lib\";\n",
+        "tsconfig.json": "{\n  \"compilerOptions\": {\n    \"target\": \"ES2020\",\n    \"module\": \"ESNext\",\n    \"moduleResolution\": \"bundler\",\n    \"strict\": true,\n    \"noEmit\": true\n  },\n  \"include\": [\"src\"]\n}\n"
+      }
+    }
+  },
+  "14_text_refs_never_writes": {
+    "commit": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/lib.ts Foo -> Baz\n  src/a.ts  3 uses\n  src/b.ts  1 uses\n  src/barrel.ts  1 uses\n  src/c.ts  2 uses\n  src/d.ts  2 uses\n  src/lib.ts  3 uses\nreplace src/a.ts -> src/a.ts  update src/a.ts (92 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,5 @@\n    -import { Foo } from \"./lib\";\n    +import { Baz } from \"./lib\";\n    \n    -export function firstUse(value: Foo): Foo {\n    +export function firstUse(value: Baz): Baz {\n       return value;\n     }\nreplace src/b.ts -> src/b.ts  update src/b.ts (143 bytes)\n    --- original\n    +++ modified\n    @@ -1,4 +1,4 @@\n    -import { Foo as Bar } from \"./lib\";\n    +import { Baz as Bar } from \"./lib\";\n    \n     export function secondUse(left: Bar, right: Bar): Bar {\n       return left.tag === right.tag ? left : right;\nreplace src/barrel.ts -> src/barrel.ts  update src/barrel.ts (29 bytes)\n    --- original\n    +++ modified\n    @@ -1 +1 @@\n    -export { Foo } from \"./lib\";\n    +export { Baz } from \"./lib\";\nreplace src/c.ts -> src/c.ts  update src/c.ts (104 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,5 @@\n    -import { Foo } from \"./barrel\";\n    +import { Baz } from \"./barrel\";\n    \n    -export function fromBarrel(value: Foo): string {\n    +export function fromBarrel(value: Baz): string {\n       return value.tag;\n     }\nreplace src/d.ts -> src/d.ts  update src/d.ts (110 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,5 @@\n    -import { Foo } from \"./star\";\n    +import { Baz } from \"./star\";\n    \n    -export function viaStar(value: Foo): boolean {\n    +export function viaStar(value: Baz): boolean {\n       return value.tag === \"foo\";\n     }\nreplace src/lib.ts -> src/lib.ts  update src/lib.ts (101 bytes)\n    --- original\n    +++ modified\n    @@ -1,7 +1,7 @@\n    -export class Foo {\n    +export class Baz {\n       readonly tag = \"foo\";\n     }\n    \n    -export function makeFoo(): Foo {\n    -  return new Foo();\n    +export function makeFoo(): Baz {\n    +  return new Baz();\n     }\nstage $STAGE committed\ntext-ref README.md:3 Foo -> Baz\ntext-ref src/e.ts:1 \"Foo\" -> \"Baz\"\n",
+      "stderr": ""
+    },
+    "tree": {
+      "files": {
+        "README.md": "# exports fixture\n\nThe Foo symbol exported by src/lib.ts is renamed across this fixture by the\ntests in 4_rename_ts.rs; this file carries a prose mention of the name so the\nrename verb's --text-refs report sees a carrier outside any source file.\n",
+        "src/": {
+          "directory": true
+        },
+        "src/a.ts": "import { Baz } from \"./lib\";\n\nexport function firstUse(value: Baz): Baz {\n  return value;\n}\n",
+        "src/b.ts": "import { Baz as Bar } from \"./lib\";\n\nexport function secondUse(left: Bar, right: Bar): Bar {\n  return left.tag === right.tag ? left : right;\n}\n",
+        "src/barrel.ts": "export { Baz } from \"./lib\";\n",
+        "src/c.ts": "import { Baz } from \"./barrel\";\n\nexport function fromBarrel(value: Baz): string {\n  return value.tag;\n}\n",
+        "src/d.ts": "import { Baz } from \"./star\";\n\nexport function viaStar(value: Baz): boolean {\n  return value.tag === \"foo\";\n}\n",
+        "src/e.ts": "export const key = \"Foo\";\n",
+        "src/lib.ts": "export class Baz {\n  readonly tag = \"foo\";\n}\n\nexport function makeFoo(): Baz {\n  return new Baz();\n}\n",
+        "src/star.ts": "export * from \"./lib\";\n",
+        "tsconfig.json": "{\n  \"compilerOptions\": {\n    \"target\": \"ES2020\",\n    \"module\": \"ESNext\",\n    \"moduleResolution\": \"bundler\",\n    \"strict\": true,\n    \"noEmit\": true\n  },\n  \"include\": [\"src\"]\n}\n"
+      }
+    }
+  },
+  "15_without_the_flag_no_text_ref_rows": {
+    "dry": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/lib.ts Foo -> Baz\n  src/a.ts  3 uses\n  src/b.ts  1 uses\n  src/barrel.ts  1 uses\n  src/c.ts  2 uses\n  src/d.ts  2 uses\n  src/lib.ts  3 uses\nreplace src/a.ts -> src/a.ts  update src/a.ts (92 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,5 @@\n    -import { Foo } from \"./lib\";\n    +import { Baz } from \"./lib\";\n    \n    -export function firstUse(value: Foo): Foo {\n    +export function firstUse(value: Baz): Baz {\n       return value;\n     }\nreplace src/b.ts -> src/b.ts  update src/b.ts (143 bytes)\n    --- original\n    +++ modified\n    @@ -1,4 +1,4 @@\n    -import { Foo as Bar } from \"./lib\";\n    +import { Baz as Bar } from \"./lib\";\n    \n     export function secondUse(left: Bar, right: Bar): Bar {\n       return left.tag === right.tag ? left : right;\nreplace src/barrel.ts -> src/barrel.ts  update src/barrel.ts (29 bytes)\n    --- original\n    +++ modified\n    @@ -1 +1 @@\n    -export { Foo } from \"./lib\";\n    +export { Baz } from \"./lib\";\nreplace src/c.ts -> src/c.ts  update src/c.ts (104 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,5 @@\n    -import { Foo } from \"./barrel\";\n    +import { Baz } from \"./barrel\";\n    \n    -export function fromBarrel(value: Foo): string {\n    +export function fromBarrel(value: Baz): string {\n       return value.tag;\n     }\nreplace src/d.ts -> src/d.ts  update src/d.ts (110 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,5 @@\n    -import { Foo } from \"./star\";\n    +import { Baz } from \"./star\";\n    \n    -export function viaStar(value: Foo): boolean {\n    +export function viaStar(value: Baz): boolean {\n       return value.tag === \"foo\";\n     }\nreplace src/lib.ts -> src/lib.ts  update src/lib.ts (101 bytes)\n    --- original\n    +++ modified\n    @@ -1,7 +1,7 @@\n    -export class Foo {\n    +export class Baz {\n       readonly tag = \"foo\";\n     }\n    \n    -export function makeFoo(): Foo {\n    -  return new Foo();\n    +export function makeFoo(): Baz {\n    +  return new Baz();\n     }\nstage $STAGE dry run, tree untouched\n",
+      "stderr": ""
+    }
+  },
+  "16_tsc_is_clean_on_the_committed_tree": {
+    "commit": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/lib.ts Foo -> Baz\n  src/a.ts  3 uses\n  src/b.ts  1 uses\n  src/barrel.ts  1 uses\n  src/c.ts  2 uses\n  src/d.ts  2 uses\n  src/lib.ts  3 uses\nreplace src/a.ts -> src/a.ts  update src/a.ts (92 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,5 @@\n    -import { Foo } from \"./lib\";\n    +import { Baz } from \"./lib\";\n    \n    -export function firstUse(value: Foo): Foo {\n    +export function firstUse(value: Baz): Baz {\n       return value;\n     }\nreplace src/b.ts -> src/b.ts  update src/b.ts (143 bytes)\n    --- original\n    +++ modified\n    @@ -1,4 +1,4 @@\n    -import { Foo as Bar } from \"./lib\";\n    +import { Baz as Bar } from \"./lib\";\n    \n     export function secondUse(left: Bar, right: Bar): Bar {\n       return left.tag === right.tag ? left : right;\nreplace src/barrel.ts -> src/barrel.ts  update src/barrel.ts (29 bytes)\n    --- original\n    +++ modified\n    @@ -1 +1 @@\n    -export { Foo } from \"./lib\";\n    +export { Baz } from \"./lib\";\nreplace src/c.ts -> src/c.ts  update src/c.ts (104 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,5 @@\n    -import { Foo } from \"./barrel\";\n    +import { Baz } from \"./barrel\";\n    \n    -export function fromBarrel(value: Foo): string {\n    +export function fromBarrel(value: Baz): string {\n       return value.tag;\n     }\nreplace src/d.ts -> src/d.ts  update src/d.ts (110 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,5 @@\n    -import { Foo } from \"./star\";\n    +import { Baz } from \"./star\";\n    \n    -export function viaStar(value: Foo): boolean {\n    +export function viaStar(value: Baz): boolean {\n       return value.tag === \"foo\";\n     }\nreplace src/lib.ts -> src/lib.ts  update src/lib.ts (101 bytes)\n    --- original\n    +++ modified\n    @@ -1,7 +1,7 @@\n    -export class Foo {\n    +export class Baz {\n       readonly tag = \"foo\";\n     }\n    \n    -export function makeFoo(): Foo {\n    -  return new Foo();\n    +export function makeFoo(): Baz {\n    +  return new Baz();\n     }\nstage $STAGE committed\n",
+      "stderr": ""
+    },
+    "tsc": {
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    }
+  },
+  "17_scip_verify_agrees_on_the_exports_fixture": {
+    "rows": {
+      "equal": true
+    },
+    "scip_index": {
+      "index": "$work/ts.index",
+      "is_file": true
+    },
+    "tree": {
+      "files": {
+        "README.md": "# exports fixture\n\nThe Foo symbol exported by src/lib.ts is renamed across this fixture by the\ntests in 4_rename_ts.rs; this file carries a prose mention of the name so the\nrename verb's --text-refs report sees a carrier outside any source file.\n",
+        "src/": {
+          "directory": true
+        },
+        "src/a.ts": "import { Foo } from \"./lib\";\n\nexport function firstUse(value: Foo): Foo {\n  return value;\n}\n",
+        "src/b.ts": "import { Foo as Bar } from \"./lib\";\n\nexport function secondUse(left: Bar, right: Bar): Bar {\n  return left.tag === right.tag ? left : right;\n}\n",
+        "src/barrel.ts": "export { Foo } from \"./lib\";\n",
+        "src/c.ts": "import { Foo } from \"./barrel\";\n\nexport function fromBarrel(value: Foo): string {\n  return value.tag;\n}\n",
+        "src/d.ts": "import { Foo } from \"./star\";\n\nexport function viaStar(value: Foo): boolean {\n  return value.tag === \"foo\";\n}\n",
+        "src/e.ts": "export const key = \"Foo\";\n",
+        "src/lib.ts": "export class Foo {\n  readonly tag = \"foo\";\n}\n\nexport function makeFoo(): Foo {\n  return new Foo();\n}\n",
+        "src/star.ts": "export * from \"./lib\";\n",
+        "tsconfig.json": "{\n  \"compilerOptions\": {\n    \"target\": \"ES2020\",\n    \"module\": \"ESNext\",\n    \"moduleResolution\": \"bundler\",\n    \"strict\": true,\n    \"noEmit\": true\n  },\n  \"include\": [\"src\"]\n}\n"
+      }
+    },
+    "verify": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/lib.ts Foo -> Baz\n  src/a.ts  3 uses\n  src/b.ts  1 uses\n  src/barrel.ts  1 uses\n  src/c.ts  2 uses\n  src/d.ts  2 uses\n  src/lib.ts  3 uses\nscip-merge 0 sites from $work/ts.index\nscip-verify disagreements=0\nreplace src/a.ts -> src/a.ts  update src/a.ts (92 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,5 @@\n    -import { Foo } from \"./lib\";\n    +import { Baz } from \"./lib\";\n    \n    -export function firstUse(value: Foo): Foo {\n    +export function firstUse(value: Baz): Baz {\n       return value;\n     }\nreplace src/b.ts -> src/b.ts  update src/b.ts (143 bytes)\n    --- original\n    +++ modified\n    @@ -1,4 +1,4 @@\n    -import { Foo as Bar } from \"./lib\";\n    +import { Baz as Bar } from \"./lib\";\n    \n     export function secondUse(left: Bar, right: Bar): Bar {\n       return left.tag === right.tag ? left : right;\nreplace src/barrel.ts -> src/barrel.ts  update src/barrel.ts (29 bytes)\n    --- original\n    +++ modified\n    @@ -1 +1 @@\n    -export { Foo } from \"./lib\";\n    +export { Baz } from \"./lib\";\nreplace src/c.ts -> src/c.ts  update src/c.ts (104 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,5 @@\n    -import { Foo } from \"./barrel\";\n    +import { Baz } from \"./barrel\";\n    \n    -export function fromBarrel(value: Foo): string {\n    +export function fromBarrel(value: Baz): string {\n       return value.tag;\n     }\nreplace src/d.ts -> src/d.ts  update src/d.ts (110 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,5 @@\n    -import { Foo } from \"./star\";\n    +import { Baz } from \"./star\";\n    \n    -export function viaStar(value: Foo): boolean {\n    +export function viaStar(value: Baz): boolean {\n       return value.tag === \"foo\";\n     }\nreplace src/lib.ts -> src/lib.ts  update src/lib.ts (101 bytes)\n    --- original\n    +++ modified\n    @@ -1,7 +1,7 @@\n    -export class Foo {\n    +export class Baz {\n       readonly tag = \"foo\";\n     }\n    \n    -export function makeFoo(): Foo {\n    -  return new Foo();\n    +export function makeFoo(): Baz {\n    +  return new Baz();\n     }\nstage $STAGE dry run, tree untouched\n",
+      "stderr": ""
+    }
+  },
+  "18_scip_verify_reports_a_missed_seat": {
+    "rows": {
+      "equal": true
+    },
+    "scip_index": {
+      "index": "$work/ts.index",
+      "is_file": true
+    },
+    "verify": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/lib.ts Foo -> Baz\n  src/a.ts  3 uses\n  src/b.ts  1 uses\n  src/barrel.ts  1 uses\n  src/c.ts  2 uses\n  src/d.ts  2 uses\n  src/lib.ts  3 uses\n  src/ns.ts  2 uses\nscip-merge 2 sites from $work/ts.index\nscip-verify src/ns.ts:67-70 scip-only\nscip-verify src/ns.ts:90-93 scip-only\nscip-verify disagreements=2\nreplace src/a.ts -> src/a.ts  update src/a.ts (92 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,5 @@\n    -import { Foo } from \"./lib\";\n    +import { Baz } from \"./lib\";\n    \n    -export function firstUse(value: Foo): Foo {\n    +export function firstUse(value: Baz): Baz {\n       return value;\n     }\nreplace src/b.ts -> src/b.ts  update src/b.ts (143 bytes)\n    --- original\n    +++ modified\n    @@ -1,4 +1,4 @@\n    -import { Foo as Bar } from \"./lib\";\n    +import { Baz as Bar } from \"./lib\";\n    \n     export function secondUse(left: Bar, right: Bar): Bar {\n       return left.tag === right.tag ? left : right;\nreplace src/barrel.ts -> src/barrel.ts  update src/barrel.ts (29 bytes)\n    --- original\n    +++ modified\n    @@ -1 +1 @@\n    -export { Foo } from \"./lib\";\n    +export { Baz } from \"./lib\";\nreplace src/c.ts -> src/c.ts  update src/c.ts (104 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,5 @@\n    -import { Foo } from \"./barrel\";\n    +import { Baz } from \"./barrel\";\n    \n    -export function fromBarrel(value: Foo): string {\n    +export function fromBarrel(value: Baz): string {\n       return value.tag;\n     }\nreplace src/d.ts -> src/d.ts  update src/d.ts (110 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,5 @@\n    -import { Foo } from \"./star\";\n    +import { Baz } from \"./star\";\n    \n    -export function viaStar(value: Foo): boolean {\n    +export function viaStar(value: Baz): boolean {\n       return value.tag === \"foo\";\n     }\nreplace src/lib.ts -> src/lib.ts  update src/lib.ts (101 bytes)\n    --- original\n    +++ modified\n    @@ -1,7 +1,7 @@\n    -export class Foo {\n    +export class Baz {\n       readonly tag = \"foo\";\n     }\n    \n    -export function makeFoo(): Foo {\n    -  return new Foo();\n    +export function makeFoo(): Baz {\n    +  return new Baz();\n     }\nreplace src/ns.ts -> src/ns.ts  update src/ns.ts (99 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,5 @@\n     import * as lib from \"./lib\";\n    \n    -export function viaNamespace(): lib.Foo {\n    -  return new lib.Foo();\n    +export function viaNamespace(): lib.Baz {\n    +  return new lib.Baz();\n     }\nstage $STAGE dry run, tree untouched\n",
+      "stderr": ""
+    }
+  },
+  "19_scip_verify_reports_a_declaration_the_index_defines_nowhere": {
+    "rows": {
+      "equal": true
+    },
+    "scip_index": {
+      "index": "$work/ts.index",
+      "is_file": true
+    },
+    "tree": {
+      "files": {
+        "README.md": "# exports fixture\n\nThe Foo symbol exported by src/lib.ts is renamed across this fixture by the\ntests in 4_rename_ts.rs; this file carries a prose mention of the name so the\nrename verb's --text-refs report sees a carrier outside any source file.\n",
+        "src/": {
+          "directory": true
+        },
+        "src/a.ts": "import { Foo } from \"./lib\";\n\nexport function firstUse(value: Foo): Foo {\n  return value;\n}\n",
+        "src/b.ts": "import { Foo as Bar } from \"./lib\";\n\nexport function secondUse(left: Bar, right: Bar): Bar {\n  return left.tag === right.tag ? left : right;\n}\n",
+        "src/barrel.ts": "export { Foo } from \"./lib\";\n",
+        "src/c.ts": "import { Foo } from \"./barrel\";\n\nexport function fromBarrel(value: Foo): string {\n  return value.tag;\n}\n",
+        "src/d.ts": "import { Foo } from \"./star\";\n\nexport function viaStar(value: Foo): boolean {\n  return value.tag === \"foo\";\n}\n",
+        "src/e.ts": "export const key = \"Foo\";\n",
+        "src/lib.ts": "export class Foo {\n  readonly tag = \"foo\";\n}\n\nexport function makeFoo(): Foo {\n  return new Foo();\n}\n",
+        "src/star.ts": "export * from \"./lib\";\n",
+        "tsconfig.json": "{\n  \"compilerOptions\": {\n    \"target\": \"ES2020\",\n    \"module\": \"ESNext\",\n    \"moduleResolution\": \"bundler\",\n    \"strict\": true,\n    \"noEmit\": true\n  },\n  \"include\": [\"src\"]\n}\n"
+      }
+    },
+    "verify": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/b.ts Bar -> Qux\n  src/b.ts  4 uses\nscip-merge 0 sites from $work/ts.index\nscip-verify src/b.ts:16-19 plan-only\nscip-verify disagreements=1\nreplace src/b.ts -> src/b.ts  update src/b.ts (143 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,5 @@\n    -import { Foo as Bar } from \"./lib\";\n    +import { Foo as Qux } from \"./lib\";\n    \n    -export function secondUse(left: Bar, right: Bar): Bar {\n    +export function secondUse(left: Qux, right: Qux): Qux {\n       return left.tag === right.tag ? left : right;\n     }\nstage $STAGE dry run, tree untouched\n",
+      "stderr": ""
+    }
+  },
+  "20_scip_verify_without_merge_never_changes_the_plan": {
+    "plain_rows_silent": {
+      "equal": true
+    },
+    "plan_unchanged": {
+      "equal": true
+    },
+    "scip_index": {
+      "index": "$work/ts.index",
+      "is_file": true
+    },
+    "trees_identical": {
+      "files": {
+        "README.md": "# exports fixture\n\nThe Foo symbol exported by src/lib.ts is renamed across this fixture by the\ntests in 4_rename_ts.rs; this file carries a prose mention of the name so the\nrename verb's --text-refs report sees a carrier outside any source file.\n",
+        "src/": {
+          "directory": true
+        },
+        "src/a.ts": "import { Baz } from \"./lib\";\n\nexport function firstUse(value: Baz): Baz {\n  return value;\n}\n",
+        "src/b.ts": "import { Baz as Bar } from \"./lib\";\n\nexport function secondUse(left: Bar, right: Bar): Bar {\n  return left.tag === right.tag ? left : right;\n}\n",
+        "src/barrel.ts": "export { Baz } from \"./lib\";\n",
+        "src/c.ts": "import { Baz } from \"./barrel\";\n\nexport function fromBarrel(value: Baz): string {\n  return value.tag;\n}\n",
+        "src/d.ts": "import { Baz } from \"./star\";\n\nexport function viaStar(value: Baz): boolean {\n  return value.tag === \"foo\";\n}\n",
+        "src/e.ts": "export const key = \"Foo\";\n",
+        "src/lib.ts": "export class Baz {\n  readonly tag = \"foo\";\n}\n\nexport function makeFoo(): Baz {\n  return new Baz();\n}\n",
+        "src/ns.ts": "import * as lib from \"./lib\";\n\nexport function viaNamespace(): lib.Foo {\n  return new lib.Foo();\n}\n",
+        "src/star.ts": "export * from \"./lib\";\n",
+        "tsconfig.json": "{\n  \"compilerOptions\": {\n    \"target\": \"ES2020\",\n    \"module\": \"ESNext\",\n    \"moduleResolution\": \"bundler\",\n    \"strict\": true,\n    \"noEmit\": true\n  },\n  \"include\": [\"src\"]\n}\n"
+      }
+    },
+    "verified_rows": {
+      "equal": true
+    },
+    "with": {
+      "exit_code": 0,
+      "stdout": "root $work/verified\nplan src/lib.ts Foo -> Baz\n  src/a.ts  3 uses\n  src/b.ts  1 uses\n  src/barrel.ts  1 uses\n  src/c.ts  2 uses\n  src/d.ts  2 uses\n  src/lib.ts  3 uses\nscip-verify src/ns.ts:67-70 scip-only\nscip-verify src/ns.ts:90-93 scip-only\nscip-verify disagreements=2\nreplace src/a.ts -> src/a.ts  update src/a.ts (92 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,5 @@\n    -import { Foo } from \"./lib\";\n    +import { Baz } from \"./lib\";\n    \n    -export function firstUse(value: Foo): Foo {\n    +export function firstUse(value: Baz): Baz {\n       return value;\n     }\nreplace src/b.ts -> src/b.ts  update src/b.ts (143 bytes)\n    --- original\n    +++ modified\n    @@ -1,4 +1,4 @@\n    -import { Foo as Bar } from \"./lib\";\n    +import { Baz as Bar } from \"./lib\";\n    \n     export function secondUse(left: Bar, right: Bar): Bar {\n       return left.tag === right.tag ? left : right;\nreplace src/barrel.ts -> src/barrel.ts  update src/barrel.ts (29 bytes)\n    --- original\n    +++ modified\n    @@ -1 +1 @@\n    -export { Foo } from \"./lib\";\n    +export { Baz } from \"./lib\";\nreplace src/c.ts -> src/c.ts  update src/c.ts (104 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,5 @@\n    -import { Foo } from \"./barrel\";\n    +import { Baz } from \"./barrel\";\n    \n    -export function fromBarrel(value: Foo): string {\n    +export function fromBarrel(value: Baz): string {\n       return value.tag;\n     }\nreplace src/d.ts -> src/d.ts  update src/d.ts (110 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,5 @@\n    -import { Foo } from \"./star\";\n    +import { Baz } from \"./star\";\n    \n    -export function viaStar(value: Foo): boolean {\n    +export function viaStar(value: Baz): boolean {\n       return value.tag === \"foo\";\n     }\nreplace src/lib.ts -> src/lib.ts  update src/lib.ts (101 bytes)\n    --- original\n    +++ modified\n    @@ -1,7 +1,7 @@\n    -export class Foo {\n    +export class Baz {\n       readonly tag = \"foo\";\n     }\n    \n    -export function makeFoo(): Foo {\n    -  return new Foo();\n    +export function makeFoo(): Baz {\n    +  return new Baz();\n     }\nstage $STAGE committed\n",
+      "stderr": ""
+    },
+    "without": {
+      "exit_code": 0,
+      "stdout": "root $work/plain\nplan src/lib.ts Foo -> Baz\n  src/a.ts  3 uses\n  src/b.ts  1 uses\n  src/barrel.ts  1 uses\n  src/c.ts  2 uses\n  src/d.ts  2 uses\n  src/lib.ts  3 uses\nreplace src/a.ts -> src/a.ts  update src/a.ts (92 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,5 @@\n    -import { Foo } from \"./lib\";\n    +import { Baz } from \"./lib\";\n    \n    -export function firstUse(value: Foo): Foo {\n    +export function firstUse(value: Baz): Baz {\n       return value;\n     }\nreplace src/b.ts -> src/b.ts  update src/b.ts (143 bytes)\n    --- original\n    +++ modified\n    @@ -1,4 +1,4 @@\n    -import { Foo as Bar } from \"./lib\";\n    +import { Baz as Bar } from \"./lib\";\n    \n     export function secondUse(left: Bar, right: Bar): Bar {\n       return left.tag === right.tag ? left : right;\nreplace src/barrel.ts -> src/barrel.ts  update src/barrel.ts (29 bytes)\n    --- original\n    +++ modified\n    @@ -1 +1 @@\n    -export { Foo } from \"./lib\";\n    +export { Baz } from \"./lib\";\nreplace src/c.ts -> src/c.ts  update src/c.ts (104 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,5 @@\n    -import { Foo } from \"./barrel\";\n    +import { Baz } from \"./barrel\";\n    \n    -export function fromBarrel(value: Foo): string {\n    +export function fromBarrel(value: Baz): string {\n       return value.tag;\n     }\nreplace src/d.ts -> src/d.ts  update src/d.ts (110 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,5 @@\n    -import { Foo } from \"./star\";\n    +import { Baz } from \"./star\";\n    \n    -export function viaStar(value: Foo): boolean {\n    +export function viaStar(value: Baz): boolean {\n       return value.tag === \"foo\";\n     }\nreplace src/lib.ts -> src/lib.ts  update src/lib.ts (101 bytes)\n    --- original\n    +++ modified\n    @@ -1,7 +1,7 @@\n    -export class Foo {\n    +export class Baz {\n       readonly tag = \"foo\";\n     }\n    \n    -export function makeFoo(): Foo {\n    -  return new Foo();\n    +export function makeFoo(): Baz {\n    +  return new Baz();\n     }\nstage $STAGE committed\n",
+      "stderr": ""
+    }
+  },
+  "21_class_method_renames_and_ignored_output_stays_out": {
+    "box_text": "export class Box {\n  execute(): number {\n    return 1;\n  }\n\n  total(): number {\n    return this.execute() + 1;\n  }\n}\n",
+    "dist_text": "export function start(box) {\n  return box.run();\n}\n",
+    "git_add": {
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    "git_commit": {
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    "git_init": {
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    "rename": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/box.ts run -> execute\n  src/box.ts  2 uses\n  src/use.ts  1 uses\nreplace src/box.ts -> src/box.ts  update src/box.ts (117 bytes)\n    --- original\n    +++ modified\n    @@ -1,9 +1,9 @@\n     export class Box {\n    -  run(): number {\n    +  execute(): number {\n         return 1;\n       }\n    \n       total(): number {\n    -    return this.run() + 1;\n    +    return this.execute() + 1;\n       }\n     }\nreplace src/use.ts -> src/use.ts  update src/use.ts (98 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,5 @@\n     import { Box } from \"./box\";\n    \n     export function start(box: Box): number {\n    -  return box.run();\n    +  return box.execute();\n     }\nstage $STAGE committed\n",
+      "stderr": ""
+    },
+    "use_text": "import { Box } from \"./box\";\n\nexport function start(box: Box): number {\n  return box.execute();\n}\n"
+  },
+  "22_exported_symbol_reaches_workspace_consumers_without_dist_or_links": {
+    "commit": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/lib.ts Foo -> Widget\n  src/a.ts  3 uses\n  src/b.ts  1 uses\n  src/barrel.ts  1 uses\n  src/c.ts  2 uses\n  src/d.ts  2 uses\n  src/lib.ts  3 uses\n  src/workspace.ts  3 uses\n  src/workspace_alias.ts  1 uses\nreplace src/a.ts -> src/a.ts  update src/a.ts (101 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,5 @@\n    -import { Foo } from \"./lib\";\n    +import { Widget } from \"./lib\";\n    \n    -export function firstUse(value: Foo): Foo {\n    +export function firstUse(value: Widget): Widget {\n       return value;\n     }\nreplace src/b.ts -> src/b.ts  update src/b.ts (146 bytes)\n    --- original\n    +++ modified\n    @@ -1,4 +1,4 @@\n    -import { Foo as Bar } from \"./lib\";\n    +import { Widget as Bar } from \"./lib\";\n    \n     export function secondUse(left: Bar, right: Bar): Bar {\n       return left.tag === right.tag ? left : right;\nreplace src/barrel.ts -> src/barrel.ts  update src/barrel.ts (32 bytes)\n    --- original\n    +++ modified\n    @@ -1 +1 @@\n    -export { Foo } from \"./lib\";\n    +export { Widget } from \"./lib\";\nreplace src/c.ts -> src/c.ts  update src/c.ts (110 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,5 @@\n    -import { Foo } from \"./barrel\";\n    +import { Widget } from \"./barrel\";\n    \n    -export function fromBarrel(value: Foo): string {\n    +export function fromBarrel(value: Widget): string {\n       return value.tag;\n     }\nreplace src/d.ts -> src/d.ts  update src/d.ts (116 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,5 @@\n    -import { Foo } from \"./star\";\n    +import { Widget } from \"./star\";\n    \n    -export function viaStar(value: Foo): boolean {\n    +export function viaStar(value: Widget): boolean {\n       return value.tag === \"foo\";\n     }\nreplace src/lib.ts -> src/lib.ts  update src/lib.ts (110 bytes)\n    --- original\n    +++ modified\n    @@ -1,7 +1,7 @@\n    -export class Foo {\n    +export class Widget {\n       readonly tag = \"foo\";\n     }\n    \n    -export function makeFoo(): Foo {\n    -  return new Foo();\n    +export function makeFoo(): Widget {\n    +  return new Widget();\n     }\nreplace src/workspace.ts -> src/workspace.ts  update src/workspace.ts (82 bytes)\n    --- original\n    +++ modified\n    @@ -1,2 +1,2 @@\n    -import { Foo } from '@fixture/foo';\n    -export const value: Foo = new Foo();\n    +import { Widget } from '@fixture/foo';\n    +export const value: Widget = new Widget();\nreplace src/workspace_alias.ts -> src/workspace_alias.ts  update src/workspace_alias.ts (89 bytes)\n    --- original\n    +++ modified\n    @@ -1,2 +1,2 @@\n    -import { Foo as Local } from '@fixture/foo';\n    +import { Widget as Local } from '@fixture/foo';\n     export const value: Local = new Local();\nstage $STAGE committed\n",
+      "stderr": ""
+    },
+    "workspace_alias_text": "import { Widget as Local } from '@fixture/foo';\nexport const value: Local = new Local();\n",
+    "workspace_text": "import { Widget } from '@fixture/foo';\nexport const value: Widget = new Widget();\n"
+  }
+}
