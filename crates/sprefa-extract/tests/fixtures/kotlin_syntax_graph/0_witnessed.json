@@ -1,0 +1,16 @@
+{
+  "steps": [
+    {
+      "action": "run",
+      "name": "extract",
+      "cwd": "$manifest",
+      "arguments": [
+        "--witness",
+        "--kinds",
+        "type",
+        "tests/fixtures/tsi/probe_graph.kt"
+      ],
+      "expect_exit_code": 0
+    }
+  ]
+}
