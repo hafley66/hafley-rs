@@ -48,7 +48,17 @@ Every difference is listed locally with file:line in
 `crates/sprefa-extract/bench/rust-resolution-agreement/disagreements.tsv` (12,569 rows).
 The TSV is gitignored and removed from tracked plans. Its verdict column distinguishes
 contract-decided cases from cases requiring an independent oracle. Receiver calls
-require Types; external sources abstain; synthetic extern module declarations are
-removed. Remaining changed/unresolved destinations are explicitly marked for review;
+require Types under the brief; external sources abstain. Referenced workspace
+dependency roots are now retained as RA-derived module relations. Remaining changed/unresolved destinations are explicitly marked for review;
 this comparison does not establish which destination is correct without an oracle.
 Import rows without source spans anchor line 1. No third corpus run was performed.
+
+
+Post-run regression repairs retain this frozen measurement. They remove invented
+star-import rows, restore referenced workspace dependency root routes, restrict
+Type joins to Type facets, preserve import hop provenance, and resolve workspace
+trait overrides through indexed RA lookup. No additional agreement run was made.
+The receiver-call expectation changes were held until the 2026-10-06 user decision.
+
+The 2026-10-06 user decision selects default method abstention. The reviewed
+contracts and per-test list are in [failure triage](2026-10-05-rust-names-failure-triage.md).

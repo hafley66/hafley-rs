@@ -152,7 +152,7 @@ type_ladder/_3_many.rs#many_params              1    0  ok
 type_ladder/_3_many.rs#method                   1    0  ok
 type_ladder/_4_nested.rs#Nest                   3    0  ok
 type_ladder/_4_nested.rs#projection             1    0  ok
-rename_merge/_0_types.rs#A                      6    3  ok
-rename_merge/_0_types.rs#A --no-scip-merge      4    3  error[E0425]: cannot find value `A` in module `types`"#
+rename_merge/_0_types.rs#A                      6    1  ok
+rename_merge/_0_types.rs#A --no-scip-merge      6    1  ok"#
     );
 }

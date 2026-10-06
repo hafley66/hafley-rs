@@ -127,8 +127,6 @@ crates/hafley_scm/src/read/lang/rust/2_call.rs	fn::scip_call_target	1
 crates/hafley_scm/src/read/lang/rust/3_df.rs	fn::project_df	1
 crates/hafley_scm/src/read/lang/rust_checker.rs	fn::answer	2
 crates/hafley_scm/src/read/lang/rust_checker_ra.rs	fn::answer	1
-crates/hafley_scm/src/read/lang/rust_modules.rs	fn::named_children	1
-crates/hafley_scm/src/read/lang/rust_modules.rs	fn::tree_text	1
 crates/hafley_scm/src/read/lang/ts.rs	fn::call_drops	1
 crates/hafley_scm/src/read/lang/ts.rs	fn::clean_block_comment	1
 crates/hafley_scm/src/read/lang/ts/0_df_rows.rs	fn::df_edge	1

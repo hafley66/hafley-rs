@@ -46,11 +46,7 @@ fn a_bare_name_binds_only_inside_the_crate_and_its_dependencies() {
     assert_eq!(
         table,
         "\
-call app/src/lib.rs      calls       -> lib_a/src/lib.rs:only_a_fn  corpus_unique
-call app/src/lib.rs      calls       -> lib_a/src/lib.rs:shared_fn  corpus_unique
 call app/src/lib.rs      calls       -> lib_a/src/lib.rs:shared_fn  module_plane
-type app/src/lib.rs      hidden_twin -> lib_a/src/lib.rs:Shared     corpus_unique
-type app/src/lib.rs      one         -> lib_a/src/lib.rs:OnlyA      corpus_unique
-type app/src/lib.rs      same_file_wins -> app/src/lib.rs:Twice        same_file"
+type app/src/lib.rs      same_file_wins -> app/src/lib.rs:Twice        module_plane"
     );
 }

@@ -42,42 +42,11 @@ fn run() -> Vec<Value> {
         .collect()
 }
 
-/// (caller_name, callee file stem) per `resolved_edge`.
-fn edges() -> Vec<(String, String)> {
-    let mut rows: Vec<(String, String)> = run()
-        .iter()
-        .filter(|row| row["record"] == "resolved_edge")
-        .map(|row| {
-            (
-                row["caller_name"].as_str().unwrap_or("").to_string(),
-                row["callee_path"]
-                    .as_str()
-                    .unwrap_or("")
-                    .rsplit('/')
-                    .next()
-                    .unwrap_or("")
-                    .to_string(),
-            )
-        })
-        .collect();
-    rows.sort();
-    rows
-}
+#[path = "support/0_rust_names_call_contract.rs"]
+mod names_call_contract;
 
 #[test]
-fn trait_edge_targets_the_callers_own_declaration() {
-    let edges = edges();
-    assert!(
-        edges.contains(&("f".into(), "a.rs".into())),
-        "a.rs's call must target a.rs's area, got {edges:?}"
-    );
-    assert!(
-        edges.contains(&("g".into(), "b.rs".into())),
-        "b.rs's call must target b.rs's area, got {edges:?}"
-    );
-    assert_eq!(
-        edges.len(),
-        2,
-        "no other call edges expected, got {edges:?}"
-    );
+fn trait_receivers_need_types() {
+    let rows = names_call_contract::call_contract(&run());
+    assert_eq!(rows, "drop a.rs:168 area needs_types\ndrop b.rs:123 area needs_types");
 }

@@ -1,0 +1,3 @@
+[workspace]
+resolver = "2"
+members = ["0_collector", "1_first", "2_second", "3_third"]

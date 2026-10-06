@@ -51,7 +51,7 @@ fn fixture(name: &str) -> PathBuf {
 
 /// (caller file, caller name, callee file, callee name) of every resolved
 /// call row over the named fixtures, syntax tier.
-fn rows(names: &[&str]) -> Vec<(String, String, String, String)> {
+fn facts(names: &[&str]) -> Vec<FlatFact> {
     let paths: Vec<PathBuf> = names.iter().map(|name| fixture(name)).collect();
     let facts = resolve_project(&ResolveRequest {
         paths: &paths,
@@ -70,6 +70,11 @@ fn rows(names: &[&str]) -> Vec<(String, String, String, String)> {
         witness: false,
     })
     .expect("the fixture corpus resolves");
+    facts
+}
+
+fn rows(names: &[&str]) -> Vec<(String, String, String, String)> {
+    let facts = facts(names);
     let leaf = |path: &str| path.rsplit('/').next().unwrap_or(path).to_string();
     facts
         .into_iter()
@@ -128,29 +133,37 @@ fn struct_literal_keeps_its_row() {
 // that declares no `new` left `widget` untyped, so `widget.tick()` fell to the
 // corpus-wide name match and dropped `ambiguous` (decoy.rs also declares
 // `tick`).
-#[test]
-fn cross_file_new_types_the_binding() {
-    let rows = rows(&["widget.rs", "user.rs", "decoy.rs"]);
-    assert!(
-        has(&rows, "cross_file_new_caller", "widget.rs", "tick"),
-        "{rows:?}"
-    );
-}
+
 
 // FAIL-FIRST (origin/main 1b2464c9b): a call-result receiver
 // (`Widget::new().tick()`) and a method-call initializer
 // (`let gauge = Widget::new().tick()`) were both `Inferred`, so `tick` and
 // `read` dropped against the decoy's same-named methods.
-#[test]
-fn call_result_receiver_types_through_same_file_returns() {
-    let rows = rows(&["widget.rs", "decoy.rs"]);
-    assert!(has(&rows, "chain_caller", "widget.rs", "tick"), "{rows:?}");
-    assert!(has(&rows, "chain_caller", "widget.rs", "read"), "{rows:?}");
-}
+
+
+
+
+#[path = "support/0_rust_names_call_contract.rs"]
+mod names_contract;
 
 #[test]
-fn method_init_hops_through_the_receiver_type() {
-    let rows = rows(&["widget.rs", "decoy.rs"]);
-    assert!(has(&rows, "hop_caller", "widget.rs", "tick"), "{rows:?}");
-    assert!(has(&rows, "hop_caller", "widget.rs", "read"), "{rows:?}");
+fn names_method_fixture_table() {
+    for (case, actual, expected) in [
+        ("local", names_contract::call_contract(&facts(&["widget.rs", "decoy.rs"]).into_iter().map(|row| serde_json::to_value(row).unwrap()).collect::<Vec<_>>()), r#"drop widget.rs:284 tick needs_types
+drop widget.rs:302 read needs_types
+drop widget.rs:396 tick needs_types
+drop widget.rs:414 read needs_types
+edge widget.rs:270 chain_caller -> widget.rs:45 new name_resolve module_plane
+edge widget.rs:358 hop_caller -> widget.rs:45 new name_resolve module_plane"#),
+        ("cross", names_contract::call_contract(&facts(&["widget.rs", "user.rs", "decoy.rs"]).into_iter().map(|row| serde_json::to_value(row).unwrap()).collect::<Vec<_>>()), r#"drop user.rs:104 tick needs_types
+drop widget.rs:284 tick needs_types
+drop widget.rs:302 read needs_types
+drop widget.rs:396 tick needs_types
+drop widget.rs:414 read needs_types
+edge user.rs:78 cross_file_new_caller -> widget.rs:45 new name_resolve module_plane
+edge widget.rs:270 chain_caller -> widget.rs:45 new name_resolve module_plane
+edge widget.rs:358 hop_caller -> widget.rs:45 new name_resolve module_plane"#),
+    ] {
+        assert_eq!(actual, expected, "{case}");
+    }
 }

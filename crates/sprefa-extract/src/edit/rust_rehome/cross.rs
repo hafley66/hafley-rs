@@ -831,6 +831,7 @@ pub(super) fn build(cx: &MoveCx) -> RelocatePlan {
                         &decl.chain,
                         true,
                         moving,
+                        &before,
                         &after,
                         &map_path,
                         &is_moved,
@@ -923,6 +924,7 @@ pub(super) fn build(cx: &MoveCx) -> RelocatePlan {
                 &[],
                 false,
                 moving,
+                &before,
                 &after,
                 &map_path,
                 &is_moved,
@@ -1268,6 +1270,7 @@ fn respell_reading(
     chain: &[String],
     from_use: bool,
     moving: bool,
+    before: &Scope,
     after: &Scope,
     map_path: &dyn Fn(&str, &[String]) -> (String, Vec<String>),
     is_moved: &dyn Fn(&str, &[String]) -> bool,
@@ -1298,6 +1301,13 @@ fn respell_reading(
     }
     let (want_root, want_path) = map_path(&reading.root, &reading.abs[..span_len]);
     let _ = chain;
+    if matches!(idents.first().map(String::as_str), Some("crate" | "self" | "super"))
+        && before.here == after.here
+        && want_root == after.root
+        && want_path == reading.abs[..span_len]
+    {
+        return None;
+    }
     let spelled = if want_root == after.root {
         std::iter::once("crate".to_string())
             .chain(want_path.iter().cloned())

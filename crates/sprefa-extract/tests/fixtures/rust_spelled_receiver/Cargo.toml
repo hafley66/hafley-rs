@@ -1,0 +1,7 @@
+[package]
+name = "names_spelled_receiver"
+version = "0.0.0"
+edition = "2021"
+[lib]
+path = "src/0_fixture.rs"
+[workspace]

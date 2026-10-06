@@ -40,9 +40,9 @@
   type edges). Fast and slow tiers share it; they never fork a second copy.
 - Rust resolution is rust-analyzer as a library (`ra_ap_*`, feature `rust-checker`). It is part of
   the default `cli` build.
-- Rust has exactly two module resolvers (user-set 2026-09-30): fast = `RustModuleIndex`
-  (`hafley_scm/src/read/lang/rust_modules.rs`), slow = rust-analyzer. Every tool (graph, rename,
-  cleave, move) asks one of them; no edit arm keeps its own module or `#[path]` reading.
+- Rust uses one rust-analyzer module-place provider for graph, rename, cleave and move.
+  Names loads workspace module maps without caller-body inference; Types adds inference.
+  Method calls abstain `needs_types` in Names. No edit arm keeps its own module or `#[path]` reader.
 - Code stays tight and legible (user-set 2026-09-28). New work goes in a new small numbered file.
   Never grow a large file (over ~1000 lines) with new work; split it when you touch it.
 - hafley-observe is the single home for tracing, profiling and memory instrumentation (user-set 2026-09-29).

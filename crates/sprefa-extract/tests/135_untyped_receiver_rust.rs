@@ -83,47 +83,9 @@ fn push_edges(names: &[&str]) -> Vec<(String, String)> {
         .collect()
 }
 
-#[test]
-fn receiver_typed_call_binds() {
-    // The control: `d.push(1)` with `d: &mut Defs` binds through the corpus
-    // impl table, origin receiver.
-    let rows = push_edges(&["lib.rs", "use.rs"]);
-    assert!(
-        rows.iter()
-            .any(|(file, origin)| file == "lib.rs" && origin == "receiver"),
-        "{rows:?}"
-    );
-}
 
-#[test]
-fn untyped_receiver_member_call_drops_inferred() {
-    // D.1: `w.push(2)` and `q.push(3)` mint receiver rows the walk cannot
-    // type, so the corpus answers with one receiver edge and one free edge.
-    let rows = push_edges(&["lib.rs", "use.rs"]);
-    assert_eq!(rows.len(), 2, "{rows:?}");
-    assert!(
-        rows.iter()
-            .any(|(file, origin)| file == "lib.rs" && origin == "receiver"),
-        "{rows:?}"
-    );
-    assert!(
-        rows.iter()
-            .any(|(file, origin)| file == "use.rs" && origin == "same_file"),
-        "{rows:?}"
-    );
-    let drops = drops(&["lib.rs", "use.rs"]);
-    let use_push_drops: Vec<&(String, String, String)> = drops
-        .iter()
-        .filter(|(file, detail, _)| file == "use.rs" && detail == "push")
-        .collect();
-    assert_eq!(use_push_drops.len(), 2, "{drops:?}");
-    assert!(
-        use_push_drops
-            .iter()
-            .all(|(_, _, reason)| reason == "inferred"),
-        "{drops:?}"
-    );
-}
+
+
 
 #[test]
 fn free_call_keeps_name_match() {
@@ -133,13 +95,31 @@ fn free_call_keeps_name_match() {
     assert!(
         rows.iter().any(|(callee, file, origin, _)| callee == "push"
             && file == "use.rs"
-            && origin == "same_file"),
+            && origin == "module_plane"),
         "{rows:?}"
     );
     assert!(
         rows.iter().any(|(callee, file, origin, _)| callee == "mk"
             && file == "use.rs"
-            && origin == "same_file"),
+            && origin == "module_plane"),
         "{rows:?}"
     );
+}
+
+#[path = "support/0_rust_names_call_contract.rs"]
+mod names_contract;
+
+#[test]
+fn names_method_fixture_table() {
+    for (case, actual, expected) in [
+        ("untyped", names_contract::call_contract(&run(&["lib.rs", "use.rs"])), r#"drop lib.rs:102 push needs_types
+drop use.rs:125 push needs_types
+drop use.rs:49 push needs_types
+drop use.rs:74 Vec::new no_corpus_def
+drop use.rs:92 push needs_types
+edge use.rs:113 f -> use.rs:181 mk name_resolve module_plane
+edge use.rs:138 f -> use.rs:157 push name_resolve module_plane"#),
+    ] {
+        assert_eq!(actual, expected, "{case}");
+    }
 }

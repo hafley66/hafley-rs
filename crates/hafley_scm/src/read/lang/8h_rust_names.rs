@@ -2,7 +2,7 @@
 
 use super::modules::{host_path, vfs_path, ModulePlace, RustModuleTree};
 use super::*;
-use ra_ap_hir::{AssocItem, HasVisibility, Module, ScopeDef};
+use ra_ap_hir::{AsAssocItem, AssocItem, HasVisibility, Module, ScopeDef};
 
 pub type NamesHost = RustModuleTree;
 
@@ -11,6 +11,7 @@ pub enum Abstain {
     OutsideWorkspace,
     NeedsTypes,
     UnresolvedPath,
+    Ambiguous,
 }
 
 impl std::fmt::Display for Abstain {
@@ -19,6 +20,7 @@ impl std::fmt::Display for Abstain {
             Self::OutsideWorkspace => "outside_workspace",
             Self::NeedsTypes => "needs_types",
             Self::UnresolvedPath => "unresolved_path",
+            Self::Ambiguous => "ambiguous",
         })
     }
 }
@@ -81,6 +83,20 @@ pub fn resolve_path_at(
                     .right_biased()
             })
             .and_then(|token| token.parent());
+        // A closure invocation has no written module path. The extractor's
+        // nested call spelling must not resolve the outer closure invocation.
+        if offset.is_some_and(|offset| {
+            node.as_ref().is_some_and(|node| {
+                node.ancestors().find_map(ast::CallExpr::cast).is_some_and(|call| {
+                    call.expr().is_some_and(|callee| {
+                        callee.syntax().text_range().contains(ra_ap_syntax::TextSize::from(offset))
+                            && !matches!(callee, ast::Expr::PathExpr(_))
+                    })
+                })
+            })
+        }) {
+            return Err(Abstain::NeedsTypes);
+        }
         let mut chain = node
             .as_ref()
             .map(|node| {
@@ -113,6 +129,10 @@ pub fn resolve_path_at(
         }) {
             return Err(Abstain::NeedsTypes);
         }
+        let self_implementation = node
+            .as_ref()
+            .and_then(|node| node.ancestors().find_map(ast::Impl::cast))
+            .and_then(|implementation| sema.to_def(&implementation));
         let mut places = Vec::new();
         let mut external = false;
         let single = modules.len() == 1;
@@ -133,6 +153,17 @@ pub fn resolve_path_at(
             if !reached {
                 continue;
             }
+            if single
+                && node.is_some()
+                && path.len() == 1
+                && lexical.is_none()
+                && !resolve_module_path(db, module, path).is_empty()
+            {
+                return Err(Abstain::NeedsTypes);
+            }
+            if path.len() == 1 && ambiguous_glob(db, &sema, module, &path[0]) {
+                return Err(Abstain::Ambiguous);
+            }
             let root = workspace.vfs.file_path(ra_ap_vfs::FileId::from_raw(
                 module.krate(db).root_file(db).index(),
             ));
@@ -144,12 +175,27 @@ pub fn resolve_path_at(
             let mut definitions = if single && node.is_some() {
                 match lexical {
                     Some(PathResolution::Def(def)) => vec![def],
+                    Some(PathResolution::SelfType(implementation)) => implementation
+                        .self_ty(db)
+                        .as_adt()
+                        .map(ModuleDef::Adt)
+                        .into_iter()
+                        .collect(),
                     _ => Vec::new(),
                 }
             } else {
                 resolve_module_path(db, module, path)
             };
-            if definitions.is_empty() && path.len() > 1 {
+            if definitions.is_empty() && path == ["Self"] {
+                definitions.extend(
+                    self_implementation
+                        .and_then(|implementation| implementation.self_ty(db).as_adt())
+                        .map(ModuleDef::Adt),
+                );
+            }
+            if path.len() > 1 && (definitions.is_empty() || definitions.iter().any(|definition| {
+                matches!(definition, ModuleDef::Function(function) if function.as_assoc_item(db).is_some_and(|item| item.container_trait(db).is_some()))
+            })) {
                 let prefix = &path[..path.len() - 1];
                 let mut heads = resolve_module_path(db, module, prefix)
                     .into_iter()
@@ -170,21 +216,18 @@ pub fn resolve_path_at(
                     }
                 }
                 if prefix == ["Self"] {
-                    if let Some(implementation) = node
-                        .as_ref()
-                        .and_then(|node| node.ancestors().find_map(ast::Impl::cast))
-                        .and_then(|implementation| sema.to_def(&implementation))
-                    {
+                    if let Some(implementation) = self_implementation {
                         heads = vec![PathResolution::SelfType(implementation)];
                     }
                 }
+                let mut associated = Vec::new();
                 for head in heads {
                     let from = if matches!(head, PathResolution::SelfType(_)) {
                         scoped.as_ref().map_or(module, |scope| scope.module())
                     } else {
                         module
                     };
-                    definitions.extend(associated_defs(
+                    associated.extend(associated_defs(
                         db,
                         from,
                         head,
@@ -192,6 +235,7 @@ pub fn resolve_path_at(
                         path.last().unwrap(),
                     ));
                 }
+                if !associated.is_empty() { definitions = associated; }
             }
             for def in definitions {
                 let Some(nav) = def.try_to_nav(&sema).map(|nav| nav.call_site) else {
@@ -211,7 +255,10 @@ pub fn resolve_path_at(
                     .file_path(ra_ap_vfs::FileId::from_raw(source.index()));
                 let Some(file) = file.as_path() else { continue };
                 let file = PathBuf::from(file.to_string());
-                let Some(krate) = def.module(db).map(|module| module.krate(db)) else {
+                let Some(krate) = (match def {
+                    ModuleDef::Module(module) => Some(module.krate(db)),
+                    _ => def.module(db).map(|module| module.krate(db)),
+                }) else {
                     continue;
                 };
                 let crate_file = workspace
@@ -246,6 +293,78 @@ pub fn resolve_path_at(
             Ok(places)
         }
     })
+}
+
+/// Compare RA answers for glob sources when its def map retained the first
+/// conflicting import. Explicit imports and declarations shadow glob names.
+fn ambiguous_glob(
+    db: &RootDatabase,
+    sema: &Semantics<'_, RootDatabase>,
+    module: Module,
+    name: &str,
+) -> bool {
+    if module.declarations(db).iter().any(|definition| {
+        definition
+            .name(db)
+            .is_some_and(|declared| declared.as_str() == name)
+    }) {
+        return false;
+    }
+    let source = sema.module_definition_node(module).value;
+    let container = ast::Module::cast(source.clone())
+        .and_then(|module| module.item_list().map(|items| items.syntax().clone()))
+        .unwrap_or(source);
+    let uses: Vec<_> = container.children().filter_map(ast::Use::cast).collect();
+    let trees: Vec<_> = uses
+        .iter()
+        .flat_map(|item| item.syntax().descendants().filter_map(ast::UseTree::cast))
+        .collect();
+    if trees.iter().any(|tree| {
+        if tree.star_token().is_some() || tree.use_tree_list().is_some() {
+            return false;
+        }
+        let local = tree
+            .rename()
+            .and_then(|rename| rename.name())
+            .map(|name| name.text().to_string())
+            .or_else(|| {
+                tree.path().and_then(|path| {
+                    path.segment()?
+                        .name_ref()
+                        .map(|name| name.text().to_string())
+                })
+            });
+        local.as_deref() == Some(name)
+    }) {
+        return false;
+    }
+    let mut definitions = Vec::new();
+    for tree in trees.iter().filter(|tree| tree.star_token().is_some()) {
+        let mut prefixes: Vec<_> = tree
+            .syntax()
+            .ancestors()
+            .filter_map(ast::UseTree::cast)
+            .filter_map(|tree| tree.path().map(|path| path.syntax().text().to_string()))
+            .collect();
+        prefixes.reverse();
+        prefixes.push(name.to_string());
+        let parsed = ra_ap_syntax::SourceFile::parse(
+            &format!("use {};", prefixes.join("::")),
+            ra_ap_ide::Edition::CURRENT,
+        )
+        .tree();
+        if let Some(path) = parsed.syntax().descendants().find_map(ast::Path::cast) {
+            if let Some(PathResolution::Def(definition)) = sema
+                .scope(tree.syntax())
+                .and_then(|scope| scope.speculative_resolve(&path))
+            {
+                if !definitions.contains(&definition) {
+                    definitions.push(definition);
+                }
+            }
+        }
+    }
+    definitions.len() > 1
 }
 
 /// Inherent associated items come from RA's indexed impl lookup. This lowers
@@ -301,6 +420,21 @@ fn associated_defs(
                         None::<()>
                     },
                 );
+            }
+        }
+        for item in &mut items {
+            if let (AssocItem::Function(function), Some(trait_)) = (*item, item.container_trait(db))
+            {
+                if trait_.type_or_const_param_count(db, false) == 0 {
+                    if let Some(implementation) = Semantics::new(db).resolve_trait_impl_method(
+                        ty.clone(),
+                        trait_,
+                        function,
+                        [ty.clone()],
+                    ) {
+                        *item = AssocItem::Function(implementation);
+                    }
+                }
             }
         }
     }
@@ -486,6 +620,45 @@ pub fn all_module_places(host: &NamesHost) -> Vec<ModulePlace> {
             };
             places.push(place);
             pending.extend(module.children(db));
+        }
+        places.sort();
+        places.dedup();
+        places
+    })
+}
+
+/// Workspace dependency roots from RA's crate graph, including a bin's own library.
+pub fn dependency_places(host: &NamesHost, file: &Path) -> Vec<(String, ModulePlace)> {
+    let workspace = host.workspace.lock().unwrap();
+    let Some((id, _)) = workspace.vfs.file_id(&vfs_path(&host_path(file))) else {
+        return Vec::new();
+    };
+    let db = workspace.host.raw_database();
+    attach_db(db, || {
+        let sema = Semantics::new(db);
+        let parsed = sema.parse_guess_edition(ra_ap_ide::FileId::from_raw(id.index()));
+        let prefixes: std::collections::HashSet<String> = parsed
+            .syntax()
+            .descendants()
+            .filter_map(ast::Path::cast)
+            .filter_map(|path| {
+                path.segments()
+                    .next()?
+                    .name_ref()
+                    .map(|name| name.text().to_string())
+            })
+            .collect();
+        let mut places = Vec::new();
+        for module in sema.file_to_module_defs(ra_ap_ide::FileId::from_raw(id.index())) {
+            for dependency in module.krate(db).dependencies(db) {
+                if !prefixes.contains(dependency.name.as_str()) {
+                    continue;
+                }
+                if let Some(place) = host.place_of(&workspace, db, dependency.krate.root_module(db))
+                {
+                    places.push((dependency.name.as_str().to_string(), place));
+                }
+            }
         }
         places.sort();
         places.dedup();

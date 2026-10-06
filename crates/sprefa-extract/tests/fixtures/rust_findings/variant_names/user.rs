@@ -9,3 +9,5 @@ pub fn collide_user() -> Shape {
     let _side = square(2);
     Shape::Square(2)
 }
+
+use crate::square;

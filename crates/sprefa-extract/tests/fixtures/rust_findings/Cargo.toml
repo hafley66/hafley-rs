@@ -1,0 +1,34 @@
+[package]
+name = "names_standalone_findings"
+version = "0.0.0"
+edition = "2021"
+
+[[bin]]
+name = "closure_caller_chain"
+path = "closure_caller_chain.rs"
+
+[[bin]]
+name = "closure_mirror_count"
+path = "closure_mirror_count.rs"
+
+[[bin]]
+name = "const_block_defs"
+path = "const_block_defs.rs"
+
+[[bin]]
+name = "macro_body_calls"
+path = "macro_body_calls.rs"
+
+[[bin]]
+name = "resolve_scale_200"
+path = "resolve_scale_200.rs"
+
+[[bin]]
+name = "static_init_call"
+path = "static_init_call.rs"
+
+[[bin]]
+name = "unresolved_reason"
+path = "unresolved_reason.rs"
+
+[workspace]

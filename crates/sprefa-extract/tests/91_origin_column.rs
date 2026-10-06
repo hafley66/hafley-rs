@@ -132,7 +132,7 @@ fn go_dot_import_edge_says_module_plane() {
 #[test]
 fn rust_same_file_edge_says_same_file() {
     let edges = call_edges(&["--kinds", "call", RUST_FIXTURE, RUST_FIXTURE]);
-    assert_eq!(origins(&edges, Some("run"), "helper"), ["same_file"]);
+    assert_eq!(origins(&edges, Some("run"), "helper"), ["module_plane"]);
 }
 
 /// `func()` resolves to `wrapper`, and only the decorator leg knows that: the

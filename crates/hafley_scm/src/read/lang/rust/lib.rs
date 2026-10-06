@@ -37,7 +37,7 @@ use crate::read::types::ResolveDrop;
 use crate::read::trace;
 use crate::read::types::LangKind;
 use crate::read::types::ScipIndex;
-use crate::read::types::{DefSite, MacroSite, MacroSiteSource, UnresolvedReason};
+use crate::read::types::{MacroSite, MacroSiteSource, UnresolvedReason};
 
 pub use hafley_scm::lang::rust::{build_line_starts, syn_span};
 
@@ -48,7 +48,6 @@ use type_facts::project_types;
 #[path = "2_call.rs"]
 mod call_facts;
 pub use call_facts::{call_drops, own_blob_probes};
-pub use call_facts::{crate_root_of, module_segments, module_target, ModuleTarget};
 use call_facts::{project_call, scm_call_defs, splice_macro_expansions};
 
 #[path = "3_df.rs"]
@@ -156,7 +155,7 @@ impl Source for RustSource {
         if mask.types || mask.call || mask.df {
             if let (Ok(src), Some(tree)) = (std::str::from_utf8(content), tree.as_ref()) {
                 if !tree.root_node().has_error() {
-                    rust_module = Some(super::rust_modules::rust_module_facts_from_tree(
+                    rust_module = Some(super::rust_module_facts::rust_module_facts_from_tree(
                         tree, content,
                     ));
                     if mask.types {

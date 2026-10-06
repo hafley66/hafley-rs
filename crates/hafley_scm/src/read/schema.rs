@@ -290,14 +290,13 @@ MODULE PLANE (--resolve)
   call edges it binds carry kind=import_resolve.
   Two `export *` arms offering DIFFERENT bindings for one name is the spec's
   AMBIGUOUS outcome: no edge, and an `unresolved` row with reason=ambiguous.
-  rust runs the Rust Reference's own name resolution over its `use`/`mod`
-  facts (a dedicated second parse, `src/lang/rust_modules.rs`): `crate::read::`/
-  `self::`/`super::`/absolute paths to a home file (reusing the kink-4
-  qualifier-to-file match), `pub use` re-export chains to any depth, `use
-  a::*` globs (ambiguous on disagreement, precedence namespace > star >
-  indirect > local, `default` never occurs), and `use a::b;` where `b` is a
-  module rather than an item (namespace). A local def always shadows an
-  import. go runs its own directory-scoped plane (`src/lang/go_modules.rs`):
+  rust asks rust-analyzer's Names module maps for written paths, use bindings,
+  re-exports, globs, visibility, inline modules and target-specific module places.
+  Syntax facts live in `src/read/lang/0_rust_module_facts.rs`; the corpus adapter
+  joins engine coordinates to supplied declarations. Associated paths use indexed
+  impl and trait lookup on declared type heads. Dot method calls abstain needs_types
+  unless Types or SCIP supplies the receiver-dependent answer. Workspace crates
+  load without sysroot or dependency sources; outside paths abstain. go runs its own directory-scoped plane (`src/lang/go_modules.rs`):
   each import spec resolves to the target directory's REAL package name (its
   `package` clause, never the import path's last segment), kind=local, or
   kind=namespace for a dot import; an unresolvable directory emits an

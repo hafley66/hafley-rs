@@ -118,24 +118,15 @@ fn impl_fn_beats_the_trait_fallback() {
 
 /// Class 4: `d.greet()` with Dog's impl of Speak not overriding greet binds
 /// the trait's default body.
-#[test]
-fn trait_default_body_binds_the_unoverridden_method() {
-    assert!(binds("default_call", "greet", "traits"), "{:?}", edges());
-}
+
 
 /// Class 6: the receiver's type is the corpus trait `dyn Talk`; the call
 /// binds the trait's fn def, named via the call facet's def for the bare
 /// signature.
-#[test]
-fn dyn_trait_receiver_binds_the_trait_fn_def() {
-    assert!(binds("dyn_call", "chat", "traits"), "{:?}", edges());
-}
+
 
 /// Class 6b: the receiver is a generic param whose bound names the trait.
-#[test]
-fn bound_generic_receiver_binds_the_trait_fn_def() {
-    assert!(binds("generic_call", "chat", "traits"), "{:?}", edges());
-}
+
 
 /// Class 8, zero impls: `Dog::helper()` has no impl of (Dog, helper); the
 /// trait-provided assoc fn binds the trait's def.
@@ -146,4 +137,22 @@ fn zero_impl_assoc_call_binds_the_trait_default() {
         "{:?}",
         edges()
     );
+}
+
+#[path = "support/0_rust_names_call_contract.rs"]
+mod names_contract;
+
+#[test]
+fn names_method_fixture_table() {
+    for (case, actual, expected) in [
+        ("traits", names_contract::call_contract(&run()), r#"drop ext.rs:63 mem::take external
+drop users.rs:143 chat needs_types
+drop users.rs:197 chat needs_types
+drop users.rs:93 greet needs_types
+edge robot.rs:173 robot_volume -> robot.rs:100 helper name_resolve module_plane
+edge users.rs:247 trait_assoc_call -> traits.rs:149 helper name_resolve module_plane
+edge users.rs:302 bare_trait_call -> traits.rs:44 level name_resolve module_plane"#),
+    ] {
+        assert_eq!(actual, expected, "{case}");
+    }
 }

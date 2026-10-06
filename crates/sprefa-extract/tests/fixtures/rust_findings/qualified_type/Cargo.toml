@@ -1,0 +1,9 @@
+[package]
+name = "names_qualified_type"
+version = "0.0.0"
+edition = "2021"
+
+[lib]
+path = "lib.rs"
+
+[workspace]

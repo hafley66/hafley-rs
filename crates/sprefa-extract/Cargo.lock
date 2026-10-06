@@ -965,7 +965,6 @@ dependencies = [
  "ra_ap_span",
  "ra_ap_syntax",
  "ra_ap_syntax-bridge",
- "ra_ap_test_utils",
  "ra_ap_tt",
  "ra_ap_vfs",
  "rayon",

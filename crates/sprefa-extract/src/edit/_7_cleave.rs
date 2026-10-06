@@ -2000,7 +2000,7 @@ pub(super) fn rust_children(node: tree_sitter::Node<'_>) -> Vec<tree_sitter::Nod
 fn rust_route_index(
     cx: &MoveCx,
 ) -> Result<hafley_scm::read::lang::rust_names_index::RustNamesIndex, String> {
-    use hafley_scm::read::lang::rust_modules::rust_module_facts_from_tree;
+    use hafley_scm::read::lang::rust_module_facts::rust_module_facts_from_tree;
     use hafley_scm::read::lang::rust_names_index::RustNamesIndex;
     let mut corpus = Vec::new();
     let mut outputs = Vec::new();
@@ -2168,7 +2168,7 @@ impl Imports {
     }
 
     fn route_reaches(&self, from: &str, module: &str, bound: &str, target: &str) -> bool {
-        use hafley_scm::read::lang::rust_modules::ModuleCallTarget;
+        use hafley_scm::read::lang::rust_module_facts::ModuleCallTarget;
         let asked = module.rsplit("::").next().unwrap_or(bound);
         let qualifier = module_key(asked, module);
         let segments: Vec<String> = qualifier.split("::").map(str::to_string).collect();
@@ -2362,8 +2362,8 @@ impl Imports {
                         let segments: Vec<String> = written.split("::").map(str::to_string).collect();
                         self.rust_routes.qualified_binding(caller, &segments[..segments.len() - 1], item)
                             .ok().flatten().is_some_and(|binding| !matches!(binding.kind,
-                                hafley_scm::read::lang::rust_modules::ResolvedImportKind::Indirect |
-                                hafley_scm::read::lang::rust_modules::ResolvedImportKind::Star))
+                                hafley_scm::read::lang::rust_module_facts::ResolvedImportKind::Indirect |
+                                hafley_scm::read::lang::rust_module_facts::ResolvedImportKind::Star))
                     })
             })
             .map(|(caller, span, _, _)| (caller.clone(), *span))

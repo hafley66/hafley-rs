@@ -29,7 +29,7 @@ use rayon::prelude::*;
 use crate::read::lang::go_modules::{GoModuleFacts, GoModuleIndex};
 use crate::read::lang::kotlin_modules::{kt_module_facts, KtModuleFacts, KtModuleIndex};
 use crate::read::lang::python::{py_module_facts, PyModuleFacts, PyModuleIndex};
-use crate::read::lang::rust_modules::RustModuleFacts;
+use crate::read::lang::rust_module_facts::RustModuleFacts;
 use crate::read::lang::rust_names_index::RustNamesIndex;
 use crate::read::lang::ts_resolve::{ModuleFacts, TsModuleIndex};
 use crate::read::lang::{
@@ -626,11 +626,7 @@ fn resolve_project_inputs(
     }
 
     let emit_stage = stage_span("project_facts").entered();
-    let mut facts = cx.indexes.rust_modules.get()
-        .into_iter().flat_map(|index| index.context_failures.iter())
-        .map(|(path, manifest, reason)| FlatFact::FileUnresolvedRow {
-            src_path: path.clone(), module: manifest.clone(), reason: reason.clone(),
-        }).collect::<Vec<_>>();
+    let mut facts = cx.indexes.rust_modules.get().map_or_else(Vec::new, RustNamesIndex::context_facts);
     let mut trail = LegTrail {
         on: request.witness,
         ..LegTrail::default()
@@ -1800,6 +1796,9 @@ fn diet_scip_bounded<E>(
             .collect();
         fill_indexes(&cx, &inputs, &pairs, &corpus);
     }
+    for fact in cx.indexes.rust_modules.get().into_iter().flat_map(RustNamesIndex::context_facts) {
+        push(DietRow::Resolved(fact)).map_err(ResolveWithRawError::RawSink)?;
+    }
     for input in &mut inputs {
         input.module = None;
         input.rust_module = None;
@@ -1960,7 +1959,7 @@ fn rust_module_facts_of(
     wanted.then(|| {
         output
             .and_then(|output| output.rust_module.clone())
-            .or_else(|| crate::read::lang::rust_modules::rust_module_facts(path, content))
+            .or_else(|| crate::read::lang::rust_module_facts::rust_module_facts(path, content))
     })?
 }
 

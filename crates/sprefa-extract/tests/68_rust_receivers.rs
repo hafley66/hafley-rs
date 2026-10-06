@@ -116,35 +116,15 @@ fn has(rows: &[(String, String, String)], caller: &str, callee: &str, file: &str
         .any(|(c, n, f)| c == caller && n == callee && f == file)
 }
 
-#[test]
-fn param_typed_receiver_binds_inherent_method() {
-    let rows = edges(&["lib.rs"]);
-    assert!(has(&rows, "param_typed", "build", "lib"), "{rows:?}");
-}
 
-#[test]
-fn let_typed_receiver_binds() {
-    let rows = edges(&["lib.rs"]);
-    assert!(has(&rows, "let_typed", "build", "lib"), "{rows:?}");
-}
 
-#[test]
-fn one_hop_through_result_binds() {
-    let rows = edges(&["lib.rs"]);
-    assert!(has(&rows, "one_hop", "build", "lib"), "{rows:?}");
-}
 
-#[test]
-fn field_receiver_binds() {
-    let rows = edges(&["lib.rs"]);
-    assert!(has(&rows, "uses_field", "build", "lib"), "{rows:?}");
-}
 
-#[test]
-fn trait_impl_method_binds() {
-    let rows = edges(&["lib.rs"]);
-    assert!(has(&rows, "hello", "build", "lib"), "{rows:?}");
-}
+
+
+
+
+
 
 #[test]
 fn self_assoc_binds() {
@@ -159,17 +139,7 @@ fn type_assoc_binds() {
     assert!(has(&rows, "make_widget", "new", "lib"), "{rows:?}");
 }
 
-#[test]
-fn unknown_receiver_drops_inferred() {
-    // `into`'s receiver is a method-chain tail the walk cannot type: the
-    // site drops with the `inferred` reason, never `ambiguous`.
-    let rows = drops(&["lib.rs"]);
-    assert!(
-        rows.iter()
-            .any(|(detail, reason)| detail == "into" && reason == "inferred"),
-        "{rows:?}"
-    );
-}
+
 
 /// `recv_alpha.rs` and `recv_beta.rs` both define `tick`, so the corpus name
 /// match declines every site in `recv_sites.rs` and ONLY the receiver leg can
@@ -181,49 +151,24 @@ const MULTI: [&str; 3] = ["recv_sites.rs", "recv_alpha.rs", "recv_beta.rs"];
 /// `syn::visit::visit_local`, so the initializer of a destructuring `let` was
 /// never walked and `a.tick()` inside one got NO receiver row:
 /// `assertion failed: has(&rows, "tuple_pattern_init", "tick", "recv_alpha")`.
-#[test]
-fn tuple_pattern_initializer_binds() {
-    let rows = edges(&MULTI);
-    assert!(
-        has(&rows, "tuple_pattern_init", "tick", "recv_alpha"),
-        "{rows:?}"
-    );
-}
+
 
 /// SABOTAGE RECEIPT: the same hole through a `let ... else`, the shape 2,232
 /// of the corpus's 15,444 `ambiguous` method sites carry:
 /// `assertion failed: has(&rows, "let_else_init", "tick", "recv_alpha")`.
-#[test]
-fn let_else_initializer_binds() {
-    let rows = edges(&MULTI);
-    assert!(
-        has(&rows, "let_else_init", "tick", "recv_alpha"),
-        "{rows:?}"
-    );
-}
+
 
 /// SABOTAGE RECEIPT: `let a = a.tick()` inserted the new `a` before the
 /// initializer was walked, so the receiver read its own binding as unknown:
 /// `assertion failed: has(&rows, "shadowed_by_own_init", "tick", "recv_alpha")`.
-#[test]
-fn initializer_reads_the_outer_binding() {
-    let rows = edges(&MULTI);
-    assert!(
-        has(&rows, "shadowed_by_own_init", "tick", "recv_alpha"),
-        "{rows:?}"
-    );
-}
+
 
 /// SABOTAGE RECEIPT: `fn new() -> Self` put the literal string `Self` in the
 /// one-hop return table, so `let b = Beta::new(); b.tick()` asked the impl
 /// table for `("Self", "tick")`, found nothing, and, the receiver type being
 /// KNOWN, emitted no row at all:
 /// `assertion failed: has(&rows, "beta_one_hop", "tick", "recv_beta")`.
-#[test]
-fn self_return_one_hop_binds() {
-    let rows = edges(&MULTI);
-    assert!(has(&rows, "beta_one_hop", "tick", "recv_beta"), "{rows:?}");
-}
+
 
 /// PIN, not a fail-first: it passes on the pre-fix binary too. The go twin
 /// (`ModifierFlags ModifierFlags`, ORACLES.REPORT.md section 13.4 finding 2)
@@ -257,4 +202,38 @@ fn two_glob_sources_stay_unresolved() {
             .any(|(detail, reason)| detail == "shadowed" && reason == "ambiguous"),
         "{rows:?}"
     );
+}
+
+#[path = "support/0_rust_names_call_contract.rs"]
+mod names_contract;
+
+#[test]
+fn names_method_fixture_table() {
+    for (case, actual, expected) in [
+        ("lib", names_contract::call_contract(&run(&["lib.rs"])), r#"drop lib.rs:344 build needs_types
+drop lib.rs:470 build needs_types
+drop lib.rs:533 build needs_types
+drop lib.rs:613 build needs_types
+drop lib.rs:696 build needs_types
+drop lib.rs:756 Ok external
+drop lib.rs:830 wrap needs_types
+drop lib.rs:837 into needs_types
+drop lib.rs:851 build needs_types
+edge lib.rs:208 from_self -> lib.rs:65 new name_resolve module_plane
+edge lib.rs:592 let_typed -> lib.rs:65 new name_resolve module_plane
+edge lib.rs:674 one_hop -> lib.rs:714 make_widget name_resolve module_plane
+edge lib.rs:759 make_widget -> lib.rs:65 new name_resolve module_plane
+edge lib.rs:820 unknown_recv -> lib.rs:865 mystery name_resolve module_plane
+edge lib.rs:89 new -> lib.rs:11 Widget name_resolve module_plane"#),
+        ("multi", names_contract::call_contract(&run(&MULTI)), r#"drop recv_beta.rs:226 tick needs_types
+drop recv_sites.rs:106 tick needs_types
+drop recv_sites.rs:204 Some external
+drop recv_sites.rs:211 tick needs_types
+drop recv_sites.rs:326 tick needs_types
+edge recv_alpha.rs:87 new -> recv_alpha.rs:11 Alpha name_resolve module_plane
+edge recv_beta.rs:207 beta_one_hop -> recv_beta.rs:61 new name_resolve module_plane
+edge recv_beta.rs:85 new -> recv_beta.rs:11 Beta name_resolve module_plane"#),
+    ] {
+        assert_eq!(actual, expected, "{case}");
+    }
 }

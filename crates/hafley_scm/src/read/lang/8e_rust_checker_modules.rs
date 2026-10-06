@@ -2,6 +2,7 @@
 //! module path and declaring `mod` item. No body is type checked.
 
 use super::*;
+use ra_ap_hir::HasVisibility;
 use ra_ap_syntax::ast::HasAttrs;
 use ra_ap_vfs::VfsPath;
 use std::sync::{Arc, Mutex};
@@ -42,11 +43,8 @@ pub struct RustModuleTree {
 /// Cargo selects the source's workspace from its directory; rust-analyzer
 /// supplies module ownership from that workspace's def maps.
 pub fn module_tree(source: &Path, budget: Duration) -> Result<RustModuleTree, CheckerError> {
-    let discovered =
-        super::super::rust_workspace::discover(source).map_err(|error| CheckerError::NoWorkspace(match error.manifest {
-            Some(manifest) => format!("{}: {}", manifest.display(), error.reason),
-            None => error.reason,
-        }))?;
+    let discovered = super::super::rust_workspace::discover(source)
+        .map_err(|error| CheckerError::NoWorkspace(error.to_string()))?;
     module_tree_for_workspace(source, &discovered, budget)
 }
 
@@ -56,22 +54,26 @@ pub fn module_tree_for_workspace(
     discovered: &super::super::rust_workspace::RustWorkspace,
     budget: Duration,
 ) -> Result<RustModuleTree, CheckerError> {
+    module_tree_for_workspace_files(&[host_path(source)], discovered, budget)
+}
+
+/// Refresh every requested workspace file, including newly created modules.
+pub fn module_tree_for_workspace_files(
+    sources: &[PathBuf],
+    discovered: &super::super::rust_workspace::RustWorkspace,
+    budget: Duration,
+) -> Result<RustModuleTree, CheckerError> {
     let key = discovered
         .manifest_key()
         .map_err(CheckerError::NoWorkspace)?;
-    let root = discovered.metadata.workspace_root.as_std_path();
-    let mode = if super::super::rust_checker::warm_workspace_available(
-        root,
-        super::super::rust_checker::LoadMode::Types,
-    ) {
-        super::super::rust_checker::LoadMode::Types
-    } else {
-        super::super::rust_checker::LoadMode::Names
-    };
+    let files: Vec<_> = sources
+        .iter()
+        .map(|source| (source.to_string_lossy().into_owned(), host_path(source)))
+        .collect();
     let (workspace, load) = checker_workspace_loaded(
         discovered,
-        mode,
-        &[(source.to_string_lossy().into_owned(), host_path(source))],
+        super::super::rust_checker::LoadMode::Names,
+        &files,
         budget,
     )?;
     let roots: std::collections::BTreeSet<_> = discovered
@@ -187,7 +189,6 @@ impl RustModuleTree {
 
     /// Whether the destination module path and item are visible to a source module.
     pub fn can_name(&self, from: &Path, to: &Path, item: &str) -> Option<bool> {
-        use ra_ap_hir::HasVisibility;
         let workspace = self.workspace.lock().unwrap();
         let (from, _) = workspace.vfs.file_id(&vfs_path(&host_path(from)))?;
         let (to, _) = workspace.vfs.file_id(&vfs_path(&host_path(to)))?;
@@ -203,18 +204,56 @@ impl RustModuleTree {
             if viewers.is_empty() || targets.is_empty() {
                 return None;
             }
-            Some(viewers.iter().all(|viewer| {
-                targets.iter().any(|target| {
-                    target
-                        .path_to_root(db)
-                        .into_iter()
-                        .all(|module| module.is_visible_from(db, *viewer))
-                        && target
-                            .scope(db, Some(*viewer))
-                            .iter()
-                            .any(|(name, _)| name.as_str() == item)
+            let definitions: Vec<_> = targets
+                .iter()
+                .flat_map(|target| target.scope(db, None))
+                .filter_map(|(name, definition)| match definition {
+                    ra_ap_hir::ScopeDef::ModuleDef(definition) if name.as_str() == item => {
+                        Some(definition)
+                    }
+                    _ => None,
                 })
-            }))
+                .collect();
+            let parsed = sema.parse_guess_edition(ra_ap_ide::FileId::from_raw(from.index()));
+            let mut readings = Vec::new();
+            for path in parsed.syntax().descendants().filter_map(ast::Path::cast) {
+                let Some(scope) = sema.scope(path.syntax()) else {
+                    continue;
+                };
+                let Some(PathResolution::Def(definition)) = scope.speculative_resolve(&path) else {
+                    continue;
+                };
+                if !definitions.contains(&definition) {
+                    continue;
+                }
+                let viewer = scope.module();
+                let mut visible = definition.is_visible_from(db, viewer);
+                let mut prefix = path.qualifier();
+                while let Some(path) = prefix {
+                    if let Some(PathResolution::Def(definition)) = scope.speculative_resolve(&path)
+                    {
+                        visible &= definition.is_visible_from(db, viewer);
+                    }
+                    prefix = path.qualifier();
+                }
+                readings.push(visible);
+            }
+            Some(if readings.is_empty() {
+                viewers.iter().all(|viewer| {
+                    targets.iter().any(|target| {
+                        target
+                            .path_to_root(db)
+                            .into_iter()
+                            .all(|module| module.is_visible_from(db, *viewer))
+                            && target
+                                .scope(db, Some(*viewer))
+                                .iter()
+                                .any(|(name, _)| name.as_str() == item)
+                    })
+                })
+            } else {
+                readings.into_iter().all(|visible| visible)
+            })
         })
     }
 

@@ -1,0 +1,8 @@
+[package]
+name = "names_qualified_path"
+version = "0.0.0"
+edition = "2021"
+[[bin]]
+name = "qualified_path"
+path = "main.rs"
+[workspace]

@@ -60,3 +60,13 @@ pub fn unknown_recv() -> u32 {
 fn mystery() -> u32 {
     0
 }
+
+pub mod glob_a;
+pub mod glob_b;
+pub mod glob_single;
+pub mod glob_src;
+pub mod glob_two;
+pub mod recv_alpha;
+pub mod recv_beta;
+pub mod recv_field_shadow;
+pub mod recv_sites;

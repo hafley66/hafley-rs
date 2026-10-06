@@ -2470,7 +2470,7 @@ pub struct RyiOutput {
     #[cfg(feature = "kotlin")]
     pub kotlin_module: Option<crate::read::lang::kotlin_modules::KtModuleFacts>,
     #[cfg(feature = "rust")]
-    pub rust_module: Option<crate::read::lang::rust_modules::RustModuleFacts>,
+    pub rust_module: Option<crate::read::lang::rust_module_facts::RustModuleFacts>,
 }
 
 /// One language binding: a Parser + its per-family Project<F>s behind one masked

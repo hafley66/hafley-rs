@@ -67,70 +67,12 @@ fn has_origin(
         .any(|(c, n, f, o)| c == caller && n == callee && f == file && o == origin)
 }
 
-#[test]
-fn spelled_unit_struct_receiver_binds() {
-    // C.1/C.2: `CstProjector.project()` records a Named receiver and binds to
-    // the corpus `impl Project for CstProjector` in proj.rs.
-    let rows = edges(&["proj.rs"]);
-    assert!(
-        has_origin(&rows, "spelled", "project", "proj", "receiver"),
-        "{rows:?}"
-    );
-}
-#[test]
-fn field_typed_receiver_binds() {
-    // C.5 field leg: `b.inner.run()` where `struct Box { inner: Widget }`.
-    let rows = edges(&["proj.rs"]);
-    assert!(
-        has_origin(&rows, "field_leg", "run", "proj", "receiver"),
-        "{rows:?}"
-    );
-}
 
-#[test]
-fn constructor_return_receiver_binds() {
-    // C.5 constructor-return leg: `let w = Widget::new(); w.run()`.
-    let rows = edges(&["proj.rs"]);
-    assert!(
-        has_origin(&rows, "ctor_leg", "run", "proj", "receiver"),
-        "{rows:?}"
-    );
-}
 
-#[test]
-fn trait_bound_generic_receiver_binds() {
-    // C.5 trait-bound generic leg: `fn f<P: Proj>(p: P) { p.run() }` binds to
-    // the trait's own fn def in proj.rs.
-    // `Proj::run` and `Widget::run` share a name, so the assert is the callee
-    // span: it must cover the trait's `run` signature, never the inherent one.
-    // Rust callee_start is the IDENT (`def_span` at rust.rs:1547); kotlin's is
-    // the declaration keyword (`node_span` at kotlin.rs:168).
-    let src = std::fs::read_to_string(format!("{}/{SRC}/proj.rs", env!("CARGO_MANIFEST_DIR")))
-        .expect("fixture readable");
-    let trait_start = src.find("    fn run(&self) -> u32;").expect("trait fn") + "    fn ".len();
-    let trait_span = (
-        trait_start as u64,
-        (trait_start + "run(&self) -> u32".len()) as u64,
-    );
-    let inherent_start = src.find("pub fn run(&self)").expect("inherent fn") + "pub fn ".len();
-    assert_ne!(trait_span.0, inherent_start as u64);
-    let spans: Vec<(u64, u64)> = run(&["proj.rs"])
-        .iter()
-        .filter(|row| row["record"] == "resolved_edge" && row["caller_name"] == "trait_bound_leg")
-        .map(|row| {
-            assert_eq!(row["resolution_origin"], "receiver", "{row}");
-            (
-                row["callee_start"].as_u64().expect("callee_start"),
-                row["callee_end"].as_u64().expect("callee_end"),
-            )
-        })
-        .collect();
-    assert_eq!(
-        spans,
-        vec![trait_span],
-        "inherent fn starts at {inherent_start}"
-    );
-}
+
+
+
+
 
 fn drops(names: &[&str]) -> Vec<(String, String)> {
     let mut rows: Vec<(String, String)> = run(names)
@@ -157,7 +99,24 @@ fn shadowed_call_does_not_bind_free_fn() {
     assert!(
         drops
             .iter()
-            .any(|(detail, reason)| detail == "project" && reason == "inferred"),
+            .any(|(detail, reason)| detail == "project" && reason == "needs_types"),
         "{drops:?}"
     );
+}
+
+#[path = "support/0_rust_names_call_contract.rs"]
+mod names_contract;
+
+#[test]
+fn names_method_fixture_table() {
+    for (case, actual, expected) in [
+        ("spelled", names_contract::call_contract(&run(&["proj.rs"])), r#"drop proj.rs:461 project needs_types
+drop proj.rs:521 run needs_types
+drop proj.rs:590 run needs_types
+drop proj.rs:652 run needs_types
+edge proj.rs:296 new -> proj.rs:218 Widget name_resolve module_plane
+edge proj.rs:569 ctor_leg -> proj.rs:272 new name_resolve module_plane"#),
+    ] {
+        assert_eq!(actual, expected, "{case}");
+    }
 }

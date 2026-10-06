@@ -33,14 +33,30 @@ pub struct DiscoverError {
     pub reason: String,
 }
 
+impl std::fmt::Display for DiscoverError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(manifest) = &self.manifest {
+            write!(formatter, "{}: {}", manifest.display(), self.reason)
+        } else {
+            formatter.write_str(&self.reason)
+        }
+    }
+}
+
 pub fn discover(source: &Path) -> Result<RustWorkspace, DiscoverError> {
-    let manifest = nearest_manifest(source).map_err(|reason| DiscoverError { manifest: None, reason })?;
+    let manifest = nearest_manifest(source).map_err(|reason| DiscoverError {
+        manifest: None,
+        reason,
+    })?;
     let metadata = cargo_metadata::MetadataCommand::new()
         .manifest_path(&manifest)
         .no_deps()
         .other_options(vec!["--offline".to_string()])
         .exec()
-        .map_err(|error| DiscoverError { manifest: Some(manifest.clone()), reason: error.to_string() })?;
+        .map_err(|error| DiscoverError {
+            manifest: Some(manifest.clone()),
+            reason: error.to_string(),
+        })?;
     Ok(RustWorkspace { manifest, metadata })
 }
 

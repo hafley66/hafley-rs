@@ -1,180 +1,8 @@
 use super::*;
 
-// ════════════════════════════════════════════════════════════════════════════
-// Resolve<CallF> for RustSource, two
-// legs per the user rulings (scip-override ALLOWED; the v5-shaped name-match
-// stays primary):
-//   NameResolve — callee name -> unique def. Same-file WINS via the span-join
-//     (def_named in THIS CallF bundle -> its span -> the DefIndex gives the
-//     blob); cross-file a UNIQUE corpus blob (CallF facet preferred);
-//     ambiguous/absent -> NO ROW.
-//   ScipOverride — scip's occurrence resolution for the site disagrees with
-//     the name-match outcome: scip's corpus target WINS the edge, the
-//     name-match is displaced. Needs the corpus scip index
-//     (cx.indexes.scip_index) AND the rev-correct reader (cx.reader); either
-//     absent -> pure name-match. scip-EXTERNAL never displaces and never
-//     mints.
-// RUST-ANALYZER ADAPTATION (the honest per-indexer difference, mirrored by
-// the ratchet and logged in the ledger): a `local ` symbol at a call site is
-// a LOCAL BINDING (`let func = |x| ..; func(..)`) — df-owned, not a call-
-// graph def (rust-analyzer names no closure symbol; scip's answer is the
-// binding, and the 4c containing_def_site join would misroute it to the
-// ENCLOSING fn, minting a false self-edge). Local-symbol sites are treated
-// as scip-external: NO v6 edge. Method resolution stays NAME-ONLY per the 4a
-// ADDENDUM (receiver typing out of scope). `callee_path` rides phase 1 as
-// collected (rust fills it); the resolution key stays the trailing segment —
-// no path-qualified matching is invented (unexercised by the fixtures and
-// unratchetable where scip already arbitrates).
-// The arm learns its own blob by the DefIndex span-join (`own_blob`) and its
-// scip document by content hash (`join_documents`). Per-site edges, no dedup.
-// A site outside every CallF def (module level) emits no row.
-// ════════════════════════════════════════════════════════════════════════════
+// Names binds written paths through RA module maps; Types and SCIP can
+// supply receiver-dependent answers. Corpus joins use engine coordinates.
 
-/// The SAME-FILE def named `callee`, extracted so `rust_modules.rs` can run it
-/// before an import-binding leg: a local def shadows an import.
-fn same_file_call_match(
-    output: &RyiOutput,
-    index: &DefIndex,
-    own: Option<&ContentId>,
-    callee: &str,
-) -> Option<(ContentId, Span)> {
-    let call = output.call.as_ref()?;
-    // A plain `f()` names a free fn, never a method of some impl in the file.
-    let span = call
-        .nodes
-        .iter()
-        .filter(|node| {
-            node.name
-                .is_some_and(|id| output.strings.lookup(id) == callee)
-        })
-        .map(|node| node.span)
-        .find(|span| {
-            !call
-                .aux
-                .method_owners
-                .iter()
-                .any(|owner| owner.span == *span)
-        })?;
-    // Every def spliced out of one macro expansion carries the macro call's
-    // span, so a span several names share cannot name one target.
-    let shared = call.nodes.iter().any(|node| {
-        node.span == span
-            && node
-                .name
-                .is_some_and(|id| output.strings.lookup(id) != callee)
-    });
-    if shared {
-        return None;
-    }
-    // The span join must land on THIS file's DefSite: a byte-identical
-    // (name, span) def can exist in two files.
-    let blob = own?;
-    corpus_defs(index, callee)
-        .iter()
-        .find(|site| site.span == span && &site.blob == blob)
-        .map(|site| (site.blob.clone(), site.span))
-}
-
-impl RustSource {
-    /// The name-match target of one callee (the NameResolve leg). Pub so the
-    /// scip ratchet re-runs it to classify overrides — same discipline as
-    /// `type_edge_candidates`. Mirror of `TsSource::call_name_match`
-    /// (the post-4d dedup sweep owns unifying the per-lang copies).
-    pub fn call_name_match(
-        output: &RyiOutput,
-        index: &DefIndex,
-        callee: &str,
-    ) -> Option<(ContentId, Span)> {
-        let own = own_file_blob(output, index);
-        Self::call_name_match_in(output, index, own.as_ref(), callee)
-    }
-
-    /// `call_name_match` with the file's own blob already in hand: the blob is
-    /// a per-FILE fact, and finding it costs a corpus-index join per call.
-    pub fn call_name_match_in(
-        output: &RyiOutput,
-        index: &DefIndex,
-        own: Option<&ContentId>,
-        callee: &str,
-    ) -> Option<(ContentId, Span)> {
-        Self::call_name_match_seen(output, index, own, callee, |_| true)
-    }
-
-    /// `call_name_match_in` over only the def sites `sees` admits: a name is
-    /// corpus-unique among the crates the caller can reach.
-    pub fn call_name_match_seen(
-        output: &RyiOutput,
-        index: &DefIndex,
-        own: Option<&ContentId>,
-        callee: &str,
-        sees: impl Fn(&ContentId) -> bool,
-    ) -> Option<(ContentId, Span)> {
-        if let Some(found) = same_file_call_match(output, index, own, callee) {
-            return Some(found);
-        }
-        let sites: Vec<&DefSite> = corpus_defs(index, callee)
-            .iter()
-            .filter(|site| sees(&site.blob))
-            .collect();
-        let mut blobs: Vec<ContentId> = Vec::new();
-        for site in &sites {
-            if !blobs.contains(&site.blob) {
-                blobs.push(site.blob.clone());
-            }
-        }
-        let [blob] = blobs.as_slice() else {
-            return None;
-        };
-        let site = sites
-            .iter()
-            .find(|s| s.family == FamilyTag::Call)
-            .unwrap_or(&sites[0]);
-        Some((blob.clone(), site.span))
-    }
-}
-
-/// The type an associated-call path names: the LAST uppercase-leading
-/// segment before the callee (`ast::MethodCallExpr::cast` -> `MethodCallExpr`).
-/// All-lowercase paths are module-qualified, not associated.
-fn assoc_path_type(callee_path: Option<&str>) -> Option<String> {
-    let path = callee_path?;
-    let segments: Vec<&str> = path.split("::").collect();
-    if segments.len() < 2 {
-        return None;
-    }
-    segments[..segments.len() - 1]
-        .iter()
-        .rev()
-        .find(|segment| {
-            segment
-                .chars()
-                .next()
-                .is_some_and(|first| first.is_uppercase())
-        })
-        .map(|segment| (*segment).to_string())
-}
-
-/// The enclosing impl's self type for a `Self::f()` site: the caller def's
-/// span lies inside a method def whose method-owner row names it.
-fn self_impl_type(
-    call: &FamilyBundle<CallF>,
-    strings: &Strings,
-    caller: NodeRef,
-) -> Option<String> {
-    let caller_span = &call.node(caller).span;
-    call.aux
-        .method_owners
-        .iter()
-        .find(|owner| {
-            owner.self_type.is_some()
-                && owner.span.start <= caller_span.start
-                && caller_span.end() <= owner.span.end()
-        })
-        .and_then(|owner| owner.self_type.map(|name| strings.lookup(name).to_string()))
-}
-
-/// A `callee_path`'s leading segments when every one is MODULE-shaped, else
-/// None: receiver typing is out of scope, so `Widget::build` keeps the name leg.
 fn module_qualifier(callee_path: &str) -> Option<Vec<&str>> {
     let mut segments: Vec<&str> = callee_path.split("::").collect();
     segments.pop()?;
@@ -190,113 +18,6 @@ fn module_qualifier(callee_path: &str) -> Option<Vec<&str>> {
                 .is_some_and(|first| first.is_uppercase())
         })
         .then_some(segments)
-}
-
-/// The module path a file spells: minus `.rs`, `src` dropped, `mod`/`lib`/`main`
-/// collapsing to the directory, `-` read as `_` (`crates/ide-db` is `ide_db`).
-pub fn module_segments(path: &str) -> Vec<String> {
-    let stem = path.strip_suffix(".rs").unwrap_or(path);
-    let mut segments: Vec<String> = stem
-        .split('/')
-        .filter(|segment| !segment.is_empty() && *segment != "." && *segment != "src")
-        .map(|segment| segment.replace('-', "_"))
-        .collect();
-    if matches!(
-        segments.last().map(String::as_str),
-        Some("mod" | "lib" | "main")
-    ) {
-        segments.pop();
-    }
-    segments
-}
-
-/// What a resolved qualifier demands of a candidate file: a module-path suffix,
-/// and under `crate::read::` the caller's own crate directory as a path prefix.
-pub struct ModuleTarget {
-    pub suffix: Vec<String>,
-    pub crate_root: Option<String>,
-}
-
-impl ModuleTarget {
-    /// `crate::read::a::b` is anchored at the crate root: root ++ suffix EXACTLY,
-    /// so `crate::read::tests` never also names `src/context/tests.rs`.
-    pub fn covers(&self, candidate: &[String]) -> bool {
-        if let Some(root) = &self.crate_root {
-            let mut anchored = module_segments(root);
-            anchored.extend(self.suffix.iter().cloned());
-            return candidate == anchored.as_slice();
-        }
-        candidate.ends_with(&self.suffix)
-    }
-}
-
-/// `qualifier` read from `from`'s position: `crate` restarts at the crate root,
-/// `self` extends the caller's module, `super` pops one, else absolute suffix.
-pub fn module_target(
-    from: &str,
-    qualifier: &[&str],
-    crate_root: Option<String>,
-) -> Option<ModuleTarget> {
-    let own = module_segments(from);
-    let normalize = |rest: &[&str]| -> Vec<String> {
-        rest.iter()
-            .map(|segment| segment.replace('-', "_"))
-            .collect()
-    };
-    match qualifier[0] {
-        "crate" => Some(ModuleTarget {
-            suffix: normalize(&qualifier[1..]),
-            crate_root,
-        }),
-        "self" | "super" => {
-            let mut base = own;
-            let mut rest = qualifier;
-            while let Some(head) = rest.first() {
-                match *head {
-                    "self" => {}
-                    "super" => {
-                        base.pop()?;
-                    }
-                    _ => break,
-                }
-                rest = &rest[1..];
-            }
-            base.extend(normalize(rest));
-            Some(ModuleTarget {
-                suffix: base,
-                crate_root: None,
-            })
-        }
-        _ => Some(ModuleTarget {
-            suffix: normalize(qualifier),
-            crate_root: None,
-        }),
-    }
-}
-
-/// The Cargo manifest directory assigned to `path` by the corpus manifest walk.
-pub fn crate_root_of(
-    path: &str,
-    crate_roots: &std::collections::HashMap<String, String>,
-) -> Option<String> {
-    let mut normalized = std::path::PathBuf::new();
-    for component in std::path::Path::new(path).components() {
-        match component {
-            std::path::Component::CurDir => {}
-            std::path::Component::ParentDir => {
-                normalized.pop();
-            }
-            other => normalized.push(other),
-        }
-    }
-    let key = normalized.to_string_lossy();
-    crate_roots.get(key.as_ref()).map(|root| {
-        if root == "." || root.is_empty() {
-            String::new()
-        } else {
-            root.clone()
-        }
-    })
 }
 
 /// One corpus `DefSite` examined while learning a file's own blob. The term
@@ -455,7 +176,11 @@ impl Resolve<CallF> for RustSource {
                     Some((
                         bound.target_blob,
                         bound.target_span,
-                        CallEdgeKind::NameResolve,
+                        if segments.len() == 1 && bound.target_path != from && bound.kind != crate::read::lang::rust_module_facts::ResolvedImportKind::Star {
+                            CallEdgeKind::ImportResolve
+                        } else {
+                            CallEdgeKind::NameResolve
+                        },
                         ResolutionOrigin::ModulePlane,
                     ))
                 })
@@ -632,10 +357,14 @@ pub fn call_drops(
                         .collect();
                     matches!(
                         modules.map(|m| m.module_call(from, &segments, callee)),
-                        Some(crate::read::lang::rust_modules::ModuleCallTarget::External)
+                        Some(crate::read::lang::rust_module_facts::ModuleCallTarget::External)
                     )
                     .then_some(())
                 });
+            let names_reason = modules.zip(own_path).and_then(|(modules, from)| {
+                let written = site.callee_path.map(|id| output.strings.lookup(id)).unwrap_or(callee);
+                modules.binding_at(from, &written.split("::").map(str::to_string).collect::<Vec<_>>(), Some(site.span.start), FamilyTag::Call).err()
+            });
             let checker_external = match checker
                 .zip(own_path)
                 .and_then(|(index, path)| index.call_at(path, site.span, callee))
@@ -643,7 +372,7 @@ pub fn call_drops(
                 Some(CheckerAnswer::External(qualified)) => Some(qualified),
                 _ => None,
             };
-            let reason = if checker_external.is_some() {
+            let reason = if checker_external.is_some() || names_reason == Some(UnresolvedReason::External) {
                 UnresolvedReason::External
             } else if methods.contains(&(site.span.start, site.span.end())) {
                 if checker.is_none() {
@@ -651,10 +380,14 @@ pub fn call_drops(
                 } else {
                     UnresolvedReason::Inferred
                 }
+            } else if checker.is_none() && names_reason == Some(UnresolvedReason::NeedsTypes) {
+                UnresolvedReason::NeedsTypes
             } else if external_prefix.is_some()
                 || (qualifier.is_none() && PRELUDE_ITEMS.contains(&callee))
             {
                 UnresolvedReason::External
+            } else if let Some(reason) = names_reason {
+                reason
             } else if corpus_defs(def_index, callee).is_empty() {
                 UnresolvedReason::NoCorpusDef
             } else {

@@ -3,14 +3,6 @@
 use crate::read::shape::{Span, Strings};
 use crate::read::types::{CallF, FamilyBundle, ReceiverBinding, ReceiverOutcome};
 
-/// One impl block's contribution to the corpus (type, method) table.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ImplEntry {
-    pub self_type: String,
-    pub trait_name: Option<String>,
-    pub methods: Vec<(String, Span)>,
-}
-
 pub fn collect_receivers_from_tree(
     tree: &tree_sitter::Tree,
     source: &[u8],

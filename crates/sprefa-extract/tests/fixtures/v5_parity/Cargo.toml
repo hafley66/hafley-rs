@@ -1,0 +1,34 @@
+[package]
+name = "names_v5_parity"
+version = "0.0.0"
+edition = "2021"
+
+[[bin]]
+name = "case_0_call"
+path = "0_call.rs"
+
+[[bin]]
+name = "case_21_capture"
+path = "21_capture.rs"
+
+[[bin]]
+name = "case_2_loop"
+path = "2_loop.rs"
+
+[[bin]]
+name = "case_6_chain"
+path = "6_chain.rs"
+
+[[bin]]
+name = "case_7_branches"
+path = "7_branches.rs"
+
+[[bin]]
+name = "case_8_breaks"
+path = "8_breaks.rs"
+
+[[bin]]
+name = "case_9_chain"
+path = "9_chain.rs"
+
+[workspace]

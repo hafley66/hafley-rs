@@ -41,9 +41,14 @@ impl Fixture {
         fixture.git(&["symbolic-ref", "HEAD", "refs/heads/main"]);
         // Cross-file callers, so `--resolve` has resolved_edge rows to emit and
         // the equality assertion below is not comparing two empty strings.
+        fixture.commit("Cargo.toml", "[package]\nname = \"parallel_dispatch\"\nversion = \"0.0.0\"\nedition = \"2021\"\n[lib]\npath = \"0_fixture.rs\"\n[workspace]\n");
+        fixture.commit("0_fixture.rs", "pub mod a;\npub mod b;\npub mod c;\n");
         fixture.commit("a.rs", "pub fn alpha() -> i32 {\n    1\n}\n");
-        fixture.commit("b.rs", "pub fn beta() -> i32 {\n    alpha() + 1\n}\n");
-        fixture.commit("c.rs", "pub fn gamma() -> i32 {\n    beta() + alpha()\n}\n");
+        fixture.commit(
+            "b.rs",
+            "pub fn beta() -> i32 {\n    alpha() + 1\n}\nuse crate::a::alpha;\n",
+        );
+        fixture.commit("c.rs", "pub fn gamma() -> i32 {\n    beta() + alpha()\n}\nuse crate::a::alpha;\nuse crate::b::beta;\n");
         fixture
     }
 
@@ -104,7 +109,10 @@ fn single_thread_matches_default_cap() {
     let default = resolve_output(&fixture, None);
     let capped_one = resolve_output(&fixture, Some("1"));
     assert_eq!(
-        default.lines().count(),
+        default
+            .lines()
+            .filter(|line| line.contains("\"record\":\"resolved_edge\""))
+            .count(),
         3,
         "the fixture must emit resolved edges, else this compares two empty runs: {default}"
     );

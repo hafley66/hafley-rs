@@ -1692,6 +1692,14 @@ fn call_resolve_scip_ratchet_rust() {
         .expect("fresh OnceLock");
     let scip_index = cx.indexes.scip_index.get().unwrap();
     let def_index = cx.indexes.def_index.get().unwrap();
+    let names = hafley_scm::read::lang::rust_names_index::RustNamesIndex::build_in(
+        &fixture_root,
+        corpus.iter().filter_map(|(rel, _, out)| out.rust_module.clone().map(|facts| (rel.clone(), facts))).collect(),
+        &corpus.iter().map(|(rel, blob, _)| (rel.clone(), blob.clone())).collect::<Vec<_>>(),
+        def_index,
+    );
+    cx.indexes.paths.set(hafley_scm::read::types::build_path_index(corpus.iter().map(|(rel, blob, _)| (blob.clone(), rel.as_str())))).unwrap();
+    cx.indexes.rust_modules.set(names).ok().unwrap();
 
     let mut total_sites = 0usize;
     let mut counts = RatchetCounts::default();
@@ -1753,7 +1761,14 @@ fn call_resolve_scip_ratchet_rust() {
                     containing_def_site(def_index, def_blob.clone(), ident)
                         .map(|(name, s)| (def_blob.clone(), s.span, name))
                 });
-            let name_t = RustSource::call_name_match(out, def_index, callee);
+            let method = call.aux.receivers.iter().any(|receiver| receiver.call_site == site.span);
+            let written = site.callee_path.map(|id| out.strings.lookup(id)).unwrap_or(callee);
+            let name_t = (!method).then(|| {
+                let names = cx.indexes.rust_modules.get()?;
+                let bound = names.binding_at(rel, &written.split("::").map(str::to_string).collect::<Vec<_>>(), Some(site.span.start), FamilyTag::Call).ok()?;
+                if bound.target_name.is_none() || names.is_collapsed(&bound.target_blob, bound.target_span) || names.is_alias(&bound.target_blob, bound.target_span) { return None; }
+                Some((bound.target_blob, bound.target_span))
+            }).flatten();
             // The twin outcome (the same legs the arm runs; the multiset
             // comparison below is the orchestration check). Clones name_t/scip_t
             // into the closure so both stay owned for the scip-side match below.
@@ -2475,8 +2490,7 @@ fn ratchet_bump_requires_a_followup_card_for_each_wrong_target_class() {
 /// the walk is over RATCHET.tsv, so the absent origin reads as zero.
 #[test]
 fn ratchet_pin_charges_an_origin_the_run_dropped() {
-    let mut by_origin: BTreeMap<String, (usize, usize, usize)> = BTreeMap::new();
-    by_origin.insert("scip".to_string(), (3, 0, 0));
+    let by_origin: BTreeMap<String, (usize, usize, usize)> = BTreeMap::new();
     let outcome = std::panic::catch_unwind(|| pin_ratchet_tsv("rust", &by_origin));
     let text = match outcome {
         Ok(()) => panic!("a missing origin passed the floor"),
@@ -2487,7 +2501,7 @@ fn ratchet_pin_charges_an_origin_the_run_dropped() {
             .unwrap_or_default(),
     };
     assert!(
-        text.contains("rust/same_file: true 0 below the pinned floor 2"),
+        text.contains("rust/module_plane: true 0 below the pinned floor 5"),
         "unexpected panic text: {text}"
     );
 }

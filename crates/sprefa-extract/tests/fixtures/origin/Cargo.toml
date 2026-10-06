@@ -1,0 +1,10 @@
+[package]
+name = "names_origin"
+version = "0.0.0"
+edition = "2021"
+
+[[bin]]
+name = "case_rust_same_file"
+path = "rust_same_file.rs"
+
+[workspace]

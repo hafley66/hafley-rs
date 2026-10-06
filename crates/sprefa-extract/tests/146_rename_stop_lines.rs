@@ -50,6 +50,16 @@ fn fixture(label: &str, files: &[(&str, &str)]) -> Fixture {
         std::fs::create_dir_all(path.parent().expect("rel has a parent")).expect("create dir");
         std::fs::write(path, text).expect("write fixture file");
     }
+    if files.iter().any(|(rel, _)| *rel == "src/lib.rs") {
+        let mut manifest = String::from("[package]\nname = \"rename_routes\"\nversion = \"0.0.0\"\nedition = \"2021\"\nautobins = false\nautotests = false\n[workspace]\n");
+        if root.join("src/bin/extract.rs").exists() {
+            manifest.push_str("[[bin]]\nname = \"extract\"\npath = \"src/bin/extract.rs\"\n");
+        }
+        if root.join("tests/probe.rs").exists() {
+            manifest.push_str("[[test]]\nname = \"probe\"\npath = \"tests/probe.rs\"\n");
+        }
+        std::fs::write(root.join("Cargo.toml"), manifest).expect("fixture Cargo manifest");
+    }
     Fixture {
         root: root.canonicalize().expect("canonicalize fixture root"),
         state,

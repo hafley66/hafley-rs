@@ -183,6 +183,12 @@ impl Cleave for RustSource {
                 .into_iter()
                 .find(|candidate| cx.contains(candidate))?,
         };
+        let path_sibling = declarer.is_some()
+            && src.rsplit_once('/').map_or("", |(dir, _)| dir) == dir;
+        if !path_sibling
+            && !places(cx, &parent).ok()?.iter().any(|place| place.directory == cx.abs(dir)) {
+            return None;
+        }
         let text = cx.text(&parent)?;
         let parsed = hafley_scm::lang::rust::parse_rust_file(&text).ok()?;
         let (name, numbered) = module_name(file);

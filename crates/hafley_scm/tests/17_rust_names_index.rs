@@ -1,5 +1,5 @@
 #![cfg(feature = "rust-checker")]
-use hafley_scm::read::lang::{rust_modules::rust_module_facts, rust_names_index::RustNamesIndex};
+use hafley_scm::read::lang::{rust_module_facts::rust_module_facts, rust_names_index::RustNamesIndex};
 use hafley_scm::read::types::{build_def_index, content_id_of};
 use hafley_scm::read::{dispatch, FamilyMask};
 use std::path::Path;

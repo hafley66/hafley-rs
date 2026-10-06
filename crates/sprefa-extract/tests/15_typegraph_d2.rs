@@ -30,6 +30,8 @@ fn run_example(root: &str, entry: &str, out: &Path) -> String {
         .args([
             "run",
             "--quiet",
+            "--features",
+            "rust-checker",
             "--example",
             "typegraph_d2",
             "--",
@@ -190,6 +192,18 @@ fn board_summaries(stdout: &str) -> Vec<String> {
 #[test]
 fn scc_layers_keep_hops_cycles_and_cross_board_edges_deterministic() {
     let fixture_root = scratch("scc-fixture");
+    std::fs::write(
+        fixture_root.join("Cargo.toml"),
+        r#"[package]
+name = "typegraph_scc"
+version = "0.0.0"
+edition = "2021"
+[lib]
+path = "fixture.rs"
+[workspace]
+"#,
+    )
+    .expect("fixture Cargo manifest");
     let fixture_path = fixture_root.join("fixture.rs");
     std::fs::write(
         &fixture_path,
@@ -283,6 +297,8 @@ fn an_unknown_entrypoint_exits_nonzero() {
         .args([
             "run",
             "--quiet",
+            "--features",
+            "rust-checker",
             "--example",
             "typegraph_d2",
             "--",

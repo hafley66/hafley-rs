@@ -80,7 +80,7 @@ fn collect(
                 let uses = rows.uses.len();
                 let stars = rows.stars.len();
                 walk_use_tree(&item.tree, reexport, &mut Vec::new(), rows);
-                let offset = span_range(item.span()).start;
+                let offset = span_range(item.use_token.span).start;
                 for row in &mut rows.uses[uses..] {
                     row.offset = offset;
                 }

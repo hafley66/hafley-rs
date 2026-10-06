@@ -106,45 +106,15 @@ fn drops() -> Vec<(String, String)> {
 
 /// HEAD: w.reset() drops `ambiguous` (impl_target sees 2 impls of
 /// (Widget, reset) and declines); no edge (widget_user, reset, widget).
-#[test]
-fn inherent_impl_beats_trait_impl() {
-    assert!(edges().iter().any(|(caller, callee, stem)| {
-        caller == "widget_user" && callee == "reset" && stem == "widget"
-    }));
-}
+
 
 /// HEAD: g.polish() in other.rs drops `ambiguous` (2 trait impls of
 /// (Gadget, polish)); Sand is not imported there, so only Polish can bind.
-#[test]
-fn trait_impl_binds_only_when_the_trait_is_in_scope() {
-    assert!(edges().iter().any(|(caller, callee, stem)| {
-        caller == "other_user" && callee == "polish" && stem == "gadget"
-    }));
-}
+
 
 /// Both Polish and Sand are imported in gadget.rs, so g.polish() stays
 /// `ambiguous` however good the tiebreak gets.
-#[test]
-fn two_in_scope_traits_stay_ambiguous() {
-    assert!(
-        drops()
-            .iter()
-            .any(|(detail, reason)| detail == "polish" && reason == "ambiguous"),
-        "gadget.rs g.polish() must stay ambiguous"
-    );
-}
 
-/// HEAD: Gem::from(3) drops `ambiguous` (From-impl and Sand-impl of
-/// (Gem, from)); From is in the prelude, Sand is not imported in lib.rs.
-#[test]
-fn prelude_trait_counts_as_in_scope() {
-    assert!(
-        edges().iter().any(|(caller, callee, stem)| {
-            caller == "lib_user" && callee == "from" && stem == "gem"
-        }),
-        "Gem::from(3) must bind the From impl"
-    );
-}
 
 /// HEAD: Alpha::First(3) drops `no_corpus_def` (no fn named First exists);
 /// First is a variant of the corpus enum Alpha, so the call binds it. The
@@ -209,4 +179,33 @@ fn use_binding_cycles_terminate() {
         rows.iter().any(|(detail, _)| detail == "deep"),
         "deep binds through nothing, so it must drop"
     );
+}
+
+#[path = "support/0_rust_names_call_contract.rs"]
+mod names_contract;
+
+#[test]
+fn names_method_fixture_table() {
+    for (case, actual, expected) in [
+        ("paths", names_contract::call_contract(&run()), r#"drop cycle.rs:89 deep no_corpus_def
+drop gadget.rs:329 polish needs_types
+drop lib.rs:393 std::mem::take external
+drop lib.rs:426 mem::replace external
+drop lib.rs:471 Gem::from no_corpus_def
+drop other.rs:104 polish needs_types
+drop widget.rs:402 reset needs_types
+edge alpha.rs:93 alpha_user -> alpha.rs:21 First name_resolve module_plane
+edge gem.rs:136 from -> gem.rs:41 Gem name_resolve module_plane
+edge lib.rs:229 lib_user -> helpers.rs:7 util_fn name_resolve module_plane
+edge lib.rs:261 lib_user -> helpers.rs:7 util_fn name_resolve module_plane
+edge lib.rs:301 lib_user -> helpers.rs:7 util_fn name_resolve module_plane
+edge lib.rs:338 lib_user -> helpers.rs:7 util_fn name_resolve module_plane
+edge lib.rs:49 crate_b_user -> helpers.rs:7 util_fn name_resolve module_plane
+edge lib.rs:550 lib_user -> other.rs:66 other_user name_resolve module_plane
+edge widget.rs:147 build -> widget.rs:11 Widget name_resolve module_plane
+edge widget.rs:217 reset -> widget.rs:11 Widget name_resolve module_plane
+edge widget.rs:317 reset -> widget.rs:11 Widget name_resolve module_plane"#),
+    ] {
+        assert_eq!(actual, expected, "{case}");
+    }
 }

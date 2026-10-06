@@ -91,7 +91,7 @@ fn the_syntax_leg_alone_drops_the_inferred_receiver() {
     let facts = run(false);
     assert_eq!(
         unresolved_reasons(&facts),
-        vec![("render".to_string(), "inferred".to_string())],
+        vec![("render".to_string(), "needs_types".to_string())],
         "without the tier the site stays a drop"
     );
 }

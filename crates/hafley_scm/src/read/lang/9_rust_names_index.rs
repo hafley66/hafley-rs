@@ -6,11 +6,11 @@ use std::sync::Arc;
 use std::time::Duration;
 
 #[cfg(feature = "rust-checker")]
-use super::rust_checker::{module_places, module_tree_for_workspace, scope_names_at, NamesHost};
-use super::rust_modules::{
+use super::rust_checker::{module_places, module_tree_for_workspace_files, NamesHost};
+use super::rust_module_facts::{
     ImportRow, ModuleCallTarget, ResolvedImport, ResolvedImportKind, RustModuleFacts,
 };
-use crate::read::types::{ContentId, DefIndex};
+use crate::read::types::{ContentId, DefIndex, UnresolvedReason};
 use crate::span::Span;
 
 #[derive(Default)]
@@ -100,7 +100,7 @@ impl RustNamesIndex {
             let mut files: Vec<_> = index.facts.keys().cloned().collect();
             files.sort();
             for file in files {
-                let source = absolute(&file);
+                let source = index.source_paths[&file].clone();
                 let manifest = super::rust_workspace::nearest_manifest(&source);
                 let selected = manifest
                     .as_ref()
@@ -109,7 +109,11 @@ impl RustNamesIndex {
                 let result = match manifest {
                     Ok(manifest) => manifests
                         .entry(manifest)
-                        .or_insert_with(|| super::rust_workspace::discover(&source).map(Arc::new))
+                        .or_insert_with(|| {
+                            super::rust_workspace::discover(&source)
+                                .map(Arc::new)
+                                .map_err(|error| error.reason)
+                        })
                         .clone(),
                     Err(error) => Err(error),
                 };
@@ -127,9 +131,23 @@ impl RustNamesIndex {
                     workspaces
                         .entry(root)
                         .or_insert_with(|| {
-                            module_tree_for_workspace(&source, &workspace, Duration::from_secs(120))
-                                .map(Arc::new)
-                                .map_err(|error| error.to_string())
+                            let files = index
+                                .source_paths
+                                .values()
+                                .filter(|path| {
+                                    path.starts_with(
+                                        workspace.metadata.workspace_root.as_std_path(),
+                                    )
+                                })
+                                .cloned()
+                                .collect::<Vec<_>>();
+                            module_tree_for_workspace_files(
+                                &files,
+                                &workspace,
+                                Duration::from_secs(120),
+                            )
+                            .map(Arc::new)
+                            .map_err(|error| error.to_string())
                         })
                         .clone()
                 });
@@ -164,6 +182,19 @@ impl RustNamesIndex {
             ));
         }
         index
+    }
+
+    pub fn context_facts(&self) -> Vec<crate::read::wire::FlatFact> {
+        self.context_failures
+            .iter()
+            .map(
+                |(path, manifest, reason)| crate::read::wire::FlatFact::FileUnresolvedRow {
+                    src_path: path.clone(),
+                    module: manifest.clone(),
+                    reason: reason.clone(),
+                },
+            )
+            .collect()
     }
 
     pub fn open(texts: &[(PathBuf, String)]) -> Result<Self, String> {
@@ -302,14 +333,71 @@ impl RustNamesIndex {
         from: &str,
         qualifier: &[String],
         name: &str,
-    ) -> Result<Option<ResolvedImport>, ()> {
+    ) -> Result<Option<ResolvedImport>, UnresolvedReason> {
         let path: Vec<_> = qualifier
             .iter()
             .cloned()
             .chain(name.split("::").map(str::to_string))
             .collect();
-        self.binding_at(from, &path, None, crate::read::shape::FamilyTag::Call)
-            .map(Some)
+        let mut bound = self.binding_at(from, &path, None, crate::read::shape::FamilyTag::Call)?;
+        if !qualifier.is_empty()
+            && bound.target_name.is_some()
+            && self
+                .binding_at(from, qualifier, None, crate::read::shape::FamilyTag::Call)
+                .is_ok_and(|module| {
+                    module.target_name.is_none() && module.target_path != bound.target_path
+                })
+        {
+            bound.kind = ResolvedImportKind::Indirect;
+            bound.hops = self.import_hops(from, qualifier, name, None);
+        }
+        Ok(Some(bound))
+    }
+
+    fn import_hops(
+        &self,
+        from: &str,
+        qualifier: &[String],
+        name: &str,
+        offset: Option<u32>,
+    ) -> u32 {
+        let mut file = from.to_string();
+        let mut qualifier = qualifier.to_vec();
+        let mut name = name.to_string();
+        let mut offset = offset;
+        let mut seen = BTreeSet::new();
+        let mut hops = 0;
+        while !qualifier.is_empty() {
+            let Ok(module) = self.binding_at(
+                &file,
+                &qualifier,
+                offset,
+                crate::read::shape::FamilyTag::Call,
+            ) else {
+                break;
+            };
+            if module.target_name.is_some()
+                || !seen.insert((module.target_path.clone(), name.clone()))
+            {
+                break;
+            }
+            let Some(facts) = self.facts.get(&module.target_path) else {
+                break;
+            };
+            let mut bindings = facts.uses.iter().filter(|binding| binding.local == name);
+            let Some(binding) = bindings.next() else {
+                break;
+            };
+            if bindings.next().is_some() {
+                break;
+            }
+            hops += 1;
+            file = module.target_path;
+            qualifier = binding.qualifier.clone();
+            name = binding.asked.clone();
+            offset = Some(binding.offset);
+        }
+        hops
     }
 
     pub fn binding_at(
@@ -318,11 +406,11 @@ impl RustNamesIndex {
         path: &[String],
         offset: Option<u32>,
         family: crate::read::shape::FamilyTag,
-    ) -> Result<ResolvedImport, ()> {
+    ) -> Result<ResolvedImport, UnresolvedReason> {
         #[cfg(feature = "rust-checker")]
         {
-            let host = self.hosts.get(from).ok_or(())?;
-            let name = path.last().ok_or(())?;
+            let host = self.hosts.get(from).ok_or(UnresolvedReason::NoCorpusDef)?;
+            let name = path.last().ok_or(UnresolvedReason::NoCorpusDef)?;
             let destinations = super::rust_checker::resolve_path_at(
                 host,
                 &self
@@ -333,7 +421,12 @@ impl RustNamesIndex {
                 path,
                 offset,
             )
-            .map_err(|_| ())?;
+            .map_err(|reason| match reason {
+                super::rust_checker::Abstain::NeedsTypes => UnresolvedReason::NeedsTypes,
+                super::rust_checker::Abstain::OutsideWorkspace => UnresolvedReason::External,
+                super::rust_checker::Abstain::UnresolvedPath => UnresolvedReason::NoCorpusDef,
+                super::rust_checker::Abstain::Ambiguous => UnresolvedReason::Ambiguous,
+            })?;
             let mut joined = Vec::new();
             for def in destinations {
                 let Some(target_path) = self.paths.get(&def.file) else {
@@ -345,11 +438,18 @@ impl RustNamesIndex {
                 let span = if def.module {
                     Span::anchor(0)
                 } else {
-                    let blobs = HashMap::from([(def.file.to_str().ok_or(())?, blob)]);
+                    let blobs = HashMap::from([(
+                        def.file.to_str().ok_or(UnresolvedReason::NoCorpusDef)?,
+                        blob,
+                    )]);
                     match super::answer_of(
-                        (def.file.to_str().ok_or(())?, &def.name, def.start),
+                        (
+                            def.file.to_str().ok_or(UnresolvedReason::NoCorpusDef)?,
+                            &def.name,
+                            def.start,
+                        ),
                         if family == crate::read::shape::FamilyTag::Type {
-                            super::TYPE_FACETS
+                            &[crate::read::shape::FamilyTag::Type]
                         } else {
                             super::CALL_FACETS
                         },
@@ -373,6 +473,13 @@ impl RustNamesIndex {
                     target_name: (!def.module).then_some(def.name),
                     kind: if def.module {
                         ResolvedImportKind::Namespace
+                    } else if path.len() == 1
+                        && target_path != from
+                        && !self.facts.get(from).is_some_and(|facts| {
+                            facts.uses.iter().any(|binding| binding.local == path[0])
+                        })
+                    {
+                        ResolvedImportKind::Star
                     } else {
                         ResolvedImportKind::Local
                     },
@@ -385,13 +492,14 @@ impl RustNamesIndex {
             joined.dedup();
             match joined.as_slice() {
                 [one] => Ok(one.clone()),
-                _ => Err(()),
+                [] => Err(UnresolvedReason::NoCorpusDef),
+                _ => Err(UnresolvedReason::Ambiguous),
             }
         }
         #[cfg(not(feature = "rust-checker"))]
         {
             let _ = (from, path, offset, family);
-            Err(())
+            Err(UnresolvedReason::NoCorpusDef)
         }
     }
 
@@ -406,6 +514,20 @@ impl RustNamesIndex {
         match self.qualified_binding(from, qualifier, callee) {
             Ok(Some(bound)) if bound.target_name.is_some() => {
                 ModuleCallTarget::Target(bound.target_blob, bound.target_span)
+            }
+            _ if self
+                .external_type_crate(
+                    from,
+                    &qualifier
+                        .iter()
+                        .cloned()
+                        .chain([callee.to_string()])
+                        .collect::<Vec<_>>()
+                        .join("::"),
+                )
+                .is_some() =>
+            {
+                ModuleCallTarget::External
             }
             _ => ModuleCallTarget::Miss,
         }
@@ -448,7 +570,7 @@ impl RustNamesIndex {
         let Some(facts) = self.facts.get(file) else {
             return Vec::new();
         };
-        let mut names: Vec<(String, String, ResolvedImportKind, Option<u32>)> = facts
+        let names: Vec<(String, String, ResolvedImportKind, Option<u32>)> = facts
             .uses
             .iter()
             .map(|binding| {
@@ -460,32 +582,9 @@ impl RustNamesIndex {
                 )
             })
             .collect();
-        names.extend(
-            facts
-                .mod_decls
-                .iter()
-                .map(|(name, _)| (name.clone(), "*".into(), ResolvedImportKind::Module, None)),
-        );
-        #[cfg(feature = "rust-checker")]
-        if let Some(host) = self.hosts.get(file) {
-            for star in &facts.stars {
-                names.extend(
-                    scope_names_at(host, &self.source_paths[file], Some(star.offset))
-                        .unwrap_or_default()
-                        .into_iter()
-                        .map(|name| {
-                            (
-                                name.clone(),
-                                name,
-                                ResolvedImportKind::Star,
-                                Some(star.offset),
-                            )
-                        }),
-                );
-            }
-        }
         let mut rows = Vec::new();
-        for (local, asked, kind, offset) in names {
+        for (local, asked, mut kind, offset) in names {
+            let mut hops = 0;
             if let Ok(bound) = self.binding_at(
                 file,
                 &[local.clone()],
@@ -495,14 +594,76 @@ impl RustNamesIndex {
                 if kind == ResolvedImportKind::Star && bound.target_path == file {
                     continue;
                 }
+                if kind == ResolvedImportKind::Local {
+                    if let Some(binding) = facts
+                        .uses
+                        .iter()
+                        .find(|binding| binding.local == local && Some(binding.offset) == offset)
+                    {
+                        if !binding.qualifier.is_empty()
+                            && self
+                                .binding_at(
+                                    file,
+                                    &binding.qualifier,
+                                    offset,
+                                    crate::read::shape::FamilyTag::Call,
+                                )
+                                .is_ok_and(|module| {
+                                    module.target_name.is_none()
+                                        && module.target_path != bound.target_path
+                                })
+                        {
+                            kind = ResolvedImportKind::Indirect;
+                            hops =
+                                self.import_hops(file, &binding.qualifier, &binding.asked, offset);
+                        }
+                    }
+                }
                 rows.push(ImportRow {
                     local,
                     name: asked,
                     target_path: bound.target_path,
                     target_name: bound.target_name,
                     kind,
-                    hops: 0,
+                    hops,
                 });
+            }
+        }
+        #[cfg(feature = "rust-checker")]
+        if let Some(host) = self.hosts.get(file) {
+            for place in super::rust_checker::all_module_places(host) {
+                if place.file == self.source_paths[file]
+                    || !place
+                        .decl
+                        .as_ref()
+                        .is_some_and(|(parent, _, _)| parent == &self.source_paths[file])
+                {
+                    continue;
+                }
+                if let Some(target_path) = self.paths.get(&place.file) {
+                    rows.push(ImportRow {
+                        local: String::new(),
+                        name: place.path.last().cloned().unwrap_or_default(),
+                        target_path: target_path.clone(),
+                        target_name: None,
+                        kind: ResolvedImportKind::Module,
+                        hops: 1,
+                    });
+                }
+            }
+            for (name, place) in
+                super::rust_checker::dependency_places(host, &self.source_paths[file])
+            {
+                if let Some(target_path) = self.paths.get(&place.file) {
+                    rows.push(ImportRow {
+                        local: String::new(),
+                        name,
+                        target_path: target_path.clone(),
+                        target_name: None,
+                        kind: ResolvedImportKind::Module,
+                        hops: 0,
+                    });
+                }
             }
         }
         rows.sort_by(|a, b| {
@@ -523,21 +684,22 @@ impl RustNamesIndex {
         {
             let host = self.hosts.get(from)?;
             let explicit = name.split("::").map(str::to_string).collect::<Vec<_>>();
-            let path = if explicit.len() > 1 {
-                explicit
-            } else {
-                let binding = self
-                    .facts
-                    .get(from)?
-                    .uses
-                    .iter()
-                    .find(|binding| binding.local == name)?;
-                binding
+            let head = explicit.first()?;
+            let binding = self
+                .facts
+                .get(from)?
+                .uses
+                .iter()
+                .find(|binding| &binding.local == head);
+            let path = match binding {
+                Some(binding) => binding
                     .qualifier
                     .iter()
                     .cloned()
                     .chain([binding.asked.clone()])
-                    .collect()
+                    .chain(explicit[1..].iter().cloned())
+                    .collect(),
+                None => explicit,
             };
             matches!(
                 super::rust_checker::resolve_path(

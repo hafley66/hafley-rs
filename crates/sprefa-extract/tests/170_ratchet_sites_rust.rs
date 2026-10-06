@@ -230,6 +230,13 @@ fn fast_type_edges_match_slow_on_soopy_at_the_pinned_rate() {
         })
         .expect("type grade");
     eprintln!("type edges: both {both}, fast only {fast_only}, slow only {slow_only}");
+    if slow_only > 2 {
+        let missing = conn.prepare("select owner_path, owner_start, owner_name, kind, target_path, target_name from slow.resolved_type_edge where (owner_path, owner_start, kind, target_name, target_path) not in (select owner_path, owner_start, kind, target_name, target_path from resolved_type_edge) order by 1, 2, 3, 4, 5, 6").unwrap()
+            .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?, row.get::<_, String>(2)?, row.get::<_, String>(3)?, row.get::<_, String>(4)?, row.get::<_, String>(5)?))).unwrap()
+            .collect::<Result<Vec<_>, _>>().unwrap();
+        eprintln!("slow-only type destinations: {missing:#?}");
+    }
+
 
     let pin_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/RATCHET_TYPES.tsv");
     let pinned = std::fs::read_to_string(&pin_path).unwrap_or_default();

@@ -25,3 +25,5 @@ pub fn build_type_probe(_b: build_dep::BuildType) {}
 pub fn wrong_branch(_w: crate::a::b::Widget) {}
 pub fn missing_branch(_w: crate::missing::Widget) {}
 pub fn right_branch(_w: crate::c::b::Widget) {}
+
+use normal_dep::normal_call;

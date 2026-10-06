@@ -155,6 +155,6 @@ fn fast_tier_stops_on_a_method_call_whose_receiver_type_it_cannot_see() {
         .unwrap();
     assert_eq!(output.status.code(), Some(6));
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("src/queue.rs:6: method call on a receiver of unknown type"), "{stderr}");
+    assert_eq!(stderr, "src/queue.rs:6: method call needs_types reaches the symbol at runtime\nsrc/queue.rs:15: method call needs_types reaches the symbol at runtime\n");
     assert_eq!(read(&fixture, "src/queue.rs"), text);
 }

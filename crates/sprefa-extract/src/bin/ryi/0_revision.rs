@@ -61,9 +61,24 @@ impl RevisionReader {
             files.insert(path.to_string(), oid.0.to_string());
         }
 
+        // Workspace names are resolved from the revision's Cargo ownership and
+        // source files, including files outside the requested corpus selection.
+        let context = self.tree.snapshot(&soopy::SourceQuery {
+            revision: soopy::Revision::Commit(commit.clone()),
+            patterns: ["**/Cargo.toml", "**/Cargo.lock", "**/*.rs"]
+                .into_iter()
+                .map(|pattern| soopy::Pattern(pattern.to_string()))
+                .collect(),
+        })?;
+        let mut materialized = files.clone();
+        for entry in &context.files {
+            if let soopy::ContentId::GitBlob(oid) = &entry.content {
+                materialized.insert(entry.source.path.0.to_string(), oid.0.to_string());
+            }
+        }
         let scratch = tempfile::Builder::new().prefix("ryi-revision-").tempdir()?;
         let mut paths = Vec::with_capacity(files.len());
-        for (path, oid) in &files {
+        for (path, oid) in &materialized {
             let bytes = match self.blobs.get(oid) {
                 Some(bytes) => bytes.clone(),
                 None => {
@@ -77,7 +92,9 @@ impl RevisionReader {
                 std::fs::create_dir_all(parent)?;
             }
             std::fs::write(&destination, bytes.as_ref())?;
-            paths.push(destination);
+            if files.contains_key(path) {
+                paths.push(destination);
+            }
         }
 
         let answer = run(&paths, scratch.path());

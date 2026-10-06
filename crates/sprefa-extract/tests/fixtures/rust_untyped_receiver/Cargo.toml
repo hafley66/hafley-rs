@@ -1,0 +1,10 @@
+[package]
+name = "names_untyped_receiver"
+version = "0.0.0"
+edition = "2021"
+[lib]
+path = "lib.rs"
+[[bin]]
+name = "use_site"
+path = "use.rs"
+[workspace]

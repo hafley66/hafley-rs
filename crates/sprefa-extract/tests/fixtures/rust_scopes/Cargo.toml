@@ -1,0 +1,34 @@
+[package]
+name = "names_scopes"
+version = "0.0.0"
+edition = "2021"
+
+[[bin]]
+name = "cfg_call_sites"
+path = "cfg_call_sites.rs"
+
+[[bin]]
+name = "cfg_scopes"
+path = "cfg_scopes.rs"
+
+[[bin]]
+name = "corpus_scope_a"
+path = "corpus_scope_a.rs"
+
+[[bin]]
+name = "corpus_scope_b"
+path = "corpus_scope_b.rs"
+
+[[bin]]
+name = "corpus_scope_c"
+path = "corpus_scope_c.rs"
+
+[[bin]]
+name = "impl_owners"
+path = "impl_owners.rs"
+
+[[bin]]
+name = "nested_mods"
+path = "nested_mods.rs"
+
+[workspace]

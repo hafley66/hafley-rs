@@ -142,7 +142,8 @@ mod rust_checker_session;
 #[path = "0_rust_workspace.rs"]
 pub mod rust_workspace;
 #[cfg(feature = "rust")]
-pub mod rust_modules;
+#[path = "0_rust_module_facts.rs"]
+pub mod rust_module_facts;
 #[cfg(feature = "rust")]
 pub mod rust_receivers;
 #[cfg(feature = "rust")]

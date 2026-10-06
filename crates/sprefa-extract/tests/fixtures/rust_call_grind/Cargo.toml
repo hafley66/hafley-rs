@@ -1,0 +1,7 @@
+[package]
+name = "names_call_grind"
+version = "0.0.0"
+edition = "2021"
+[lib]
+path = "0_fixture.rs"
+[workspace]

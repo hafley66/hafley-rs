@@ -39,11 +39,15 @@ fn collect_items(
                     let uses = rows.uses.len();
                     let stars = rows.stars.len();
                     collect_use(tree, &mut Vec::new(), reexport, source, rows);
+                    let offset = (0..item.child_count())
+                        .filter_map(|index| item.child(index))
+                        .find(|child| child.kind() == "use")
+                        .map_or(item.start_byte(), |keyword| keyword.start_byte()) as u32;
                     for row in &mut rows.uses[uses..] {
-                        row.offset = item.start_byte() as u32;
+                        row.offset = offset;
                     }
                     for row in &mut rows.stars[stars..] {
-                        row.offset = item.start_byte() as u32;
+                        row.offset = offset;
                     }
                 }
             }

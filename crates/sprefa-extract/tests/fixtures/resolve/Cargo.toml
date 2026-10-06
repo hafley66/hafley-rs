@@ -1,0 +1,7 @@
+[package]
+name = "names_closure"
+version = "0.0.0"
+edition = "2021"
+[lib]
+path = "7_closure_caller.rs"
+[workspace]

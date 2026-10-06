@@ -5,5 +5,3 @@ edition = "2021"
 
 [dependencies]
 ladder-collector = { path = "../0_collector" }
-
-[workspace]

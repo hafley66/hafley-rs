@@ -7,3 +7,5 @@ impl Speak for Dog {
 pub fn make() -> Dog {
     Dog
 }
+
+use crate::traits::Speak;

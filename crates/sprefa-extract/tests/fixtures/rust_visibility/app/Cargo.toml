@@ -12,5 +12,3 @@ dev_dep = { path = "../dev_dep" }
 
 [build-dependencies]
 build_dep = { path = "../build_dep" }
-
-[workspace]

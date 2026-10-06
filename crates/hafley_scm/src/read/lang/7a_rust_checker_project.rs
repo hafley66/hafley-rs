@@ -33,7 +33,7 @@ pub(super) fn names_project(
 
     let mut crates: Vec<serde_json::Value> = Vec::new();
     let mut library: HashMap<&PackageId, (usize, String)> = HashMap::new();
-    let mut targets: Vec<(&PackageId, bool, bool, usize)> = Vec::new();
+    let mut targets: Vec<(&PackageId, bool, bool, bool, usize)> = Vec::new();
     for package in metadata.workspace_packages() {
         // Edges come from the default-feature resolve; every feature is on as a cfg.
         let cfg: Vec<String> = package
@@ -53,6 +53,12 @@ pub(super) fn names_project(
                 .iter()
                 .any(|kind| matches!(kind, TargetKind::CustomBuild));
             let is_lib = target.kind.iter().any(is_library);
+            let is_dev = target.kind.iter().any(|kind| {
+                matches!(
+                    kind,
+                    TargetKind::Test | TargetKind::Example | TargetKind::Bench
+                )
+            });
             let index = crates.len();
             let source_dir = target
                 .src_path
@@ -72,11 +78,11 @@ pub(super) fn names_project(
             if is_lib {
                 library.insert(&package.id, (index, target.name.replace('-', "_")));
             }
-            targets.push((&package.id, is_lib, is_build, index));
+            targets.push((&package.id, is_lib, is_build, is_dev, index));
         }
     }
 
-    for (package, is_lib, is_build, index) in &targets {
+    for (package, is_lib, is_build, is_dev, index) in &targets {
         let mut deps: Vec<serde_json::Value> = Vec::new();
         if !is_lib && !is_build {
             if let Some((lib, name)) = library.get(package) {
@@ -88,7 +94,8 @@ pub(super) fn names_project(
         };
         for (dependency, name, kinds) in edges {
             let wanted = kinds.iter().any(|kind| match kind {
-                DependencyKind::Normal | DependencyKind::Development => !is_build,
+                DependencyKind::Normal => !is_build,
+                DependencyKind::Development => *is_dev,
                 DependencyKind::Build => *is_build,
                 _ => false,
             });

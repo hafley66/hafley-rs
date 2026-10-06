@@ -10,7 +10,7 @@ fn tree(
     cx: &MoveCx,
     source: &std::path::Path,
 ) -> Result<std::sync::Arc<hafley_scm::read::lang::rust_checker::RustModuleTree>, String> {
-    let workspace = hafley_scm::read::lang::rust_workspace::discover(source)?;
+    let workspace = hafley_scm::read::lang::rust_workspace::discover(source).map_err(|error| format!("no cargo workspace: {error}"))?;
     let key = workspace.metadata.workspace_root.as_std_path();
     let manifests = workspace.manifest_key()?;
     let mut trees = cx.rust_modules.lock().map_err(|error| error.to_string())?;

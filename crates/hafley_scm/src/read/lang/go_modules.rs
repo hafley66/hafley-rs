@@ -5,7 +5,7 @@
 //! REAL name rather than a corpus-wide name guess. Go has no `use`/`mod`
 //! chain and no re-export: one flat namespace per package DIRECTORY, and
 //! exportedness is capitalization, never a keyword — the plane is a
-//! directory index, not a resolve chain (mirrors `rust_modules.rs`'s
+//! directory index, not a resolve chain (mirrors Rust Names'
 //! discipline, Go's own simpler spec).
 //!
 //! A dedicated second parse, gated behind `--resolve`: phase 1's

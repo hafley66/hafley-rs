@@ -342,8 +342,8 @@ pub fn target_calls(
 
 #[cfg(feature = "rust-checker")]
 pub use super::rust_checker_ra::{
-    all_module_places, module_places, module_tree, module_tree_for_workspace, resolve_method,
-    resolve_path, resolve_path_at, resolve_prefix, scope_names, scope_names_at, Abstain, DefPlace, ModulePlace,
+    all_module_places, module_places, module_tree, module_tree_for_workspace, module_tree_for_workspace_files, resolve_method,
+    dependency_places, resolve_path, resolve_path_at, resolve_prefix, scope_names, scope_names_at, Abstain, DefPlace, ModulePlace,
     NamesHost, RustModuleTree,
 };
 #[cfg(feature = "rust-checker")]

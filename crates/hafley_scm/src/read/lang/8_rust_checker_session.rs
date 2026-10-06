@@ -67,7 +67,7 @@ pub(super) fn checker_workspace(
     files: &[(String, PathBuf)],
     budget: Duration,
 ) -> Result<(Arc<Mutex<CheckerWorkspace>>, Duration), CheckerError> {
-    let discovered = super::rust_workspace::discover(root).map_err(CheckerError::NoWorkspace)?;
+    let discovered = super::rust_workspace::discover(root).map_err(|error| CheckerError::NoWorkspace(error.to_string()))?;
     checker_workspace_loaded(&discovered, tier, files, budget)
 }
 

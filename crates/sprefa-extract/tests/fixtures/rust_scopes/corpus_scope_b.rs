@@ -6,4 +6,5 @@ pub mod inner {
     pub fn go() -> u32 {
         helper()
     }
+    use super::helper;
 }

@@ -1,0 +1,15 @@
+[package]
+name = "trait_blob_fixture"
+version = "0.0.0"
+edition = "2021"
+autobins = false
+
+[[bin]]
+name = "a"
+path = "a.rs"
+
+[[bin]]
+name = "b"
+path = "b.rs"
+
+[workspace]

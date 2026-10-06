@@ -319,7 +319,7 @@ fn a_type_qualifier_keeps_the_name_leg_and_an_unknown_crate_mints_nothing() {
     );
     assert!(
         unresolved_rows(QUALIFIED)
-            .contains(&("external".to_string(), "other_crate::helper".to_string())),
+            .contains(&("no_corpus_def".to_string(), "other_crate::helper".to_string())),
         "other_crate names no corpus module: {:?}",
         unresolved_rows(QUALIFIED)
     );

@@ -6,6 +6,7 @@ mod other;
 mod traits_mod;
 mod widget;
 
+use std::mem;
 use crate::gem::Gem;
 use crate::helpers as aide;
 use helpers::*;
@@ -21,3 +22,6 @@ pub fn lib_user(g: &gadget::Gadget) -> u32 {
     let made = Gem::from(3);
     via_glob + via_module + via_alias + via_crate + made.grade + other::other_user(g)
 }
+
+mod cycle;
+mod deep { pub mod helpers; }
