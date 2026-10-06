@@ -1,0 +1,68 @@
+{
+  "scenario": "py-move-imported-fn",
+  "claim_tests": [
+    "relocation_python",
+    "origin_conservation_python"
+  ],
+  "steps": [
+    {
+      "action": "directory",
+      "path": "$work/base"
+    },
+    {
+      "action": "copy",
+      "source": "tests/fixtures/py_findings/module_caller/main.py",
+      "path": "$work/base/main.py"
+    },
+    {
+      "action": "copy",
+      "source": "tests/fixtures/py_findings/module_caller/helper.py",
+      "path": "$work/base/helper.py"
+    },
+    {
+      "action": "api",
+      "name": "base",
+      "api": "resolve_rows",
+      "root": "$work/base",
+      "files": [
+        "main.py",
+        "helper.py"
+      ]
+    },
+    {
+      "action": "directory",
+      "path": "$work/after"
+    },
+    {
+      "action": "copy",
+      "source": "tests/fixtures/py_findings/module_caller/main.py",
+      "path": "$work/after/main.py"
+    },
+    {
+      "action": "copy",
+      "source": "tests/fixtures/py_findings/module_caller/helper.py",
+      "path": "$work/after/helper.py"
+    },
+    {
+      "action": "copy",
+      "source": "$work/after/helper.py",
+      "path": "$work/after/moved.py"
+    },
+    {
+      "action": "write",
+      "path": "$work/after/helper.py",
+      "text": "# imported_fn moved to moved.py\n"
+    },
+    {
+      "action": "api",
+      "name": "after",
+      "api": "resolve_rows",
+      "root": "$work/after",
+      "files": [
+        "main.py",
+        "helper.py",
+        "moved.py"
+      ]
+    }
+  ]
+}

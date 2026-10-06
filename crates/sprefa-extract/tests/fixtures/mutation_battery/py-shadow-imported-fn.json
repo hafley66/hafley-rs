@@ -1,0 +1,64 @@
+{
+  "scenario": "py-shadow-imported-fn",
+  "claim_tests": [
+    "shadow_python",
+    "origin_conservation_python"
+  ],
+  "steps": [
+    {
+      "action": "directory",
+      "path": "$work/base"
+    },
+    {
+      "action": "copy",
+      "source": "tests/fixtures/py_findings/module_caller/main.py",
+      "path": "$work/base/main.py"
+    },
+    {
+      "action": "copy",
+      "source": "tests/fixtures/py_findings/module_caller/helper.py",
+      "path": "$work/base/helper.py"
+    },
+    {
+      "action": "api",
+      "name": "base",
+      "api": "resolve_rows",
+      "root": "$work/base",
+      "files": [
+        "main.py",
+        "helper.py"
+      ]
+    },
+    {
+      "action": "directory",
+      "path": "$work/after"
+    },
+    {
+      "action": "copy",
+      "source": "tests/fixtures/py_findings/module_caller/main.py",
+      "path": "$work/after/main.py"
+    },
+    {
+      "action": "copy",
+      "source": "tests/fixtures/py_findings/module_caller/helper.py",
+      "path": "$work/after/helper.py"
+    },
+    {
+      "action": "replace",
+      "path": "$work/after/main.py",
+      "from": "result = local_fn()\nother = imported_fn()\n",
+      "to": "def consume(imported_fn):\n    return imported_fn()\n\n\nresult = local_fn()\nother = consume(print)\n",
+      "count": 1
+    },
+    {
+      "action": "api",
+      "name": "after",
+      "api": "resolve_rows",
+      "root": "$work/after",
+      "files": [
+        "main.py",
+        "helper.py"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,63 @@
+{
+  "scenario": "py-dup-local-fn",
+  "claim_tests": [
+    "duplicate_def_python_same_file",
+    "origin_conservation_python"
+  ],
+  "steps": [
+    {
+      "action": "directory",
+      "path": "$work/base"
+    },
+    {
+      "action": "copy",
+      "source": "tests/fixtures/py_findings/module_caller/main.py",
+      "path": "$work/base/main.py"
+    },
+    {
+      "action": "copy",
+      "source": "tests/fixtures/py_findings/module_caller/helper.py",
+      "path": "$work/base/helper.py"
+    },
+    {
+      "action": "api",
+      "name": "base",
+      "api": "resolve_rows",
+      "root": "$work/base",
+      "files": [
+        "main.py",
+        "helper.py"
+      ]
+    },
+    {
+      "action": "directory",
+      "path": "$work/after"
+    },
+    {
+      "action": "copy",
+      "source": "tests/fixtures/py_findings/module_caller/main.py",
+      "path": "$work/after/main.py"
+    },
+    {
+      "action": "copy",
+      "source": "tests/fixtures/py_findings/module_caller/helper.py",
+      "path": "$work/after/helper.py"
+    },
+    {
+      "action": "write",
+      "path": "$work/after/dup_local.py",
+      "text": "def local_fn():\n    return 99\n"
+    },
+    {
+      "action": "api",
+      "name": "after",
+      "api": "resolve_rows",
+      "root": "$work/after",
+      "files": [
+        "main.py",
+        "helper.py",
+        "dup_local.py"
+      ]
+    }
+  ]
+}

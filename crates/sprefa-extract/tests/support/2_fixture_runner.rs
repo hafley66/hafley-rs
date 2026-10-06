@@ -153,11 +153,15 @@ pub fn commands(case: &Value, api: impl Fn(&Value) -> Value) -> Value {
             }
             "replace" => {
                 let text = std::fs::read_to_string(path()).unwrap();
-                std::fs::write(
-                    path(),
-                    text.replace(step["from"].as_str().unwrap(), step["to"].as_str().unwrap()),
-                )
-                .unwrap();
+                let from = step["from"].as_str().unwrap();
+                let to = step["to"].as_str().unwrap();
+                let replacement = if let Some(count) = step["count"].as_u64() {
+                    assert!(text.contains(from), "{step}");
+                    text.replacen(from, to, count as usize)
+                } else {
+                    text.replace(from, to)
+                };
+                std::fs::write(path(), replacement).unwrap();
             }
             "sql_query" => {
                 let db =
@@ -175,7 +179,7 @@ pub fn commands(case: &Value, api: impl Fn(&Value) -> Value) -> Value {
             "copy" => {
                 let target = path();
                 std::fs::create_dir_all(target.parent().unwrap()).unwrap();
-                std::fs::copy(step["source"].as_str().unwrap(), target).unwrap();
+                std::fs::copy(expand(step["source"].as_str().unwrap()), target).unwrap();
             }
             "write" => {
                 let target = path();
@@ -642,4 +646,89 @@ fn claim(
     };
     assert_eq!(actual, expected, "{step}");
     actual
+}
+
+/// Resolve fixture paths through the library, retaining the span-independent
+/// edge tuple consumed by mutation and relocation contracts.
+pub fn resolved_rows(step: &Value) -> Value {
+    use sprefa_extract::{resolve_project, ResolveArms, ResolveRequest};
+    let root = Path::new(step["root"].as_str().unwrap());
+    let paths: Vec<_> = step["files"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|file| root.join(file.as_str().unwrap()))
+        .collect();
+    let facts = resolve_project(&ResolveRequest {
+        paths: &paths,
+        arms: ResolveArms {
+            call: true,
+            types: true,
+            flow: false,
+        },
+        scip: Default::default(),
+        project_root: None,
+        scip_records: Default::default(),
+        occurrence_text: false,
+        rust_checker: None,
+        ts_checker: None,
+        go_checker: None,
+        witness: false,
+    })
+    .unwrap();
+    let mut calls = Vec::new();
+    let mut types = Vec::new();
+    let call_fields = [
+        "caller_path",
+        "caller_name",
+        "callee_path",
+        "callee_name",
+        "kind",
+        "origin",
+    ];
+    let type_fields = [
+        "owner_path",
+        "owner_name",
+        "target_path",
+        "target_name",
+        "kind",
+        "origin",
+    ];
+    for fact in facts {
+        let value = serde_json::to_value(fact).unwrap();
+        let (fields, output) = match value["record"].as_str() {
+            Some("resolved_edge") => (&call_fields, &mut calls),
+            Some("resolved_type_edge") => (&type_fields, &mut types),
+            _ => continue,
+        };
+        let mut row = serde_json::Map::new();
+        for field in fields {
+            let source = if *field == "origin" {
+                "resolution_origin"
+            } else {
+                field
+            };
+            let mut cell = value[source].clone();
+            if field.ends_with("_path") {
+                let path = cell.as_str().unwrap();
+                cell = Path::new(path)
+                    .strip_prefix(root)
+                    .map(|path| path.to_string_lossy().into_owned())
+                    .unwrap_or_else(|_| path.to_string())
+                    .into();
+            }
+            row.insert(field.to_string(), cell);
+        }
+        output.push(Value::Object(row));
+    }
+    for (rows, fields) in [(&mut calls, call_fields), (&mut types, type_fields)] {
+        rows.sort_by_key(|row| {
+            fields
+                .iter()
+                .map(|field| row[*field].as_str().map(str::to_string))
+                .collect::<Vec<_>>()
+        });
+        rows.dedup();
+    }
+    serde_json::json!({"calls":calls,"types":types})
 }

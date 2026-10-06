@@ -1,0 +1,94 @@
+{
+  "scenario": "go-move-trim",
+  "claim_tests": [
+    "relocation_go_call",
+    "origin_conservation_go"
+  ],
+  "steps": [
+    {
+      "action": "directory",
+      "path": "$work/base"
+    },
+    {
+      "action": "copy",
+      "source": "tests/fixtures/go/docs.go",
+      "path": "$work/base/docs.go"
+    },
+    {
+      "action": "copy",
+      "source": "tests/fixtures/go/sample.go",
+      "path": "$work/base/sample.go"
+    },
+    {
+      "action": "copy",
+      "source": "tests/fixtures/go/edges.go",
+      "path": "$work/base/edges.go"
+    },
+    {
+      "action": "copy",
+      "source": "tests/fixtures/go/corpus_1.go",
+      "path": "$work/base/corpus_1.go"
+    },
+    {
+      "action": "api",
+      "name": "base",
+      "api": "resolve_rows",
+      "root": "$work/base",
+      "files": [
+        "docs.go",
+        "sample.go",
+        "edges.go",
+        "corpus_1.go"
+      ]
+    },
+    {
+      "action": "directory",
+      "path": "$work/after"
+    },
+    {
+      "action": "copy",
+      "source": "tests/fixtures/go/docs.go",
+      "path": "$work/after/docs.go"
+    },
+    {
+      "action": "copy",
+      "source": "tests/fixtures/go/sample.go",
+      "path": "$work/after/sample.go"
+    },
+    {
+      "action": "copy",
+      "source": "tests/fixtures/go/edges.go",
+      "path": "$work/after/edges.go"
+    },
+    {
+      "action": "copy",
+      "source": "tests/fixtures/go/corpus_1.go",
+      "path": "$work/after/corpus_1.go"
+    },
+    {
+      "action": "replace",
+      "path": "$work/after/docs.go",
+      "from": "// Trim returns its input unchanged.\nfunc Trim(value string) string {\n\treturn value\n}\n\n",
+      "to": "",
+      "count": 1
+    },
+    {
+      "action": "write",
+      "path": "$work/after/moved.go",
+      "text": "package docs\n\n// Trim returns its input unchanged.\nfunc Trim(value string) string {\n\treturn value\n}\n\n"
+    },
+    {
+      "action": "api",
+      "name": "after",
+      "api": "resolve_rows",
+      "root": "$work/after",
+      "files": [
+        "docs.go",
+        "sample.go",
+        "edges.go",
+        "corpus_1.go",
+        "moved.go"
+      ]
+    }
+  ]
+}

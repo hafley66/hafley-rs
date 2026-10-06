@@ -1,0 +1,82 @@
+{
+  "scenario": "go-move-modifier-flags",
+  "claim_tests": [
+    "relocation_go_types",
+    "origin_conservation_go"
+  ],
+  "steps": [
+    {
+      "action": "directory",
+      "path": "$work/base"
+    },
+    {
+      "action": "copy",
+      "source": "tests/fixtures/go_type_refs/a.go",
+      "path": "$work/base/a.go"
+    },
+    {
+      "action": "copy",
+      "source": "tests/fixtures/go_type_refs/b.go",
+      "path": "$work/base/b.go"
+    },
+    {
+      "action": "copy",
+      "source": "tests/fixtures/go_type_refs/other/c.go",
+      "path": "$work/base/other/c.go"
+    },
+    {
+      "action": "api",
+      "name": "base",
+      "api": "resolve_rows",
+      "root": "$work/base",
+      "files": [
+        "a.go",
+        "b.go",
+        "other/c.go"
+      ]
+    },
+    {
+      "action": "directory",
+      "path": "$work/after"
+    },
+    {
+      "action": "copy",
+      "source": "tests/fixtures/go_type_refs/a.go",
+      "path": "$work/after/a.go"
+    },
+    {
+      "action": "copy",
+      "source": "tests/fixtures/go_type_refs/b.go",
+      "path": "$work/after/b.go"
+    },
+    {
+      "action": "copy",
+      "source": "tests/fixtures/go_type_refs/other/c.go",
+      "path": "$work/after/other/c.go"
+    },
+    {
+      "action": "replace",
+      "path": "$work/after/a.go",
+      "from": "type ModifierFlags uint32\n\n",
+      "to": "",
+      "count": 1
+    },
+    {
+      "action": "write",
+      "path": "$work/after/moved.go",
+      "text": "package typerefs\n\ntype ModifierFlags uint32\n"
+    },
+    {
+      "action": "api",
+      "name": "after",
+      "api": "resolve_rows",
+      "root": "$work/after",
+      "files": [
+        "a.go",
+        "b.go",
+        "other/c.go",
+        "moved.go"
+      ]
+    }
+  ]
+}
