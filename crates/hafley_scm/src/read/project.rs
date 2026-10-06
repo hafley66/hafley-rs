@@ -29,7 +29,8 @@ use rayon::prelude::*;
 use crate::read::lang::go_modules::{GoModuleFacts, GoModuleIndex};
 use crate::read::lang::kotlin_modules::{kt_module_facts, KtModuleFacts, KtModuleIndex};
 use crate::read::lang::python::{py_module_facts, PyModuleFacts, PyModuleIndex};
-use crate::read::lang::rust_modules::{RustModuleFacts, RustModuleIndex};
+use crate::read::lang::rust_modules::RustModuleFacts;
+use crate::read::lang::rust_names_index::RustNamesIndex;
 use crate::read::lang::ts_resolve::{ModuleFacts, TsModuleIndex};
 use crate::read::lang::{
     source_for, FallbackSource, GoSource, KotlinSource, MarkdownSource, PrologSource, PythonSource,
@@ -800,7 +801,7 @@ pub fn fill_indexes(
     cx.indexes
         .rust_modules
         .set(stage_span("index_rust_modules").in_scope(|| {
-            RustModuleIndex::build(
+            RustNamesIndex::build(
                 rust_module_files,
                 corpus,
                 cx.indexes.def_index.get().expect("the def index is set"),

@@ -7,3 +7,5 @@ pub mod nested {
     use crate::shared::target as local;
     pub fn run() { local(); super::shared::target(); }
 }
+
+pub fn method_user(item: shared::Item) { item.method(); }

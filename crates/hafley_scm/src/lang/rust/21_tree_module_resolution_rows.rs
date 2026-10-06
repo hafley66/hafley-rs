@@ -36,7 +36,15 @@ fn collect_items(
                     .into_iter()
                     .find(|child| child.kind() != "visibility_modifier")
                 {
+                    let uses = rows.uses.len();
+                    let stars = rows.stars.len();
                     collect_use(tree, &mut Vec::new(), reexport, source, rows);
+                    for row in &mut rows.uses[uses..] {
+                        row.offset = item.start_byte() as u32;
+                    }
+                    for row in &mut rows.stars[stars..] {
+                        row.offset = item.start_byte() as u32;
+                    }
                 }
             }
             "trait_item" => {
@@ -202,6 +210,7 @@ fn collect_use(
                 segments.pop();
                 if let Some((asked, qualifier)) = segments.split_last() {
                     rows.uses.push(UseBindingRow {
+                        offset: 0,
                         local: asked.clone(),
                         qualifier: qualifier.to_vec(),
                         asked: asked.clone(),
@@ -210,6 +219,7 @@ fn collect_use(
                 }
             } else if let Some((asked, qualifier)) = segments.split_last() {
                 rows.uses.push(UseBindingRow {
+                    offset: 0,
                     local: asked.clone(),
                     qualifier: qualifier.to_vec(),
                     asked: asked.clone(),
@@ -241,6 +251,7 @@ fn collect_use(
                 .get(1)
                 .map_or_else(|| asked.clone(), |alias| text(*alias, source).to_owned());
             rows.uses.push(UseBindingRow {
+                offset: 0,
                 local,
                 qualifier: qualifier.to_vec(),
                 asked: asked.clone(),
@@ -257,6 +268,7 @@ fn collect_use(
                 prefix.clone()
             };
             rows.stars.push(StarImportRow {
+                offset: 0,
                 qualifier,
                 reexport,
             });
@@ -282,6 +294,7 @@ fn push_use_leaf(
         (prefix.to_vec(), segment.to_owned())
     };
     rows.uses.push(UseBindingRow {
+        offset: 0,
         local: alias.unwrap_or_else(|| asked.clone()),
         qualifier,
         asked,

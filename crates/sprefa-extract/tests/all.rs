@@ -564,3 +564,5 @@ fn every_test_file_is_a_module_here() {
 
 #[path = "support/1_df_increment.rs"]
 mod df_increment_support;
+#[path = "211_rust_names.rs"]
+mod t_211_rust_names;

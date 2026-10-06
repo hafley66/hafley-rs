@@ -28,19 +28,21 @@ mod context;
 /// What one `use` leaf binds a local name to. `qualifier` is the source
 /// module's path as written (`crate`/`self`/`super` kept literal).
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct UseBinding {
-    local: String,
-    qualifier: Vec<String>,
-    asked: String,
-    reexport: bool,
+pub(crate) struct UseBinding {
+    pub(crate) offset: u32,
+    pub(crate) local: String,
+    pub(crate) qualifier: Vec<String>,
+    pub(crate) asked: String,
+    pub(crate) reexport: bool,
 }
 
 /// A bare `use a::b::*;` / `pub use a::b::*;`: no local name, only a star hop
 /// candidate for names the qualifier module's own resolve asks.
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct StarImport {
-    qualifier: Vec<String>,
-    reexport: bool,
+pub(crate) struct StarImport {
+    pub(crate) offset: u32,
+    pub(crate) qualifier: Vec<String>,
+    pub(crate) reexport: bool,
 }
 
 fn module_candidates(
@@ -85,12 +87,12 @@ fn module_candidates(
 /// One file's `use`/`mod` facts, carried from phase 1 into project resolve.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct RustModuleFacts {
-    uses: Vec<UseBinding>,
-    stars: Vec<StarImport>,
+    pub(crate) uses: Vec<UseBinding>,
+    pub(crate) stars: Vec<StarImport>,
     /// `mod x { .. }`: no file of its own, so `use x::f` binds in this blob.
     inline_mods: BTreeSet<String>,
     /// `mod x;` / `#[path = "y.rs"] mod x;`: name plus the path literal.
-    mod_decls: Vec<(String, Option<String>)>,
+    pub(crate) mod_decls: Vec<(String, Option<String>)>,
     mod_scopes: BTreeMap<String, Vec<(String, Option<String>)>>,
     /// Every impl block's (self type, fn name, fn def span), for the corpus
     /// receiver leg's (T, m) table.
@@ -110,7 +112,7 @@ pub struct RustModuleFacts {
     call_result_receivers: Vec<(Span, String, String)>,
     /// Every `type X = ..` def span. An alias rides the shared `DefIndex` as a
     /// type entity and is never the item a `X(..)` call constructs.
-    aliases: Vec<Span>,
+    pub(crate) aliases: Vec<Span>,
     /// Top-level declarations unavailable through an external crate import.
     private_defs: HashSet<String>,
     pub macro_invocations: Vec<(Span, String)>,
@@ -432,6 +434,7 @@ fn rust_module_facts_from_rows(
             .uses
             .into_iter()
             .map(|row| UseBinding {
+                offset: row.offset,
                 local: row.local,
                 qualifier: row.qualifier,
                 asked: row.asked,
@@ -442,6 +445,7 @@ fn rust_module_facts_from_rows(
             .stars
             .into_iter()
             .map(|row| StarImport {
+                offset: row.offset,
                 qualifier: row.qualifier,
                 reexport: row.reexport,
             })

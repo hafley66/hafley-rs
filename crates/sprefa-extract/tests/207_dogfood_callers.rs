@@ -89,12 +89,11 @@ fn bounded_rust_callers_keep_module_routes_or_emit_a_cargo_abstain() {
     }
     insta::assert_snapshot!(results.join("\n"), @r#"
 dogfood_callers/src/0_calls.rs#objects slow=false:
-{"record":"graph_edge","from_path":"tests/fixtures/dogfood_callers/src/0_calls.rs","from_name":"local","to_path":"tests/fixtures/dogfood_callers/src/0_calls.rs","to_name":"objects","kind":"name_resolve","grade":"~","from_line":2,"to_line":1}
-{"record":"graph_edge","from_path":"tests/fixtures/dogfood_callers/src/1_child.rs","from_name":"child","to_path":"tests/fixtures/dogfood_callers/src/0_calls.rs","to_name":"objects","kind":"import_resolve","grade":"+","from_line":2,"to_line":1}
-{"record":"graph_edge","from_path":"tests/fixtures/dogfood_callers/src/2_importer.rs","from_name":"indirect","to_path":"tests/fixtures/dogfood_callers/src/0_calls.rs","to_name":"objects","kind":"import_resolve","grade":"+","from_line":2,"to_line":1}
+{"record":"graph_edge","from_path":"tests/fixtures/dogfood_callers/src/0_calls.rs","from_name":"local","to_path":"tests/fixtures/dogfood_callers/src/0_calls.rs","to_name":"objects","kind":"name_resolve","grade":"+","from_line":2,"to_line":1}
+{"record":"graph_edge","from_path":"tests/fixtures/dogfood_callers/src/1_child.rs","from_name":"child","to_path":"tests/fixtures/dogfood_callers/src/0_calls.rs","to_name":"objects","kind":"name_resolve","grade":"+","from_line":2,"to_line":1}
+{"record":"graph_edge","from_path":"tests/fixtures/dogfood_callers/src/2_importer.rs","from_name":"indirect","to_path":"tests/fixtures/dogfood_callers/src/0_calls.rs","to_name":"objects","kind":"name_resolve","grade":"+","from_line":2,"to_line":1}
 
 dogfood_callers/src/0_calls.rs#method slow=false:
-{"record":"graph_edge","from_path":"tests/fixtures/dogfood_callers/src/0_calls.rs","from_name":"run","to_path":"tests/fixtures/dogfood_callers/src/0_calls.rs","to_name":"method","kind":"name_resolve","grade":"~","from_line":6,"to_line":5}
 
 dogfood_callers/src/1_child.rs#child slow=false:
 {"record":"graph_edge","from_path":"tests/fixtures/dogfood_callers/src/0_calls.rs","from_name":"nested","to_path":"tests/fixtures/dogfood_callers/src/1_child.rs","to_name":"child","kind":"name_resolve","grade":"+","from_line":10,"to_line":2}

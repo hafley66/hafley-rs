@@ -11,8 +11,8 @@
 //! nodes through their byte ranges.
 
 use hafley_scm::lang::rust::{
-    call_metadata_rows_from_tree, call_site_rows_from_tree, fast_file_query,
-    CallDefinitionKind, RustFastFile, RUST_FAST_QUERY,
+    call_metadata_rows_from_tree, call_site_rows_from_tree, fast_file_query, CallDefinitionKind,
+    RustFastFile, RUST_FAST_QUERY,
 };
 use std::collections::BTreeSet;
 
@@ -37,16 +37,13 @@ use crate::read::types::ResolveDrop;
 use crate::read::trace;
 use crate::read::types::LangKind;
 use crate::read::types::ScipIndex;
-use crate::read::types::{
-    DefSite, MacroSite, MacroSiteSource, PathIndex, ReceiverOutcome,
-    UnresolvedReason,
-};
+use crate::read::types::{DefSite, MacroSite, MacroSiteSource, UnresolvedReason};
 
 pub use hafley_scm::lang::rust::{build_line_starts, syn_span};
 
 #[path = "1_type.rs"]
 mod type_facts;
-use type_facts::{import_bound_target, project_types};
+use type_facts::project_types;
 
 #[path = "2_call.rs"]
 mod call_facts;

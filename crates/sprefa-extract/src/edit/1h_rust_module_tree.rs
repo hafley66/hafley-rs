@@ -59,6 +59,8 @@ pub fn extern_name(cx: &MoveCx, from: &ModulePlace, to: &ModulePlace) -> Result<
 #[derive(Clone, Debug)]
 pub struct ModulePlace {
     pub target: u32,
+    pub file: std::path::PathBuf,
+    pub directory: std::path::PathBuf,
     pub crate_root: std::path::PathBuf,
     pub crate_name: String,
     pub path: Vec<String>,
@@ -71,8 +73,8 @@ pub fn places(_cx: &MoveCx, _rel: &str) -> Result<Vec<ModulePlace>, String> {
 }
 
 #[cfg(not(feature = "rust-checker"))]
-pub fn extern_name(_cx: &MoveCx, _from: &ModulePlace, to: &ModulePlace) -> Result<String, String> {
-    Ok(to.crate_name.clone())
+pub fn extern_name(_cx: &MoveCx, _from: &ModulePlace, _to: &ModulePlace) -> Result<String, String> {
+    Err("Rust module paths need --features rust-checker".to_string())
 }
 
 #[cfg(not(feature = "rust-checker"))]

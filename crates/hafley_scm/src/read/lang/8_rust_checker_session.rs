@@ -268,7 +268,7 @@ fn load_checker_workspace(
     };
     let started = Instant::now();
     let _load_span =
-        crate::read::trace::tracked(tracing::info_span!("rust_analyzer.load")).entered();
+        crate::read::trace::tracked(tracing::debug_span!("rust_analyzer.load")).entered();
     fn no_workspace(error: impl std::fmt::Display) -> CheckerError {
         CheckerError::NoWorkspace(error.to_string())
     }

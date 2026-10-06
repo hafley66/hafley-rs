@@ -32,8 +32,8 @@ pub use modules::{module_tree, module_tree_for_workspace, ModulePlace, RustModul
 #[path = "8h_rust_names.rs"]
 mod names;
 pub use names::{
-    module_places, resolve_method, resolve_path, resolve_prefix, scope_names, Abstain, DefPlace,
-    NamesHost,
+    all_module_places, module_places, resolve_method, resolve_path, resolve_path_at,
+    resolve_prefix, scope_names, scope_names_at, Abstain, DefPlace, NamesHost,
 };
 #[path = "8f_rust_checker_body_edges.rs"]
 mod body_edges;

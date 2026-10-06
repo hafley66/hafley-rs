@@ -131,46 +131,6 @@ impl RustSource {
             .unwrap_or(&sites[0]);
         Some((blob.clone(), site.span))
     }
-
-    /// The name-match target of a callee written `a::b::f` for MODULES `a::b`:
-    /// only defs whose file spells a module path ending in `a::b` are candidates.
-    pub fn call_name_match_in_module(
-        index: &DefIndex,
-        modules: Option<&crate::read::lang::rust_modules::RustModuleIndex>,
-        paths: &PathIndex,
-        from: &str,
-        qualifier: &[&str],
-        callee: &str,
-    ) -> Option<(ContentId, Span)> {
-        let want = module_target(
-            from,
-            qualifier,
-            modules.and_then(|index| index.crate_root_of(from)),
-        )?;
-        let sites: Vec<&DefSite> = corpus_defs(index, callee)
-            .iter()
-            .filter(|site| {
-                paths.get(&site.blob).is_some_and(|path| {
-                    want.covers(&module_segments(path))
-                        && modules.is_none_or(|m| m.sees_path(from, path))
-                })
-            })
-            .collect();
-        let mut blobs: Vec<&ContentId> = Vec::new();
-        for site in &sites {
-            if !blobs.contains(&&site.blob) {
-                blobs.push(&site.blob);
-            }
-        }
-        let [blob] = blobs.as_slice() else {
-            return None;
-        };
-        let site = sites
-            .iter()
-            .find(|s| s.family == FamilyTag::Call)
-            .unwrap_or(&sites[0]);
-        Some(((*blob).clone(), site.span))
-    }
 }
 
 /// The type an associated-call path names: the LAST uppercase-leading
@@ -472,304 +432,38 @@ impl Resolve<CallF> for RustSource {
                 continue;
             };
             let callee = output.strings.lookup(site.callee);
-            let qualifier = site
-                .callee_path
-                .map(|id| output.strings.lookup(id))
-                .and_then(module_qualifier);
-            // The receiver leg (the go twin): a method site whose receiver's
-            // type the compiler could see in scope binds ONLY through the
-            // corpus (T, m) impl table; the name-match never runs for it.
-            let recv_named: Option<String> = call
+            let method = call
                 .aux
                 .receivers
                 .iter()
-                .find(|r| r.call_site == site.span)
-                .and_then(|r| match &r.outcome {
-                    ReceiverOutcome::Named(name) => Some(output.strings.lookup(*name).to_string()),
-                    _ => None,
+                .any(|receiver| receiver.call_site == site.span);
+            let name_t = (!method)
+                .then(|| {
+                    let from = own_path?;
+                    let modules = modules?;
+                    let written = site
+                        .callee_path
+                        .map(|id| output.strings.lookup(id))
+                        .unwrap_or(callee);
+                    let segments = written.split("::").map(str::to_string).collect::<Vec<_>>();
+                    let (name, qualifier) = segments.split_last()?;
+                    let _ = (name, qualifier);
+                    let bound = modules
+                        .binding_at(from, &segments, Some(site.span.start), FamilyTag::Call)
+                        .ok()?;
+                    bound.target_name?;
+                    Some((
+                        bound.target_blob,
+                        bound.target_span,
+                        CallEdgeKind::NameResolve,
+                        ResolutionOrigin::ModulePlane,
+                    ))
                 })
-                .or_else(|| {
-                    modules
-                        .zip(own_path)
-                        .and_then(|(modules, path)| {
-                            modules.call_result_receiver_type(path, site.span)
-                        })
-                        .map(str::to_string)
-                });
-            let recv_t = recv_named.as_ref().and_then(|ty| {
-                modules
-                    .and_then(|m| {
-                        m.impl_target(ty, callee, own_path)
-                            // The receiver names a corpus trait (`dyn T`,
-                            // `impl T`, a bound param): the trait's own fn
-                            // def (class 6).
-                            .or_else(|| {
-                                m.is_trait(ty)
-                                    .then_some(())
-                                    .and_then(|()| m.trait_fn_target(ty, callee, own_path))
-                            })
-                            // No impl defines the method; a trait the type
-                            // implements provides a default body (class 4).
-                            .or_else(|| m.trait_default_target(ty, callee, own_path))
-                    })
-                    .map(|(blob, span)| (blob, span, CallEdgeKind::NameResolve))
-            });
-            // The receiver was SEEN in scope (typed, or a plain call to a
-            // scope-bound name): even unbound, the name-match legs never run.
-            let recv_known = call.aux.receivers.iter().any(|r| {
-                r.call_site == site.span
-                    && matches!(
-                        r.outcome,
-                        ReceiverOutcome::Named(_) | ReceiverOutcome::Shadowed
-                    )
-            });
-            // Phase 1 saw the receiver but could not name its type: a member
-            // call on an untyped receiver, so the name-match legs never run.
-            let recv_inferred = call.aux.receivers.iter().any(|r| {
-                r.call_site == site.span && matches!(r.outcome, ReceiverOutcome::Inferred)
-            });
-            // The associated leg: `T::f()` / `a::T::f()` names T's impl block;
-            // `Self::f()` names the enclosing impl's self type via the file's
-            // own method-owner rows.
-            let assoc_t = (qualifier.is_none() && recv_named.is_none())
-                .then_some(())
-                .and_then(|()| {
-                    assoc_path_type(site.callee_path.map(|id| output.strings.lookup(id))).and_then(
-                        |ty| {
-                            modules
-                                .and_then(|m| {
-                                    let qualified = site
-                                        .callee_path
-                                        .map(|id| output.strings.lookup(id))
-                                        .and_then(|path| {
-                                            let segments = path.split("::").collect::<Vec<_>>();
-                                            (segments.len() > 2).then(|| {
-                                                segments[..segments.len() - 2]
-                                                    .iter()
-                                                    .map(|segment| (*segment).to_string())
-                                                    .collect::<Vec<_>>()
-                                            })
-                                        });
-                                    match qualified {
-                                        Some(qualifier) => own_path.and_then(|from| {
-                                            m.qualified_impl_target(from, &qualifier, &ty, callee)
-                                        }),
-                                        None => m.impl_target(&ty, callee, own_path),
-                                    }
-                                })
-                                .map(|(blob, span)| (blob, span, CallEdgeKind::NameResolve))
-                                // 0 impls and a variant of the enum: the path names
-                                // the enum itself.
-                                .or_else(|| {
-                                    modules
-                                        .and_then(|m| m.variant_ctor_target(&ty, callee))
-                                        .map(|(blob, span)| (blob, span, CallEdgeKind::NameResolve))
-                                })
-                                // Trait dispatch: T a corpus trait (class 12, impl
-                                // first), else a trait-provided fn with no impl
-                                // override (class 8's zero-impl arm).
-                                .or_else(|| {
-                                    modules.and_then(|m| {
-                                        m.trait_impl_target(&ty, callee, own_path)
-                                            .or_else(|| m.trait_fn_target(&ty, callee, own_path))
-                                            .or_else(|| {
-                                                m.trait_default_target(&ty, callee, own_path)
-                                            })
-                                            .map(|(blob, span)| {
-                                                (blob, span, CallEdgeKind::NameResolve)
-                                            })
-                                    })
-                                })
-                        },
-                    )
-                });
-            let type_path = qualifier.is_none()
-                && recv_named.is_none()
-                && assoc_path_type(site.callee_path.map(|id| output.strings.lookup(id))).is_some();
-            let self_t = (qualifier.is_none()
-                && recv_named.is_none()
-                && site
-                    .callee_path
-                    .map(|id| output.strings.lookup(id).split("::").next() == Some("Self"))
-                    .unwrap_or(false))
-            .then_some(())
-            .and_then(|()| self_impl_type(call, &output.strings, caller))
-            .and_then(|ty| {
-                modules
-                    .and_then(|m| {
-                        m.impl_target(&ty, callee, own_path)
-                            .or_else(|| m.variant_ctor_target(&ty, callee))
-                    })
-                    .map(|(blob, span)| (blob, span, CallEdgeKind::NameResolve))
-            });
-            // In an impl, `Self { .. }` constructs the impl's own type. The
-            // call site spells `Self`, while its callable def spells the type.
-            let self_constructor = (callee == "Self" && site.callee_path.is_none())
-                .then(|| self_impl_type(call, &output.strings, caller))
-                .flatten()
-                .and_then(|ty| {
-                    let own = own.as_ref()?;
-                    corpus_defs(def_index, &ty)
-                        .iter()
-                        .find(|def| def.blob == *own && def.family == FamilyTag::Type)
-                        .map(|def| (def.blob.clone(), def.span))
-                })
-                .map(|(blob, span)| (blob, span, CallEdgeKind::NameResolve));
-            let expected_default = (callee == "default"
-                && site
-                    .callee_path
-                    .map(|id| output.strings.lookup(id) == "Default::default")
-                    .unwrap_or(false))
-            .then(|| {
-                call.aux
-                    .expected_types
-                    .iter()
-                    .find(|(span, _)| *span == site.span)
-            })
-            .flatten()
-            .and_then(|(_, ty)| {
-                modules.and_then(|m| {
-                    let path = output.strings.lookup(*ty);
-                    let segments = path.split("::").collect::<Vec<_>>();
-                    let name = segments.last().copied()?;
-                    if segments.len() > 1 {
-                        let qualifier = segments[..segments.len() - 1]
-                            .iter()
-                            .map(|segment| (*segment).to_string())
-                            .collect::<Vec<_>>();
-                        own_path.and_then(|from| {
-                            m.qualified_impl_target(from, &qualifier, name, callee)
-                        })
-                    } else {
-                        m.impl_target(name, callee, own_path)
-                    }
-                })
-            })
-            .map(|(blob, span)| (blob, span, CallEdgeKind::NameResolve));
-            // Each leg names ITSELF: `kind` is `name_resolve` for nearly all
-            // of them, so only the origin separates the receiver plane from the
-            // module plane from the corpus-wide guess.
-            let tag = |found: Option<(ContentId, Span, CallEdgeKind)>, origin| {
-                found.map(|(blob, span, kind)| (blob, span, kind, origin))
-            };
-            let name_t: Option<(ContentId, Span, CallEdgeKind, ResolutionOrigin)> = if recv_t
-                .is_some()
-            {
-                tag(recv_t, ResolutionOrigin::Receiver)
-            } else if recv_known {
-                // A KNOWN receiver type with no corpus impl target is
-                // definitive (std, an external crate, trait dispatch).
-                None
-            } else if recv_inferred {
-                None
-            } else if callee == "Self" {
-                tag(self_constructor, ResolutionOrigin::SelfType)
-            } else if expected_default.is_some() {
-                tag(expected_default, ResolutionOrigin::SelfType)
-            } else {
-                match (qualifier, own_path, paths) {
-                    (Some(qualifier), Some(from), Some(paths)) => {
-                        let segments: Vec<String> = qualifier
-                            .iter()
-                            .map(|segment| segment.to_string())
-                            .collect();
-                        match modules
-                            .map(|m| m.module_call(from, &segments, callee))
-                            .unwrap_or(crate::read::lang::rust_modules::ModuleCallTarget::Miss)
-                        {
-                            crate::read::lang::rust_modules::ModuleCallTarget::Target(
-                                blob,
-                                span,
-                            ) => Some((
-                                blob,
-                                span,
-                                CallEdgeKind::NameResolve,
-                                ResolutionOrigin::ModulePlane,
-                            )),
-                            _ => RustSource::call_name_match_in_module(
-                                def_index, modules, paths, from, &qualifier, callee,
-                            )
-                            .map(|(blob, span)| {
-                                (
-                                    blob,
-                                    span,
-                                    CallEdgeKind::NameResolve,
-                                    ResolutionOrigin::ModulePlane,
-                                )
-                            }),
-                        }
-                    }
-                    // `Vec::new()`: a type-qualified path whose type has no corpus
-                    // impl is external; no name match may bind it.
-                    _ if assoc_t.is_none() && self_t.is_none() && type_path => None,
-                    _ => tag(assoc_t, ResolutionOrigin::SelfType)
-                        .or_else(|| tag(self_t, ResolutionOrigin::SelfType))
-                        .or_else(|| {
-                            same_file_call_match(output, def_index, own.as_ref(), callee).map(
-                                |(blob, span)| {
-                                    (
-                                        blob,
-                                        span,
-                                        CallEdgeKind::NameResolve,
-                                        ResolutionOrigin::SameFile,
-                                    )
-                                },
-                            )
-                        })
-                        .or_else(|| {
-                            import_bound_target(modules, own_path, callee).map(|(blob, span)| {
-                                (
-                                    blob,
-                                    span,
-                                    CallEdgeKind::ImportResolve,
-                                    ResolutionOrigin::ModulePlane,
-                                )
-                            })
-                        })
-                        .or_else(|| {
-                            if modules
-                                .zip(own_path)
-                                .is_some_and(|(m, from)| m.binds_external(from, callee))
-                            {
-                                return None;
-                            }
-                            let sees = |blob: &ContentId| {
-                                modules.zip(own_path).map_or(true, |(m, from)| {
-                                    m.sees(from, blob)
-                                        && !m.private_import_target(from, callee, blob)
-                                })
-                            };
-                            RustSource::call_name_match_seen(
-                                output,
-                                def_index,
-                                own.as_ref(),
-                                callee,
-                                sees,
-                            )
-                            .map(|(blob, span)| {
-                                (
-                                    blob,
-                                    span,
-                                    CallEdgeKind::NameResolve,
-                                    ResolutionOrigin::CorpusUnique,
-                                )
-                            })
-                        }),
-                }
-            };
-            // A def coordinate several names share is one macro expansion's
-            // collapsed span: it names nothing, so no name match binds there.
-            // A `type X = ..` coordinate names no CALLABLE: `X(..)` constructs
-            // the aliased item, and the alias's own def is not it.
+                .flatten();
             let callable = |blob: &ContentId, span: Span| {
                 !modules.is_some_and(|m| m.is_collapsed(blob, span) || m.is_alias(blob, span))
             };
-            let name_t = name_t.filter(|(blob, span, _, _)| {
-                callable(blob, *span)
-                    && modules
-                        .zip(own_path)
-                        .map_or(true, |(m, from)| m.sees(from, blob))
-            });
+            let name_t = name_t.filter(|(blob, span, _, _)| callable(blob, *span));
             // The syntax tier's whole answer for this site: the name match and
             // scip folded the way they fold when no checker runs.
             let syntax_t = |name_t: Option<(ContentId, Span, CallEdgeKind, ResolutionOrigin)>| {
@@ -912,20 +606,11 @@ pub fn call_drops(
         .collect();
     // An unbound member site is a receiver-policy drop when the plane cannot
     // answer for the receiver; corpus-impl-known types keep the def counts.
-    let inferred: BTreeSet<(u32, u32)> = call
+    let methods: BTreeSet<(u32, u32)> = call
         .aux
         .receivers
         .iter()
-        .filter(|r| match &r.outcome {
-            ReceiverOutcome::Inferred | ReceiverOutcome::Shadowed => true,
-            // Two conflicting declarations traced: the def counts below tell
-            // the story.
-            ReceiverOutcome::Named(ty) => {
-                !modules.is_some_and(|m| m.is_impl_known(output.strings.lookup(*ty)))
-            }
-            ReceiverOutcome::Ambiguous => false,
-        })
-        .map(|r| (r.call_site.start, r.call_site.end()))
+        .map(|receiver| (receiver.call_site.start, receiver.call_site.end()))
         .collect();
     call.aux
         .sites
@@ -960,8 +645,12 @@ pub fn call_drops(
             };
             let reason = if checker_external.is_some() {
                 UnresolvedReason::External
-            } else if inferred.contains(&(site.span.start, site.span.end())) {
-                UnresolvedReason::Inferred
+            } else if methods.contains(&(site.span.start, site.span.end())) {
+                if checker.is_none() {
+                    UnresolvedReason::NeedsTypes
+                } else {
+                    UnresolvedReason::Inferred
+                }
             } else if external_prefix.is_some()
                 || (qualifier.is_none() && PRELUDE_ITEMS.contains(&callee))
             {

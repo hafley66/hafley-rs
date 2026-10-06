@@ -7,13 +7,12 @@ use rayon::prelude::*;
 use syn::spanned::Spanned;
 
 use super::{
-    crate_roots, insert_decls, is_manifest, line_after, natural_paths, relocate_scan, slice,
-    whole_lines, FileScan, RelocateEdit, RelocatePlan, Relocation, SegRun, MOD_PATH,
-    MOD_RELOCATE_OUT, WIDEN_VIS,
+    crate_roots, insert_decls, line_after, natural_paths, relocate_scan, slice, whole_lines,
+    FileScan, RelocateEdit, RelocatePlan, Relocation, SegRun, MOD_PATH, MOD_RELOCATE_OUT,
+    WIDEN_VIS,
 };
 use crate::edit_seams::ImportRefKind;
 use crate::lang::rust::syn_span;
-use crate::lang::rust_modules::CargoManifest;
 use crate::manifests::{fold_package_edges, Manifest, ManifestKind};
 use crate::move_cx::{dirname, join_rel, relative_between, stem, MoveCx};
 use crate::project::extract_pool;
@@ -46,26 +45,46 @@ struct Package {
 }
 
 fn packages(cx: &MoveCx) -> Vec<Package> {
-    cx.files()
-        .iter()
-        .filter(|rel| is_manifest(rel))
-        .filter_map(|manifest| {
-            let text = cx.text(manifest)?;
-            let parsed = CargoManifest::parse(&text)?;
-            let name = parsed.package_name()?;
-            let ident = parsed.ident()?;
-            let dir = dirname(manifest).to_string();
-            let lib = join_rel(&dir, &parsed.lib_path());
-            Some(Package {
-                lib: cx.contains(&lib).then_some(lib),
-                dir,
-                manifest: manifest.clone(),
-                name,
-                ident,
-                text,
+    #[cfg(feature = "rust-checker")]
+    {
+        let roots = crate_roots(cx);
+        let Some(provider) = roots.provider.as_ref().ok() else {
+            return Vec::new();
+        };
+        provider
+            .packages()
+            .into_iter()
+            .filter_map(|package| {
+                let manifest = roots.rel(package.manifest_path.as_std_path());
+                let text = cx.text(&manifest)?;
+                let dir = dirname(&manifest).to_string();
+                let library = package.targets.iter().find(|target| {
+                    target.kind.iter().any(|kind| {
+                        matches!(kind.to_string().as_str(), "lib" | "rlib" | "proc-macro")
+                    })
+                });
+                let ident = library
+                    .map(|target| target.name.replace('-', "_"))
+                    .unwrap_or_else(|| package.name.to_string().replace('-', "_"));
+                let lib = library
+                    .map(|target| roots.rel(target.src_path.as_std_path()))
+                    .filter(|file| cx.contains(file));
+                Some(Package {
+                    dir,
+                    manifest,
+                    name: package.name.to_string(),
+                    ident,
+                    lib,
+                    text: text.to_string(),
+                })
             })
-        })
-        .collect()
+            .collect()
+    }
+    #[cfg(not(feature = "rust-checker"))]
+    {
+        let _ = cx;
+        Vec::new()
+    }
 }
 
 /// The deepest package directory holding `rel`.
@@ -440,12 +459,7 @@ impl<'ast> syn::visit::Visit<'ast> for ExtraWalk<'_> {
         };
         let mut leaves = Vec::new();
         let mut grouped = false;
-        use_leaves(
-            &node.tree,
-            &mut Vec::new(),
-            &mut leaves,
-            &mut grouped,
-        );
+        use_leaves(&node.tree, &mut Vec::new(), &mut leaves, &mut grouped);
         self.out.uses.push(UseDecl {
             span,
             vis,
@@ -482,10 +496,7 @@ fn use_leaves(
     };
     match tree {
         syn::UseTree::Path(segment) => {
-            prefix.push((
-                segment.ident.to_string(),
-                syn_span(segment.ident.span()),
-            ));
+            prefix.push((segment.ident.to_string(), syn_span(segment.ident.span())));
             use_leaves(&segment.tree, prefix, out, grouped);
             prefix.pop();
         }
@@ -497,19 +508,13 @@ fn use_leaves(
         }
         syn::UseTree::Name(leaf) => emit(
             prefix,
-            Some((
-                leaf.ident.to_string(),
-                syn_span(leaf.ident.span()),
-            )),
+            Some((leaf.ident.to_string(), syn_span(leaf.ident.span()))),
             None,
             false,
         ),
         syn::UseTree::Rename(leaf) => emit(
             prefix,
-            Some((
-                leaf.ident.to_string(),
-                syn_span(leaf.ident.span()),
-            )),
+            Some((leaf.ident.to_string(), syn_span(leaf.ident.span()))),
             Some(leaf.rename.to_string()),
             false,
         ),
@@ -539,64 +544,42 @@ fn child_dir(rel: &str, owns_dir: bool) -> String {
 
 /// Every file reachable from a crate root through `mod` decls. A file loaded by
 /// `#[path]` owns its directory the way a `mod.rs` does (rustc's rule).
-fn module_tree(roots: &[String], scans: &BTreeMap<String, &Scanned>) -> BTreeMap<String, Node> {
-    let mut tree: BTreeMap<String, Node> = BTreeMap::new();
-    for root in roots {
-        if tree.contains_key(root) || !scans.contains_key(root) {
+fn module_tree(
+    roots: &super::RustModulePlaces,
+    scans: &BTreeMap<String, &Scanned>,
+) -> BTreeMap<String, Node> {
+    let mut tree = BTreeMap::new();
+    for rel in scans.keys() {
+        let Some((root, path)) = roots.home(rel) else {
             continue;
-        }
+        };
+        let Some(place) = roots.places.iter().find(|place| {
+            roots.rel(&place.file) == *rel
+                && roots.rel(&place.crate_root) == root
+                && place.path == path
+        }) else {
+            continue;
+        };
+        let decl = place.decl.as_ref().and_then(|(parent, start, _)| {
+            let parent = roots.rel(parent);
+            let index = scans
+                .get(&parent)?
+                .scan
+                .decls
+                .iter()
+                .position(|decl| decl.item.start <= *start && *start < decl.item.end())?;
+            Some((parent, index))
+        });
         tree.insert(
-            root.clone(),
+            rel.clone(),
             Node {
-                root: root.clone(),
-                path: Vec::new(),
-                owns_dir: true,
-                decl: None,
+                root,
+                path,
+                owns_dir: place.directory
+                    == place.file.parent().unwrap_or(std::path::Path::new("")),
+                decl,
             },
         );
-        let mut pending = vec![root.clone()];
-        while let Some(rel) = pending.pop() {
-            let Some(scanned) = scans.get(&rel) else {
-                continue;
-            };
-            let node = tree[&rel].clone();
-            for (index, decl) in scanned.scan.decls.iter().enumerate() {
-                let base = decl
-                    .chain
-                    .iter()
-                    .fold(child_dir(&rel, node.owns_dir), |dir, block| {
-                        join_rel(&dir, block)
-                    });
-                let target = match &decl.attr {
-                    Some((_, value)) if decl.chain.is_empty() => {
-                        Some(join_rel(dirname(&rel), value))
-                    }
-                    Some((_, value)) => Some(join_rel(&base, value)),
-                    None => natural_paths(&base, &decl.name)
-                        .into_iter()
-                        .find(|candidate| scans.contains_key(candidate)),
-                };
-                let Some(target) = target.filter(|target| scans.contains_key(target)) else {
-                    continue;
-                };
-                if tree.contains_key(&target) {
-                    continue;
-                }
-                let mut path = node.path.clone();
-                path.extend(decl.chain.iter().cloned());
-                path.push(decl.name.clone());
-                tree.insert(
-                    target.clone(),
-                    Node {
-                        root: node.root.clone(),
-                        path,
-                        owns_dir: decl.attr.is_some() || stem(&target) == "mod",
-                        decl: Some((rel.clone(), index)),
-                    },
-                );
-                pending.push(target);
-            }
-        }
     }
     tree
 }
@@ -622,6 +605,7 @@ struct Scope<'a> {
     children: &'a BTreeSet<String>,
     bindings: &'a BTreeMap<String, (String, Vec<String>)>,
     idents: &'a BTreeMap<String, String>,
+    modules: &'a super::RustModulePlaces,
 }
 
 fn read_path(
@@ -631,45 +615,33 @@ fn read_path(
     relative_ok: bool,
     from_use: bool,
 ) -> Option<Reading> {
-    let first = idents.first()?.as_str();
-    let here: Vec<String> = scope.here.iter().chain(chain.iter()).cloned().collect();
-    let reading = |root: &str, base: Vec<String>, eaten: usize, via_use: bool| {
-        let base_len = base.len();
-        let mut abs = base;
-        abs.extend(idents[eaten..].iter().cloned());
-        Reading {
-            root: root.to_string(),
-            abs,
-            eaten,
-            base: base_len,
-            via_use,
-        }
-    };
-    match first {
-        "crate" => Some(reading(scope.root, Vec::new(), 1, false)),
-        "self" if relative_ok => Some(reading(scope.root, here, 1, false)),
-        "super" if relative_ok => {
-            let steps = idents.iter().take_while(|ident| *ident == "super").count();
-            let base = here.get(..here.len().checked_sub(steps)?)?.to_vec();
-            Some(reading(scope.root, base, steps, false))
-        }
-        "self" | "super" | "Self" => None,
-        name if relative_ok && chain.is_empty() && scope.children.contains(name) => {
-            Some(reading(scope.root, here, 0, false))
-        }
-        name if !from_use && relative_ok && chain.is_empty() => {
-            if let Some((root, bound)) = scope.bindings.get(name) {
-                return Some(reading(root, bound.clone(), 1, true));
-            }
-            let root = scope.idents.get(name).filter(|root| *root != scope.root)?;
-            Some(reading(root, Vec::new(), 1, false))
-        }
-        name => {
-            // A crate never names itself by its package ident.
-            let root = scope.idents.get(name).filter(|root| *root != scope.root)?;
-            Some(reading(root, Vec::new(), 1, false))
+    if !relative_ok
+        && matches!(
+            idents.first().map(String::as_str),
+            Some("self" | "super" | "Self")
+        )
+    {
+        return None;
+    }
+    for cut in (1..=idents.len()).rev() {
+        if let Some((root, module)) =
+            scope
+                .modules
+                .resolve(scope.root, scope.here, chain, &idents[..cut])
+        {
+            let base = module.len();
+            let mut abs = module;
+            abs.extend(idents[cut..].iter().cloned());
+            return Some(Reading {
+                root,
+                abs,
+                eaten: cut,
+                base,
+                via_use: !from_use && scope.bindings.contains_key(&idents[0]),
+            });
         }
     }
+    None
 }
 
 // ── the plan ────────────────────────────────────────────────────────────────
@@ -704,7 +676,7 @@ pub(super) fn build(cx: &MoveCx) -> RelocatePlan {
         .collect();
     let mut roots: Vec<String> = roots_set.iter().cloned().collect();
     roots.sort_by_key(|root| (!root.ends_with("src/lib.rs"), root.clone()));
-    let tree = module_tree(&roots, &scans);
+    let tree = module_tree(roots_set, &scans);
 
     let idents: BTreeMap<String, String> = packages
         .iter()
@@ -826,13 +798,14 @@ pub(super) fn build(cx: &MoveCx) -> RelocatePlan {
         let moving = by_old.contains_key(rel.as_str());
         let before_children = &children_before[rel.as_str()];
         let after_children = &children_after[rel];
-        let bindings = bindings_of(scanned, node, before_children, &idents);
+        let bindings = bindings_of(scanned, node, before_children, &idents, roots_set);
         let before = Scope {
             root: &node.root,
             here: &node.path,
             children: before_children,
             bindings: &bindings,
             idents: &idents,
+            modules: roots_set,
         };
         let after = Scope {
             root: &after_root,
@@ -840,6 +813,7 @@ pub(super) fn build(cx: &MoveCx) -> RelocatePlan {
             children: after_children,
             bindings: &empty_bindings,
             idents: &idents,
+            modules: roots_set,
         };
         let text = &scanned.text;
 
@@ -1323,11 +1297,7 @@ fn respell_reading(
         return None;
     }
     let (want_root, want_path) = map_path(&reading.root, &reading.abs[..span_len]);
-    let still =
-        read_path(after, &idents[..cut], chain, true, from_use).map(|read| (read.root, read.abs));
-    if still.as_ref() == Some(&(want_root.clone(), want_path.clone())) {
-        return None;
-    }
+    let _ = chain;
     let spelled = if want_root == after.root {
         std::iter::once("crate".to_string())
             .chain(want_path.iter().cloned())
@@ -1448,6 +1418,7 @@ fn bindings_of(
     node: &Node,
     children: &BTreeSet<String>,
     idents: &BTreeMap<String, String>,
+    modules: &super::RustModulePlaces,
 ) -> BTreeMap<String, (String, Vec<String>)> {
     let empty = BTreeMap::new();
     let scope = Scope {
@@ -1456,6 +1427,7 @@ fn bindings_of(
         children,
         bindings: &empty,
         idents,
+        modules,
     };
     let mut out = BTreeMap::new();
     for decl in scanned

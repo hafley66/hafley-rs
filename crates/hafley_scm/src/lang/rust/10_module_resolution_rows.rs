@@ -9,6 +9,7 @@ use super::module_specifier_rows::mod_path_attr;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct UseBindingRow {
+    pub offset: u32,
     pub local: String,
     pub qualifier: Vec<String>,
     pub asked: String,
@@ -17,6 +18,7 @@ pub struct UseBindingRow {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct StarImportRow {
+    pub offset: u32,
     pub qualifier: Vec<String>,
     pub reexport: bool,
 }
@@ -75,7 +77,16 @@ fn collect(
         match item {
             syn::Item::Use(item) => {
                 let reexport = !matches!(item.vis, syn::Visibility::Inherited);
+                let uses = rows.uses.len();
+                let stars = rows.stars.len();
                 walk_use_tree(&item.tree, reexport, &mut Vec::new(), rows);
+                let offset = span_range(item.span()).start;
+                for row in &mut rows.uses[uses..] {
+                    row.offset = offset;
+                }
+                for row in &mut rows.stars[stars..] {
+                    row.offset = offset;
+                }
             }
             syn::Item::Trait(item) => {
                 let methods = item
@@ -234,6 +245,7 @@ fn walk_use_tree(
             );
         }
         syn::UseTree::Glob(_) => rows.stars.push(StarImportRow {
+            offset: 0,
             qualifier: prefix.clone(),
             reexport,
         }),
@@ -256,6 +268,7 @@ fn push_leaf(
         (prefix.to_vec(), segment.to_string())
     };
     rows.uses.push(UseBindingRow {
+        offset: 0,
         local: alias.unwrap_or_else(|| asked.clone()),
         qualifier,
         asked,

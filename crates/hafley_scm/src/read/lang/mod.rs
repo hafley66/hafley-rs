@@ -281,3 +281,6 @@ pub fn sources() -> &'static [&'static dyn Source] {
 pub fn source_for(path: &str) -> Option<&'static dyn Source> {
     sources().iter().copied().find(|src| src.matches(path))
 }
+
+#[path = "9_rust_names_index.rs"]
+pub mod rust_names_index;

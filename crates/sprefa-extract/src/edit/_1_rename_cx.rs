@@ -47,6 +47,7 @@ pub struct RenameCx {
     rust_parse: RefCell<BTreeMap<String, syn::File>>,
     pub(crate) ts_import_graph: OnceCell<crate::edit::ts_rename::ImportGraph>,
     names: Rc<RefCell<Strings>>,
+    pub(crate) rust_names: OnceCell<Result<Rc<hafley_scm::read::lang::rust_names_index::RustNamesIndex>, String>>,
 }
 
 impl RenameCx {
@@ -72,6 +73,7 @@ impl RenameCx {
             rust_parse: RefCell::new(BTreeMap::new()),
             ts_import_graph: OnceCell::new(),
             names: Rc::new(RefCell::new(Strings::new())),
+            rust_names: OnceCell::new(),
         })
     }
 
@@ -133,6 +135,7 @@ impl RenameCx {
 
     pub fn overlay(&mut self, rel: String, text: String) {
         self.rust_parse.get_mut().remove(&rel);
+        self.rust_names.take();
         self.ts_import_graph.take();
         self.overlay.insert(rel, text);
     }

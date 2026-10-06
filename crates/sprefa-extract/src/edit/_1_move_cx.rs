@@ -46,7 +46,7 @@ pub struct MoveCx {
     #[cfg(feature = "rust-checker")]
     pub(crate) rust_modules: std::sync::Arc<std::sync::Mutex<BTreeMap<PathBuf, std::sync::Arc<hafley_scm::read::lang::rust_checker::RustModuleTree>>>>,
     pub(crate) relocate_plan: OnceLock<crate::edit::rust_rehome::RelocatePlan>,
-    pub(crate) crate_roots: OnceLock<BTreeSet<String>>,
+    pub(crate) crate_roots: OnceLock<crate::edit::rust_module_places::RustModulePlaces>,
     pub(crate) ts_packages: OnceLock<Vec<crate::edit::ts_rehome::cross::TsPackage>>,
     pub(crate) ts_dep_plan: OnceLock<crate::edit::ts_rehome::cross::DepPlan>,
     pub(crate) ts_resolver: OnceLock<Result<crate::lang::ts_resolve::TsResolver, String>>,

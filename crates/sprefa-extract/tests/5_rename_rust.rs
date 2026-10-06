@@ -366,14 +366,10 @@ fn list_commit_is_atomic_across_rows() {
         .expect("extract binary runs");
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
     assert!(
-        stderr.contains("src/twins.rs declares Wyll more than once"),
+        stderr.contains("src/twins.rs: rust-analyzer Names refused the rename: outside_workspace"),
         "the stop names the twin row:\n{stderr}"
     );
-    assert_eq!(
-        output.status.code(),
-        Some(3),
-        "Ambiguous exits 3:\n{stderr}"
-    );
+    assert_eq!(output.status.code(), Some(8), "Refused exits 8:\n{stderr}");
     let entries = diff_rq(&fixture.root, &tree("macro", "before"));
     assert!(
         entries.is_empty(),
@@ -399,7 +395,7 @@ fn list_rows_read_earlier_edits() {
         )
         .unwrap();
         let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
-        .current_dir(&fixture.root)
+            .current_dir(&fixture.root)
             .args(["rename", "--list"])
             .arg(&list)
             .arg("--root")
@@ -646,7 +642,7 @@ fn untyped_field_access_abstains_beside_typed_access() {
         "typed access is planned: {stdout}"
     );
     assert!(
-        stdout.contains("\"symbol\":\"size\",\"reason\":\"inferred\",\"receiver\":\"v\""),
+        stdout.contains("\"symbol\":\"size\",\"reason\":\"needs_types\",\"receiver\":\"v\""),
         "untyped receiver is reported: {stdout}"
     );
     assert!(stderr.is_empty(), "abstain is not a run error: {stderr}");
@@ -687,7 +683,10 @@ fn variant_seats_rename_through_owner_reexports() {
         "ScmOnly",
         &["--commit"],
     );
-    let plan: Vec<&str> = stdout.lines().filter(|line| line.starts_with("  src/")).collect();
+    let plan: Vec<&str> = stdout
+        .lines()
+        .filter(|line| line.starts_with("  src/"))
+        .collect();
     assert_eq!(
         plan,
         [
@@ -782,7 +781,11 @@ fn new_fixture_crates_pass_cargo_check() {
         ("path", "src/elsewhere/impl.rs#Helper", "Tool"),
         ("field", "src/util.rs#size", "width"),
         ("variant", "src/lib.rs#Old", "Prior"),
-        ("variant_reexport", "src/types/query_error.rs#Only", "ScmOnly"),
+        (
+            "variant_reexport",
+            "src/types/query_error.rs#Only",
+            "ScmOnly",
+        ),
         ("serde", "src/util.rs#size", "width"),
         ("fnuse", "src/util.rs#Helper", "Tool"),
     ];

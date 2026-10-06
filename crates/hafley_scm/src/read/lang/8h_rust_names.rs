@@ -48,6 +48,16 @@ pub fn resolve_path(
     file: &Path,
     path: &[String],
 ) -> Result<Vec<DefPlace>, Abstain> {
+    resolve_path_at(host, file, path, None)
+}
+
+/// Resolve at an inline module or lexical scope without receiver inference.
+pub fn resolve_path_at(
+    host: &NamesHost,
+    file: &Path,
+    path: &[String],
+    offset: Option<u32>,
+) -> Result<Vec<DefPlace>, Abstain> {
     let workspace = host.workspace.lock().unwrap();
     let Some((id, _)) = workspace.vfs.file_id(&vfs_path(&host_path(file))) else {
         return Err(Abstain::OutsideWorkspace);
@@ -61,9 +71,80 @@ pub fn resolve_path(
         if modules.is_empty() {
             return Err(Abstain::OutsideWorkspace);
         }
+        let parsed = sema.parse_guess_edition(ra_ap_ide::FileId::from_raw(id.index()));
+        let node = offset
+            .filter(|offset| *offset <= u32::from(parsed.syntax().text_range().end()))
+            .and_then(|offset| {
+                parsed
+                    .syntax()
+                    .token_at_offset(ra_ap_syntax::TextSize::from(offset))
+                    .right_biased()
+            })
+            .and_then(|token| token.parent());
+        let mut chain = node
+            .as_ref()
+            .map(|node| {
+                node.ancestors()
+                    .filter_map(ast::Module::cast)
+                    .filter_map(|module| module.name().map(|name| name.text().to_string()))
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        chain.reverse();
+        let scoped = node.as_ref().and_then(|node| sema.scope(node));
+        let syntax = ra_ap_syntax::SourceFile::parse(
+            &format!("use {};", path.join("::")),
+            ra_ap_ide::Edition::CURRENT,
+        )
+        .tree();
+        let written = syntax.syntax().descendants().find_map(ast::Path::cast);
+        let lexical = scoped
+            .as_ref()
+            .zip(written.as_ref())
+            .and_then(|(scope, path)| scope.speculative_resolve(path));
+        if lexical
+            .as_ref()
+            .is_some_and(|resolution| !matches!(resolution, PathResolution::Def(_)))
+        {
+            return Err(Abstain::NeedsTypes);
+        }
         let mut places = Vec::new();
-        for module in modules {
-            for def in resolve_module_path(db, module, path) {
+        let mut external = false;
+        let single = modules.len() == 1;
+        for mut module in modules {
+            let mut reached = true;
+            for name in &chain {
+                match module
+                    .children(db)
+                    .find(|child| child.name(db).is_some_and(|child| child.as_str() == name))
+                {
+                    Some(child) => module = child,
+                    None => {
+                        reached = false;
+                        break;
+                    }
+                }
+            }
+            if !reached {
+                continue;
+            }
+            let root = workspace.vfs.file_path(ra_ap_vfs::FileId::from_raw(
+                module.krate(db).root_file(db).index(),
+            ));
+            external |= root.as_path().is_some_and(|root| {
+                host.external_names
+                    .get(&PathBuf::from(root.to_string()))
+                    .is_some_and(|names| path.first().is_some_and(|name| names.contains(name)))
+            });
+            let definitions = if single && node.is_some() {
+                match lexical {
+                    Some(PathResolution::Def(def)) => vec![def],
+                    _ => Vec::new(),
+                }
+            } else {
+                resolve_module_path(db, module, path)
+            };
+            for def in definitions {
                 let Some(nav) = def.try_to_nav(&sema).map(|nav| nav.call_site) else {
                     continue;
                 };
@@ -91,6 +172,7 @@ pub fn resolve_path(
                     host.crate_roots
                         .contains_key(&PathBuf::from(path.to_string()))
                 }) {
+                    external = true;
                     continue;
                 }
                 let range = nav.focus_range.unwrap_or(nav.full_range);
@@ -106,7 +188,11 @@ pub fn resolve_path(
         places.sort();
         places.dedup();
         if places.is_empty() {
-            Err(Abstain::UnresolvedPath)
+            Err(if external {
+                Abstain::OutsideWorkspace
+            } else {
+                Abstain::UnresolvedPath
+            })
         } else {
             Ok(places)
         }
@@ -154,6 +240,14 @@ fn resolve_module_path(
 /// Every name available in a file's module scopes. Destinations come from the
 /// same resolver used for explicit paths.
 pub fn scope_names(host: &NamesHost, file: &Path) -> Result<Vec<String>, Abstain> {
+    scope_names_at(host, file, None)
+}
+
+pub fn scope_names_at(
+    host: &NamesHost,
+    file: &Path,
+    offset: Option<u32>,
+) -> Result<Vec<String>, Abstain> {
     let workspace = host.workspace.lock().unwrap();
     let Some((id, _)) = workspace.vfs.file_id(&vfs_path(&host_path(file))) else {
         return Err(Abstain::OutsideWorkspace);
@@ -161,22 +255,43 @@ pub fn scope_names(host: &NamesHost, file: &Path) -> Result<Vec<String>, Abstain
     let db = workspace.host.raw_database();
     attach_db(db, || {
         let sema = Semantics::new(db);
-        let modules: Vec<_> = sema
-            .file_to_module_defs(ra_ap_ide::FileId::from_raw(id.index()))
-            .collect();
-        if modules.is_empty() {
-            return Err(Abstain::OutsideWorkspace);
+        let file = ra_ap_ide::FileId::from_raw(id.index());
+        let parsed = sema.parse_guess_edition(file);
+        let mut names = Vec::new();
+        if let Some(offset) =
+            offset.filter(|offset| *offset <= u32::from(parsed.syntax().text_range().end()))
+        {
+            let node = parsed
+                .syntax()
+                .token_at_offset(offset.into())
+                .right_biased()
+                .and_then(|token| token.parent());
+            if let Some(scope) = node.as_ref().and_then(|node| sema.scope(node)) {
+                scope.process_all_names(&mut |name, def| {
+                    if matches!(def, ScopeDef::ModuleDef(_)) {
+                        names.push(name.as_str().to_string());
+                    }
+                });
+            }
+        } else {
+            for module in sema.file_to_module_defs(file) {
+                names.extend(
+                    module
+                        .scope(db, None)
+                        .into_iter()
+                        .filter_map(|(name, def)| {
+                            matches!(def, ScopeDef::ModuleDef(_)).then(|| name.as_str().to_string())
+                        }),
+                );
+            }
         }
-        let mut names: Vec<_> = modules
-            .into_iter()
-            .flat_map(|module| module.scope(db, None))
-            .filter_map(|(name, def)| {
-                matches!(def, ScopeDef::ModuleDef(_)).then(|| name.as_str().to_string())
-            })
-            .collect();
         names.sort();
         names.dedup();
-        Ok(names)
+        if names.is_empty() {
+            Err(Abstain::OutsideWorkspace)
+        } else {
+            Ok(names)
+        }
     })
 }
 
@@ -230,5 +345,28 @@ pub fn resolve_prefix(
         } else {
             Ok(places)
         }
+    })
+}
+
+/// Enumerate the engine's module graph, including inline modules.
+pub fn all_module_places(host: &NamesHost) -> Vec<ModulePlace> {
+    let workspace = host.workspace.lock().unwrap();
+    let db = workspace.host.raw_database();
+    attach_db(db, || {
+        let mut pending = Crate::all(db)
+            .into_iter()
+            .map(|krate| krate.root_module(db))
+            .collect::<Vec<_>>();
+        let mut places = Vec::new();
+        while let Some(module) = pending.pop() {
+            let Some(place) = host.place_of(&workspace, db, module) else {
+                continue;
+            };
+            places.push(place);
+            pending.extend(module.children(db));
+        }
+        places.sort();
+        places.dedup();
+        places
     })
 }

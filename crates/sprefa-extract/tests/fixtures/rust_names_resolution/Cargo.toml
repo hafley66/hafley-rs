@@ -1,0 +1,11 @@
+[package]
+name = "names-fixture"
+version = "0.1.0"
+edition = "2021"
+build = "3_build.rs"
+[workspace]
+[lib]
+path = "0_root.rs"
+[[bin]]
+name = "consumer"
+path = "2_bin.rs"

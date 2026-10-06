@@ -2,6 +2,7 @@
 //! module path and declaring `mod` item. No body is type checked.
 
 use super::*;
+use ra_ap_syntax::ast::HasAttrs;
 use ra_ap_vfs::VfsPath;
 use std::sync::{Arc, Mutex};
 
@@ -12,6 +13,9 @@ use super::super::rust_checker_session::{checker_workspace_loaded, CheckerWorksp
 pub struct ModulePlace {
     /// Dense workspace target identity, ordered by canonical root file.
     pub target: u32,
+    pub file: PathBuf,
+    /// Directory used when planning a child module declaration.
+    pub directory: PathBuf,
     /// The crate's root file, absolute: the crate's identity.
     pub crate_root: PathBuf,
     /// The crate's own name, as an extern path spells it.
@@ -32,6 +36,7 @@ pub struct RustModuleTree {
     pub(super) crate_roots: std::collections::BTreeMap<PathBuf, u32>,
     /// Absolute path -> the text the host holds in place of the disk's.
     staged: Mutex<HashMap<PathBuf, String>>,
+    pub(super) external_names: HashMap<PathBuf, std::collections::BTreeSet<String>>,
 }
 
 /// Cargo selects the source's workspace from its directory; rust-analyzer
@@ -81,6 +86,45 @@ pub fn module_tree_for_workspace(
         .enumerate()
         .map(|(index, root)| (root, index as u32))
         .collect();
+    let members: std::collections::BTreeSet<_> = discovered
+        .metadata
+        .workspace_packages()
+        .into_iter()
+        .filter_map(|package| {
+            package
+                .manifest_path
+                .parent()
+                .map(|path| path.to_path_buf())
+        })
+        .collect();
+    let mut external_names = HashMap::new();
+    for package in discovered.metadata.workspace_packages() {
+        let names: std::collections::BTreeSet<_> = package
+            .dependencies
+            .iter()
+            .filter(|dependency| {
+                dependency
+                    .path
+                    .as_ref()
+                    .is_none_or(|path| !members.contains(path))
+            })
+            .map(|dependency| {
+                dependency
+                    .rename
+                    .as_ref()
+                    .unwrap_or(&dependency.name)
+                    .replace('-', "_")
+            })
+            .chain(
+                ["std", "core", "alloc", "proc_macro", "test"]
+                    .into_iter()
+                    .map(str::to_string),
+            )
+            .collect();
+        for target in &package.targets {
+            external_names.insert(host_path(target.src_path.as_std_path()), names.clone());
+        }
+    }
     Ok(RustModuleTree {
         manifest: discovered.manifest.clone(),
         workspace,
@@ -88,6 +132,7 @@ pub fn module_tree_for_workspace(
         load,
         crate_roots,
         staged: Mutex::new(HashMap::new()),
+        external_names,
     })
 }
 
@@ -120,12 +165,10 @@ impl RustModuleTree {
             .map(|(path, text)| (host_path(path), text))
             .collect();
         for (path, text) in &wanted {
-            if staged.get(path) != Some(*text) {
-                workspace
-                    .vfs
-                    .set_file_contents(vfs_path(path), Some(text.as_bytes().to_vec()));
-                staged.insert(path.clone(), (*text).clone());
-            }
+            workspace
+                .vfs
+                .set_file_contents(vfs_path(path), Some(text.as_bytes().to_vec()));
+            staged.insert(path.clone(), (*text).clone());
         }
         let released: Vec<PathBuf> = staged
             .keys()
@@ -214,7 +257,11 @@ impl RustModuleTree {
                 range.value.end().into(),
             ))
         });
+        let file = path_of(module.definition_source_file_id(db).file_id()?.file_id(db))?;
+        let directory = self.module_directory(workspace, db, module)?;
         Some(ModulePlace {
+            file,
+            directory,
             target: *self.crate_roots.get(&crate_root)?,
             crate_root,
             crate_name: crate_name(db, krate),
@@ -224,6 +271,45 @@ impl RustModuleTree {
                 .collect(),
             decl,
         })
+    }
+
+    fn module_directory(
+        &self,
+        workspace: &CheckerWorkspace,
+        db: &RootDatabase,
+        module: ra_ap_hir::Module,
+    ) -> Option<PathBuf> {
+        let source = module.definition_source(db);
+        match source.value {
+            ra_ap_hir::ModuleSource::Module(_) => {
+                let mut directory = self.module_directory(workspace, db, module.parent(db)?)?;
+                directory.push(module.name(db)?.as_str());
+                Some(directory)
+            }
+            ra_ap_hir::ModuleSource::SourceFile(_) => {
+                let file = source.file_id.file_id()?.file_id(db);
+                let path = workspace
+                    .vfs
+                    .file_path(ra_ap_vfs::FileId::from_raw(file.index()))
+                    .as_path()?;
+                let file = PathBuf::from(path.to_string());
+                let attributed = module.declaration_source(db).is_some_and(|source| {
+                    source.value.attrs().any(|attr| {
+                        attr.path()
+                            .is_some_and(|path| path.syntax().text().to_string() == "path")
+                    })
+                });
+                if module.parent(db).is_none()
+                    || file.file_name().is_some_and(|name| name == "mod.rs")
+                    || attributed
+                {
+                    file.parent().map(Path::to_path_buf)
+                } else {
+                    Some(file.with_extension(""))
+                }
+            }
+            _ => None,
+        }
     }
 
     /// The name crate `from` reaches crate `to` by: its dependency entry's

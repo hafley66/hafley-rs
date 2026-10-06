@@ -671,6 +671,8 @@ pub enum UnresolvedReason {
     /// An interface dispatch site whose interface has more than 64
     /// implementers: the `I.M` spec edge stays, the fan-out is capped.
     FanoutCap,
+    /// Names mode cannot infer a method receiver.
+    NeedsTypes,
 }
 
 /// One call site a `Resolve<CallF>` arm dropped: where, why, and the callee as
@@ -694,6 +696,7 @@ impl UnresolvedReason {
             UnresolvedReason::Inferred => "inferred",
             UnresolvedReason::External => "external",
             UnresolvedReason::FanoutCap => "fanout_cap",
+            UnresolvedReason::NeedsTypes => "needs_types",
         }
     }
 }
@@ -1703,7 +1706,7 @@ pub struct IndexBag {
     pub ts_globals: std::sync::OnceLock<Option<std::collections::HashSet<String>>>,
     /// the rust module plane, same discipline as `ts_modules`.
     #[cfg(feature = "rust")]
-    pub rust_modules: std::sync::OnceLock<crate::read::lang::rust_modules::RustModuleIndex>,
+    pub rust_modules: std::sync::OnceLock<crate::read::lang::rust_names_index::RustNamesIndex>,
     /// the go module plane, same discipline as `ts_modules`/`rust_modules`.
     #[cfg(feature = "go")]
     pub go_modules: std::sync::OnceLock<crate::read::lang::go_modules::GoModuleIndex>,

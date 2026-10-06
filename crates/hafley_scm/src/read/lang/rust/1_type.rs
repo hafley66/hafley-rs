@@ -182,197 +182,13 @@ impl RustSource {
 }
 
 /// A candidate is interned AS WRITTEN (`hir::Struct`) and every index keys on a
-/// bare declaration name, so the trailing segment is the key.
-/// The SYNTAX dst leg of one candidate: same-file entity, else a unique corpus
-/// site, else None. The checker tier answers ahead of it, at the caller.
-#[allow(clippy::too_many_arguments)]
-fn resolve_type_dst(
-    types: &FamilyBundle<TypeF>,
-    strings: &Strings,
-    index: Option<&DefIndex>,
-    modules: Option<&crate::read::lang::rust_modules::RustModuleIndex>,
-    paths: Option<&PathIndex>,
-    own_path: Option<&str>,
-    name: &str,
-    kind: TypeEdgeKind,
-) -> Option<(ContentId, Span, ResolutionOrigin)> {
-    let (qualifier, trailing) = type_probe_key(name, kind);
-    if let Some(trait_name) = qualifier {
-        if let Some((blob, span)) = modules
-            .zip(own_path)
-            .and_then(|(m, from)| m.assoc_type_target(from, trait_name, trailing))
-        {
-            return Some((blob, span, ResolutionOrigin::ModulePlane));
-        }
-    }
-    if let Some(found) = name_match_type_dst(types, strings, index, modules, own_path, name) {
-        return Some(found);
-    }
-    let Some(qualifier) = qualifier else {
-        return None;
-    };
-    // The qualifier narrows: only a declaration whose FILE spells a module path
-    // ending in it is the one `a::b::C` names.
-    let segments: Vec<&str> = qualifier.split("::").collect();
-    let qualifier = segments
-        .iter()
-        .map(|segment| (*segment).to_string())
-        .collect::<Vec<_>>();
-    modules
-        .zip(own_path)
-        .and_then(|(m, from)| m.qualified_type_target(from, &qualifier, trailing))
-        .or_else(|| module_scoped_type(index, modules, paths, own_path, &segments, trailing))
-        .map(|(blob, span)| (blob, span, ResolutionOrigin::ModulePlane))
-        .or_else(|| {
-            let head = segments.last().copied().unwrap_or_default();
-            if head != "Self"
-                && head.chars().next().is_some_and(char::is_uppercase)
-                && index.is_none_or(|index| {
-                    !corpus_defs(index, head)
-                        .iter()
-                        .any(|site| site.family == FamilyTag::Type)
-                })
-            {
-                return None;
-            }
-            unique_declared_type(index, modules, own_path, trailing)
-                .filter(|(blob, _)| {
-                    modules.zip(own_path).is_some_and(|(m, from)| {
-                        m.qualified_type_fallback_sees(from, &qualifier, trailing, blob)
-                    })
-                })
-                .map(|(blob, span)| (blob, span, ResolutionOrigin::CorpusUnique))
-        })
-}
-
-/// The name-match legs over ONE key: this file's own entity, the file's `use`
-/// bindings, then a corpus-unique type declaration.
-fn name_match_type_dst(
-    types: &FamilyBundle<TypeF>,
-    strings: &Strings,
-    index: Option<&DefIndex>,
-    modules: Option<&crate::read::lang::rust_modules::RustModuleIndex>,
-    own_path: Option<&str>,
-    name: &str,
-) -> Option<(ContentId, Span, ResolutionOrigin)> {
-    let same_file = types
-        .nodes
-        .iter()
-        .find(|node| node.name.map_or(false, |id| strings.lookup(id) == name));
-    let own_blob = modules.zip(own_path).and_then(|(m, path)| m.blob_of(path));
-    if let (Some(node), Some(index)) = (same_file, index) {
-        if let Some(found) = corpus_defs(index, name)
-            .iter()
-            .find(|site| site.span == node.span && own_blob.map_or(true, |own| *own == site.blob))
-            .map(|site| (site.blob.clone(), site.span, ResolutionOrigin::SameFile))
-        {
-            return Some(found);
-        }
-    }
-    if let Some((blob, span)) = modules
-        .zip(own_path)
-        .and_then(|(m, from)| m.type_target(from, name))
-    {
-        return Some((blob, span, ResolutionOrigin::ModulePlane));
-    }
-    if modules
-        .zip(own_path)
-        .is_some_and(|(m, from)| m.binds_external(from, name))
-    {
-        return None;
-    }
-    // These bare names are supplied by the Rust prelude. A same-file
-    // declaration or an explicit import above can shadow them; an unrelated
-    // corpus declaration cannot.
-    if matches!(name, "Result" | "Box") {
-        return None;
-    }
-    unique_declared_type(index, modules, own_path, name)
-        .map(|(blob, span)| (blob, span, ResolutionOrigin::CorpusUnique))
-}
-
-/// The one corpus TYPE declaration of `name`, or nothing. A call-plane def
-/// sharing the name (an enum variant, a fn) never makes the pick ambiguous.
-fn unique_declared_type(
-    index: Option<&DefIndex>,
-    modules: Option<&crate::read::lang::rust_modules::RustModuleIndex>,
-    own_path: Option<&str>,
-    name: &str,
-) -> Option<(ContentId, Span)> {
-    let declared: Vec<&DefSite> = index
-        .map(|index| corpus_defs(index, name))
-        .unwrap_or(&[])
-        .iter()
-        .filter(|site| site.family == FamilyTag::Type)
-        .filter(|site| {
-            modules
-                .zip(own_path)
-                .map_or(true, |(m, from)| m.sees(from, &site.blob))
-        })
-        .filter(|site| {
-            !modules
-                .zip(own_path)
-                .is_some_and(|(m, from)| m.private_import_target(from, name, &site.blob))
-        })
-        .collect();
-    match declared.as_slice() {
-        [only] => Some((only.blob.clone(), only.span)),
-        _ => None,
-    }
-}
-
-/// `call_name_match_in_module` on the TYPE facet: the declarations of `name`
-/// whose file's module path ends in `qualifier`, unique blob only.
-fn module_scoped_type(
-    index: Option<&DefIndex>,
-    modules: Option<&crate::read::lang::rust_modules::RustModuleIndex>,
-    paths: Option<&PathIndex>,
-    own_path: Option<&str>,
-    qualifier: &[&str],
-    name: &str,
-) -> Option<(ContentId, Span)> {
-    let paths = paths?;
-    let from = own_path?;
-    let want = module_target(
-        from,
-        qualifier,
-        modules.and_then(|index| index.crate_root_of(from)),
-    )?;
-    let sites: Vec<&DefSite> = corpus_defs(index?, name)
-        .iter()
-        .filter(|site| site.family == FamilyTag::Type)
-        .filter(|site| {
-            paths.get(&site.blob).is_some_and(|path| {
-                want.covers(&module_segments(path))
-                    && modules.is_none_or(|m| m.sees_path(from, path))
-            })
-        })
-        .collect();
-    match sites.as_slice() {
-        [only] => Some((only.blob.clone(), only.span)),
-        _ => None,
-    }
-}
-
-/// A bare name with no same-file def: the `use` binding named `name` in
-/// `own_path`, resolved through the module plane.
-pub(super) fn import_bound_target(
-    modules: Option<&crate::read::lang::rust_modules::RustModuleIndex>,
-    own_path: Option<&str>,
-    name: &str,
-) -> Option<(ContentId, Span)> {
-    modules?.target(own_path?, name)
-}
-
 impl Resolve<TypeF> for RustSource {
     fn resolve(&self, output: &RyiOutput, cx: &ProjectCx) -> Vec<ProjectEdge<TypeF>> {
         let Some(types) = &output.types else {
             return Vec::new();
         };
-        let index = cx.indexes.def_index.get();
         let modules = cx.indexes.rust_modules.get();
         let checker = cx.indexes.rust_checker.get();
-        let paths = cx.indexes.paths.get();
         let own_path = own_blob(cx, output)
             .zip(cx.indexes.paths.get())
             .and_then(|(blob, paths)| paths.get(&blob).map(str::to_string));
@@ -398,16 +214,28 @@ impl Resolve<TypeF> for RustSource {
             let referenced = output.strings.lookup(candidate.to);
             let zero = (ZERO_CONTENT_ID, Span::empty(), ResolutionOrigin::Unresolved);
             let name_match = || {
-                resolve_type_dst(
-                    types,
-                    &output.strings,
-                    index,
-                    modules,
-                    paths,
-                    own_path.as_deref(),
-                    referenced,
-                    candidate.kind,
-                )
+                modules
+                    .zip(own_path.as_deref())
+                    .and_then(|(modules, from)| {
+                        let segments = referenced
+                            .split("::")
+                            .map(str::to_string)
+                            .collect::<Vec<_>>();
+                        let bound = modules
+                            .binding_at(
+                                from,
+                                &segments,
+                                Some(candidate.owner.start),
+                                FamilyTag::Type,
+                            )
+                            .ok()?;
+                        bound.target_name?;
+                        Some((
+                            bound.target_blob,
+                            bound.target_span,
+                            ResolutionOrigin::ModulePlane,
+                        ))
+                    })
             };
             // The CHECKER tier answers first; a name one file resolves two ways
             // takes the answer nearest the owner.

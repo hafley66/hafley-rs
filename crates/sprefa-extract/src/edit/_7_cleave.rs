@@ -1999,8 +1999,9 @@ pub(super) fn rust_children(node: tree_sitter::Node<'_>) -> Vec<tree_sitter::Nod
 
 fn rust_route_index(
     cx: &MoveCx,
-) -> Result<hafley_scm::read::lang::rust_modules::RustModuleIndex, String> {
-    use hafley_scm::read::lang::rust_modules::{rust_module_facts_from_tree, RustModuleIndex};
+) -> Result<hafley_scm::read::lang::rust_names_index::RustNamesIndex, String> {
+    use hafley_scm::read::lang::rust_modules::rust_module_facts_from_tree;
+    use hafley_scm::read::lang::rust_names_index::RustNamesIndex;
     let mut corpus = Vec::new();
     let mut outputs = Vec::new();
     let mut modules = Vec::new();
@@ -2037,7 +2038,11 @@ fn rust_route_index(
         .map(|(blob, output)| (blob.clone(), output.as_ref()))
         .collect();
     let defs = hafley_scm::read::types::build_def_index(&pairs);
-    Ok(RustModuleIndex::build(modules, &corpus, &defs))
+    let index = RustNamesIndex::build_in(cx.root(), modules, &corpus, &defs);
+    let texts: Vec<_> = cx.resolver_texts().into_iter().filter(|(path, _)| path.ends_with(".rs"))
+        .map(|(path, text)| (cx.abs(path), text.to_string())).collect();
+    index.sync(&texts)?;
+    Ok(index)
 }
 
 /// Where `export` goes in a declaration: its start, plus each later line that
@@ -2145,7 +2150,7 @@ struct Imports {
     names: Vec<(String, String, String, String, bool)>,
     /// Resolved call sites `(caller file, site span, callee file, callee name)`.
     calls: Vec<(String, Span, String, String)>,
-    rust_routes: hafley_scm::read::lang::rust_modules::RustModuleIndex,
+    rust_routes: hafley_scm::read::lang::rust_names_index::RustNamesIndex,
     /// Target -> importers over every resolved module specifier: the barrels a
     /// cleave must re-read are the importers of SRC.
     importers: BTreeMap<String, BTreeSet<String>>,

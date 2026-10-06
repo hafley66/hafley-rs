@@ -342,13 +342,14 @@ pub fn target_calls(
 
 #[cfg(feature = "rust-checker")]
 pub use super::rust_checker_ra::{
-    demand_walk, BodyEdge, BodyEdges, EdgeKind, WalkAnswer, WalkEdge, WalkNode, WalkQuestion,
-    WalkSession,
+    all_module_places, module_places, module_tree, module_tree_for_workspace, resolve_method,
+    resolve_path, resolve_path_at, resolve_prefix, scope_names, scope_names_at, Abstain, DefPlace, ModulePlace,
+    NamesHost, RustModuleTree,
 };
 #[cfg(feature = "rust-checker")]
 pub use super::rust_checker_ra::{
-    module_places, module_tree, module_tree_for_workspace, resolve_method, resolve_path,
-    resolve_prefix, scope_names, Abstain, DefPlace, ModulePlace, NamesHost, RustModuleTree,
+    demand_walk, BodyEdge, BodyEdges, EdgeKind, WalkAnswer, WalkEdge, WalkNode, WalkQuestion,
+    WalkSession,
 };
 #[cfg(feature = "rust-checker")]
 pub use super::rust_checker_ra::{rename, RenameEdit, RenameFailure, RenameSeed};

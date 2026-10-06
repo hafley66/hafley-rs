@@ -27,6 +27,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use rayon::prelude::*;
 use syn::spanned::Spanned;
 
+use crate::edit::rust_module_places::RustModulePlaces;
 use crate::lang::rust::{syn_span, RustSource};
 use crate::move_cx::{dirname, join_rel, relative_between, stem, MoveCx};
 use crate::project::extract_pool;
@@ -316,16 +317,8 @@ fn scan_file(text: &str) -> Option<FileScan> {
 fn scan_with(text: &str, runs: bool) -> Option<(FileScan, Vec<SegRun>)> {
     let parsed = hafley_scm::lang::rust::parse_rust_file(text).ok()?;
     let mut scan = FileScan::default();
-    collect_items(
-        &parsed.items,
-        text,
-        &mut Vec::new(),
-        &mut scan,
-    );
-    scan.first_item = parsed
-        .items
-        .first()
-        .map(|item| syn_span(item.span()).start);
+    collect_items(&parsed.items, text, &mut Vec::new(), &mut scan);
+    scan.first_item = parsed.items.first().map(|item| syn_span(item.span()).start);
     let mut includes = IncludeScan {
         source: text,
         out: Vec::new(),
@@ -346,12 +339,7 @@ fn scan_with(text: &str, runs: bool) -> Option<(FileScan, Vec<SegRun>)> {
 
 /// Descends into inline `mod name { .. }` bodies, carrying the block names: a
 /// decl nested in one resolves against a directory per enclosing block.
-fn collect_items(
-    items: &[syn::Item],
-    source: &str,
-    chain: &mut Vec<String>,
-    out: &mut FileScan,
-) {
+fn collect_items(items: &[syn::Item], source: &str, chain: &mut Vec<String>, out: &mut FileScan) {
     for item in items {
         match item {
             syn::Item::Mod(mod_item) => {
@@ -407,11 +395,7 @@ fn collect_items(
 /// type, trait or mod. The span covers the kind keyword alone, attributes and
 /// docs excluded, so the respell writes `pub(crate) <keyword>` over exactly
 /// those bytes.
-fn own_item(
-    item: &syn::Item,
-    source: &str,
-    chain: &[String],
-) -> Option<OwnItem> {
+fn own_item(item: &syn::Item, source: &str, chain: &[String]) -> Option<OwnItem> {
     let (kw, name, vis, attrs) = match item {
         syn::Item::Fn(it) => ("fn", it.sig.ident.to_string(), &it.vis, &it.attrs),
         syn::Item::Struct(it) => ("struct", it.ident.to_string(), &it.vis, &it.attrs),
@@ -633,10 +617,7 @@ fn use_runs(
     };
     match tree {
         syn::UseTree::Path(segment) => {
-            prefix.push((
-                segment.ident.to_string(),
-                syn_span(segment.ident.span()),
-            ));
+            prefix.push((segment.ident.to_string(), syn_span(segment.ident.span())));
             use_runs(&segment.tree, prefix, out);
             prefix.pop();
         }
@@ -647,17 +628,11 @@ fn use_runs(
         }
         syn::UseTree::Name(leaf) => emit(
             prefix,
-            Some((
-                leaf.ident.to_string(),
-                syn_span(leaf.ident.span()),
-            )),
+            Some((leaf.ident.to_string(), syn_span(leaf.ident.span()))),
         ),
         syn::UseTree::Rename(leaf) => emit(
             prefix,
-            Some((
-                leaf.ident.to_string(),
-                syn_span(leaf.ident.span()),
-            )),
+            Some((leaf.ident.to_string(), syn_span(leaf.ident.span()))),
         ),
         syn::UseTree::Glob(_) => emit(prefix, None),
     }
@@ -667,7 +642,10 @@ fn use_runs(
 
 /// The directory a file's child `mod` decls resolve against: a crate root and a
 /// `mod.rs` own theirs, every other file owns one named after itself.
-fn module_dir(rel: &str, roots: &BTreeSet<String>) -> String {
+fn module_dir(rel: &str, roots: &RustModulePlaces) -> String {
+    if let Some(directory) = roots.directory(rel) {
+        return directory;
+    }
     if is_mod_rs(rel, roots) {
         dirname(rel).to_string()
     } else {
@@ -675,13 +653,13 @@ fn module_dir(rel: &str, roots: &BTreeSet<String>) -> String {
     }
 }
 
-fn is_mod_rs(rel: &str, roots: &BTreeSet<String>) -> bool {
+fn is_mod_rs(rel: &str, roots: &RustModulePlaces) -> bool {
     stem(rel) == "mod" || roots.contains(rel)
 }
 
 /// The directory the decl itself resolves against: the declaring file's module
 /// directory, one level deeper per enclosing inline `mod` block.
-fn decl_base(rel: &str, chain: &[String], roots: &BTreeSet<String>) -> String {
+fn decl_base(rel: &str, chain: &[String], roots: &RustModulePlaces) -> String {
     chain
         .iter()
         .fold(module_dir(rel, roots), |dir, block| join_rel(&dir, block))
@@ -689,7 +667,7 @@ fn decl_base(rel: &str, chain: &[String], roots: &BTreeSet<String>) -> String {
 
 /// The directory a `#[path]` on the decl resolves against. Outside an inline
 /// block that is the declaring FILE's directory, not its module directory.
-fn attr_base(rel: &str, chain: &[String], roots: &BTreeSet<String>) -> String {
+fn attr_base(rel: &str, chain: &[String], roots: &RustModulePlaces) -> String {
     match chain.is_empty() {
         true => dirname(rel).to_string(),
         false => decl_base(rel, chain, roots),
@@ -707,19 +685,12 @@ fn natural_paths(base: &str, name: &str) -> [String; 2] {
 /// The corpus file one decl names, pre-move.
 fn resolve_decl(
     cx: &MoveCx,
-    roots: &BTreeSet<String>,
+    roots: &RustModulePlaces,
     rel: &str,
     decl: &ModDecl,
 ) -> Option<String> {
-    match &decl.attr {
-        Some((_, value)) => {
-            let target = join_rel(&attr_base(rel, &decl.chain, roots), value);
-            cx.contains(&target).then_some(target)
-        }
-        None => natural_paths(&decl_base(rel, &decl.chain, roots), &decl.name)
-            .into_iter()
-            .find(|candidate| cx.contains(candidate)),
-    }
+    let _ = cx;
+    roots.declared(rel, &decl.chain, &decl.name)
 }
 
 fn decl_ref(rel: &str, decl: &ModDecl, target: &str) -> ImportRef {
@@ -861,8 +832,32 @@ fn relocate_plan(cx: &MoveCx) -> &RelocatePlan {
 fn build_relocate_plan(cx: &MoveCx) -> RelocatePlan {
     let mut plan = RelocatePlan::default();
     let roots = crate_roots(cx);
+    for (old, _) in cx.moved().iter().filter(|(old, _)| old.ends_with(".rs")) {
+        if roots
+            .provider
+            .as_ref()
+            .ok()
+            .and_then(|provider| provider.homes(&cx.abs(old).to_string_lossy()).ok())
+            .is_none()
+        {
+            let reason = roots
+                .provider
+                .as_ref()
+                .err()
+                .cloned()
+                .unwrap_or_else(|| "outside_workspace".into());
+            plan.errors
+                .push(format!("Rust module resolution for {old}: {reason}"));
+        }
+    }
     for (old, new) in cx.moved().iter().filter(|(old, _)| old.ends_with(".rs")) {
-        if owning_root(old, roots).is_some() && owning_root(new, roots).is_none() {
+        if !cross::active(cx)
+            && owning_root(old, roots).is_some_and(|root| {
+                std::path::Path::new(&root)
+                    .parent()
+                    .is_some_and(|directory| !std::path::Path::new(new).starts_with(directory))
+            })
+        {
             plan.errors.push(format!(
                 "move destination {new} is outside the source Rust crate root for {old}"
             ));
@@ -1037,7 +1032,7 @@ fn build_relocate_plan(cx: &MoveCx) -> RelocatePlan {
 /// every ancestor `mod` on its new path is written `pub`.
 fn publish_ancestors(
     cx: &MoveCx,
-    roots: &BTreeSet<String>,
+    roots: &RustModulePlaces,
     moves: &BTreeMap<String, Relocation>,
     plan: &mut RelocatePlan,
 ) {
@@ -1048,7 +1043,7 @@ fn publish_ancestors(
         let ancestors = &relocation.new_path[..relocation.new_path.len() - 1];
         for depth in 1..=ancestors.len() {
             let name = &ancestors[depth - 1];
-            let Some((file, text)) = parent_files(&root, &ancestors[..depth - 1])
+            let Some((file, text)) = parent_files(roots, &root, &ancestors[..depth - 1])
                 .into_iter()
                 .find_map(|candidate| {
                     editable(cx, &candidate).and_then(|rel| Some((rel.clone(), cx.text(&rel)?)))
@@ -1093,7 +1088,7 @@ fn publish_ancestors(
 /// `pub(crate)`.
 fn widen_privates(
     cx: &MoveCx,
-    roots: &BTreeSet<String>,
+    roots: &RustModulePlaces,
     moves: &BTreeMap<String, Relocation>,
     scanned: &[(String, String, FileScan, Vec<SegRun>)],
     plan: &mut RelocatePlan,
@@ -1144,7 +1139,7 @@ fn widen_privates(
 
 /// The module path a file answers to once the batch lands: its destination when
 /// it moves, otherwise where it already sits.
-fn here_after(cx: &MoveCx, roots: &BTreeSet<String>, rel: &str) -> Option<Vec<String>> {
+fn here_after(cx: &MoveCx, roots: &RustModulePlaces, rel: &str) -> Option<Vec<String>> {
     let laid = cx.destination(rel).unwrap_or(rel);
     module_path(laid, roots).map(|(_, path)| path)
 }
@@ -1250,7 +1245,7 @@ fn relocate_scan(cx: &MoveCx) -> Vec<(String, String, FileScan, Vec<SegRun>)> {
 /// and the default `#[path]` arm still answers.
 fn plan_relocation(
     cx: &MoveCx,
-    roots: &BTreeSet<String>,
+    roots: &RustModulePlaces,
     parent_rel: &str,
     parent_text: &str,
     decl: &ModDecl,
@@ -1286,7 +1281,7 @@ fn plan_relocation(
         true => old_name.clone(),
         false => new_path.last().cloned().unwrap_or_else(|| old_name.clone()),
     };
-    let candidates = parent_files(&root, &new_path[..new_path.len() - 1]);
+    let candidates = parent_files(roots, &root, &new_path[..new_path.len() - 1]);
     let Some((edit_at, lands_at)) = candidates
         .iter()
         .find_map(|candidate| editable(cx, candidate).map(|pre| (pre, candidate.clone())))
@@ -1456,47 +1451,20 @@ fn qualifier_of(idents: &[String]) -> (usize, usize, bool) {
 
 /// A file's crate root and its module path from that root, by file layout alone.
 /// A `#[path]` decl breaks that reading, so only natural decls reach here.
-fn module_path(rel: &str, roots: &BTreeSet<String>) -> Option<(String, Vec<String>)> {
-    let root = owning_root(rel, roots)?;
-    if rel == root {
-        return Some((root, Vec::new()));
-    }
-    let base = dirname(&root);
-    let tail = match base.is_empty() {
-        true => rel,
-        false => rel.strip_prefix(&format!("{base}/"))?,
-    };
-    let mut parts: Vec<String> = tail.split('/').map(str::to_string).collect();
-    let name = parts.pop()?;
-    let name = name.strip_suffix(".rs")?;
-    if name != "mod" {
-        parts.push(name.to_string());
-    }
-    Some((root, parts))
+fn module_path(rel: &str, roots: &RustModulePlaces) -> Option<(String, Vec<String>)> {
+    roots.home(rel)
 }
 
 /// The crate root `rel` answers to: the one whose directory is its deepest
 /// ancestor, and itself when it is a root.
-fn owning_root(rel: &str, roots: &BTreeSet<String>) -> Option<String> {
-    roots
-        .iter()
-        .filter(|root| rel == root.as_str() || under(rel, dirname(root)))
-        .max_by_key(|root| (rel == root.as_str(), dirname(root).len()))
-        .cloned()
+fn owning_root(rel: &str, roots: &RustModulePlaces) -> Option<String> {
+    roots.home(rel).map(|(root, _)| root)
 }
 
 /// The two files rustc accepts for the module path `path` under `root`'s crate,
 /// or the crate root itself when `path` is the root module.
-fn parent_files(root: &str, path: &[String]) -> Vec<String> {
-    if path.is_empty() {
-        return vec![root.to_string()];
-    }
-    let base = dirname(root);
-    let joined = path.join("/");
-    vec![
-        join_rel(base, &format!("{joined}.rs")),
-        join_rel(base, &format!("{joined}/mod.rs")),
-    ]
+fn parent_files(roots: &RustModulePlaces, root: &str, path: &[String]) -> Vec<String> {
+    roots.files(root, path)
 }
 
 /// The pre-move rel to edit for a file that exists once the batch lands: itself
@@ -1708,39 +1676,22 @@ fn quote_of(literal: &str) -> char {
 
 /// Crate roots are mod-rs files and a `[[bin]] path` can put one anywhere, so
 /// the manifests are read. ONE read per root per process, `ts_rehome::resolver`'s law.
-fn crate_roots(cx: &MoveCx) -> &BTreeSet<String> {
+fn crate_roots(cx: &MoveCx) -> &RustModulePlaces {
     cx.crate_roots.get_or_init(|| {
-        let mut roots: BTreeSet<String> = cx
-            .files()
-            .iter()
-            .filter(|rel| auto_crate_root(rel))
-            .cloned()
+        let mut texts: BTreeMap<_, _> = cx
+            .files_of(&RustSource)
+            .into_iter()
+            .filter_map(|path| Some((cx.abs(path), cx.text(path)?)))
             .collect();
-        for manifest in cx.files().iter().filter(|rel| is_manifest(rel)) {
-            let Some(text) = cx.text(manifest) else {
-                continue;
-            };
-            let package_dir = dirname(manifest);
-            for leaf in manifest_leaves(&text) {
-                roots.insert(join_rel(package_dir, toml_bare(&leaf.literal)));
-            }
-        }
-        roots
+        texts.extend(
+            cx.resolver_texts()
+                .into_iter()
+                .filter(|(path, _)| path.ends_with(".rs"))
+                .map(|(path, text)| (cx.abs(path), text.to_string())),
+        );
+        let texts = texts.into_iter().collect::<Vec<_>>();
+        RustModulePlaces::open(cx.root(), &texts)
     })
-}
-
-/// Cargo's target auto-discovery, as path shapes: the two library/binary roots,
-/// the `src/bin` binaries, the integration/bench/example roots, the build script.
-fn auto_crate_root(rel: &str) -> bool {
-    let parts: Vec<&str> = rel.split('/').collect();
-    let (Some(last), Some(parent)) = (parts.last(), parts.iter().nth_back(1)) else {
-        return parts.last() == Some(&"build.rs");
-    };
-    match *parent {
-        "src" => matches!(*last, "lib.rs" | "main.rs"),
-        "bin" | "tests" | "benches" | "examples" => last.ends_with(".rs"),
-        _ => *last == "build.rs",
-    }
 }
 
 /// Whether a file can name the batch at all. A superset filter: it never drops a

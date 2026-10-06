@@ -3,10 +3,7 @@
 //! are identifier byte spans from `syn_span`; no new crate.
 //! @comment-ok: module header, the seam list every lang file opens with
 //!
-//! rustc's module-file law (crate roots, `mod.rs` owning its directory, a module
-//! path read off the layout) is restated here rather than shared: the same law
-//! sits in `rust_rehome.rs:685-1300` behind a `MoveCx`, and a rename carries a
-//! `RenameCx`.
+//! Module ownership and path prefixes come from the shared Names provider.
 //!
 //! Seats a run reports and never rewrites: a glob `use m::*` whose scope then
 //! writes the bare name, and a `.old` member token when the anchor is a method.
@@ -34,8 +31,6 @@ use crate::edit_seams::Respell;
 use crate::edit_seams::SymbolRef;
 use crate::edit_seams::SymbolSeat;
 use crate::lang::rust::{build_line_starts, syn_span, RustSource};
-use crate::lang::rust_modules::CargoManifest;
-use crate::move_cx::{dirname, join_rel, stem};
 use crate::rename_cx::{RenameCx, RenameRequest};
 use crate::types::UnresolvedReason;
 use hafley_scm::atoms::{NameId, Strings};
@@ -61,6 +56,13 @@ impl Rename for RustSource {
             return crate::edit::ra_rename::symbol_refs_and_abstains(cx, request);
         }
         let corpus = Corpus::open(cx, &request.old);
+        if let Some(reason) = corpus.failures.get(&request.anchor) {
+            return Err(RenameStop::Refused {
+                anchor: request.anchor.clone(),
+                engine: "rust-analyzer Names",
+                reason: reason.clone(),
+            });
+        }
         let anchor = corpus
             .scans
             .get(&request.anchor)
@@ -160,7 +162,7 @@ impl Rename for RustSource {
                     file,
                     span,
                     symbol: request.old.clone(),
-                    reason: UnresolvedReason::Inferred.as_str(),
+                    reason: UnresolvedReason::NeedsTypes.as_str(),
                     receiver,
                 });
             }
@@ -198,7 +200,11 @@ impl Rename for RustSource {
         request: &RenameRequest,
         reference: &SymbolRef,
     ) -> Option<Respell> {
-        if let Some(text) = cx.slow().then(|| cx.slow_edit(&reference.file, reference.span)).flatten() {
+        if let Some(text) = cx
+            .slow()
+            .then(|| cx.slow_edit(&reference.file, reference.span))
+            .flatten()
+        {
             return Some(Respell {
                 file: reference.file.clone(),
                 span: reference.span,
@@ -210,15 +216,11 @@ impl Rename for RustSource {
         // typing walk proves the shape so a same-spelled use leaf never matches.
         let shorthand = match cx.text(&reference.file) {
             Some(source) => match hafley_scm::lang::rust::parse_rust_file(&source) {
-                Ok(parsed) => {
-                    field_sites(&parsed, &request.old)
-                        .iter()
-                        .any(|site| {
-                            matches!(site,
+                Ok(parsed) => field_sites(&parsed, &request.old).iter().any(|site| {
+                    matches!(site,
                                 FieldSite::Owner { span, shorthand: true, .. }
                                     if *span == reference.span)
-                        })
-                }
+                }),
                 Err(_) => false,
             },
             None => false,
@@ -305,22 +307,34 @@ fn module_of(home: &ModuleId, chain: &[String]) -> ModuleId {
     (home.0.clone(), path)
 }
 
-/// Every Rust file that spells the old name, scanned once, plus the two layout
-/// tables the module law reads.
+/// Every Rust file that spells the old name, scanned once, with provider places.
 struct Corpus {
     scans: BTreeMap<String, FileScan>,
     names: Rc<RefCell<Strings>>,
     /// rel -> every module that file IS, in route order; never empty.
     homes: BTreeMap<String, Vec<ModuleId>>,
-    /// A crate's identifier as a `use` writes it -> that crate's root file.
-    crates: BTreeMap<String, String>,
+    /// Shared module answers over the same overlaid corpus.
+    modules: Rc<hafley_scm::read::lang::rust_names_index::RustNamesIndex>,
+    root: std::path::PathBuf,
+    failures: BTreeMap<String, String>,
 }
 
 impl Corpus {
     fn open(cx: &RenameCx, old: &str) -> Self {
-        let roots = crate_roots(cx);
-        let crates = crate_idents(cx);
-        let path_mods = path_module_table(cx, &roots);
+        let loaded = cx.rust_names.get_or_init(|| {
+            let texts: Vec<_> = cx
+                .files_of(&RustSource)
+                .into_iter()
+                .filter_map(|rel| Some((cx.abs(rel), cx.text(rel)?.to_string())))
+                .collect();
+            hafley_scm::read::lang::rust_names_index::RustNamesIndex::open(&texts).map(Rc::new)
+        });
+        let modules = loaded
+            .as_ref()
+            .cloned()
+            .unwrap_or_else(|_| Rc::new(Default::default()));
+        let synced = loaded.as_ref().map(|_| ()).map_err(Clone::clone);
+        let mut failures = BTreeMap::new();
         let mut scans = BTreeMap::new();
         let mut homes = BTreeMap::new();
         let names = cx.names();
@@ -361,13 +375,32 @@ impl Corpus {
             {
                 continue;
             }
-            homes.insert(
-                rel.to_string(),
-                path_mods
-                    .get(rel)
-                    .cloned()
-                    .unwrap_or_else(|| vec![module_path(rel, &roots)]),
-            );
+            let places = synced
+                .as_ref()
+                .map_err(|reason| reason.clone())
+                .and_then(|_| modules.homes(&cx.abs(rel).to_string_lossy()));
+            match places {
+                Ok(places) => {
+                    homes.insert(
+                        rel.to_string(),
+                        places
+                            .into_iter()
+                            .map(|(root, path)| {
+                                (
+                                    root.strip_prefix(cx.root())
+                                        .unwrap_or(&root)
+                                        .to_string_lossy()
+                                        .to_string(),
+                                    path,
+                                )
+                            })
+                            .collect(),
+                    );
+                }
+                Err(reason) => {
+                    failures.insert(rel.to_string(), reason);
+                }
+            }
             scans.insert(rel.to_string(), scanned);
         }
         drop(interned);
@@ -375,46 +408,37 @@ impl Corpus {
             scans,
             names,
             homes,
-            crates,
+            modules,
+            root: cx.root().to_path_buf(),
+            failures,
         }
     }
 
-    /// The modules a file is. A file under no crate root answers to itself, so its
-    /// own paths still resolve against each other.
+    /// Every provider place for a reached file; orphan files have no place.
     fn homes_of(&self, rel: &str) -> &[ModuleId] {
-        static ORPHAN: [ModuleId; 1] = [(String::new(), Vec::new())];
-        self.homes.get(rel).map_or(&ORPHAN, Vec::as_slice)
+        self.homes.get(rel).map_or(&[], Vec::as_slice)
     }
 
     /// The `::`-prefix of a path, as a module. `None` when it climbs above a
     /// crate root, which names nothing.
     fn resolve(&self, home: &ModuleId, chain: &[String], prefix: &[String]) -> Option<ModuleId> {
-        let mut here: Vec<String> = home.1.iter().chain(chain).cloned().collect();
-        let mut rest = prefix;
-        let mut root = home.0.clone();
-        match rest.first().map(String::as_str) {
-            Some("crate") => {
-                here.clear();
-                rest = &rest[1..];
-            }
-            Some("self") => {
-                rest = &rest[1..];
-            }
-            Some("super") => {
-                while rest.first().map(String::as_str) == Some("super") {
-                    here.pop()?;
-                    rest = &rest[1..];
-                }
-            }
-            Some(name) if self.crates.contains_key(name) => {
-                here.clear();
-                root = self.crates.get(name)?.clone();
-                rest = &rest[1..];
-            }
-            _ => {}
-        }
-        here.extend(rest.iter().cloned());
-        Some((root, here))
+        let root = self.root.join(&home.0);
+        let places = self
+            .modules
+            .resolve_module(&root, &home.1, chain, prefix)
+            .ok()?;
+        let [place] = places.as_slice() else {
+            return None;
+        };
+        Some((
+            place
+                .0
+                .strip_prefix(&self.root)
+                .unwrap_or(&place.0)
+                .to_string_lossy()
+                .to_string(),
+            place.1.clone(),
+        ))
     }
 
     /// Every module the symbol can be named from: the declaring one, plus a hop
@@ -518,7 +542,7 @@ impl Corpus {
         anchored: Option<&Decl>,
         anchor_kind: &DeclKind,
         anchor_namespace: Namespace,
-        anchor_owner: Option<&str>,
+        _anchor_owner: Option<&str>,
         owners: &BTreeSet<ModuleId>,
         request: &RenameRequest,
         refs: &mut Vec<SymbolRef>,
@@ -633,14 +657,9 @@ impl Corpus {
             }
             if !path.prefix.is_empty() {
                 let variant = match anchor_kind {
-                    DeclKind::Variant { owner } => self.owner_reach(
-                        home,
-                        &path.chain,
-                        &path.prefix,
-                        owner,
-                        owners,
-                        scan,
-                    ),
+                    DeclKind::Variant { owner } => {
+                        self.owner_reach(home, &path.chain, &path.prefix, owner, owners, scan)
+                    }
                     _ => false,
                 };
                 if variant
@@ -804,6 +823,17 @@ impl Corpus {
                 }
             }
         }
+        if matches!(anchor_kind, DeclKind::Method) {
+            for (span, _, _) in &scan.methods {
+                seats.push(SymbolSeat {
+                    file: rel.to_string(),
+                    span: *span,
+                    line: line_starts.partition_point(|start| *start <= span.start) as u32,
+                    reaches: String::new(),
+                    form: "method call needs_types",
+                });
+            }
+        }
         if ours.is_empty() {
             return;
         }
@@ -840,23 +870,7 @@ impl Corpus {
                 });
             }
         }
-        // A method call names our method only through `self` in an impl of its
-        // own type; any other receiver's type is unknown here, so it is a seat.
-        if matches!(anchor_kind, DeclKind::Method) {
-            for (span, on_self, owner) in &scan.methods {
-                if anchored.is_some() && *on_self && owner.is_some() && owner.as_deref() == anchor_owner {
-                    refs.push(seat(rel, *span, RefRole::Read, &request.old));
-                } else {
-                    seats.push(SymbolSeat {
-                        file: rel.to_string(),
-                        span: *span,
-                        line: line_starts.partition_point(|start| *start <= span.start) as u32,
-                        reaches: String::new(),
-                        form: "method call on a receiver of unknown type",
-                    });
-                }
-            }
-        }
+
     }
 
     /// Whether a `use` leaf's prefix ends at the anchor enum: `use Kind::Old;`
@@ -1810,8 +1824,7 @@ impl<'ast> syn::visit::Visit<'ast> for Scan<'_> {
     }
 
     fn visit_block(&mut self, node: &'ast syn::Block) {
-        self.blocks
-            .push(syn_span(node.brace_token.span.join()));
+        self.blocks.push(syn_span(node.brace_token.span.join()));
         syn::visit::visit_block(self, node);
         self.blocks.pop();
     }
@@ -1830,8 +1843,12 @@ impl<'ast> syn::visit::Visit<'ast> for Scan<'_> {
 
     fn visit_impl_item(&mut self, node: &'ast syn::ImplItem) {
         match node {
-            syn::ImplItem::Fn(item) => self.declare(&item.sig.ident, DeclKind::Method, Namespace::Value),
-            syn::ImplItem::Const(item) => self.declare(&item.ident, DeclKind::Item, Namespace::Value),
+            syn::ImplItem::Fn(item) => {
+                self.declare(&item.sig.ident, DeclKind::Method, Namespace::Value)
+            }
+            syn::ImplItem::Const(item) => {
+                self.declare(&item.ident, DeclKind::Item, Namespace::Value)
+            }
             syn::ImplItem::Type(item) => self.declare(&item.ident, DeclKind::Item, Namespace::Type),
             _ => {}
         }
@@ -1840,9 +1857,15 @@ impl<'ast> syn::visit::Visit<'ast> for Scan<'_> {
 
     fn visit_trait_item(&mut self, node: &'ast syn::TraitItem) {
         match node {
-            syn::TraitItem::Fn(item) => self.declare(&item.sig.ident, DeclKind::Method, Namespace::Value),
-            syn::TraitItem::Const(item) => self.declare(&item.ident, DeclKind::Item, Namespace::Value),
-            syn::TraitItem::Type(item) => self.declare(&item.ident, DeclKind::Item, Namespace::Type),
+            syn::TraitItem::Fn(item) => {
+                self.declare(&item.sig.ident, DeclKind::Method, Namespace::Value)
+            }
+            syn::TraitItem::Const(item) => {
+                self.declare(&item.ident, DeclKind::Item, Namespace::Value)
+            }
+            syn::TraitItem::Type(item) => {
+                self.declare(&item.ident, DeclKind::Item, Namespace::Type)
+            }
             _ => {}
         }
         syn::visit::visit_trait_item(self, node);
@@ -2016,7 +2039,8 @@ impl<'ast> syn::visit::Visit<'ast> for Scan<'_> {
     fn visit_expr_method_call(&mut self, node: &'ast syn::ExprMethodCall) {
         if node.method == self.old {
             if let Some(span) = self.exact(node.method.span()) {
-                let on_self = matches!(&*node.receiver, syn::Expr::Path(path) if path.path.is_ident("self"));
+                let on_self =
+                    matches!(&*node.receiver, syn::Expr::Path(path) if path.path.is_ident("self"));
                 let owner = self.impls.last().cloned().flatten();
                 self.out.methods.push((span, on_self, owner));
             }
@@ -2152,212 +2176,4 @@ fn use_branches(
         )),
         syn::UseTree::Glob(_) => out.push(branch(prefix, None, LeafKind::Glob, None)),
     }
-}
-
-// ── rustc's module-file law ─────────────────────────────────────────────────
-
-/// A non-`#[path]` `mod x;`'s directory: the declaring file's own dir when it
-/// owns its directory (crate root or `mod.rs`), else `<dir>/<stem>`.
-fn module_dir(rel: &str, roots: &BTreeSet<String>) -> String {
-    let file = rel.rsplit('/').next().unwrap_or(rel);
-    let owned_directly = file == "mod.rs" || roots.contains(rel);
-    match owned_directly {
-        true => rel
-            .rsplit_once('/')
-            .map(|(dir, _)| dir.to_string())
-            .unwrap_or_default(),
-        false => rel.strip_suffix(".rs").unwrap_or(rel).to_string(),
-    }
-}
-
-/// The `#[path = ".."]` literals on a `mod` decl, as byte spans.
-fn path_attrs(attrs: &[syn::Attribute]) -> Vec<(Span, String)> {
-    let mut out = Vec::new();
-    for attr in attrs {
-        if !attr.path().is_ident("path") {
-            continue;
-        }
-        if let syn::Meta::NameValue(meta) = &attr.meta {
-            if let syn::Expr::Lit(lit) = &meta.value {
-                if let syn::Lit::Str(text) = &lit.lit {
-                    let span = syn_span(text.span());
-                    out.push((span, text.value()));
-                }
-            }
-        }
-    }
-    out
-}
-
-/// The files a `#[path = ".."]` decl names, to every module each is: the literal
-/// reads against the declaring file's dir; a file two decls name is two modules.
-fn path_module_table(cx: &RenameCx, roots: &BTreeSet<String>) -> BTreeMap<String, Vec<ModuleId>> {
-    let mut named: BTreeMap<String, Vec<ModuleId>> = BTreeMap::new();
-    for rel in cx.files_of(&RustSource) {
-        let Some(text) = cx.text(rel) else {
-            continue;
-        };
-        // Exact for `#[path`; nothing else in a file names a placement.
-        if !text.contains("path") {
-            continue;
-        }
-        let Ok(parsed) = hafley_scm::lang::rust::parse_rust_file(&text) else {
-            continue;
-        };
-        let home = module_path(rel, roots);
-        path_decls(
-            &parsed.items,
-            &[],
-            rel,
-            &home,
-            roots,
-            &mut named,
-        );
-    }
-    for routes in named.values_mut() {
-        let mut seen = BTreeSet::new();
-        routes.retain(|module| seen.insert(module.clone()));
-    }
-    named
-}
-
-/// One file's `#[path]` decls, through inline mods: each names a file under
-/// the declaring module's directory and a module at that file's rustc module.
-fn path_decls(
-    items: &[syn::Item],
-    chain: &[String],
-    rel: &str,
-    home: &ModuleId,
-    roots: &BTreeSet<String>,
-    out: &mut BTreeMap<String, Vec<ModuleId>>,
-) {
-    let mut dir = module_dir(rel, roots);
-    for segment in chain {
-        dir.push('/');
-        dir.push_str(segment);
-    }
-    for item in items {
-        let syn::Item::Mod(decl) = item else {
-            continue;
-        };
-        match &decl.content {
-            None => {
-                let mut target = home.1.clone();
-                target.extend(chain.iter().cloned());
-                target.push(decl.ident.to_string());
-                let root = owning_root(rel, roots).unwrap_or_else(|| rel.to_string());
-                for (_, value) in path_attrs(&decl.attrs) {
-                    out.entry(join_rel(&dir, &value))
-                        .or_default()
-                        .push((root.clone(), target.clone()));
-                }
-            }
-            Some((_, inner)) => {
-                let mut inner_chain = chain.to_vec();
-                inner_chain.push(decl.ident.to_string());
-                path_decls(inner, &inner_chain, rel, home, roots, out);
-            }
-        }
-    }
-}
-
-/// A file's crate root and its module path from it, by layout alone. A `#[path]`
-/// decl breaks that reading, which drops seats rather than inventing them.
-fn module_path(rel: &str, roots: &BTreeSet<String>) -> ModuleId {
-    let Some(root) = owning_root(rel, roots) else {
-        return (rel.to_string(), Vec::new());
-    };
-    if rel == root {
-        return (root, Vec::new());
-    }
-    let base = dirname(&root);
-    let tail = match base.is_empty() {
-        true => Some(rel),
-        false => rel.strip_prefix(&format!("{base}/")),
-    };
-    let Some(tail) = tail else {
-        return (root, Vec::new());
-    };
-    let mut parts: Vec<String> = tail.split('/').map(str::to_string).collect();
-    let leaf = parts.pop().unwrap_or_default();
-    let name = leaf.strip_suffix(".rs").unwrap_or(&leaf);
-    if name != "mod" {
-        parts.push(name.to_string());
-    }
-    (root, parts)
-}
-
-/// The crate root `rel` answers to: the one whose directory is its deepest
-/// ancestor, and itself when it is a root.
-fn owning_root(rel: &str, roots: &BTreeSet<String>) -> Option<String> {
-    roots
-        .iter()
-        .filter(|root| rel == root.as_str() || under(rel, dirname(root)))
-        .max_by_key(|root| {
-            (
-                rel == root.as_str(),
-                dirname(root).len(),
-                root.rsplit('/').next() == Some("lib.rs"),
-            )
-        })
-        .cloned()
-}
-
-fn under(path: &str, dir: &str) -> bool {
-    dir.is_empty() || path.starts_with(&format!("{dir}/"))
-}
-
-/// Cargo's target auto-discovery, as path shapes: the two library/binary roots,
-/// the `src/bin` binaries, the integration/bench/example roots, the build script.
-fn auto_crate_root(rel: &str) -> bool {
-    let parts: Vec<&str> = rel.split('/').collect();
-    let (Some(last), Some(parent)) = (parts.last(), parts.iter().nth_back(1)) else {
-        return parts.last() == Some(&"build.rs");
-    };
-    match *parent {
-        "src" => matches!(*last, "lib.rs" | "main.rs"),
-        "bin" | "tests" | "benches" | "examples" => last.ends_with(".rs"),
-        _ => *last == "build.rs",
-    }
-}
-
-fn crate_roots(cx: &RenameCx) -> BTreeSet<String> {
-    let mut roots: BTreeSet<String> = cx
-        .files()
-        .iter()
-        .filter(|rel| auto_crate_root(rel))
-        .cloned()
-        .collect();
-    for (manifest, package) in manifests(cx) {
-        let dir = dirname(&manifest);
-        if let Some(path) = package.explicit_lib_path() {
-            roots.insert(join_rel(dir, &path));
-        }
-    }
-    roots
-}
-
-/// A crate's identifier as a `use` writes it -> that crate's library root, so a
-/// path through the package name reaches the same modules `crate::` does.
-fn crate_idents(cx: &RenameCx) -> BTreeMap<String, String> {
-    let mut out = BTreeMap::new();
-    for (manifest, package) in manifests(cx) {
-        let Some(ident) = package.ident() else {
-            continue;
-        };
-        out.insert(ident, join_rel(dirname(&manifest), &package.lib_path()));
-    }
-    out
-}
-
-fn manifests(cx: &RenameCx) -> Vec<(String, CargoManifest)> {
-    cx.files()
-        .iter()
-        .filter(|rel| stem(rel) == "Cargo" && rel.ends_with(".toml"))
-        .filter_map(|rel| {
-            let text = cx.text(rel)?;
-            let parsed = CargoManifest::parse(&text)?;
-            Some((rel.clone(), parsed))
-        })
-        .collect()
 }
