@@ -28,7 +28,7 @@ pub(super) fn load(
             Err(error) => {
                 for (path, root) in &nearest {
                     if root == package_root {
-                        failures.push((path.clone(), lexical(&manifest), error.clone()));
+                        failures.push((path.clone(), lexical(&manifest), error.reason.clone()));
                     }
                 }
                 continue;

@@ -33,7 +33,10 @@ pub struct RustModuleTree {
 /// supplies module ownership from that workspace's def maps.
 pub fn module_tree(source: &Path, budget: Duration) -> Result<RustModuleTree, CheckerError> {
     let discovered = super::super::rust_workspace::discover(source)
-        .map_err(CheckerError::NoWorkspace)?;
+        .map_err(|error| CheckerError::NoWorkspace(match error.manifest {
+            Some(manifest) => format!("{}: {}", manifest.display(), error.reason),
+            None => error.reason,
+        }))?;
     let manifest = discovered.manifest;
     let metadata = discovered.metadata;
     let root = metadata.workspace_root.as_std_path();
