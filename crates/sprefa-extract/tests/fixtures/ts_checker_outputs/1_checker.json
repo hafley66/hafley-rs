@@ -1,0 +1,24 @@
+{
+  "steps": [
+    {
+      "action": "run",
+      "name": "extract",
+      "arguments": [
+        "--resolve",
+        "--arms",
+        "call,type",
+        "--root",
+        "tests/fixtures/ts_checker",
+        "--ts-checker",
+        "tests/fixtures/ts_checker/src/main.ts",
+        "tests/fixtures/ts_checker/src/widget.ts",
+        "tests/fixtures/ts_checker/src/panel.ts",
+        "tests/fixtures/ts_checker/src/pick.ts",
+        "tests/fixtures/ts_checker/src/shadow.ts"
+      ],
+      "environment": {
+        "SPREFA_TSGO": "$STOCK_TSGO"
+      }
+    }
+  ]
+}
