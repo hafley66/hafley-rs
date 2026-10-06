@@ -1,0 +1,53 @@
+{
+  "steps": [
+    {
+      "source": "$fixtures/rust_rename/serde/before",
+      "target": "$work/repo",
+      "action": "copy_tree"
+    },
+    {
+      "path": "$work/state",
+      "action": "directory"
+    },
+    {
+      "action": "run",
+      "name": "rename",
+      "arguments": [
+        "rename",
+        "src/util.rs#size",
+        "width",
+        "--root",
+        "$work/repo",
+        "--state",
+        "$work/state",
+        "--commit"
+      ],
+      "cwd": "$work/repo",
+      "expect_exit_code": 0,
+      "raw_stdout": true,
+      "stdout_redactions": [
+        {
+          "pattern": "(?m)^(stage )[0-9a-f]{64}( committed| dry run, tree untouched)$",
+          "replacement": "${1}$$STAGE${2}"
+        }
+      ]
+    },
+    {
+      "action": "tree_matches",
+      "name": "claim_0",
+      "left": "$work/repo",
+      "fixture": "$fixtures/rust_rename/serde/after"
+    }
+  ],
+  "old_assertions": [
+    {
+      "cell": "tree_vs_after",
+      "kind": "diff_rq_empty",
+      "value": "diff -rq $work/repo <after>",
+      "claim": "#[serde(rename = \"size\")] beside struct Helper { size: u32 }: field rename touches decl and h.size, leaves the literal, the derive, and the len field untouched, byte for byte"
+    }
+  ],
+  "notes": [
+    "only fixture case carrying Cargo.lock (identical md5 on both sides: 8e94d38ca02d3a12569cded42595dc7b)"
+  ]
+}

@@ -1,0 +1,103 @@
+{
+  "steps": [
+    {
+      "source": "$fixtures/rust_rename/local/before",
+      "target": "$work/repo",
+      "action": "copy_tree"
+    },
+    {
+      "path": "$work/state",
+      "action": "directory"
+    },
+    {
+      "path": "$work/state/renames.tsv",
+      "text": "src/util.rs\tHelper\tTool\nsrc/util.rs\tTool\tInstrument\n",
+      "action": "write"
+    },
+    {
+      "source": "$fixtures/rename_merge/index.scip",
+      "action": "copy",
+      "path": "$work/repo/index.scip"
+    },
+    {
+      "action": "run",
+      "name": "rename",
+      "arguments": [
+        "rename",
+        "--list",
+        "$work/state/renames.tsv",
+        "--root",
+        "$work/repo",
+        "--state",
+        "$work/state",
+        "--commit"
+      ],
+      "cwd": "$work/repo",
+      "expect_exit_code": 0,
+      "raw_stdout": true,
+      "stdout_redactions": [
+        {
+          "pattern": "(?m)^(stage )[0-9a-f]{64}( committed| dry run, tree untouched)$",
+          "replacement": "${1}$$STAGE${2}"
+        }
+      ]
+    },
+    {
+      "action": "claim",
+      "name": "skip",
+      "cell": "rename",
+      "kind": "contains",
+      "text": "scip-verify skipped for sequential rename batch"
+    },
+    {
+      "action": "read_tree",
+      "name": "src/util.rs",
+      "path": "$work/repo/src/util.rs"
+    },
+    {
+      "action": "claim",
+      "name": "claim_src/util.rs",
+      "cell": "src/util.rs",
+      "kind": "text_equals",
+      "text": "pub struct Instrument {\n    pub size: u32,\n}\n\nimpl Instrument {\n    pub fn new(size: u32) -> Instrument {\n        Instrument { size }\n    }\n}\n"
+    },
+    {
+      "action": "read_tree",
+      "name": "src/lib.rs",
+      "path": "$work/repo/src/lib.rs"
+    },
+    {
+      "action": "claim",
+      "name": "claim_src/lib.rs",
+      "cell": "src/lib.rs",
+      "kind": "text_equals",
+      "text": "mod util;\n\nuse crate::util::Instrument;\n\npub fn build() -> Instrument {\n    Instrument::new(4)\n}\n\npub fn width(helper: &Instrument) -> u32 {\n    helper.size\n}\n\npub fn label() -> String {\n    format!(\"Helper\")\n}\n\nmod other {\n    pub struct Helper;\n}\n\n#[cfg(test)]\nmod tests {\n    use crate::util::Instrument as H;\n\n    #[test]\n    fn builds() {\n        assert_eq!(H::new(2).size, 2);\n    }\n}\n"
+    }
+  ],
+  "old_assertions": [
+    {
+      "cell": "exit_code",
+      "kind": "success",
+      "value": 0,
+      "claim": "both iterations succeed; panic message prefixes the label"
+    },
+    {
+      "cell": "stdout",
+      "kind": "contains_eq_bool",
+      "value": "scip-verify skipped for sequential rename batch",
+      "claim": "skip line present iff NOT indexed (assert_eq!(stdout.contains(line), indexed)); second row binds the declaration after the first row renamed it"
+    },
+    {
+      "cell": "file:src/util.rs",
+      "kind": "text_eq_with_replace",
+      "value": "<after>/src/util.rs with all \"Tool\" replaced by \"Instrument\"",
+      "claim": "produced util.rs equals chained expectation"
+    },
+    {
+      "cell": "file:src/lib.rs",
+      "kind": "text_eq_with_replace",
+      "value": "<after>/src/lib.rs with all \"Tool\" replaced by \"Instrument\"",
+      "claim": "produced lib.rs equals chained expectation"
+    }
+  ]
+}

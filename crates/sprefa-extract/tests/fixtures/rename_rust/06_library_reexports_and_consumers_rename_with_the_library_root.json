@@ -1,0 +1,241 @@
+{
+  "steps": [
+    {
+      "source": "$fixtures/rust_rename/reexport/before",
+      "target": "$work/repo",
+      "action": "copy_tree"
+    },
+    {
+      "path": "$work/state",
+      "action": "directory"
+    },
+    {
+      "action": "run",
+      "name": "plan",
+      "arguments": [
+        "rename",
+        "src/types.rs#Pattern",
+        "ItemPattern",
+        "--root",
+        "$work/repo",
+        "--state",
+        "$work/state",
+        "--commit"
+      ],
+      "cwd": "$work/repo",
+      "expect_exit_code": 0,
+      "raw_stdout": true,
+      "stdout_redactions": [
+        {
+          "pattern": "(?m)^(stage )[0-9a-f]{64}( committed| dry run, tree untouched)$",
+          "replacement": "${1}$$STAGE${2}"
+        }
+      ]
+    },
+    {
+      "action": "run",
+      "name": "glob_plan",
+      "arguments": [
+        "rename",
+        "src/types.rs#RepositoryId",
+        "RepoIdentity",
+        "--root",
+        "$work/repo",
+        "--state",
+        "$work/state",
+        "--commit"
+      ],
+      "cwd": "$work/repo",
+      "expect_exit_code": 0,
+      "raw_stdout": true,
+      "stdout_redactions": [
+        {
+          "pattern": "(?m)^(stage )[0-9a-f]{64}( committed| dry run, tree untouched)$",
+          "replacement": "${1}$$STAGE${2}"
+        }
+      ]
+    },
+    {
+      "action": "run",
+      "name": "cargo",
+      "arguments": [
+        "check",
+        "--offline",
+        "--all-targets"
+      ],
+      "cwd": "$work/repo",
+      "expect_exit_code": 0,
+      "raw_stdout": true,
+      "program": "$cargo",
+      "unasserted_stderr": true,
+      "unasserted_stdout": true,
+      "environment": {
+        "CARGO_TARGET_DIR": "$work/repo/target"
+      }
+    },
+    {
+      "action": "read_tree",
+      "name": "file_src/lib.rs",
+      "path": "$work/repo/src/lib.rs"
+    },
+    {
+      "action": "claim",
+      "name": "claim_0",
+      "cell": "file_src/lib.rs",
+      "kind": "contains",
+      "text": "pub use types::ItemPattern;"
+    },
+    {
+      "action": "read_tree",
+      "name": "file_src/lib.rs",
+      "path": "$work/repo/src/lib.rs"
+    },
+    {
+      "action": "claim",
+      "name": "claim_1",
+      "cell": "file_src/lib.rs",
+      "kind": "contains",
+      "text": "pub use types::*;"
+    },
+    {
+      "action": "read_tree",
+      "name": "file_src/users.rs",
+      "path": "$work/repo/src/users.rs"
+    },
+    {
+      "action": "claim",
+      "name": "claim_2",
+      "cell": "file_src/users.rs",
+      "kind": "contains",
+      "text": "use crate::{ItemPattern, RepoIdentity};"
+    },
+    {
+      "action": "read_tree",
+      "name": "file_src/users.rs",
+      "path": "$work/repo/src/users.rs"
+    },
+    {
+      "action": "claim",
+      "name": "claim_3",
+      "cell": "file_src/users.rs",
+      "kind": "contains",
+      "text": "crate::ItemPattern"
+    },
+    {
+      "action": "read_tree",
+      "name": "file_src/main.rs",
+      "path": "$work/repo/src/main.rs"
+    },
+    {
+      "action": "claim",
+      "name": "claim_4",
+      "cell": "file_src/main.rs",
+      "kind": "contains",
+      "text": "rust_rename_reexport::ItemPattern"
+    },
+    {
+      "action": "read_tree",
+      "name": "file_src/users.rs",
+      "path": "$work/repo/src/users.rs"
+    },
+    {
+      "action": "claim",
+      "name": "claim_5",
+      "cell": "file_src/users.rs",
+      "kind": "contains",
+      "text": "crate::RepoIdentity"
+    },
+    {
+      "action": "read_tree",
+      "name": "file_src/main.rs",
+      "path": "$work/repo/src/main.rs"
+    },
+    {
+      "action": "claim",
+      "name": "claim_6",
+      "cell": "file_src/main.rs",
+      "kind": "contains",
+      "text": "rust_rename_reexport::RepoIdentity"
+    },
+    {
+      "action": "claim",
+      "name": "claim_7",
+      "cell": "plan.stdout",
+      "kind": "contains",
+      "text": "src/lib.rs"
+    },
+    {
+      "action": "claim",
+      "name": "claim_8",
+      "cell": "glob_plan.stdout",
+      "kind": "contains",
+      "text": "src/users.rs"
+    }
+  ],
+  "old_assertions": [
+    {
+      "cell": "file:src/lib.rs",
+      "kind": "contains",
+      "value": "pub use types::ItemPattern;",
+      "claim": "named re-export moved"
+    },
+    {
+      "cell": "file:src/lib.rs",
+      "kind": "contains",
+      "value": "pub use types::*;",
+      "claim": "glob re-export untouched"
+    },
+    {
+      "cell": "file:src/users.rs",
+      "kind": "contains",
+      "value": "use crate::{ItemPattern, RepoIdentity};",
+      "claim": "both consumers follow"
+    },
+    {
+      "cell": "file:src/users.rs",
+      "kind": "contains",
+      "value": "crate::ItemPattern",
+      "claim": "qualified use through the re-export"
+    },
+    {
+      "cell": "file:src/main.rs",
+      "kind": "contains",
+      "value": "rust_rename_reexport::ItemPattern",
+      "claim": "binary crate's library use"
+    },
+    {
+      "cell": "file:src/users.rs",
+      "kind": "contains",
+      "value": "crate::RepoIdentity",
+      "claim": "qualified glob re-export use"
+    },
+    {
+      "cell": "file:src/main.rs",
+      "kind": "contains",
+      "value": "rust_rename_reexport::RepoIdentity",
+      "claim": "binary crate's glob re-export use"
+    },
+    {
+      "cell": "stdout(plan)",
+      "kind": "contains",
+      "value": "src/lib.rs",
+      "claim": "the plan reaches the library root"
+    },
+    {
+      "cell": "stdout(glob_plan)",
+      "kind": "contains",
+      "value": "src/users.rs",
+      "claim": "glob binding reaches its consumer"
+    },
+    {
+      "cell": "exit_code(cargo)",
+      "kind": "success",
+      "value": 0,
+      "claim": "cargo check after re-export rename"
+    }
+  ],
+  "notes": [
+    "order matters: Pattern row first, then RepositoryId row, then cargo check",
+    "file reads happen after both commits"
+  ]
+}

@@ -1,0 +1,78 @@
+{
+  "steps": [
+    {
+      "source": "$fixtures/rust_rename/macro/before",
+      "target": "$work/repo",
+      "action": "copy_tree"
+    },
+    {
+      "path": "$work/state",
+      "action": "directory"
+    },
+    {
+      "path": "$work/state/renames.tsv",
+      "text": "src/lib.rs\tground\t_1b_ground\nsrc/twins.rs\tWyll\tVyle\n",
+      "action": "write"
+    },
+    {
+      "action": "run",
+      "name": "rename",
+      "arguments": [
+        "rename",
+        "--list",
+        "$work/state/renames.tsv",
+        "--root",
+        "$work/repo",
+        "--state",
+        "$work/state",
+        "--commit"
+      ],
+      "cwd": "$work/repo",
+      "expect_exit_code": 8,
+      "raw_stdout": true,
+      "stdout_redactions": [
+        {
+          "pattern": "(?m)^(stage )[0-9a-f]{64}( committed| dry run, tree untouched)$",
+          "replacement": "${1}$$STAGE${2}"
+        }
+      ]
+    },
+    {
+      "action": "claim",
+      "name": "claim_0",
+      "cell": "rename.stderr",
+      "kind": "contains",
+      "text": "src/twins.rs: rust-analyzer Names refused the rename: outside_workspace"
+    },
+    {
+      "action": "tree_matches",
+      "name": "claim_2",
+      "left": "$work/repo",
+      "fixture": "$fixtures/rust_rename/macro/before"
+    }
+  ],
+  "old_assertions": [
+    {
+      "cell": "stderr",
+      "kind": "contains",
+      "value": "src/twins.rs: rust-analyzer Names refused the rename: outside_workspace",
+      "claim": "the stop names the twin row exactly"
+    },
+    {
+      "cell": "exit_code",
+      "kind": "code",
+      "value": 8,
+      "claim": "Refused exits 8"
+    },
+    {
+      "cell": "tree_vs_before",
+      "kind": "diff_rq_empty",
+      "value": "diff -rq $work/repo <before>",
+      "claim": "all-or-zero: the valid ground row applied nothing when the later Wyll row stops at the twin declarations"
+    }
+  ],
+  "notes": [
+    "twins.rs carries two identical `pub struct Wyll;` declarations (md5 af5e7e9bb431ab0a9e7cf6c52fb0881b)",
+    "old exit assertion message: 'Refused exits 8'"
+  ]
+}

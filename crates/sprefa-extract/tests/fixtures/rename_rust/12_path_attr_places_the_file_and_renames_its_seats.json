@@ -1,0 +1,51 @@
+{
+  "steps": [
+    {
+      "source": "$fixtures/rust_rename/path/before",
+      "target": "$work/repo",
+      "action": "copy_tree"
+    },
+    {
+      "path": "$work/state",
+      "action": "directory"
+    },
+    {
+      "action": "run",
+      "name": "rename",
+      "arguments": [
+        "rename",
+        "src/elsewhere/impl.rs#Helper",
+        "Tool",
+        "--root",
+        "$work/repo",
+        "--state",
+        "$work/state",
+        "--commit"
+      ],
+      "cwd": "$work/repo",
+      "expect_exit_code": 0,
+      "raw_stdout": true,
+      "stdout_redactions": [
+        {
+          "pattern": "(?m)^(stage )[0-9a-f]{64}( committed| dry run, tree untouched)$",
+          "replacement": "${1}$$STAGE${2}"
+        }
+      ]
+    },
+    {
+      "action": "tree_matches",
+      "name": "claim_0",
+      "left": "$work/repo",
+      "fixture": "$fixtures/rust_rename/path/after"
+    }
+  ],
+  "old_assertions": [
+    {
+      "cell": "tree_vs_after",
+      "kind": "diff_rq_empty",
+      "value": "diff -rq $work/repo <after>",
+      "claim": "#[path = \"elsewhere/impl.rs\"] mod util; places the file at the module the attr names: decl, use, and every path in lib.rs rename; src/other.rs's unrelated Helper stays"
+    }
+  ],
+  "notes": []
+}

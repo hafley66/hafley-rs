@@ -1,0 +1,51 @@
+{
+  "steps": [
+    {
+      "source": "$fixtures/rust_rename/variant/before",
+      "target": "$work/repo",
+      "action": "copy_tree"
+    },
+    {
+      "path": "$work/state",
+      "action": "directory"
+    },
+    {
+      "action": "run",
+      "name": "rename",
+      "arguments": [
+        "rename",
+        "src/lib.rs#Old",
+        "Prior",
+        "--root",
+        "$work/repo",
+        "--state",
+        "$work/state",
+        "--commit"
+      ],
+      "cwd": "$work/repo",
+      "expect_exit_code": 0,
+      "raw_stdout": true,
+      "stdout_redactions": [
+        {
+          "pattern": "(?m)^(stage )[0-9a-f]{64}( committed| dry run, tree untouched)$",
+          "replacement": "${1}$$STAGE${2}"
+        }
+      ]
+    },
+    {
+      "action": "tree_matches",
+      "name": "claim_0",
+      "left": "$work/repo",
+      "fixture": "$fixtures/rust_rename/variant/after"
+    }
+  ],
+  "old_assertions": [
+    {
+      "cell": "tree_vs_after",
+      "kind": "diff_rq_empty",
+      "value": "diff -rq $work/repo <after>",
+      "claim": "every path ending [Kind, Old] renames once Kind resolves to the anchor's module: bare path in make(), match arm, use Kind::Old; clause, bare Old it binds inside via_use(); mod other's own Kind::Old is a different enum and stays"
+    }
+  ],
+  "notes": []
+}

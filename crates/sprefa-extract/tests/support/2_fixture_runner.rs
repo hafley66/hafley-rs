@@ -385,7 +385,7 @@ pub fn commands(case: &Value, api: impl Fn(&Value) -> Value) -> Value {
                         .lines()
                         .filter(|line| {
                             if step["projection"] == "prefix" {
-                                line.starts_with(step["prefix"].as_str().unwrap())
+                                line.starts_with(step["prefix"].as_str().unwrap()) && step["suffix"].as_str().is_none_or(|suffix| line.ends_with(suffix))
                             } else {
                                 line.starts_with("plan ") || line.starts_with("  ")
                             }
@@ -534,6 +534,9 @@ pub fn commands(case: &Value, api: impl Fn(&Value) -> Value) -> Value {
                     records.push(row);
                 }
                 result["stdout"] = Value::Array(records);
+            }
+            if case["steps"].as_array().unwrap().iter().any(|step| step["name"] == name.as_str() && step["unasserted_stdout"] == true) {
+                result.as_object_mut().unwrap().remove("stdout");
             }
             if unasserted_stderr.contains(name.as_str()) {
                 result.as_object_mut().unwrap().remove("stderr");
@@ -811,7 +814,8 @@ pub fn editing_api(step: &Value) -> Value {
         }
         "scip_index" => {
             let root = Path::new(step["root"].as_str().unwrap());
-            let index = sprefa_extract::ScipTypescript.build(root).unwrap();
+            let index = if step["language"] == "rust" { sprefa_extract::ScipRust.build(root) }
+                else { sprefa_extract::ScipTypescript.build(root) }.unwrap();
             let target = Path::new(step["into"].as_str().unwrap());
             std::fs::copy(index, target).unwrap();
             serde_json::json!({"index":target.to_str().unwrap(),"is_file":target.is_file()})

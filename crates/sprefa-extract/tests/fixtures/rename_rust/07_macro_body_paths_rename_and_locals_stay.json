@@ -1,0 +1,53 @@
+{
+  "steps": [
+    {
+      "source": "$fixtures/rust_rename/macro/before",
+      "target": "$work/repo",
+      "action": "copy_tree"
+    },
+    {
+      "path": "$work/state",
+      "action": "directory"
+    },
+    {
+      "action": "run",
+      "name": "rename",
+      "arguments": [
+        "rename",
+        "src/lib.rs#ground",
+        "_1b_ground",
+        "--root",
+        "$work/repo",
+        "--state",
+        "$work/state",
+        "--commit"
+      ],
+      "cwd": "$work/repo",
+      "expect_exit_code": 0,
+      "raw_stdout": true,
+      "stdout_redactions": [
+        {
+          "pattern": "(?m)^(stage )[0-9a-f]{64}( committed| dry run, tree untouched)$",
+          "replacement": "${1}$$STAGE${2}"
+        }
+      ]
+    },
+    {
+      "action": "tree_matches",
+      "name": "claim_0",
+      "left": "$work/repo",
+      "fixture": "$fixtures/rust_rename/macro/after"
+    }
+  ],
+  "old_assertions": [
+    {
+      "cell": "tree_vs_after",
+      "kind": "diff_rq_empty",
+      "value": "diff -rq $work/repo <after>",
+      "claim": "module path inside ordinary macro check!(ground::decide()) is a bound reference and renames; same-spelled field, local, loop binding and string in the same macro stay"
+    }
+  ],
+  "notes": [
+    "FAIL-FIRST receipt in doc comment: report-8 binary exited 6, src/lib.rs byte 214: macro body reaches the symbol at runtime"
+  ]
+}

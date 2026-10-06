@@ -1,0 +1,72 @@
+{
+  "steps": [
+    {
+      "source": "$fixtures/rust_rename/variant_reexport/before",
+      "target": "$work/repo",
+      "action": "copy_tree"
+    },
+    {
+      "path": "$work/state",
+      "action": "directory"
+    },
+    {
+      "action": "run",
+      "name": "rename",
+      "arguments": [
+        "rename",
+        "src/types/query_error.rs#Only",
+        "ScmOnly",
+        "--root",
+        "$work/repo",
+        "--state",
+        "$work/state",
+        "--commit"
+      ],
+      "cwd": "$work/repo",
+      "expect_exit_code": 0,
+      "raw_stdout": true,
+      "stdout_redactions": [
+        {
+          "pattern": "(?m)^(stage )[0-9a-f]{64}( committed| dry run, tree untouched)$",
+          "replacement": "${1}$$STAGE${2}"
+        }
+      ]
+    },
+    {
+      "action": "compare",
+      "name": "claim_0",
+      "left": "rename",
+      "projection": "prefix",
+      "prefix": "  src/",
+      "text": "  src/lib.rs  1 uses\n  src/read.rs  2 uses\n  src/types/query_error.rs  1 uses\n"
+    },
+    {
+      "action": "tree_matches",
+      "name": "claim_1",
+      "left": "$work/repo",
+      "fixture": "$fixtures/rust_rename/variant_reexport/after"
+    }
+  ],
+  "old_assertions": [
+    {
+      "cell": "stdout",
+      "kind": "exact_filtered_lines",
+      "filter": "lines starting with \"  src/\"",
+      "value": [
+        "  src/lib.rs  1 uses",
+        "  src/read.rs  2 uses",
+        "  src/types/query_error.rs  1 uses"
+      ],
+      "claim": "plan rows exactly these three, in this order; each QueryError::Only constructor and pattern reached through the owner's re-export set (pub use types::*, use crate::types::QueryError, extern crate self ident)"
+    },
+    {
+      "cell": "tree_vs_after",
+      "kind": "diff_rq_empty",
+      "value": "diff -rq $work/repo <after>",
+      "claim": "committed tree equals hand-written after/"
+    }
+  ],
+  "notes": [
+    "the old assertion is assert_eq! on the collected Vec<&str> - exact list equality including order"
+  ]
+}
