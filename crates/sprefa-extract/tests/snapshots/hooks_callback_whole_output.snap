@@ -76,6 +76,17 @@ expression: "query_fixtures(\"callbacks\")"
   },
   {
     "fixture": "7_class.tsx",
-    "rows": []
+    "rows": [
+      {
+        "path": "7_class.tsx",
+        "start": 45,
+        "end": 55,
+        "hook": "useState",
+        "owner": "useFeatureFlag",
+        "rule": "class",
+        "status": "violation",
+        "reason": "hook belongs to a class method or class field function"
+      }
+    ]
   }
 ]

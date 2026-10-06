@@ -1,0 +1,232 @@
+---
+source: tests/211_hooks_query.rs
+assertion_line: 86
+expression: "query_fixtures(\"owners\")"
+---
+[
+  {
+    "fixture": "004_Case.tsx",
+    "rows": [
+      {
+        "path": "004_Case.tsx",
+        "start": 23,
+        "end": 37,
+        "hook": "This.useHook",
+        "owner": "m",
+        "rule": "class",
+        "status": "violation",
+        "reason": "hook belongs to a class method or class field function"
+      },
+      {
+        "path": "004_Case.tsx",
+        "start": 43,
+        "end": 58,
+        "hook": "Super.useHook",
+        "owner": "m",
+        "rule": "class",
+        "status": "violation",
+        "reason": "hook belongs to a class method or class field function"
+      }
+    ]
+  },
+  {
+    "fixture": "005_Case.tsx",
+    "rows": [
+      {
+        "path": "005_Case.tsx",
+        "start": 190,
+        "end": 215,
+        "hook": "FooStore.useFeatureFlag",
+        "owner": "render",
+        "rule": "class",
+        "status": "violation",
+        "reason": "hook belongs to a class method or class field function"
+      }
+    ]
+  },
+  {
+    "fixture": "042_Case.tsx",
+    "rows": [
+      {
+        "path": "042_Case.tsx",
+        "start": 97,
+        "end": 113,
+        "hook": "useFeatureFlag",
+        "owner": "render",
+        "rule": "class",
+        "status": "violation",
+        "reason": "hook belongs to a class method or class field function"
+      }
+    ]
+  },
+  {
+    "fixture": "043_Case.tsx",
+    "rows": [
+      {
+        "path": "043_Case.tsx",
+        "start": 73,
+        "end": 89,
+        "hook": "React.useState",
+        "owner": "render",
+        "rule": "class",
+        "status": "violation",
+        "reason": "hook belongs to a class method or class field function"
+      }
+    ]
+  },
+  {
+    "fixture": "044_Case.tsx",
+    "rows": [
+      {
+        "path": "044_Case.tsx",
+        "start": 27,
+        "end": 37,
+        "hook": "useState",
+        "owner": ".useHook::closure::19",
+        "rule": "class",
+        "status": "violation",
+        "reason": "hook belongs to a class method or class field function"
+      }
+    ]
+  },
+  {
+    "fixture": "045_Case.tsx",
+    "rows": [
+      {
+        "path": "045_Case.tsx",
+        "start": 21,
+        "end": 31,
+        "hook": "useState",
+        "owner": "useHook",
+        "rule": "class",
+        "status": "violation",
+        "reason": "hook belongs to a class method or class field function"
+      }
+    ]
+  },
+  {
+    "fixture": "046_Case.tsx",
+    "rows": [
+      {
+        "path": "046_Case.tsx",
+        "start": 21,
+        "end": 31,
+        "hook": "useState",
+        "owner": ".h::closure::13",
+        "rule": "class",
+        "status": "violation",
+        "reason": "hook belongs to a class method or class field function"
+      }
+    ]
+  },
+  {
+    "fixture": "047_Case.tsx",
+    "rows": [
+      {
+        "path": "047_Case.tsx",
+        "start": 15,
+        "end": 25,
+        "hook": "useState",
+        "owner": "i",
+        "rule": "class",
+        "status": "violation",
+        "reason": "hook belongs to a class method or class field function"
+      }
+    ]
+  },
+  {
+    "fixture": "048_Case.tsx",
+    "rows": [
+      {
+        "path": "048_Case.tsx",
+        "start": 37,
+        "end": 47,
+        "hook": "useState",
+        "owner": "AsyncComponent",
+        "rule": "async",
+        "status": "violation",
+        "reason": "owning component, hook, or render wrapper is async"
+      }
+    ]
+  },
+  {
+    "fixture": "049_Case.tsx",
+    "rows": [
+      {
+        "path": "049_Case.tsx",
+        "start": 35,
+        "end": 45,
+        "hook": "useState",
+        "owner": "useAsyncHook",
+        "rule": "async",
+        "status": "violation",
+        "reason": "owning component, hook, or render wrapper is async"
+      }
+    ]
+  },
+  {
+    "fixture": "050_Case.tsx",
+    "rows": [
+      {
+        "path": "050_Case.tsx",
+        "start": 27,
+        "end": 34,
+        "hook": "useId",
+        "owner": "Page",
+        "rule": "async",
+        "status": "violation",
+        "reason": "owning component, hook, or render wrapper is async"
+      },
+      {
+        "path": "050_Case.tsx",
+        "start": 38,
+        "end": 51,
+        "hook": "React.useId",
+        "owner": "Page",
+        "rule": "async",
+        "status": "violation",
+        "reason": "owning component, hook, or render wrapper is async"
+      }
+    ]
+  },
+  {
+    "fixture": "051_Case.tsx",
+    "rows": [
+      {
+        "path": "051_Case.tsx",
+        "start": 35,
+        "end": 42,
+        "hook": "useId",
+        "owner": "useAsyncHook",
+        "rule": "async",
+        "status": "violation",
+        "reason": "owning component, hook, or render wrapper is async"
+      }
+    ]
+  },
+  {
+    "fixture": "052_controls.tsx",
+    "rows": [
+      {
+        "path": "052_controls.tsx",
+        "start": 119,
+        "end": 129,
+        "hook": "useAsync",
+        "owner": "Async",
+        "rule": "async",
+        "status": "violation",
+        "reason": "owning component, hook, or render wrapper is async"
+      },
+      {
+        "path": "052_controls.tsx",
+        "start": 185,
+        "end": 197,
+        "hook": "useWrapped",
+        "owner": "<render>",
+        "rule": "async",
+        "status": "violation",
+        "reason": "owning component, hook, or render wrapper is async"
+      }
+    ]
+  }
+]

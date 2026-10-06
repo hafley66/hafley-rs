@@ -79,3 +79,9 @@ fn hooks_return_whole_output() {
     let _snapshots = snapshots();
     insta::assert_json_snapshot!("hooks_return_whole_output", query_fixtures("returns"));
 }
+
+#[test]
+fn hooks_owner_whole_output() {
+    let _snapshots = snapshots();
+    insta::assert_json_snapshot!("hooks_owner_whole_output", query_fixtures("owners"));
+}

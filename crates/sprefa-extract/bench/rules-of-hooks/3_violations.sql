@@ -3,7 +3,7 @@
 -- CST naming follows explicit function names, then binding/assignment/property names.
 -- Render wrappers qualify only their direct function arguments; callbacks require
 -- an enclosing component, hook, or wrapper. Namespace hooks require an uppercase identifier.
--- Class diagnostics remain outside this query's implemented rule set.
+-- Generic DF owner metadata supplies async and direct class-method facts.
 WITH
 sources AS (
   SELECT DISTINCT p.id AS file, q.source__start AS start, q.source__text AS text
@@ -50,16 +50,15 @@ raw_hooks AS (
     (SELECT f.pre FROM frames f
       WHERE f.file = p.id AND f.pre < n.pre AND f.last >= n.pre
       ORDER BY f.depth DESC LIMIT 1) AS frame,
-    (SELECT d.function FROM facts.node d
-      WHERE d._input_path = q.path AND d.family = 'df' AND d.kind = 'call_res'
-        AND d.span__start = q.hook__start AND d.span__end = q.hook__end
-      LIMIT 1) AS raw_owner,
+    d.function AS raw_owner, d.is_async, d.owner_kind,
     EXISTS (SELECT 1 FROM facts.site s
       WHERE s._input_path = q.path AND s.family = 'call'
         AND s.span__start = q.invoked__start AND s.span__end = q.invoked__end) AS has_site
   FROM scmpp_row q JOIN scmpp_dict_path p ON p.text = q.path
   JOIN cst n ON n.file = p.id AND n.start = q.hook__start
     AND n."end" = q.hook__end AND n.kind_name = 'call_expression'
+  LEFT JOIN facts.node d ON d._input_path = q.path AND d.family = 'df' AND d.kind = 'call_res'
+    AND d.span__start = q.hook__start AND d.span__end = q.hook__end
   WHERE EXISTS (SELECT 1 FROM cst callee WHERE callee.file = n.file AND callee.parent = n.pre
     AND callee.field_name = 'function' AND (callee.kind_name = 'identifier' OR
       (callee.kind_name = 'member_expression' AND EXISTS (SELECT 1 FROM cst object
@@ -128,6 +127,15 @@ violations AS (
   UNION
   SELECT path, start, "end", hook, owner, 'caller', 'hook at top level'
   FROM reachable WHERE has_site AND frame IS NULL
+  UNION
+  SELECT path, start, "end", hook, owner, 'class',
+    'hook belongs to a class method or class field function'
+  FROM reachable WHERE has_site AND raw_owner IS NOT NULL
+    AND (owner_kind = 'class_method' OR class_context)
+  UNION
+  SELECT path, start, "end", hook, owner, 'async',
+    'owning component, hook, or render wrapper is async'
+  FROM eligible WHERE is_async
   UNION
   SELECT path, start, "end", hook, owner, 'loop',
     'df_nest joins a loop within the owning function'
