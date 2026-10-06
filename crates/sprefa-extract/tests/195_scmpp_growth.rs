@@ -3,7 +3,7 @@
 //! scm++ growth classes, counted with hafley-observe spans: compile is per level, writes and rows per file size.
 
 #[path = "../src/bin/ryi/2_scmpp.rs"]
-mod scmpp;
+pub(crate) mod scmpp;
 #[path = "../src/bin/ryi/0_sqlite.rs"]
 mod sqlite;
 

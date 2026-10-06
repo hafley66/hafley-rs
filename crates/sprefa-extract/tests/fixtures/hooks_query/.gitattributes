@@ -1,0 +1,2 @@
+# Preserve exact whitespace in copied pinned upstream cases.
+edges/*.tsx whitespace=-blank-at-eol

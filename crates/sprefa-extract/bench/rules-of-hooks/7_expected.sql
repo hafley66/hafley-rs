@@ -69,10 +69,8 @@ SELECT m.path, m.rule, m.hook, m.expected_count, m.actual_count,
         FROM actual a WHERE a.path = m.path AND a.hook = m.hook
           AND a.status = 'violation' AND a.rule <> m.rule)
       ELSE '' END
-    WHEN m.rule IN ('class', 'async', 'try_catch', 'effect_event') THEN
-      'reference behavior outside the implemented rules'
-    WHEN m.hook = 'use' OR m.hook LIKE '%.use' THEN
-      'bare use does not match ^use[A-Z0-9]'
+    WHEN m.rule = 'effect_event' THEN
+      'no matching effect-event reference finding after lexical scopes and configured effects'
     WHEN EXISTS (SELECT 1 FROM actual a WHERE a.path = m.path
       AND a.hook = m.hook AND a.status = 'violation' AND a.rule <> m.rule) THEN
       'hook reported under rules: ' || (SELECT group_concat(DISTINCT a.rule)
@@ -86,14 +84,14 @@ SELECT m.path, m.rule, m.hook, m.expected_count, m.actual_count,
       JOIN scmpp_node ancestor ON ancestor.file = call.file AND ancestor.pre < call.pre AND ancestor.last >= call.pre
       JOIN scmpp_dict_kind kind ON kind.id = ancestor.kind AND kind.text = 'try_statement'
       WHERE q.path = m.path AND q.invoked__text = m.hook) THEN
-      'try/catch control-flow alternative is outside the conditional syntax predicate'
+      'try/catch control-flow alternative differs from the owning-frame syntax predicate'
     WHEN m.rule = 'conditional' AND EXISTS (
       SELECT 1 FROM scmpp_row q JOIN scmpp_dict_path p ON p.text = q.path
       JOIN scmpp_node call ON call.file = p.id AND call.start = q.hook__start AND call."end" = q.hook__end
       JOIN scmpp_node ancestor ON ancestor.file = call.file AND ancestor.pre < call.pre AND ancestor.last >= call.pre
       JOIN scmpp_dict_kind kind ON kind.id = ancestor.kind AND kind.text = 'labeled_statement'
       WHERE q.path = m.path AND q.invoked__text = m.hook) THEN
-      'labeled break can skip the call; break-based control flow is outside the conditional syntax predicate'
+      'labeled-break bypass differs from the owning-frame syntax predicate'
     ELSE 'call captured; no owning-function predicate matched this reference rule'
   END AS reason
 FROM matched_counts m WHERE m.actual_count <> m.expected_count;

@@ -1,48 +1,53 @@
 {
   "status": "pre-ryiii",
-  "source_head": "61a11247d6fd6ec23055f2af7da010e2320c64fc",
+  "source_head": "43ac07a30b3a61b4afdd1f9c1fd73394512345e7",
+  "base": "dce5c65f",
+  "source_dirty_at_build": true,
+  "production_commits": [
+    "8f63b2a6",
+    "43ac07a3"
+  ],
   "binary": "/Users/chrishafley/.cache/boop/lanes/feature-ryi-rules-of-hooks/target/debug/ryii",
-  "binary_sha256": "1a5c036f28ee9109a01ad1d9ffab42a5ee9725e870e02c2f4c3e543a1708808a",
+  "binary_artifact": "/Users/chrishafley/.cache/boop/lanes/feature-ryi-rules-of-hooks/target/debug/deps/ryii-958ad9c5785516bc",
+  "binary_sha256": "16b407612b4faac05926ef9ff9c27d31c7ddfd4379661994c5c71df77a4261a1",
   "build_command": "KACHE_DISABLED=1 cargo build --features cli,ts-checker --bin ryii",
-  "build_duration_seconds": 46.34,
+  "build_duration_seconds": 105,
+  "checker_used": false,
+  "reference_commit": "ae74234eae6ebd62f19190731278e20bc1c37d51",
+  "working_directory": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-rules-of-hooks/crates/sprefa-extract/bench/rules-of-hooks",
+  "case_metadata_rows": 118,
   "nonflow_cases": 114,
   "expected_messages": 99,
-  "captured_calls": 182,
+  "captured_calls": 198,
   "fact_rows": 3038,
   "df_loop_rows": 13,
   "df_nest_rows": 20,
-  "query_rows_reported": 8802,
-  "violation_rows": 64,
+  "query_rows_reported": 8882,
+  "violation_rows": 99,
   "gap_rows": 0,
-  "disagreement_rows": 31,
-  "disagreement_files": 29,
+  "disagreement_rows": 0,
+  "disagreement_files": 0,
   "input_list_sha256": "21e0d0ebfbfb66f062df04575e4a9aed43b7876dee8627e1fbac45b84fee6af7",
   "program_sha256": {
-    "2_hooks.scm": "0f770503731bba247448382f4709582a80cc6ebbf060d05e06c552e3eb1cb577",
-    "3_violations.sql": "378ce2fbec82548239a13a0e5ce4f3efd29e451d69efa9f56276a4b2460c1893",
-    "7_expected.sql": "05894b51c974a14695058f5f68e8fcad5bd897f35070a7b1e25ef075186c7fb1",
+    "2_hooks.scm": "b1707303ee019fb68523525aeee51e63b50a23414c8356984c5250d46becb1fc",
+    "3_violations.sql": "0ee69de57d04e66202edf2db596d7fdd8ad5335fc6fec888b96c9bb0ecf097e6",
+    "7_expected.sql": "fe8fd1336ef218ec0f99c4f4897fffb5e82156f6f77a1a9d99b90025856f2bb5",
     "8_score.sql": "d314760628a43e427963e54571f8c91f2554da92cf622f149c6f8681fead3c64"
   },
-  "extraction_commands": [
-    "/Users/chrishafley/.cache/boop/lanes/feature-ryi-rules-of-hooks/target/debug/ryii --kinds call,df --sqlite runs/revised/facts.db - < runs/revised/nonflow.paths",
-    "/Users/chrishafley/.cache/boop/lanes/feature-ryi-rules-of-hooks/target/debug/ryii query --scmpp 2_hooks.scm --timeout 90 --sqlite runs/revised/query.db - < runs/revised/nonflow.paths"
-  ],
-  "working_directory": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-rules-of-hooks/crates/sprefa-extract/bench/rules-of-hooks",
-  "reference_commit": "ae74234eae6ebd62f19190731278e20bc1c37d51",
-  "checker_used": false,
-  "source_dirty_at_build": true,
-  "production_commits": [
-    "a4916801",
-    "266ff281",
-    "61a11247"
-  ],
-  "binary_artifact": "/Users/chrishafley/.cache/boop/lanes/feature-ryi-rules-of-hooks/target/debug/deps/ryii-958ad9c5785516bc",
-  "case_metadata_rows": 118,
   "production_source_sha256": {
-    "crates/hafley_scm/src/read/lang/ts/1_df.rs": "e90b768279f3ca1894e70d708c86fba1446cd5473ec9d9c2550472f71ce37f23",
-    "crates/hafley_scm/src/read/lang/ts/2_df_expr.rs": "36e13931787d2ec4ab1891539773a494e7f0c1f9a28a65639a1549127ab6f591",
-    "crates/hafley_scm/src/read/lang/ts/5_df_defaults.rs": "abc492ce6a4ad6776fe90538d4392f6090bf928b39b1d1f7e1fc1d888552c7dd"
+    "crates/hafley_scm/src/read/0b_df_aux.rs": "f0c48b8c8d4ac9dc721daf056a6b641e0a39ab1a4120848ad31b672036dd7b8c",
+    "crates/hafley_scm/src/read/0c_flat_fact.rs": "d4f6d74210088264e970dd6aa54f3eae7d19914063382cd313a3417e0b4a7626",
+    "crates/hafley_scm/src/read/wire.rs": "7d51395d7bf1a54c4ec952d2d8be4bf6c0fa71fc1719edcb730a0e9bd392db56",
+    "crates/hafley_scm/src/read/lang/ts/0_df_rows.rs": "56e0d973bcf89921a63e9f11ecf9e102b049b376efbc4978b7bd34d0820ab567",
+    "crates/hafley_scm/src/read/lang/ts/1_df.rs": "f2f6ef54e7c2b1caadabb0cf2ec5d7f8a5bb19f8aa670304963aec1b1d7b3061",
+    "crates/hafley_scm/src/read/lang/ts/2_df_expr.rs": "1091943b06e4da66e589f400f7ea7c94808c6fb7377343fee28f6a27f7a219bd",
+    "crates/hafley_scm/src/read/lang/ts/3_df_jsx.rs": "fe5eb0d019989f293e26c9d50f6827e3db75a828b0e64cbdeadaec683c382fa7",
+    "crates/sprefa-extract/schema/1_facts.tsp": "f0a452b1fbec9c0865401e12b1ddb2d3c2867b494eb795fe9d699ea00b128893"
   },
-  "scoring_command": "sqlite3 -bail -json runs/revised/query.db < 8_score.sql > 9_SCORE.json",
+  "extraction_commands": [
+    "/Users/chrishafley/.cache/boop/lanes/feature-ryi-rules-of-hooks/target/debug/ryii --kinds call,df --sqlite runs/parity/facts.db - < runs/parity/nonflow.paths",
+    "/Users/chrishafley/.cache/boop/lanes/feature-ryi-rules-of-hooks/target/debug/ryii query --scmpp 2_hooks.scm --timeout 90 --sqlite runs/parity/query.db - < runs/parity/nonflow.paths"
+  ],
+  "scoring_command": "sqlite3 -bail -json runs/parity/query.db < 8_score.sql > 9_SCORE.json",
   "scoring_runs": 1
 }

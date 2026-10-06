@@ -1,0 +1,12 @@
+{
+  "042_valid.tsx": {
+    "react-hooks": {
+      "additionalEffectHooks": "(useMyEffect|useServerEffect)"
+    }
+  },
+  "061_invalid.tsx": {
+    "react-hooks": {
+      "additionalEffectHooks": "useMyEffect"
+    }
+  }
+}

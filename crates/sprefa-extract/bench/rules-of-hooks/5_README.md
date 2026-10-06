@@ -22,7 +22,10 @@ are unavailable to the TypeScript fast adapter.
 
 `2_hooks.scm` selects hook calls and captures the program source while requesting generic CST ancestor storage.
 `3_violations.sql` reads that query database with a fast database attached as
-`facts`. Its result signature is:
+`facts`. A `bench_case(path, metadata)` table supplies per-case configuration;
+`metadata` retains the original `settings` object. The query consumes only
+`settings["react-hooks"].additionalEffectHooks`, not expected messages or validity.
+The existing scm++ runtime and SQLite CLI provide `regexp()`. Its result signature is:
 
 ```text
 (path, start, end, hook, owner, rule, status, reason)
@@ -59,13 +62,15 @@ The two extraction commands used by the adapter are:
 ```
 
 The first is syntax-only extraction. Neither command enables a checker. After
-both stores exist, attach `FACTS_DB` as `facts` in `QUERY_DB` and execute
-`3_violations.sql`. The adapter performs that attachment with the SQLite CLI.
+both stores exist, attach `FACTS_DB` as `facts` in `QUERY_DB`, load the case's
+settings into `bench_case`, and execute `3_violations.sql`. The adapter performs
+those steps with the SQLite CLI.
 
 ## Lifetimes and reads
 
 Each attempt creates two stores and exits. Captures join by path: `@invoked` spans join callee-only `site` spans, and full
-`@hook` spans join `node(kind=call_res, family=df)` spans. `node.function` establishes DF ownership. SQL derives diagnostic frame names from
+`@hook` spans join `node(kind=call_res, family=df)` spans. `node.function` establishes DF ownership; `node.is_async` and
+`node.owner_kind` carry the generic owning-callable properties. SQL derives diagnostic frame names from
 explicit function identifiers, then variable bindings, assignments, properties,
 and destructuring defaults. Names are sliced from the program capture as byte
 ranges, including sources containing UTF-8. CST preorder intervals choose the
@@ -81,17 +86,29 @@ its JSX-bearing cases; the suite does not provide a dedicated JSX owner assertio
 The query captures the terminal identifier of direct or member callees. SQL
 accepts namespace hook members only when the receiver is an uppercase identifier,
 matching the reference heuristic. Components and hooks use `[A-Z]` and
-`use[A-Z0-9]` prefixes. Direct function arguments to `memo`, `forwardRef`,
+`use[A-Z0-9]` prefixes; the exact name `use` is also a hook. Direct function arguments to `memo`, `forwardRef`,
 `React.memo`, or `React.forwardRef` qualify as render functions. Anonymous
 callbacks produce findings only beneath a component, hook, or render function;
-callbacks with their own qualifying name use their own frame. Class diagnostics
-remain outside the implemented rule set.
+callbacks with their own qualifying name use their own frame. Class methods and
+class-field functions produce class findings. Async components, hooks, and render
+wrappers produce async findings from the generic DF flag. Bare `use` is exempt
+from loop, conditional, return-order, and anonymous callback restrictions; its
+caller, class, async, and try/catch restrictions remain.
 Loop rows require matching `df_nest` and `df_loop` facts inside the function.
 Conditional rows inspect branch fields and the right operand of `&&`, `||`,
 and `??`. Return rows use byte order within the same function. A direct return in a
 containing block suppresses unreachable calls. Loop findings take precedence over
 return-order findings, matching the reference diagnostics in the loop cases.
-This syntax predicate does not compute full control-flow reachability.
+Labeled breaks identify calls bypassed within the same labeled block; a prior
+potentially throwing call in a try body with a catch identifies the remaining
+try/catch conditional case. These syntax predicates do not compute a full CFG.
+
+Effect-event bindings and references join within lexical scopes. Shadowing
+bindings exclude unrelated identifiers. References are allowed inside callbacks
+to Effects and Effect Events in the same component, including nested closures
+and configured effect-hook regex matches. Other references produce effect-event
+findings, including aliases and JSX properties. This models the pinned fixture
+suite; it does not establish general JavaScript binding or CFG equivalence.
 
 No file name or validity label participates in violation computation.
 `7_expected.sql` imports case metadata and expected messages with SQLite JSON
@@ -121,8 +138,8 @@ sqlite3 :memory: "SELECT json_extract(value, '$.file') FROM json_each(CAST(readf
 awk 'BEGIN {print "CREATE TABLE actual AS"} {print}' 3_violations.sql > runs/materialize_actual.sql
 sqlite3 runs/query.db <<'SQL'
 ATTACH 'runs/facts.db' AS facts;
-.read runs/materialize_actual.sql
 .read 7_expected.sql
+.read runs/materialize_actual.sql
 SQL
 sqlite3 -json runs/query.db < 8_score.sql > 9_SCORE.json
 sqlite3 -json runs/query.db 'SELECT * FROM disagreements ORDER BY path, rule, hook;' > 10_DISAGREEMENTS.json

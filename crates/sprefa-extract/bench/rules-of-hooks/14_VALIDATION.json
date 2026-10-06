@@ -1,84 +1,53 @@
 {
   "full_gate": {
     "command": "KACHE_DISABLED=1 cargo test --features cli --no-fail-fast",
-    "exit_code": 101,
-    "integration_passed": 1267,
-    "integration_failed": 6,
+    "runs": 1,
+    "exit_code": 0,
+    "integration_passed": 1283,
+    "integration_failed": 0,
     "integration_ignored": 19,
     "library_passed": 7,
     "binary_unit_passed": 18,
-    "doctests": 0
+    "doctests": 0,
+    "integration_duration_seconds": 150.37
   },
-  "failures": [
-    {
-      "test": "t_166_cleave_rust::an_unloadable_manifest_stops_the_rust_cleave_with_the_reason",
-      "origin": "base / unrelated Rust path",
-      "disposition": "remaining; Rust resolver files unchanged",
-      "actual": "no cargo workspace: `cargo metadata` exited with an error: error: key with no value, expected `=`",
-      "expected": "no cargo workspace: ROOT/Cargo.toml: `cargo metadata` exited with an error: error: key with no value, expected `=`"
-    },
-    {
-      "test": "t_18_df_aux_fields_lits::df_aux_fields_lits_match_v5",
-      "origin": "new DF traversal coverage",
-      "disposition": "fixed legacy projection; unchanged oracle passes targeted check"
-    },
-    {
-      "test": "t_2_df_aux_cli::df_aux_cli_goldens_cover_all_projectors",
-      "origin": "new DF traversal coverage",
-      "disposition": "fixed legacy projection; unchanged oracle passes targeted check"
-    },
-    {
-      "test": "t_6_kind_vocab::wire_output_is_byte_identical_to_the_kind_vocab_golden",
-      "origin": "new DF traversal coverage",
-      "disposition": "fixed legacy projection; unchanged oracle passes targeted check"
-    },
-    {
-      "test": "t_golden_parity::ported_facets_match_v5",
-      "origin": "new DF traversal coverage",
-      "disposition": "fixed legacy projection; unchanged oracle passes targeted check"
-    },
-    {
-      "test": "t_snapshot::ts_uniform_surface",
-      "origin": "new DF traversal coverage",
-      "disposition": "fixed legacy projection; unchanged oracle passes targeted check"
-    }
-  ],
-  "targeted_gate": {
-    "filters": [
-      "df_aux",
-      "ts_uniform_surface",
-      "ported_facets",
-      "ts_df_lift_owners",
-      "hooks_"
-    ],
-    "passed": 11,
-    "failed": 0
-  },
-  "wire_gate": {
-    "test": "t_6_kind_vocab::wire_ported_output_is_byte_identical_to_the_kind_vocab_golden",
-    "passed": 1,
-    "failed": 0,
-    "legacy_bytes": 1270869
-  },
+  "failures": [],
+  "base_failures": [],
+  "new_failures": [],
   "owner_fail_first": {
-    "before": "zero call-result rows in all four fixtures",
-    "after": "authored lexical owners and whole-output snapshot pass"
+    "test": "ts_df_owner_flags_whole_output",
+    "passed": 0,
+    "failed": 1,
+    "reason": "both owner columns absent on all 12 authored fixture calls"
   },
-  "oracle_updates": false,
-  "scoring_runs": 1,
-  "final_combined_gate": {
-    "filters": [
-      "df_aux",
-      "ts_uniform_surface",
-      "ported_facets",
-      "wire_ported",
-      "ts_df_lift_owners",
-      "hooks_"
-    ],
-    "passed": 12,
+  "owner_and_legacy_targeted": {
+    "passed": 10,
     "failed": 0,
-    "duration_seconds": 5.87
+    "unchanged_oracle_wire_bytes": 1270869
   },
-  "projection_scope": "TS frontend only; other languages retain their original comparisons",
-  "utf8_fixture": "callbacks/5_wrapped_branch.tsx: conditional findings after a UTF-8 prefix"
+  "final_targeted": {
+    "command": "KACHE_DISABLED=1 cargo test --features cli,ts-checker --test all -- hooks_ ts_df_owner_flags",
+    "passed": 5,
+    "failed": 0,
+    "duration_seconds": 4.82
+  },
+  "schema_generation_check": {
+    "command": "node crates/sprefa-extract/schema/2_gen.mjs --check",
+    "artifacts_current": 9
+  },
+  "full_gate_followup": "Hook tests reuse the existing regexp registration module after removing a duplicate test-module import; final targeted tests pass. Missing-owner metadata is reported as a gap; final scoring has no gaps.",
+  "rust_resolver_files_changed": false,
+  "legacy_oracles_rewritten": false,
+  "adapter_smoke": [
+    {
+      "case": "invalid-060",
+      "status": "complete",
+      "effect_event_findings": 1
+    },
+    {
+      "case": "valid-042",
+      "status": "complete",
+      "effect_event_findings": 0
+    }
+  ]
 }

@@ -27,11 +27,16 @@ try {
   // ryii refuses to overwrite stores. The caller supplies a fresh attempt directory.
   command(binary, ['--kinds', 'call,df', '--sqlite', facts, file]);
   const columns = JSON.parse(command('sqlite3', ['-json', facts, 'PRAGMA table_info(node);']));
-  if (!columns.some(column => column.name === 'function')) throw new Error('fast node table lacks function ownership');
+  for (const name of ['function', 'is_async', 'owner_kind']) {
+    if (!columns.some(column => column.name === name)) throw new Error(`fast node table lacks ${name}`);
+  }
   command(binary, ['query', '--scmpp', path.join(__dirname, '2_hooks.scm'), '--sqlite', query, file]);
   const sql = fs.readFileSync(path.join(__dirname, '3_violations.sql'), 'utf8');
+  const quote = value => `'${value.replaceAll("'", "''")}'`;
+  const configuration = `CREATE TABLE bench_case(path TEXT, metadata TEXT);
+INSERT INTO bench_case VALUES (${quote(file)}, ${quote(JSON.stringify({settings: test.settings || {}}))});`;
   const findings = JSON.parse(command('sqlite3', ['-json', query,
-    `ATTACH '${facts.replaceAll("'", "''")}' AS facts;\n${sql}`]) || '[]');
+    `ATTACH ${quote(facts)} AS facts;\n${configuration}\n${sql}`]) || '[]');
   const unavailable = findings.some(finding => finding.status === 'gap');
   console.log(JSON.stringify({case_id: test.id, status: unavailable ? 'unavailable' : 'complete', findings}));
   if (unavailable) process.exitCode = 2;

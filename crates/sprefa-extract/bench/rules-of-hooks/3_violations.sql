@@ -1,5 +1,6 @@
 -- Run on query --scmpp's SQLite store with the fast database attached as facts.
--- Same input paths for both commands. Missing owners are explicit gap rows.
+-- Same input paths for both commands. Load bench_case(path, metadata) settings first.
+-- Missing owners are explicit gap rows.
 -- CST naming follows explicit function names, then binding/assignment/property names.
 -- Render wrappers qualify only their direct function arguments; callbacks require
 -- an enclosing component, hook, or wrapper. Namespace hooks require an uppercase identifier.
@@ -40,7 +41,7 @@ frame_names AS (
 ),
 frames AS (
   SELECT *, NOT class_context AND coalesce((wrapper OR
-    (instr(function_name, '.') = 0 AND (function_name GLOB '[A-Z]*' OR function_name GLOB 'use[A-Z0-9]*')) OR
+    (instr(function_name, '.') = 0 AND (function_name GLOB '[A-Z]*' OR (function_name = 'use' OR function_name GLOB 'use[A-Z0-9]*'))) OR
     (function_name GLOB '[A-Z]*.use[A-Z0-9]*')), 0) AS react
   FROM frame_names
 ),
@@ -51,6 +52,7 @@ raw_hooks AS (
       WHERE f.file = p.id AND f.pre < n.pre AND f.last >= n.pre
       ORDER BY f.depth DESC LIMIT 1) AS frame,
     d.function AS raw_owner, d.is_async, d.owner_kind,
+    q.callee__text = 'use' AS is_use,
     EXISTS (SELECT 1 FROM facts.site s
       WHERE s._input_path = q.path AND s.family = 'call'
         AND s.span__start = q.invoked__start AND s.span__end = q.invoked__end) AS has_site
@@ -83,9 +85,10 @@ reachable AS (
 eligible AS (
   SELECT * FROM reachable WHERE has_site AND raw_owner IS NOT NULL AND react
 ),
+ordered_hooks AS (SELECT * FROM eligible WHERE NOT is_use),
 branches AS (
   SELECT h.path, h.start, h."end", h.hook, h.owner, a.pre
-  FROM eligible h JOIN cst a ON a.file = h.file AND a.pre < h.pre
+  FROM ordered_hooks h JOIN cst a ON a.file = h.file AND a.pre < h.pre
     AND a.last >= h.pre AND a.pre > h.frame
   WHERE
     (a.kind_name IN ('if_statement', 'ternary_expression') AND EXISTS (
@@ -97,6 +100,26 @@ branches AS (
         AND op.kind_name IN ('&&', '||', '??')) AND EXISTS (
       SELECT 1 FROM cst rhs WHERE rhs.file = a.file AND rhs.parent = a.pre
         AND rhs.field_name = 'right' AND rhs.pre <= h.pre AND rhs.last >= h.pre))
+
+    -- A catch path skips calls reached after a potentially throwing call.
+    OR (a.kind_name = 'try_statement' AND EXISTS (
+      SELECT 1 FROM cst body JOIN cst previous ON previous.file = body.file
+        AND previous.pre > body.pre AND previous.last <= body.last
+      WHERE body.file = a.file AND body.parent = a.pre AND body.field_name = 'body'
+        AND body.pre < h.pre AND body.last >= h.pre
+        AND previous.kind_name IN ('call_expression', 'new_expression') AND previous."end" <= h.start
+        AND NOT EXISTS (SELECT 1 FROM frames f WHERE f.file = h.file AND f.pre > h.frame
+          AND f.pre < previous.pre AND f.last >= previous.pre))
+      AND EXISTS (SELECT 1 FROM cst handler WHERE handler.file = a.file
+        AND handler.parent = a.pre AND handler.kind_name = 'catch_clause'))
+    -- A labeled break bypasses later calls in that label's block.
+    OR (a.kind_name = 'labeled_statement' AND EXISTS (
+      SELECT 1 FROM cst jump JOIN cst label ON label.file = jump.file AND label.parent = jump.pre
+      JOIN cst target ON target.file = a.file AND target.parent = a.pre AND target.field_name = 'label'
+      WHERE jump.file = a.file AND jump.kind_name = 'break_statement' AND jump.pre > a.pre
+        AND jump.last <= a.last AND jump."end" <= h.start AND label.text = target.text
+        AND NOT EXISTS (SELECT 1 FROM frames f WHERE f.file = h.file AND f.pre > h.frame
+          AND f.pre < jump.pre AND f.last >= jump.pre)))
 ),
 returns AS (
   SELECT r.*, (SELECT f.pre FROM frames f
@@ -106,13 +129,71 @@ returns AS (
 ),
 looped AS (
   SELECT DISTINCT h.path, h.start, h."end", h.hook, h.owner
-  FROM eligible h JOIN facts.df_nest nest ON nest._input_path = h.path
+  FROM ordered_hooks h JOIN facts.df_nest nest ON nest._input_path = h.path
     AND nest.call__start = h.start AND nest.call__end = h."end"
   JOIN facts.df_loop loop ON loop._input_path = nest._input_path
     AND loop.span__start = nest.loop__start AND loop.span__end = nest.loop__end
   JOIN cst l ON l.file = h.file AND l.start = loop.span__start
     AND l."end" = loop.span__end AND l.pre > h.frame
     AND l.kind_name IN ('for_statement', 'for_in_statement', 'while_statement', 'do_statement')
+),
+scopes AS (
+  SELECT * FROM cst WHERE kind_name IN ('program', 'statement_block', 'function_declaration',
+    'function_expression', 'arrow_function', 'generator_function_declaration', 'generator_function',
+    'method_definition', 'catch_clause')
+),
+bindings AS (
+  SELECT name.*, declaration.pre AS declaration,
+    (SELECT scope.pre FROM scopes scope WHERE scope.file = name.file
+      AND scope.pre < name.pre AND scope.last >= name.pre
+      ORDER BY scope.depth DESC LIMIT 1) AS scope
+  FROM cst name JOIN cst declaration ON declaration.file = name.file AND declaration.pre = name.parent
+  WHERE name.kind_name = 'identifier' AND
+    ((declaration.kind_name = 'variable_declarator' AND name.field_name = 'name')
+      OR (declaration.kind_name IN ('function_declaration', 'class_declaration') AND name.field_name = 'name')
+      OR declaration.kind_name IN ('formal_parameters', 'required_parameter', 'optional_parameter')
+      OR (declaration.kind_name = 'catch_clause' AND name.field_name = 'parameter'))
+),
+event_definitions AS (
+  SELECT binding.*, owner.pre AS component, owner.function_name AS owner
+  FROM bindings binding JOIN cst value ON value.file = binding.file
+    AND value.parent = binding.declaration AND value.field_name = 'value' AND value.kind_name = 'call_expression'
+  JOIN cst callee ON callee.file = value.file AND callee.parent = value.pre AND callee.field_name = 'function'
+  JOIN frames owner ON owner.file = binding.file AND owner.pre = (
+    SELECT frame.pre FROM frames frame WHERE frame.file = binding.file
+      AND frame.pre < binding.pre AND frame.last >= binding.pre ORDER BY frame.depth DESC LIMIT 1)
+  WHERE callee.text IN ('useEffectEvent', 'React.useEffectEvent') AND owner.react
+),
+event_references AS (
+  SELECT reference.*, event.text AS event_name, event.owner, event.component,
+    path.text AS path
+  FROM event_definitions event JOIN scopes scope ON scope.file = event.file AND scope.pre = event.scope
+  JOIN cst reference ON reference.file = event.file AND reference.text = event.text
+    AND reference.kind_name IN ('identifier', 'shorthand_property_identifier')
+    AND reference.pre > scope.pre AND reference.last <= scope.last AND reference.pre <> event.pre
+  JOIN scmpp_dict_path path ON path.id = event.file
+  WHERE NOT EXISTS (SELECT 1 FROM bindings shadow JOIN scopes shadow_scope
+    ON shadow_scope.file = shadow.file AND shadow_scope.pre = shadow.scope
+    WHERE shadow.file = reference.file AND shadow.text = reference.text AND shadow.pre <> event.pre
+      AND shadow_scope.pre <= reference.pre AND shadow_scope.last >= reference.last
+      AND shadow_scope.depth >= scope.depth)
+    AND NOT EXISTS (SELECT 1 FROM bindings declaration WHERE declaration.file = reference.file
+      AND declaration.pre = reference.pre)
+),
+event_violations AS (
+  SELECT reference.* FROM event_references reference
+  WHERE NOT EXISTS (
+    SELECT 1 FROM frames callback JOIN cst args ON args.file = callback.file AND args.pre = callback.parent
+    JOIN cst call ON call.file = args.file AND call.pre = args.parent AND call.kind_name = 'call_expression'
+    JOIN cst callee ON callee.file = call.file AND callee.parent = call.pre AND callee.field_name = 'function'
+    WHERE callback.file = reference.file AND callback.pre < reference.pre AND callback.last >= reference.last
+      AND callback.pre > reference.component AND args.kind_name = 'arguments'
+      AND (callee.text IN ('useEffect', 'React.useEffect', 'useLayoutEffect', 'React.useLayoutEffect',
+        'useInsertionEffect', 'React.useInsertionEffect', 'useEffectEvent', 'React.useEffectEvent')
+        OR EXISTS (SELECT 1 FROM bench_case config
+          WHERE config.path = reference.path AND callee.kind_name = 'identifier'
+            AND json_extract(config.metadata, '$.settings."react-hooks".additionalEffectHooks') IS NOT NULL
+            AND regexp(json_extract(config.metadata, '$.settings."react-hooks".additionalEffectHooks'), callee.text))))
 ),
 violations AS (
   SELECT path, start, "end", hook, owner, 'caller' AS rule,
@@ -123,7 +204,7 @@ violations AS (
   SELECT path, start, "end", hook, owner, 'nested_callback',
     'anonymous callback inside a component, hook, or render wrapper'
   FROM reachable WHERE has_site AND raw_owner IS NOT NULL AND NOT class_context
-    AND function_name IS NULL AND NOT react AND inside_react
+    AND function_name IS NULL AND NOT react AND inside_react AND NOT is_use
   UNION
   SELECT path, start, "end", hook, owner, 'caller', 'hook at top level'
   FROM reachable WHERE has_site AND frame IS NULL
@@ -147,13 +228,31 @@ violations AS (
   UNION
   SELECT h.path, h.start, h."end", h.hook, h.owner, 'early_return',
     'a return precedes this call within the same function'
-  FROM eligible h JOIN returns r ON r.file = h.file AND r.frame = h.frame
+  FROM ordered_hooks h JOIN returns r ON r.file = h.file AND r.frame = h.frame
     AND r."end" <= h.start
   WHERE NOT EXISTS (SELECT 1 FROM looped l WHERE l.path = h.path AND l.start = h.start)
+  UNION
+  SELECT h.path, h.start, h."end", h.hook, h.owner, 'try_catch',
+    'use appears in a try body or catch within its owning function'
+  FROM eligible h WHERE h.is_use AND EXISTS (
+    SELECT 1 FROM cst ancestor WHERE ancestor.file = h.file AND ancestor.pre > h.frame
+      AND ancestor.pre < h.pre AND ancestor.last >= h.pre
+      AND (ancestor.kind_name = 'catch_clause' OR (ancestor.kind_name = 'statement_block'
+        AND ancestor.field_name = 'body' AND EXISTS (SELECT 1 FROM cst parent
+          WHERE parent.file = ancestor.file AND parent.pre = ancestor.parent AND parent.kind_name = 'try_statement'))))
+  UNION
+  SELECT path, start, "end", event_name, owner, 'effect_event',
+    'effect event reference outside Effects and Effect Events in its component'
+  FROM event_violations
   UNION
   SELECT path, start, "end", hook, owner, 'missing_owner',
     'df call_res owner absent for a call inside a function'
   FROM hooks WHERE frame IS NOT NULL AND raw_owner IS NULL
+  UNION
+  SELECT path, start, "end", hook, owner, 'missing_owner_metadata',
+    'owning call lacks is_async or owner_kind metadata'
+  FROM hooks WHERE frame IS NOT NULL AND raw_owner IS NOT NULL
+    AND (is_async IS NULL OR owner_kind IS NULL)
   UNION
   SELECT path, start, "end", hook, owner, 'missing_site',
     'query hook has no matching fast call site'
@@ -164,5 +263,5 @@ violations AS (
   FROM cst n JOIN scmpp_dict_path p ON p.id = n.file WHERE n.kind_name = 'ERROR'
 )
 SELECT path, start, "end", hook, owner, rule,
-  CASE WHEN rule IN ('missing_owner', 'missing_site', 'parse_error') THEN 'gap' ELSE 'violation' END AS status, reason
+  CASE WHEN rule IN ('missing_owner', 'missing_owner_metadata', 'missing_site', 'parse_error') THEN 'gap' ELSE 'violation' END AS status, reason
 FROM violations ORDER BY path, start, rule;

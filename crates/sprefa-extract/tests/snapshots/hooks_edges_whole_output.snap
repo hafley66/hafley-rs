@@ -1,0 +1,405 @@
+---
+source: tests/211_hooks_query.rs
+assertion_line: 113
+expression: "query_fixtures(\"edges\")"
+---
+[
+  {
+    "fixture": "028_invalid.tsx",
+    "rows": [
+      {
+        "path": "028_invalid.tsx",
+        "start": 160,
+        "end": 169,
+        "hook": "useHook",
+        "owner": "useLabeledBlock",
+        "rule": "conditional",
+        "status": "violation",
+        "reason": "hook is in a conditional branch within its function"
+      }
+    ]
+  },
+  {
+    "fixture": "034_invalid.tsx",
+    "rows": [
+      {
+        "path": "034_invalid.tsx",
+        "start": 134,
+        "end": 144,
+        "hook": "useState",
+        "owner": "useHook",
+        "rule": "conditional",
+        "status": "violation",
+        "reason": "hook is in a conditional branch within its function"
+      }
+    ]
+  },
+  {
+    "fixture": "034_valid.tsx",
+    "rows": []
+  },
+  {
+    "fixture": "035_valid.tsx",
+    "rows": []
+  },
+  {
+    "fixture": "036_valid.tsx",
+    "rows": []
+  },
+  {
+    "fixture": "037_valid.tsx",
+    "rows": []
+  },
+  {
+    "fixture": "042_valid.tsx",
+    "rows": []
+  },
+  {
+    "fixture": "043_valid.tsx",
+    "rows": []
+  },
+  {
+    "fixture": "044_valid.tsx",
+    "rows": []
+  },
+  {
+    "fixture": "045_valid.tsx",
+    "rows": []
+  },
+  {
+    "fixture": "046_valid.tsx",
+    "rows": []
+  },
+  {
+    "fixture": "047_valid.tsx",
+    "rows": []
+  },
+  {
+    "fixture": "048_valid.tsx",
+    "rows": []
+  },
+  {
+    "fixture": "049_valid.tsx",
+    "rows": []
+  },
+  {
+    "fixture": "053_invalid.tsx",
+    "rows": [
+      {
+        "path": "053_invalid.tsx",
+        "start": 1,
+        "end": 11,
+        "hook": "Hook.use",
+        "owner": "<top>",
+        "rule": "caller",
+        "status": "violation",
+        "reason": "hook at top level"
+      },
+      {
+        "path": "053_invalid.tsx",
+        "start": 26,
+        "end": 41,
+        "hook": "Hook.useState",
+        "owner": "<top>",
+        "rule": "caller",
+        "status": "violation",
+        "reason": "hook at top level"
+      },
+      {
+        "path": "053_invalid.tsx",
+        "start": 61,
+        "end": 73,
+        "hook": "Hook.use42",
+        "owner": "<top>",
+        "rule": "caller",
+        "status": "violation",
+        "reason": "hook at top level"
+      },
+      {
+        "path": "053_invalid.tsx",
+        "start": 75,
+        "end": 89,
+        "hook": "Hook.useHook",
+        "owner": "<top>",
+        "rule": "caller",
+        "status": "violation",
+        "reason": "hook at top level"
+      }
+    ]
+  },
+  {
+    "fixture": "054_invalid.tsx",
+    "rows": [
+      {
+        "path": "054_invalid.tsx",
+        "start": 30,
+        "end": 42,
+        "hook": "use",
+        "owner": "notAComponent",
+        "rule": "caller",
+        "status": "violation",
+        "reason": "owner name does not match component or hook convention"
+      }
+    ]
+  },
+  {
+    "fixture": "055_invalid.tsx",
+    "rows": [
+      {
+        "path": "055_invalid.tsx",
+        "start": 14,
+        "end": 26,
+        "hook": "use",
+        "owner": "<top>",
+        "rule": "caller",
+        "status": "violation",
+        "reason": "hook at top level"
+      }
+    ]
+  },
+  {
+    "fixture": "056_invalid.tsx",
+    "rows": [
+      {
+        "path": "056_invalid.tsx",
+        "start": 23,
+        "end": 35,
+        "hook": "use",
+        "owner": "m",
+        "rule": "class",
+        "status": "violation",
+        "reason": "hook belongs to a class method or class field function"
+      }
+    ]
+  },
+  {
+    "fixture": "057_invalid.tsx",
+    "rows": [
+      {
+        "path": "057_invalid.tsx",
+        "start": 37,
+        "end": 42,
+        "hook": "use",
+        "owner": "AsyncComponent",
+        "rule": "async",
+        "status": "violation",
+        "reason": "owning component, hook, or render wrapper is async"
+      }
+    ]
+  },
+  {
+    "fixture": "058_invalid.tsx",
+    "rows": [
+      {
+        "path": "058_invalid.tsx",
+        "start": 38,
+        "end": 45,
+        "hook": "use",
+        "owner": "App",
+        "rule": "try_catch",
+        "status": "violation",
+        "reason": "use appears in a try body or catch within its owning function"
+      }
+    ]
+  },
+  {
+    "fixture": "059_invalid.tsx",
+    "rows": [
+      {
+        "path": "059_invalid.tsx",
+        "start": 69,
+        "end": 76,
+        "hook": "use",
+        "owner": "App",
+        "rule": "try_catch",
+        "status": "violation",
+        "reason": "use appears in a try body or catch within its owning function"
+      }
+    ]
+  },
+  {
+    "fixture": "060_invalid.tsx",
+    "rows": [
+      {
+        "path": "060_invalid.tsx",
+        "start": 246,
+        "end": 253,
+        "hook": "onClick",
+        "owner": "MyComponent",
+        "rule": "effect_event",
+        "status": "violation",
+        "reason": "effect event reference outside Effects and Effect Events in its component"
+      }
+    ]
+  },
+  {
+    "fixture": "061_invalid.tsx",
+    "rows": [
+      {
+        "path": "061_invalid.tsx",
+        "start": 229,
+        "end": 236,
+        "hook": "onClick",
+        "owner": "MyComponent",
+        "rule": "effect_event",
+        "status": "violation",
+        "reason": "effect event reference outside Effects and Effect Events in its component"
+      }
+    ]
+  },
+  {
+    "fixture": "062_invalid.tsx",
+    "rows": [
+      {
+        "path": "062_invalid.tsx",
+        "start": 136,
+        "end": 143,
+        "hook": "onClick",
+        "owner": "MyComponent",
+        "rule": "effect_event",
+        "status": "violation",
+        "reason": "effect event reference outside Effects and Effect Events in its component"
+      }
+    ]
+  },
+  {
+    "fixture": "063_invalid.tsx",
+    "rows": [
+      {
+        "path": "063_invalid.tsx",
+        "start": 210,
+        "end": 217,
+        "hook": "onClick",
+        "owner": "MyComponent",
+        "rule": "effect_event",
+        "status": "violation",
+        "reason": "effect event reference outside Effects and Effect Events in its component"
+      },
+      {
+        "path": "063_invalid.tsx",
+        "start": 440,
+        "end": 447,
+        "hook": "onClick",
+        "owner": "MyOtherComponent",
+        "rule": "effect_event",
+        "status": "violation",
+        "reason": "effect event reference outside Effects and Effect Events in its component"
+      }
+    ]
+  },
+  {
+    "fixture": "064_invalid.tsx",
+    "rows": [
+      {
+        "path": "064_invalid.tsx",
+        "start": 139,
+        "end": 146,
+        "hook": "onClick",
+        "owner": "MyComponent",
+        "rule": "effect_event",
+        "status": "violation",
+        "reason": "effect event reference outside Effects and Effect Events in its component"
+      }
+    ]
+  },
+  {
+    "fixture": "065_invalid.tsx",
+    "rows": [
+      {
+        "path": "065_invalid.tsx",
+        "start": 190,
+        "end": 197,
+        "hook": "onClick",
+        "owner": "MyComponent",
+        "rule": "effect_event",
+        "status": "violation",
+        "reason": "effect event reference outside Effects and Effect Events in its component"
+      }
+    ]
+  },
+  {
+    "fixture": "066_invalid.tsx",
+    "rows": [
+      {
+        "path": "066_invalid.tsx",
+        "start": 297,
+        "end": 304,
+        "hook": "onClick",
+        "owner": "MyComponent",
+        "rule": "effect_event",
+        "status": "violation",
+        "reason": "effect event reference outside Effects and Effect Events in its component"
+      }
+    ]
+  },
+  {
+    "fixture": "067_invalid.tsx",
+    "rows": [
+      {
+        "path": "067_invalid.tsx",
+        "start": 256,
+        "end": 263,
+        "hook": "onClick",
+        "owner": "MyComponent",
+        "rule": "effect_event",
+        "status": "violation",
+        "reason": "effect event reference outside Effects and Effect Events in its component"
+      },
+      {
+        "path": "067_invalid.tsx",
+        "start": 327,
+        "end": 334,
+        "hook": "onClick",
+        "owner": "MyComponent",
+        "rule": "effect_event",
+        "status": "violation",
+        "reason": "effect event reference outside Effects and Effect Events in its component"
+      },
+      {
+        "path": "067_invalid.tsx",
+        "start": 383,
+        "end": 390,
+        "hook": "onClick",
+        "owner": "MyComponent",
+        "rule": "effect_event",
+        "status": "violation",
+        "reason": "effect event reference outside Effects and Effect Events in its component"
+      },
+      {
+        "path": "067_invalid.tsx",
+        "start": 453,
+        "end": 460,
+        "hook": "onClick",
+        "owner": "MyComponent",
+        "rule": "effect_event",
+        "status": "violation",
+        "reason": "effect event reference outside Effects and Effect Events in its component"
+      }
+    ]
+  },
+  {
+    "fixture": "068_controls.tsx",
+    "rows": [
+      {
+        "path": "068_controls.tsx",
+        "start": 111,
+        "end": 116,
+        "hook": "event",
+        "owner": "App",
+        "rule": "effect_event",
+        "status": "violation",
+        "reason": "effect event reference outside Effects and Effect Events in its component"
+      },
+      {
+        "path": "068_controls.tsx",
+        "start": 232,
+        "end": 243,
+        "hook": "useBroken",
+        "owner": "useLabels",
+        "rule": "conditional",
+        "status": "violation",
+        "reason": "hook is in a conditional branch within its function"
+      }
+    ]
+  }
+]
