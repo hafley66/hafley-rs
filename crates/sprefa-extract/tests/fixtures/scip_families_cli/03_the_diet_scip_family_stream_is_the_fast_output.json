@@ -1,0 +1,40 @@
+{
+  "claim_test": "the_diet_scip_family_stream_is_the_fast_output",
+  "unasserted_index_fields": [
+    "index_mtime_unix_ms",
+    "staleness"
+  ],
+  "steps": [
+    {
+      "action": "run",
+      "name": "fast",
+      "arguments": [
+        "fast",
+        "tests/fixtures/ts/sample.ts",
+        "tests/fixtures/ts/docs.ts",
+        "tests/fixtures/ts/lambdas.ts",
+        "tests/fixtures/ts/consts.ts"
+      ],
+      "success": true,
+      "environment": {
+        "RUST_LOG": "off",
+        "DL_TRACE": "0",
+        "DL_TRAIL": "0"
+      }
+    },
+    {
+      "action": "compare",
+      "name": "ported",
+      "left": "fast",
+      "projection": "ported",
+      "fixture": "tests/fixtures/scip_families/diet_scip_ts.jsonl"
+    },
+    {
+      "action": "compare",
+      "name": "syntax",
+      "left": "fast",
+      "projection": "written",
+      "fixture": "tests/fixtures/scip_families/diet_scip_ts_syntax.jsonl"
+    }
+  ]
+}

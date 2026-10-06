@@ -1,0 +1,50 @@
+{
+  "claim_test": "an_existing_index_is_reused_and_yields_identical_rows",
+  "unasserted_index_fields": [
+    "index_mtime_unix_ms",
+    "staleness"
+  ],
+  "steps": [
+    {
+      "action": "run",
+      "name": "built",
+      "arguments": [
+        "scip",
+        "--scip-cache",
+        "$work/cache",
+        "tests/fixtures/scip_rel"
+      ],
+      "success": true,
+      "environment": {
+        "RUST_LOG": "off",
+        "DL_TRACE": "0",
+        "DL_TRAIL": "0"
+      }
+    },
+    {
+      "action": "run",
+      "name": "reused",
+      "arguments": [
+        "scip",
+        "--scip-cache",
+        "$work/cache",
+        "tests/fixtures/scip_rel"
+      ],
+      "success": true,
+      "environment": {
+        "RUST_LOG": "off",
+        "DL_TRACE": "0",
+        "DL_TRAIL": "0"
+      }
+    },
+    {
+      "action": "compare",
+      "name": "identical",
+      "left": "built",
+      "right": "reused",
+      "replace": {
+        "\"reused\":false": "\"reused\":true"
+      }
+    }
+  ]
+}

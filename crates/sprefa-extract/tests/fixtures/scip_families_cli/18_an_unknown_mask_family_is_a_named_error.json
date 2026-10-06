@@ -1,0 +1,24 @@
+{
+  "claim_test": "an_unknown_mask_family_is_a_named_error",
+  "unasserted_index_fields": [
+    "index_mtime_unix_ms",
+    "staleness"
+  ],
+  "steps": [
+    {
+      "action": "run",
+      "name": "error",
+      "arguments": [
+        "--kinds",
+        "nonsense",
+        "tests/fixtures/ts/scip/alpha.ts"
+      ],
+      "success": false,
+      "environment": {
+        "RUST_LOG": "off",
+        "DL_TRACE": "0",
+        "DL_TRAIL": "0"
+      }
+    }
+  ]
+}

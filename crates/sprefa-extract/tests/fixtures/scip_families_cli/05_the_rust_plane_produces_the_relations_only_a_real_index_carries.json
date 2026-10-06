@@ -1,0 +1,26 @@
+{
+  "claim_test": "the_rust_plane_produces_the_relations_only_a_real_index_carries",
+  "unasserted_index_fields": [
+    "index_mtime_unix_ms",
+    "staleness",
+    "tool_version"
+  ],
+  "steps": [
+    {
+      "action": "run",
+      "name": "scip",
+      "arguments": [
+        "scip",
+        "--scip-cache",
+        "$work/cache",
+        "tests/fixtures/rust"
+      ],
+      "success": true,
+      "environment": {
+        "RUST_LOG": "off",
+        "DL_TRACE": "0",
+        "DL_TRAIL": "0"
+      }
+    }
+  ]
+}

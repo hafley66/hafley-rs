@@ -1,0 +1,32 @@
+{
+  "claim_test": "the_scip_family_stream_is_the_v5_relation_vocabulary",
+  "unasserted_index_fields": [
+    "index_mtime_unix_ms",
+    "staleness"
+  ],
+  "steps": [
+    {
+      "action": "run",
+      "name": "scip",
+      "arguments": [
+        "scip",
+        "--scip-cache",
+        "$work/cache",
+        "tests/fixtures/scip_rel"
+      ],
+      "success": true,
+      "environment": {
+        "RUST_LOG": "off",
+        "DL_TRACE": "0",
+        "DL_TRAIL": "0"
+      }
+    },
+    {
+      "action": "compare",
+      "name": "golden",
+      "left": "scip",
+      "projection": "index_evidence",
+      "fixture": "tests/fixtures/scip_families/scip_rel.jsonl"
+    }
+  ]
+}

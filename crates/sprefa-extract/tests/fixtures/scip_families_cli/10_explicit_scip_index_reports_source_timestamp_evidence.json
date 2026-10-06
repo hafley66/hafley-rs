@@ -1,0 +1,83 @@
+{
+  "claim_test": "explicit_scip_index_reports_source_timestamp_evidence",
+  "unasserted_index_fields": [],
+  "steps": [
+    {
+      "action": "copy",
+      "source": "tests/fixtures/scip_relationship/fixture.scip",
+      "path": "$work/root/supplied.scip"
+    },
+    {
+      "action": "copy",
+      "source": "tests/fixtures/scip_relationship/animal.ts",
+      "path": "$work/root/animal.ts"
+    },
+    {
+      "action": "mtime",
+      "path": "$work/root/supplied.scip",
+      "milliseconds": 1700000000000
+    },
+    {
+      "action": "mtime",
+      "path": "$work/root/animal.ts",
+      "milliseconds": 1699999995000
+    },
+    {
+      "action": "run",
+      "name": "older",
+      "arguments": [
+        "scip",
+        "--scip-index",
+        "$work/root/supplied.scip",
+        "$work/root"
+      ],
+      "success": true,
+      "environment": {
+        "RUST_LOG": "off",
+        "DL_TRACE": "0",
+        "DL_TRAIL": "0"
+      }
+    },
+    {
+      "action": "mtime",
+      "path": "$work/root/animal.ts",
+      "milliseconds": 1700000005000
+    },
+    {
+      "action": "run",
+      "name": "stale",
+      "arguments": [
+        "scip",
+        "--scip-index",
+        "$work/root/supplied.scip",
+        "$work/root"
+      ],
+      "success": true,
+      "environment": {
+        "RUST_LOG": "off",
+        "DL_TRACE": "0",
+        "DL_TRAIL": "0"
+      }
+    },
+    {
+      "action": "remove",
+      "path": "$work/root/animal.ts"
+    },
+    {
+      "action": "run",
+      "name": "uncertain",
+      "arguments": [
+        "scip",
+        "--scip-index",
+        "$work/root/supplied.scip",
+        "$work/root"
+      ],
+      "success": true,
+      "environment": {
+        "RUST_LOG": "off",
+        "DL_TRACE": "0",
+        "DL_TRAIL": "0"
+      }
+    }
+  ]
+}

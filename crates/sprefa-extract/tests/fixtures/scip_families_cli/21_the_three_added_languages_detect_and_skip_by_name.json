@@ -1,0 +1,79 @@
+{
+  "claim_test": "the_three_added_languages_detect_and_skip_by_name",
+  "unasserted_index_fields": [
+    "index_mtime_unix_ms",
+    "staleness"
+  ],
+  "steps": [
+    {
+      "action": "directory",
+      "path": "$work/empty"
+    },
+    {
+      "action": "write",
+      "path": "$work/root_0/pyproject.toml",
+      "text": ""
+    },
+    {
+      "action": "run",
+      "name": "python",
+      "arguments": [
+        "scip",
+        "--scip-cache",
+        "$work/cache_0",
+        "$work/root_0"
+      ],
+      "success": true,
+      "environment": {
+        "PATH": "$work/empty",
+        "RUST_LOG": "off",
+        "DL_TRACE": "0",
+        "DL_TRAIL": "0"
+      }
+    },
+    {
+      "action": "write",
+      "path": "$work/root_1/build.gradle.kts",
+      "text": ""
+    },
+    {
+      "action": "run",
+      "name": "kotlin/java",
+      "arguments": [
+        "scip",
+        "--scip-cache",
+        "$work/cache_1",
+        "$work/root_1"
+      ],
+      "success": true,
+      "environment": {
+        "PATH": "$work/empty",
+        "RUST_LOG": "off",
+        "DL_TRACE": "0",
+        "DL_TRAIL": "0"
+      }
+    },
+    {
+      "action": "write",
+      "path": "$work/root_2/compile_commands.json",
+      "text": ""
+    },
+    {
+      "action": "run",
+      "name": "cpp",
+      "arguments": [
+        "scip",
+        "--scip-cache",
+        "$work/cache_2",
+        "$work/root_2"
+      ],
+      "success": true,
+      "environment": {
+        "PATH": "$work/empty",
+        "RUST_LOG": "off",
+        "DL_TRACE": "0",
+        "DL_TRAIL": "0"
+      }
+    }
+  ]
+}

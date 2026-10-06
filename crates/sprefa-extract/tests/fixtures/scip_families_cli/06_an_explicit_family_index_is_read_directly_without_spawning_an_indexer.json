@@ -1,0 +1,67 @@
+{
+  "claim_test": "an_explicit_family_index_is_read_directly_without_spawning_an_indexer",
+  "unasserted_index_fields": [
+    "index_mtime_unix_ms",
+    "staleness"
+  ],
+  "steps": [
+    {
+      "action": "copy",
+      "source": "tests/fixtures/scip_relationship/fixture.scip",
+      "path": "$work/root/supplied.scip"
+    },
+    {
+      "action": "copy",
+      "source": "tests/fixtures/scip_relationship/animal.ts",
+      "path": "$work/root/animal.ts"
+    },
+    {
+      "action": "write",
+      "path": "$work/root/package.json",
+      "text": "{}\n"
+    },
+    {
+      "action": "write",
+      "path": "$work/root/environment.scip",
+      "text": "invalid environment index"
+    },
+    {
+      "action": "write",
+      "path": "$work/root/cache/index.scip",
+      "text": "invalid cache index"
+    },
+    {
+      "action": "write",
+      "path": "$work/root/bin/scip-typescript",
+      "text": "#!/bin/sh\n: > '$work/root/indexer-ran'\nexit 91\n",
+      "executable": true
+    },
+    {
+      "action": "run",
+      "name": "scip",
+      "arguments": [
+        "scip",
+        "--scip-index",
+        "$work/root/supplied.scip",
+        "--scip-cache",
+        "$work/root/cache",
+        "$work/root"
+      ],
+      "success": true,
+      "environment": {
+        "PATH": "$work/root/bin",
+        "SPREFA_SCIP_INDEX": "$work/root/environment.scip",
+        "RUST_LOG": "off",
+        "DL_TRACE": "0",
+        "DL_TRAIL": "0"
+      }
+    },
+    {
+      "action": "exists",
+      "name": "indexer_sentinel",
+      "path": "$work/root/indexer-ran",
+      "expected": false
+    }
+  ],
+  "unix": true
+}

@@ -1,0 +1,14 @@
+{
+  "claim_test": "the_roster_carries_v5s_six_languages",
+  "unasserted_index_fields": [
+    "index_mtime_unix_ms",
+    "staleness"
+  ],
+  "steps": [
+    {
+      "action": "api",
+      "name": "roster",
+      "api": "indexer_roster"
+    }
+  ]
+}

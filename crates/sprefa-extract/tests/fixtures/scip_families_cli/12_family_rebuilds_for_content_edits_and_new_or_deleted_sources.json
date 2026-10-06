@@ -1,0 +1,114 @@
+{
+  "claim_test": "family_rebuilds_for_content_edits_and_new_or_deleted_sources",
+  "unasserted_index_fields": [
+    "index_mtime_unix_ms",
+    "staleness"
+  ],
+  "steps": [
+    {
+      "action": "write",
+      "path": "$work/root/tsconfig.json",
+      "text": "{\"include\":[\"*.ts\"]}\n"
+    },
+    {
+      "action": "write",
+      "path": "$work/root/a.ts",
+      "text": "export const a = 1;\n"
+    },
+    {
+      "action": "run",
+      "name": "built",
+      "arguments": [
+        "scip",
+        "--scip-cache",
+        "$work/root/cache",
+        "$work/root"
+      ],
+      "success": true,
+      "environment": {
+        "RUST_LOG": "off",
+        "DL_TRACE": "0",
+        "DL_TRAIL": "0"
+      }
+    },
+    {
+      "action": "run",
+      "name": "reused",
+      "arguments": [
+        "scip",
+        "--scip-cache",
+        "$work/root/cache",
+        "$work/root"
+      ],
+      "success": true,
+      "environment": {
+        "RUST_LOG": "off",
+        "DL_TRACE": "0",
+        "DL_TRAIL": "0"
+      }
+    },
+    {
+      "action": "write",
+      "path": "$work/root/a.ts",
+      "text": "export const a = 2;\n",
+      "preserve_mtime": true
+    },
+    {
+      "action": "run",
+      "name": "edited",
+      "arguments": [
+        "scip",
+        "--scip-cache",
+        "$work/root/cache",
+        "$work/root"
+      ],
+      "success": true,
+      "environment": {
+        "RUST_LOG": "off",
+        "DL_TRACE": "0",
+        "DL_TRAIL": "0"
+      }
+    },
+    {
+      "action": "write",
+      "path": "$work/root/b.ts",
+      "text": "export const b = 3;\n"
+    },
+    {
+      "action": "run",
+      "name": "added",
+      "arguments": [
+        "scip",
+        "--scip-cache",
+        "$work/root/cache",
+        "$work/root"
+      ],
+      "success": true,
+      "environment": {
+        "RUST_LOG": "off",
+        "DL_TRACE": "0",
+        "DL_TRAIL": "0"
+      }
+    },
+    {
+      "action": "remove",
+      "path": "$work/root/b.ts"
+    },
+    {
+      "action": "run",
+      "name": "removed",
+      "arguments": [
+        "scip",
+        "--scip-cache",
+        "$work/root/cache",
+        "$work/root"
+      ],
+      "success": true,
+      "environment": {
+        "RUST_LOG": "off",
+        "DL_TRACE": "0",
+        "DL_TRAIL": "0"
+      }
+    }
+  ]
+}

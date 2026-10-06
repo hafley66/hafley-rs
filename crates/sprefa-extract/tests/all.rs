@@ -576,3 +576,6 @@ mod fixture_runner;
 mod v5_normalize;
 #[path = "support/4_golden_parity.rs"]
 mod golden_parity_support;
+
+#[path = "support/5_scip_families.rs"]
+mod scip_families_support;

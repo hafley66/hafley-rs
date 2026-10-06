@@ -1,0 +1,29 @@
+{
+  "claim_test": "a_root_with_no_marker_file_says_so_rather_than_streaming_nothing",
+  "unasserted_index_fields": [
+    "index_mtime_unix_ms",
+    "staleness"
+  ],
+  "steps": [
+    {
+      "action": "directory",
+      "path": "$work/root"
+    },
+    {
+      "action": "run",
+      "name": "skip",
+      "arguments": [
+        "scip",
+        "--scip-cache",
+        "$work/cache",
+        "$work/root"
+      ],
+      "success": true,
+      "environment": {
+        "RUST_LOG": "off",
+        "DL_TRACE": "0",
+        "DL_TRAIL": "0"
+      }
+    }
+  ]
+}

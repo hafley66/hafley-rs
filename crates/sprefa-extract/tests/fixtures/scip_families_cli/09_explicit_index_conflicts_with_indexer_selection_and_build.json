@@ -1,0 +1,32 @@
+{
+  "claim_test": "explicit_index_conflicts_with_indexer_selection_and_build",
+  "unasserted_index_fields": [
+    "index_mtime_unix_ms",
+    "staleness"
+  ],
+  "steps": [
+    {
+      "action": "copy",
+      "source": "tests/fixtures/scip_relationship/fixture.scip",
+      "path": "$work/root/supplied.scip"
+    },
+    {
+      "action": "run",
+      "name": "error",
+      "arguments": [
+        "scip",
+        "--scip-index",
+        "$work/root/supplied.scip",
+        "--indexer",
+        "typescript",
+        "$work/root"
+      ],
+      "success": false,
+      "environment": {
+        "RUST_LOG": "off",
+        "DL_TRACE": "0",
+        "DL_TRAIL": "0"
+      }
+    }
+  ]
+}
