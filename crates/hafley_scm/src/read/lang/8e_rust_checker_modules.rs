@@ -259,6 +259,9 @@ impl RustModuleTree {
 
     /// Every module the def maps place `file` at, in crate-root order.
     pub fn places(&self, file: &Path) -> Vec<ModulePlace> {
+        if let Some(places) = self.workspace.lock().unwrap().names.places.get(file) {
+            return places.clone();
+        }
         self.places_for_files(&[file.to_path_buf()]).pop().unwrap()
     }
 

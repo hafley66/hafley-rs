@@ -61,7 +61,7 @@ pub fn resolve_path_at(
     offset: Option<u32>,
 ) -> Result<Vec<DefPlace>, Abstain> {
     let mut workspace = host.workspace.lock().unwrap();
-    let key = (host_path(file), path.to_vec(), offset);
+    let key = (file.to_path_buf(), path.to_vec(), offset);
     if let Some(answer) = workspace.names.paths.get(&key) {
         return answer.clone();
     }
@@ -629,7 +629,7 @@ pub fn all_module_places(host: &NamesHost) -> Vec<ModulePlace> {
 /// Workspace dependency roots from RA's crate graph, including a bin's own library.
 pub fn dependency_places(host: &NamesHost, file: &Path) -> Vec<(String, ModulePlace)> {
     let mut workspace = host.workspace.lock().unwrap();
-    let key = host_path(file);
+    let key = file.to_path_buf();
     if let Some(answer) = workspace.names.dependencies.get(&key) {
         return answer.clone();
     }

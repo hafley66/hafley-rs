@@ -1,0 +1,26 @@
+[
+  {
+    "path": "fast",
+    "state": "cold",
+    "seconds": 5.515698832998169,
+    "status": 0
+  },
+  {
+    "path": "fast",
+    "state": "warm",
+    "seconds": 0.35979137499816716,
+    "status": 0
+  },
+  {
+    "path": "written",
+    "state": "cold",
+    "seconds": 11.149424333998468,
+    "status": 0
+  },
+  {
+    "path": "written",
+    "state": "warm",
+    "seconds": 0.4049967920000199,
+    "status": 0
+  }
+]

@@ -19,7 +19,7 @@ if len(os.fsencode(socket)) > 100:
         socket = Path("/tmp") / name / "ryi.sock"
 env = dict(os.environ, XDG_CACHE_HOME=str(home), RUST_LOG="off", DL_TRAIL="0",
            HAFLEY_TRACE=str(out / (label + ".trace.json")),
-           HAFLEY_TRACE_FILTER="hafley_scm::read::trace=debug,ryii::server_auto=info")
+           HAFLEY_TRACE_FILTER="hafley_scm::read::trace=debug,hafley_scm::read::cache=debug,ryii::server_auto=info")
 subprocess.run([str(Path(os.environ["CARGO_TARGET_DIR"]) / "release/ryii"), "--daemon"], env=env, check=True)
 for _ in range(100):
     if socket.exists():

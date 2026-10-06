@@ -2,7 +2,7 @@
 //! `&self` methods), so the rayon workers all hit it. Weight is an output byte
 //! estimate, never 1-per-entry.
 
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, OnceLock};
 
 use quick_cache::sync::Cache;
@@ -21,6 +21,10 @@ const REPRESENTATIVE_ENTRY_BYTES: usize = 170 * 1024;
 /// Number of extractions actually performed (cache misses). Read by the blob
 /// cache tests to assert that a hit skips the parse.
 pub static EXTRACTIONS: AtomicUsize = AtomicUsize::new(0);
+
+/// Resident request hosts retain phase-one output; one-shot project reads do
+/// not retain an additional copy of their corpus until process exit.
+pub static RETAIN_PROJECT_EXTRACTIONS: AtomicBool = AtomicBool::new(false);
 
 /// The cache key: blob identity + source path + matched `Source` name + mask.
 /// Extracted names and rows can contain the path even when bytes are identical.

@@ -1,0 +1,38 @@
+[
+  {
+    "path": "one-shot",
+    "state": "cold",
+    "seconds": 5.483158500006539,
+    "status": 0
+  },
+  {
+    "path": "one-shot",
+    "state": "warm",
+    "seconds": 5.365698249996058,
+    "status": 0
+  },
+  {
+    "path": "fast",
+    "state": "cold",
+    "seconds": 6.11513587499212,
+    "status": 0
+  },
+  {
+    "path": "fast",
+    "state": "warm",
+    "seconds": 1.2383108329959214,
+    "status": 0
+  },
+  {
+    "path": "written",
+    "state": "cold",
+    "seconds": 12.61585100000957,
+    "status": 0
+  },
+  {
+    "path": "written",
+    "state": "warm",
+    "seconds": 1.7708227920084028,
+    "status": 0
+  }
+]

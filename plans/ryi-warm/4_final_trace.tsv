@@ -1,0 +1,7 @@
+state	stage	seconds
+cold	index_rust_modules	2.269063
+cold	resolve_calls	0.865638
+cold	project_facts	2.722058
+warm	index_rust_modules	0.037240
+warm	resolve_calls	0.030207
+warm	project_facts	0.072519

@@ -32,14 +32,14 @@ pub fn resolve_written_method(
     offset: u32,
     method: &str,
 ) -> Result<Vec<DefPlace>, Abstain> {
+    let key = (file.to_path_buf(), offset, method.to_string());
+    if let Some(answer) = host.workspace.lock().unwrap().names.written.get(&key) {
+        return answer.clone();
+    }
     if super::names::module_places(host, file)?.len() != 1 {
         return Err(Abstain::NeedsTypes);
     }
     let mut workspace = host.workspace.lock().unwrap();
-    let key = (host_path(file), offset, method.to_string());
-    if let Some(answer) = workspace.names.written.get(&key) {
-        return answer.clone();
-    }
     let (id, _) = workspace
         .vfs
         .file_id(&vfs_path(&host_path(file)))

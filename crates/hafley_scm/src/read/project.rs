@@ -2179,7 +2179,15 @@ fn read_chunk(
                             let output = if size_skip.is_some() {
                                 Some(Arc::new(RyiOutput::default()))
                             } else {
-                                crate::read::dispatch::dispatch_uncached(
+                                let dispatch = if crate::read::cache::RETAIN_PROJECT_EXTRACTIONS
+                                    .load(std::sync::atomic::Ordering::Relaxed)
+                                    && !matches!(planes, Planes::Fast)
+                                {
+                                    crate::read::dispatch::dispatch
+                                } else {
+                                    crate::read::dispatch::dispatch_uncached
+                                };
+                                dispatch(
                                     &path,
                                     &content,
                                     resolve_mask(&path, planes),
