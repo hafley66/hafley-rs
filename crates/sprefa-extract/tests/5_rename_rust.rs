@@ -50,7 +50,7 @@ fn self_rename_is_judged_by_rustc() {
     std::fs::create_dir_all(&state).expect("create state dir");
     let source = Path::new(env!("CARGO_MANIFEST_DIR"));
     copy_crate(source, &root);
-    re_aim_path_deps(source, &root.join("Cargo.toml"));
+    crate::fixture_runner::re_aim_path_deps(source, &root.join("Cargo.toml"));
     let root = root.canonicalize().expect("canonicalize crate copy");
 
     let output = run_rename(
@@ -100,19 +100,4 @@ fn copy_crate(source: &Path, target: &Path) {
             std::fs::copy(entry.path(), &to).expect("copy crate file");
         }
     }
-}
-
-/// A copy sits at a different depth, so its two sibling path dependencies are
-/// re-pointed at the originals before cargo reads them.
-fn re_aim_path_deps(source: &Path, manifest: &Path) {
-    let text = std::fs::read_to_string(manifest).expect("read manifest");
-    let mut out = text;
-    for (rel, name) in [
-        ("../../../hafley-rs/crates/soopy", "soopy"),
-        ("../../../hafley-rs/crates/hafley-observe", "hafley-observe"),
-    ] {
-        let absolute = source.join(rel).canonicalize().expect(name);
-        out = out.replace(rel, &absolute.to_string_lossy());
-    }
-    std::fs::write(manifest, out).expect("write manifest");
 }

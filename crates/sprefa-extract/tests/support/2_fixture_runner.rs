@@ -951,3 +951,12 @@ pub fn capability_api(step: &Value) -> Value {
         _ => editing_api(step),
     }
 }
+
+pub fn re_aim_path_deps(source: &Path, manifest: &Path) {
+    let text = std::fs::read_to_string(manifest).unwrap();
+    let paths = regex::Regex::new(r#"path = "(\.\./[^"]+)""#).unwrap();
+    let text = paths.replace_all(&text, |c: &regex::Captures<'_>| {
+        format!("path = \"{}\"", source.join(&c[1]).canonicalize().unwrap().display())
+    });
+    std::fs::write(manifest, text.as_bytes()).unwrap();
+}
