@@ -1,0 +1,139 @@
+{
+  "steps": [
+    {
+      "action": "copy_tree",
+      "source": "$fixtures/move/inputs/alpha",
+      "target": "$work/alpha"
+    },
+    {
+      "action": "directory",
+      "path": "$work/state"
+    },
+    {
+      "action": "git",
+      "cwd": "$work/alpha",
+      "args": [
+        "init",
+        "-q",
+        "."
+      ]
+    },
+    {
+      "action": "git",
+      "cwd": "$work/alpha",
+      "args": [
+        "add",
+        "-A"
+      ]
+    },
+    {
+      "action": "copy_tree",
+      "source": "$fixtures/move/inputs/beta",
+      "target": "$work/beta"
+    },
+    {
+      "action": "directory",
+      "path": "$work/state"
+    },
+    {
+      "action": "git",
+      "cwd": "$work/beta",
+      "args": [
+        "init",
+        "-q",
+        "."
+      ]
+    },
+    {
+      "action": "git",
+      "cwd": "$work/beta",
+      "args": [
+        "add",
+        "-A"
+      ]
+    },
+    {
+      "action": "copy_tree",
+      "source": "$work/alpha",
+      "target": "$work/before_alpha"
+    },
+    {
+      "action": "copy_tree",
+      "source": "$work/beta",
+      "target": "$work/before_beta"
+    },
+    {
+      "action": "write",
+      "path": "$work/rogue/x.pl",
+      "text": ":- module(x, []).\n"
+    },
+    {
+      "action": "write",
+      "path": "$work/state/moves.tsv",
+      "text": "$work/rogue/x.pl\t$work/rogue/y.pl\n"
+    },
+    {
+      "action": "run",
+      "name": "move",
+      "arguments": [
+        "move",
+        "--list",
+        "$work/state/moves.tsv",
+        "--root",
+        "$work/alpha",
+        "--root",
+        "$work/beta",
+        "--state",
+        "$work/state"
+      ],
+      "expect_exit_code": 2,
+      "raw_stdout": true,
+      "stdout_redactions": [
+        {
+          "pattern": "(?m)^((?:\\[root [^\\n]+?\\] )?stage )[0-9a-f]{64}(.*)$",
+          "replacement": "${1}$$STAGE${2}"
+        }
+      ]
+    },
+    {
+      "action": "claim",
+      "name": "claim_30",
+      "kind": "contains",
+      "cell": "move.stderr",
+      "text": "is under none of the roots"
+    },
+    {
+      "action": "claim",
+      "name": "claim_31",
+      "kind": "contains",
+      "cell": "move.stderr",
+      "text": "x.pl"
+    },
+    {
+      "action": "tree_matches",
+      "name": "alpha_unchanged",
+      "left": "$work/alpha",
+      "right": "$work/before_alpha",
+      "file_bytes_only": true,
+      "opaque_prefixes": [
+        ".git/"
+      ],
+      "opaque_groups": [
+        ".git/objects/"
+      ]
+    },
+    {
+      "action": "tree_matches",
+      "name": "beta_unchanged",
+      "left": "$work/beta",
+      "right": "$work/before_beta",
+      "file_bytes_only": true,
+      "opaque_prefixes": [
+        ".git/"
+      ],
+      "opaque_groups": [
+        ".git/objects/"
+      ]
+    }
+  ]
+}

@@ -164,14 +164,33 @@ pub fn commands(case: &Value, api: impl Fn(&Value) -> Value) -> Value {
                 std::fs::write(path(), replacement).unwrap();
             }
             "tree_matches" => {
-                let actual = tree_contents(Path::new(&expand(step["left"].as_str().unwrap())));
-                let expected = tree_contents(Path::new(&expand(
+                let mut actual = tree_contents(Path::new(&expand(step["left"].as_str().unwrap())));
+                let mut expected = tree_contents(Path::new(&expand(
                     step["fixture"]
                         .as_str()
                         .or_else(|| step["right"].as_str())
                         .unwrap(),
                 )));
+                if step["file_bytes_only"] == true {
+                    actual.retain(|_, value| value.get("directory") != Some(&Value::Bool(true)));
+                    expected.retain(|_, value| value.get("directory") != Some(&Value::Bool(true)));
+                }
                 assert_eq!(actual, expected, "{step}");
+                if let Some(prefixes) = step["opaque_prefixes"].as_array() {
+                    for (path, value) in &mut actual {
+                        if prefixes.iter().any(|prefix| path.starts_with(prefix.as_str().unwrap())) {
+                            *value = serde_json::json!({"byte_identical_to_before":true});
+                        }
+                    }
+                }
+                if let Some(prefixes) = step["opaque_groups"].as_array() {
+                    for prefix in prefixes {
+                        let prefix = prefix.as_str().unwrap();
+                        let count = actual.keys().filter(|path| path.starts_with(prefix)).count();
+                        actual.retain(|path, _| !path.starts_with(prefix));
+                        actual.insert(prefix.to_string(), serde_json::json!({"byte_identical_files":count}));
+                    }
+                }
                 observed.insert(name.to_string(), serde_json::json!({"files":actual}));
             }
             "sql_query" => {
@@ -240,7 +259,10 @@ pub fn commands(case: &Value, api: impl Fn(&Value) -> Value) -> Value {
                     .unwrap();
             }
             "exists" => {
-                let exists = path().exists();
+                let exists = match step["kind"].as_str() {
+                    Some("file") => path().is_file(), Some("directory") => path().is_dir(),
+                    _ => path().exists(),
+                };
                 assert_eq!(Value::Bool(exists), step["expected"], "{name}");
                 observed.insert(name.to_string(), serde_json::json!({"exists":exists}));
             }
@@ -424,7 +446,7 @@ pub fn commands(case: &Value, api: impl Fn(&Value) -> Value) -> Value {
                         projected = projected.replace(from, to.as_str().unwrap());
                     }
                 }
-                let expected = if let Some(file) = step["fixture"].as_str() {
+                let mut expected = if let Some(file) = step["fixture"].as_str() {
                     std::fs::read_to_string(file).unwrap()
                 } else if let Some(text) = step["text"].as_str() {
                     text.to_string()
@@ -442,6 +464,20 @@ pub fn commands(case: &Value, api: impl Fn(&Value) -> Value) -> Value {
                         stream.clone()
                     }
                 };
+                if let Some(replacements) = step["replace_each"].as_object() {
+                    for (from, to) in replacements {
+                        projected = projected.replace(&expand(from), to.as_str().unwrap());
+                        expected = expected.replace(&expand(from), to.as_str().unwrap());
+                    }
+                }
+                if let Some(patterns) = step["regex"].as_array() {
+                    for pattern in patterns {
+                        let regex = regex::Regex::new(pattern["pattern"].as_str().unwrap()).unwrap();
+                        let replacement = pattern["replacement"].as_str().unwrap();
+                        projected = regex.replace_all(&projected, replacement).into_owned();
+                        expected = regex.replace_all(&expected, replacement).into_owned();
+                    }
+                }
                 assert_eq!(projected, expected, "{name}");
                 observed.insert(name.to_string(), serde_json::json!({"equal":true}));
             }

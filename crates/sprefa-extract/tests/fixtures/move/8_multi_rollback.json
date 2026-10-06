@@ -1,0 +1,130 @@
+{
+  "steps": [
+    {
+      "action": "copy_tree",
+      "source": "$fixtures/move/inputs/alpha",
+      "target": "$work/alpha"
+    },
+    {
+      "action": "directory",
+      "path": "$work/state"
+    },
+    {
+      "action": "git",
+      "cwd": "$work/alpha",
+      "args": [
+        "init",
+        "-q",
+        "."
+      ]
+    },
+    {
+      "action": "git",
+      "cwd": "$work/alpha",
+      "args": [
+        "add",
+        "-A"
+      ]
+    },
+    {
+      "action": "copy_tree",
+      "source": "$fixtures/move/inputs/beta",
+      "target": "$work/beta"
+    },
+    {
+      "action": "directory",
+      "path": "$work/state"
+    },
+    {
+      "action": "git",
+      "cwd": "$work/beta",
+      "args": [
+        "init",
+        "-q",
+        "."
+      ]
+    },
+    {
+      "action": "git",
+      "cwd": "$work/beta",
+      "args": [
+        "add",
+        "-A"
+      ]
+    },
+    {
+      "action": "copy_tree",
+      "source": "$work/alpha",
+      "target": "$work/before_alpha"
+    },
+    {
+      "action": "copy_tree",
+      "source": "$work/beta",
+      "target": "$work/before_beta"
+    },
+    {
+      "action": "write",
+      "path": "$work/state/moves.tsv",
+      "text": "$work/alpha/lib/b.pl\t$work/alpha/core/b.pl\n$work/beta/lib/c.pl\t$work/beta/core/c.pl\n"
+    },
+    {
+      "action": "run",
+      "name": "move",
+      "arguments": [
+        "move",
+        "--list",
+        "$work/state/moves.tsv",
+        "--root",
+        "$work/alpha",
+        "--root",
+        "$work/beta",
+        "--state",
+        "$work/state",
+        "--commit",
+        "--verify",
+        "false"
+      ],
+      "expect_exit_code": 3,
+      "raw_stdout": true,
+      "stdout_redactions": [
+        {
+          "pattern": "(?m)^((?:\\[root [^\\n]+?\\] )?stage )[0-9a-f]{64}(.*)$",
+          "replacement": "${1}$$STAGE${2}"
+        }
+      ]
+    },
+    {
+      "action": "claim",
+      "name": "claim_32",
+      "kind": "contains",
+      "cell": "move",
+      "text": "verify failed (rc=1): rolled back"
+    },
+    {
+      "action": "tree_matches",
+      "name": "alpha_unchanged",
+      "left": "$work/alpha",
+      "right": "$work/before_alpha",
+      "file_bytes_only": true,
+      "opaque_prefixes": [
+        ".git/"
+      ],
+      "opaque_groups": [
+        ".git/objects/"
+      ]
+    },
+    {
+      "action": "tree_matches",
+      "name": "beta_unchanged",
+      "left": "$work/beta",
+      "right": "$work/before_beta",
+      "file_bytes_only": true,
+      "opaque_prefixes": [
+        ".git/"
+      ],
+      "opaque_groups": [
+        ".git/objects/"
+      ]
+    }
+  ]
+}
