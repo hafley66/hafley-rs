@@ -50,7 +50,7 @@ fn self_rename_is_judged_by_rustc() {
     std::fs::create_dir_all(&state).expect("create state dir");
     let source = Path::new(env!("CARGO_MANIFEST_DIR"));
     copy_crate(source, &root);
-    re_aim_path_deps(source, &root.join("Cargo.toml"));
+    crate::fixture_runner::re_aim_path_deps(source, &root.join("Cargo.toml"));
     let root = root.canonicalize().expect("canonicalize crate copy");
 
     let output = run_rename(
@@ -102,17 +102,3 @@ fn copy_crate(source: &Path, target: &Path) {
     }
 }
 
-/// Resolve the manifest's sibling dependencies before moving its directory.
-fn re_aim_path_deps(source: &Path, manifest: &Path) {
-    let text = std::fs::read_to_string(manifest).expect("read manifest");
-    let mut out = text.clone();
-    for line in text.lines() {
-        let Some((_, tail)) = line.split_once("path = \"") else { continue };
-        let Some((rel, _)) = tail.split_once('"') else { continue };
-        if rel.starts_with("../") {
-            let absolute = source.join(rel).canonicalize().expect("sibling dependency");
-            out = out.replace(rel, &absolute.to_string_lossy());
-        }
-    }
-    std::fs::write(manifest, out).expect("write manifest");
-}
