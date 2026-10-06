@@ -112,19 +112,12 @@ pub fn replace_strings(value: &Value, replacements: &[(&str, &str)]) -> Value {
 
 pub fn commands(case: &Value, api: impl Fn(&Value) -> Value) -> Value {
     use std::process::Command;
-    let temporary = tempfile::tempdir().unwrap();
+    let temporary = if case["short_work"] == true {
+        tempfile::tempdir_in("/tmp").unwrap()
+    } else { tempfile::tempdir().unwrap() };
     let canonical_work = temporary.path().canonicalize().unwrap();
     let work = canonical_work.to_str().unwrap();
-    let expand = |text: &str| {
-        text.replace("$work", work)
-            .replace(
-                "$fixtures",
-                concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures"),
-            )
-            .replace("$manifest", env!("CARGO_MANIFEST_DIR"))
-            .replace("$ryii", env!("CARGO_BIN_EXE_ryii"))
-            .replace("$cargo", env!("CARGO"))
-    };
+    let expand = |text: &str| expand_text(text, work);
     let mut outputs = BTreeMap::<String, (String, String)>::new();
     let mut observed = BTreeMap::new();
     for step in case["steps"].as_array().unwrap() {
@@ -346,45 +339,10 @@ pub fn commands(case: &Value, api: impl Fn(&Value) -> Value) -> Value {
                 observed.insert(name.to_string(), serde_json::json!({"rows":rows}));
             }
             "run" | "command" | "git" => {
-                let program = if step["action"] == "git" {
-                    "git".to_string()
-                } else {
-                    expand(
-                        step["program"]
-                            .as_str()
-                            .unwrap_or(env!("CARGO_BIN_EXE_ryii")),
-                    )
-                };
-                let mut command = Command::new(program);
-                command.args(
-                    step[if step["action"] == "git" {
-                        "args"
-                    } else {
-                        "arguments"
-                    }]
-                    .as_array()
-                    .unwrap()
-                    .iter()
-                    .map(|argument| expand(argument.as_str().unwrap())),
-                );
-                if let Some(environment) = step["environment"].as_object() {
-                    for (key, value) in environment {
-                        command.env(key, expand(value.as_str().unwrap()));
-                    }
-                }
-                if let Some(cwd) = step["cwd"].as_str() {
-                    command.current_dir(expand(cwd));
-                }
-                if let Some(keys) = step["env_remove"].as_array() {
-                    for key in keys {
-                        command.env_remove(key.as_str().unwrap());
-                    }
-                }
-                let started = std::time::Instant::now();
-                let output = command.output().unwrap();
-                let elapsed = started.elapsed();
+                let (output, elapsed) = crate::command_support::execute(step, &expand);
                 let stdout = String::from_utf8(output.stdout).unwrap();
                 let stderr = String::from_utf8(output.stderr).unwrap();
+                if step["unasserted_exit"] != true {
                 assert_eq!(
                     output.status.success(),
                     step["success"]
@@ -392,6 +350,7 @@ pub fn commands(case: &Value, api: impl Fn(&Value) -> Value) -> Value {
                         .unwrap_or_else(|| step["expect_exit_code"].as_i64().unwrap_or(0) == 0),
                     "{name}: {stderr}"
                 );
+                }
                 if let Some(code) = step["expect_exit_code"].as_i64() {
                     assert_eq!(
                         output.status.code(),
@@ -566,6 +525,9 @@ pub fn commands(case: &Value, api: impl Fn(&Value) -> Value) -> Value {
     // Keep record order and every stable field. Per-case exclusions remove only
     // timestamp/version evidence that the old test explicitly left unpinned.
     for (name, result) in observed.iter_mut() {
+        if case["steps"].as_array().unwrap().iter().any(|step| step["name"] == name.as_str() && step["unasserted_exit"] == true) {
+            result.as_object_mut().unwrap().remove("exit_code");
+        }
         if let Some(stream) = result["stdout"].as_str() {
             if raw.contains(name) {
                 result["stdout"] = Value::String(stream.replace(work, "$work"));
@@ -621,7 +583,7 @@ fn claim(
         let key = step[key].as_str().unwrap();
         let (name, field) = key
             .rsplit_once('.')
-            .filter(|(_, field)| ["stdout", "stderr"].contains(field))
+            .filter(|(_, field)| ["stdout", "stderr", "exit_code"].contains(field))
             .unwrap_or((key, "stdout"));
         let value = &observed[name];
         if value.is_object() {
@@ -699,9 +661,9 @@ fn claim(
         }
         _ if kind.starts_with("json_") => {
             let row: Value = serde_json::from_str(
-                text.lines()
-                    .find(|line| line.starts_with(step["line_prefix"].as_str().unwrap_or("{")))
-                    .unwrap(),
+                text.lines().enumerate()
+                    .find(|(index, line)| step["line"].as_u64().map_or_else(|| line.starts_with(step["line_prefix"].as_str().unwrap_or("{")), |wanted| *index == wanted as usize))
+                    .unwrap().1,
             )
             .unwrap();
             let selected = row
@@ -959,4 +921,16 @@ pub fn re_aim_path_deps(source: &Path, manifest: &Path) {
         format!("path = \"{}\"", source.join(&c[1]).canonicalize().unwrap().display())
     });
     std::fs::write(manifest, text.as_bytes()).unwrap();
+}
+
+pub fn expand_text(text: &str, work: &str) -> String {
+        text.replace("$work", work)
+            .replace(
+                "$fixtures",
+                concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures"),
+            )
+            .replace("$manifest", env!("CARGO_MANIFEST_DIR"))
+            .replace("$ryii", env!("CARGO_BIN_EXE_ryii"))
+            .replace("$cargo", env!("CARGO"))
+            .replace("$target", option_env!("CARGO_TARGET_DIR").unwrap_or(concat!(env!("HOME"), "/.cache/lanes/shared/target")))
 }

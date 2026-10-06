@@ -1,0 +1,182 @@
+---
+source: tests/support/2_fixture_runner.rs
+---
+{
+  "0_client_lifecycle": {
+    "absolute_stdin_exit": true,
+    "absolute_stdin_stdout": true,
+    "cleanup_cache": {
+      "socket_exists": false,
+      "has_pid": false
+    },
+    "cleanup_idle-cache": {
+      "socket_exists": false,
+      "has_pid": false
+    },
+    "cleanup_race-cache": {
+      "socket_exists": false,
+      "has_pid": false
+    },
+    "closed_trace": {
+      "request_spans": 3
+    },
+    "daemon_diagnostic": {},
+    "daemon_dot": {
+      "exit_code": 0
+    },
+    "daemon_ingest": {},
+    "daemon_paths": {},
+    "daemon_region": {},
+    "daemon_relative_stdin": {},
+    "daemon_started": {
+      "socket_exists": true
+    },
+    "diagnostic_stderr": true,
+    "diagnostic_stdout": true,
+    "direct_absolute_no_daemon": {
+      "socket_exists": false
+    },
+    "direct_diagnostic": {},
+    "direct_dot": {
+      "exit_code": 0
+    },
+    "direct_dot_no_daemon": {
+      "socket_exists": false
+    },
+    "direct_ingest": {},
+    "direct_paths": {},
+    "direct_region": {},
+    "direct_relative": {
+      "exit_code": 0
+    },
+    "direct_relative_no_daemon": {
+      "socket_exists": false
+    },
+    "direct_relative_stdin": {},
+    "dot_exit": true,
+    "dot_stdout": true,
+    "first": {
+      "exit_code": 0
+    },
+    "first_matches_direct": true,
+    "first_query_name": "first",
+    "formatted": {
+      "exit_code": 2
+    },
+    "idle": {
+      "exit_code": 0
+    },
+    "idle_exited": {
+      "socket_exists": false
+    },
+    "idle_started": {
+      "socket_exists": true
+    },
+    "idle_stdout": true,
+    "ingest_exit": true,
+    "ingest_stdout": true,
+    "late": {
+      "exit_code": 2,
+      "stdout": [
+        {
+          "end_line": 1,
+          "line": 1,
+          "name": "first",
+          "path": "$work/first.rs"
+        },
+        {
+          "error": "$work/second.txt: no language for this extension; pass --lang",
+          "code": 2
+        }
+      ]
+    },
+    "late_error_code": 2,
+    "late_exit": true,
+    "late_row_count": 2,
+    "late_stdout": true,
+    "missing_daemon": {},
+    "missing_direct": {},
+    "missing_exit": true,
+    "missing_stderr": true,
+    "missing_stdout": true,
+    "old_inode": {
+      "inode_recorded": true
+    },
+    "plain": {
+      "exit_code": 0
+    },
+    "query_daemon": {},
+    "query_direct": {},
+    "query_exit": true,
+    "query_stdout": true,
+    "race_started": {
+      "socket_exists": true
+    },
+    "racing_clients": {
+      "clients": [
+        {
+          "success": true,
+          "matches_direct": true
+        },
+        {
+          "success": true,
+          "matches_direct": true
+        }
+      ]
+    },
+    "region_exit": true,
+    "region_stdout": true,
+    "relative_stdin_exit": true,
+    "relative_stdin_stdout": true,
+    "relative_stopped": {
+      "stopped": true
+    },
+    "replaced": {
+      "exit_code": 0
+    },
+    "replacement_socket": {
+      "inode_changed": true
+    },
+    "replacement_stdout": true,
+    "second": {},
+    "second_matches_first": true,
+    "server_identity_advanced": {
+      "advanced_seconds": 2
+    },
+    "setup": null,
+    "slow_daemon": {},
+    "slow_direct": {},
+    "slow_exit": true,
+    "slow_stdout": true,
+    "stop_cache": {
+      "stopped": true
+    },
+    "stop_idle-cache": {
+      "stopped": true
+    },
+    "stop_race-cache": {
+      "stopped": true
+    },
+    "zero_fact_diagnostic": true
+  },
+  "1_long_cache": {
+    "long_cache_cleanup": {
+      "socket_exists": false,
+      "recorded_pid_alive": false
+    },
+    "long_cache_started": {
+      "has_pid": true,
+      "alive": true
+    },
+    "long_cache_stopped": {
+      "stopped": true
+    },
+    "setup": null,
+    "short_socket": {
+      "socket_within_limit": true
+    },
+    "start": {
+      "exit_code": 0
+    }
+  }
+}

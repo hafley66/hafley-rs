@@ -1,0 +1,1003 @@
+{
+  "steps": [
+    {
+      "action": "copy",
+      "source": "$target/debug/ryi",
+      "path": "$work/bin/ryi"
+    },
+    {
+      "action": "copy",
+      "source": "$ryii",
+      "path": "$work/bin/ryii"
+    },
+    {
+      "action": "api",
+      "name": "setup",
+      "api": "guard",
+      "cache": "$work/cache",
+      "operation": "register"
+    },
+    {
+      "action": "command",
+      "name": "direct_relative",
+      "program": "$work/bin/ryii",
+      "arguments": [
+        "fast",
+        "tests/fixtures/type_ladder/src"
+      ],
+      "cwd": "$manifest",
+      "environment": {},
+      "raw_stdout": true,
+      "unasserted_stdout": true,
+      "unasserted_stderr": true,
+      "expect_exit_code": 0
+    },
+    {
+      "action": "api",
+      "name": "direct_relative_no_daemon",
+      "api": "guard",
+      "cache": "$work/cache",
+      "operation": "inspect",
+      "fields": [
+        "socket_exists"
+      ],
+      "expect": {
+        "socket_exists": false
+      }
+    },
+    {
+      "action": "command",
+      "name": "plain",
+      "program": "$work/bin/ryii",
+      "arguments": [
+        "fast",
+        "$manifest/tests/fixtures/type_ladder/src/_0_types.rs"
+      ],
+      "cwd": "$manifest",
+      "environment": {},
+      "raw_stdout": true,
+      "unasserted_stdout": true,
+      "unasserted_stderr": true,
+      "stdout_to": "$work/plain.jsonl",
+      "expect_exit_code": 0
+    },
+    {
+      "action": "api",
+      "name": "direct_absolute_no_daemon",
+      "api": "guard",
+      "cache": "$work/cache",
+      "operation": "inspect",
+      "fields": [
+        "socket_exists"
+      ],
+      "expect": {
+        "socket_exists": false
+      }
+    },
+    {
+      "action": "api",
+      "name": "setup",
+      "api": "guard",
+      "cache": "$work/relative-cache",
+      "operation": "register"
+    },
+    {
+      "action": "command",
+      "name": "direct_dot",
+      "program": "$work/bin/ryii",
+      "arguments": [
+        "fast",
+        "."
+      ],
+      "cwd": "$manifest/../soopy",
+      "environment": {},
+      "raw_stdout": true,
+      "unasserted_stdout": true,
+      "unasserted_stderr": true,
+      "expect_exit_code": 0
+    },
+    {
+      "action": "api",
+      "name": "direct_dot_no_daemon",
+      "api": "guard",
+      "cache": "$work/relative-cache",
+      "operation": "inspect",
+      "fields": [
+        "socket_exists"
+      ],
+      "expect": {
+        "socket_exists": false
+      }
+    },
+    {
+      "action": "command",
+      "name": "daemon_dot",
+      "program": "$work/bin/ryi",
+      "arguments": [
+        "fast",
+        "."
+      ],
+      "cwd": "$manifest/../soopy",
+      "environment": {
+        "XDG_CACHE_HOME": "$work/relative-cache",
+        "RYI_IDLE_SECS": "5"
+      },
+      "raw_stdout": true,
+      "unasserted_stdout": true,
+      "unasserted_stderr": true,
+      "expect_exit_code": 0
+    },
+    {
+      "action": "claim",
+      "kind": "cells_equal",
+      "name": "dot_exit",
+      "left": "daemon_dot.exit_code",
+      "right": "direct_dot.exit_code"
+    },
+    {
+      "action": "claim",
+      "kind": "cells_equal",
+      "name": "dot_stdout",
+      "left": "daemon_dot",
+      "right": "direct_dot"
+    },
+    {
+      "action": "command",
+      "name": "direct_relative_stdin",
+      "program": "$work/bin/ryii",
+      "arguments": [
+        "fast",
+        "-"
+      ],
+      "cwd": "$manifest/../soopy",
+      "environment": {},
+      "raw_stdout": true,
+      "unasserted_stdout": true,
+      "unasserted_stderr": true,
+      "unasserted_exit": true,
+      "stdin": "src/lib.rs\n"
+    },
+    {
+      "action": "command",
+      "name": "daemon_relative_stdin",
+      "program": "$work/bin/ryi",
+      "arguments": [
+        "fast",
+        "-"
+      ],
+      "cwd": "$manifest/../soopy",
+      "environment": {
+        "XDG_CACHE_HOME": "$work/relative-cache",
+        "RYI_IDLE_SECS": "5"
+      },
+      "raw_stdout": true,
+      "unasserted_stdout": true,
+      "unasserted_stderr": true,
+      "unasserted_exit": true,
+      "stdin": "src/lib.rs\n"
+    },
+    {
+      "action": "claim",
+      "kind": "cells_equal",
+      "name": "relative_stdin_exit",
+      "left": "daemon_relative_stdin.exit_code",
+      "right": "direct_relative_stdin.exit_code"
+    },
+    {
+      "action": "claim",
+      "kind": "cells_equal",
+      "name": "relative_stdin_stdout",
+      "left": "daemon_relative_stdin",
+      "right": "direct_relative_stdin"
+    },
+    {
+      "action": "copy_tree",
+      "source": "$fixtures/type_ladder",
+      "target": "$work/type_ladder"
+    },
+    {
+      "action": "command",
+      "name": "missing_direct",
+      "program": "$work/bin/ryii",
+      "arguments": [
+        "fast",
+        "does/not/exist.rs"
+      ],
+      "cwd": "$manifest/../soopy",
+      "environment": {},
+      "raw_stdout": true,
+      "unasserted_stdout": true,
+      "unasserted_stderr": true,
+      "unasserted_exit": true
+    },
+    {
+      "action": "command",
+      "name": "missing_daemon",
+      "program": "$work/bin/ryi",
+      "arguments": [
+        "fast",
+        "does/not/exist.rs"
+      ],
+      "cwd": "$manifest/../soopy",
+      "environment": {
+        "XDG_CACHE_HOME": "$work/relative-cache",
+        "RYI_IDLE_SECS": "5"
+      },
+      "raw_stdout": true,
+      "unasserted_stdout": true,
+      "unasserted_stderr": true,
+      "unasserted_exit": true
+    },
+    {
+      "action": "claim",
+      "kind": "cells_equal",
+      "name": "missing_exit",
+      "left": "missing_daemon.exit_code",
+      "right": "missing_direct.exit_code"
+    },
+    {
+      "action": "claim",
+      "kind": "cells_equal",
+      "name": "missing_stdout",
+      "left": "missing_daemon",
+      "right": "missing_direct"
+    },
+    {
+      "action": "claim",
+      "kind": "cells_equal",
+      "name": "missing_stderr",
+      "left": "missing_daemon.stderr",
+      "right": "missing_direct.stderr"
+    },
+    {
+      "action": "command",
+      "name": "slow_direct",
+      "program": "$work/bin/ryii",
+      "arguments": [
+        "slow",
+        "."
+      ],
+      "cwd": "$work/type_ladder",
+      "environment": {},
+      "raw_stdout": true,
+      "unasserted_stdout": true,
+      "unasserted_stderr": true,
+      "unasserted_exit": true
+    },
+    {
+      "action": "command",
+      "name": "slow_daemon",
+      "program": "$work/bin/ryi",
+      "arguments": [
+        "slow",
+        "."
+      ],
+      "cwd": "$work/type_ladder",
+      "environment": {
+        "XDG_CACHE_HOME": "$work/relative-cache",
+        "RYI_IDLE_SECS": "5"
+      },
+      "raw_stdout": true,
+      "unasserted_stdout": true,
+      "unasserted_stderr": true,
+      "unasserted_exit": true
+    },
+    {
+      "action": "claim",
+      "kind": "cells_equal",
+      "name": "slow_exit",
+      "left": "slow_daemon.exit_code",
+      "right": "slow_direct.exit_code"
+    },
+    {
+      "action": "claim",
+      "kind": "cells_equal",
+      "name": "slow_stdout",
+      "left": "slow_daemon",
+      "right": "slow_direct"
+    },
+    {
+      "action": "command",
+      "name": "query_direct",
+      "program": "$work/bin/ryii",
+      "arguments": [
+        "query",
+        "--query",
+        "(struct_item name: (type_identifier) @n)",
+        "src"
+      ],
+      "cwd": "$work/type_ladder",
+      "environment": {},
+      "raw_stdout": true,
+      "unasserted_stdout": true,
+      "unasserted_stderr": true,
+      "unasserted_exit": true
+    },
+    {
+      "action": "command",
+      "name": "query_daemon",
+      "program": "$work/bin/ryi",
+      "arguments": [
+        "query",
+        "--query",
+        "(struct_item name: (type_identifier) @n)",
+        "src"
+      ],
+      "cwd": "$work/type_ladder",
+      "environment": {
+        "XDG_CACHE_HOME": "$work/relative-cache",
+        "RYI_IDLE_SECS": "5"
+      },
+      "raw_stdout": true,
+      "unasserted_stdout": true,
+      "unasserted_stderr": true,
+      "unasserted_exit": true
+    },
+    {
+      "action": "claim",
+      "kind": "cells_equal",
+      "name": "query_exit",
+      "left": "query_daemon.exit_code",
+      "right": "query_direct.exit_code"
+    },
+    {
+      "action": "claim",
+      "kind": "cells_equal",
+      "name": "query_stdout",
+      "left": "query_daemon",
+      "right": "query_direct"
+    },
+    {
+      "action": "api",
+      "name": "relative_stopped",
+      "api": "guard",
+      "cache": "$work/relative-cache",
+      "operation": "stop",
+      "expect": {
+        "stopped": true
+      }
+    },
+    {
+      "action": "command",
+      "name": "first",
+      "program": "$work/bin/ryi",
+      "arguments": [
+        "fast",
+        "$manifest/tests/fixtures/type_ladder/src/_0_types.rs"
+      ],
+      "cwd": "$manifest",
+      "environment": {
+        "XDG_CACHE_HOME": "$work/cache",
+        "RYI_IDLE_SECS": "5",
+        "HAFLEY_TRACE": "$work/daemon-observe.json"
+      },
+      "raw_stdout": true,
+      "unasserted_stdout": true,
+      "unasserted_stderr": true,
+      "expect_exit_code": 0
+    },
+    {
+      "action": "api",
+      "name": "daemon_started",
+      "api": "guard",
+      "cache": "$work/cache",
+      "operation": "inspect",
+      "fields": [
+        "socket_exists"
+      ],
+      "expect": {
+        "socket_exists": true
+      }
+    },
+    {
+      "action": "claim",
+      "kind": "cells_equal",
+      "name": "first_matches_direct",
+      "left": "first",
+      "right": "plain"
+    },
+    {
+      "action": "command",
+      "name": "second",
+      "program": "$work/bin/ryi",
+      "arguments": [
+        "fast",
+        "$manifest/tests/fixtures/type_ladder/src/_0_types.rs"
+      ],
+      "cwd": "$manifest",
+      "environment": {
+        "XDG_CACHE_HOME": "$work/cache",
+        "RYI_IDLE_SECS": "5",
+        "HAFLEY_TRACE": "$work/daemon-observe.json"
+      },
+      "raw_stdout": true,
+      "unasserted_stdout": true,
+      "unasserted_stderr": true,
+      "unasserted_exit": true
+    },
+    {
+      "action": "claim",
+      "kind": "cells_equal",
+      "name": "second_matches_first",
+      "left": "second",
+      "right": "first"
+    },
+    {
+      "action": "command",
+      "name": "direct_paths",
+      "program": "$work/bin/ryii",
+      "arguments": [
+        "fast",
+        "-"
+      ],
+      "cwd": "$manifest",
+      "environment": {},
+      "raw_stdout": true,
+      "unasserted_stdout": true,
+      "unasserted_stderr": true,
+      "unasserted_exit": true,
+      "stdin": "$manifest/tests/fixtures/type_ladder/src/_0_types.rs\n"
+    },
+    {
+      "action": "command",
+      "name": "daemon_paths",
+      "program": "$work/bin/ryi",
+      "arguments": [
+        "fast",
+        "-"
+      ],
+      "cwd": "$manifest",
+      "environment": {
+        "XDG_CACHE_HOME": "$work/cache",
+        "RYI_IDLE_SECS": "5"
+      },
+      "raw_stdout": true,
+      "unasserted_stdout": true,
+      "unasserted_stderr": true,
+      "unasserted_exit": true,
+      "stdin": "$manifest/tests/fixtures/type_ladder/src/_0_types.rs\n"
+    },
+    {
+      "action": "claim",
+      "kind": "cells_equal",
+      "name": "absolute_stdin_exit",
+      "left": "daemon_paths.exit_code",
+      "right": "direct_paths.exit_code"
+    },
+    {
+      "action": "claim",
+      "kind": "cells_equal",
+      "name": "absolute_stdin_stdout",
+      "left": "daemon_paths",
+      "right": "direct_paths"
+    },
+    {
+      "action": "write",
+      "path": "$work/region.rs",
+      "text": "// sprefa:auto-begin demo\nraw generated text\nwith another line\n// sprefa:auto-end demo\n"
+    },
+    {
+      "action": "command",
+      "name": "direct_region",
+      "program": "$work/bin/ryii",
+      "arguments": [
+        "region",
+        "$work/region.rs",
+        "demo",
+        "--generated",
+        "-"
+      ],
+      "cwd": "$manifest",
+      "environment": {},
+      "raw_stdout": true,
+      "unasserted_stdout": true,
+      "unasserted_stderr": true,
+      "unasserted_exit": true,
+      "stdin": "raw generated text\nwith another line\n"
+    },
+    {
+      "action": "command",
+      "name": "daemon_region",
+      "program": "$work/bin/ryi",
+      "arguments": [
+        "region",
+        "$work/region.rs",
+        "demo",
+        "--generated",
+        "-"
+      ],
+      "cwd": "$manifest",
+      "environment": {
+        "XDG_CACHE_HOME": "$work/cache",
+        "RYI_IDLE_SECS": "5"
+      },
+      "raw_stdout": true,
+      "unasserted_stdout": true,
+      "unasserted_stderr": true,
+      "unasserted_exit": true,
+      "stdin": "raw generated text\nwith another line\n"
+    },
+    {
+      "action": "claim",
+      "kind": "cells_equal",
+      "name": "region_exit",
+      "left": "daemon_region.exit_code",
+      "right": "direct_region.exit_code"
+    },
+    {
+      "action": "claim",
+      "kind": "cells_equal",
+      "name": "region_stdout",
+      "left": "daemon_region",
+      "right": "direct_region"
+    },
+    {
+      "action": "command",
+      "name": "direct_ingest",
+      "program": "$work/bin/ryii",
+      "arguments": [
+        "ingest",
+        "/dev/stdin"
+      ],
+      "cwd": "$manifest",
+      "environment": {},
+      "raw_stdout": true,
+      "unasserted_stdout": true,
+      "unasserted_stderr": true,
+      "unasserted_exit": true,
+      "stdin_file": "$manifest/tests/fixtures/tsi/foreign_probe.jsonl"
+    },
+    {
+      "action": "command",
+      "name": "daemon_ingest",
+      "program": "$work/bin/ryi",
+      "arguments": [
+        "ingest",
+        "/dev/stdin"
+      ],
+      "cwd": "$manifest",
+      "environment": {
+        "XDG_CACHE_HOME": "$work/cache",
+        "RYI_IDLE_SECS": "5"
+      },
+      "raw_stdout": true,
+      "unasserted_stdout": true,
+      "unasserted_stderr": true,
+      "unasserted_exit": true,
+      "stdin_file": "$manifest/tests/fixtures/tsi/foreign_probe.jsonl"
+    },
+    {
+      "action": "claim",
+      "kind": "cells_equal",
+      "name": "ingest_exit",
+      "left": "daemon_ingest.exit_code",
+      "right": "direct_ingest.exit_code"
+    },
+    {
+      "action": "claim",
+      "kind": "cells_equal",
+      "name": "ingest_stdout",
+      "left": "daemon_ingest",
+      "right": "direct_ingest"
+    },
+    {
+      "action": "write",
+      "path": "$work/unknown.extension",
+      "text": "unrecognized source\n"
+    },
+    {
+      "action": "command",
+      "name": "direct_diagnostic",
+      "program": "$work/bin/ryii",
+      "arguments": [
+        "$work/unknown.extension"
+      ],
+      "cwd": "$manifest",
+      "environment": {},
+      "raw_stdout": true,
+      "unasserted_stdout": true,
+      "unasserted_stderr": true,
+      "unasserted_exit": true
+    },
+    {
+      "action": "command",
+      "name": "daemon_diagnostic",
+      "program": "$work/bin/ryi",
+      "arguments": [
+        "$work/unknown.extension"
+      ],
+      "cwd": "$manifest",
+      "environment": {
+        "XDG_CACHE_HOME": "$work/cache",
+        "RYI_IDLE_SECS": "5"
+      },
+      "raw_stdout": true,
+      "unasserted_stdout": true,
+      "unasserted_stderr": true,
+      "unasserted_exit": true
+    },
+    {
+      "action": "claim",
+      "kind": "cells_equal",
+      "name": "diagnostic_stdout",
+      "left": "daemon_diagnostic",
+      "right": "direct_diagnostic"
+    },
+    {
+      "action": "claim",
+      "kind": "cells_equal",
+      "name": "diagnostic_stderr",
+      "left": "daemon_diagnostic.stderr",
+      "right": "direct_diagnostic.stderr"
+    },
+    {
+      "action": "claim",
+      "name": "zero_fact_diagnostic",
+      "kind": "contains",
+      "cell": "daemon_diagnostic.stderr",
+      "text": "0 facts:"
+    },
+    {
+      "action": "write",
+      "path": "$work/first.rs",
+      "text": "fn first() {}\n"
+    },
+    {
+      "action": "write",
+      "path": "$work/second.txt",
+      "text": "second\n"
+    },
+    {
+      "action": "command",
+      "name": "late",
+      "program": "$work/bin/ryi",
+      "arguments": [
+        "query",
+        "$work/first.rs",
+        "$work/second.txt",
+        "--query",
+        "(function_item name: (identifier) @name)"
+      ],
+      "cwd": "$manifest",
+      "environment": {
+        "XDG_CACHE_HOME": "$work/cache",
+        "RYI_IDLE_SECS": "5"
+      },
+      "raw_stdout": false,
+      "unasserted_stdout": false,
+      "unasserted_stderr": true,
+      "expect_exit_code": 2
+    },
+    {
+      "action": "command",
+      "name": "formatted",
+      "program": "$work/bin/ryii",
+      "arguments": [
+        "--format",
+        "jsonl",
+        "query",
+        "$work/first.rs",
+        "$work/second.txt",
+        "--query",
+        "(function_item name: (identifier) @name)"
+      ],
+      "cwd": "$manifest",
+      "environment": {},
+      "raw_stdout": true,
+      "unasserted_stdout": true,
+      "unasserted_stderr": true,
+      "expect_exit_code": 2
+    },
+    {
+      "action": "claim",
+      "kind": "cells_equal",
+      "name": "late_exit",
+      "left": "late.exit_code",
+      "right": "formatted.exit_code"
+    },
+    {
+      "action": "claim",
+      "kind": "cells_equal",
+      "name": "late_stdout",
+      "left": "late",
+      "right": "formatted"
+    },
+    {
+      "action": "claim",
+      "name": "late_row_count",
+      "kind": "line_count",
+      "cell": "late",
+      "line_prefix": "",
+      "expect": 2
+    },
+    {
+      "action": "claim",
+      "name": "first_query_name",
+      "kind": "json_scalar",
+      "cell": "late",
+      "line": 0,
+      "pointer": "name",
+      "expect": "first"
+    },
+    {
+      "action": "claim",
+      "name": "late_error_code",
+      "kind": "json_scalar",
+      "cell": "late",
+      "line": 1,
+      "pointer": "code",
+      "expect": 2
+    },
+    {
+      "action": "api",
+      "name": "old_inode",
+      "api": "guard",
+      "cache": "$work/cache",
+      "operation": "record_inode"
+    },
+    {
+      "action": "api",
+      "name": "server_identity_advanced",
+      "api": "advance_mtime",
+      "path": "$work/bin/ryii",
+      "seconds": 2,
+      "expect": {
+        "advanced_seconds": 2
+      }
+    },
+    {
+      "action": "command",
+      "name": "replaced",
+      "program": "$work/bin/ryi",
+      "arguments": [
+        "fast",
+        "$manifest/tests/fixtures/type_ladder/src/_0_types.rs"
+      ],
+      "cwd": "$manifest",
+      "environment": {
+        "XDG_CACHE_HOME": "$work/cache",
+        "RYI_IDLE_SECS": "5"
+      },
+      "raw_stdout": true,
+      "unasserted_stdout": true,
+      "unasserted_stderr": true,
+      "expect_exit_code": 0
+    },
+    {
+      "action": "claim",
+      "kind": "cells_equal",
+      "name": "replacement_stdout",
+      "left": "replaced",
+      "right": "plain"
+    },
+    {
+      "action": "api",
+      "name": "replacement_socket",
+      "api": "guard",
+      "cache": "$work/cache",
+      "operation": "inspect",
+      "fields": [
+        "inode_changed"
+      ],
+      "expect": {
+        "inode_changed": true
+      }
+    },
+    {
+      "action": "api",
+      "name": "closed_trace",
+      "api": "trace_requests",
+      "path": "$work/daemon-observe.json",
+      "verb": "fast",
+      "expect": {
+        "request_spans": 3
+      }
+    },
+    {
+      "action": "api",
+      "name": "setup",
+      "api": "guard",
+      "cache": "$work/idle-cache",
+      "operation": "register"
+    },
+    {
+      "action": "command",
+      "name": "idle",
+      "program": "$work/bin/ryi",
+      "arguments": [
+        "fast",
+        "$manifest/tests/fixtures/type_ladder/src/_0_types.rs"
+      ],
+      "cwd": "$manifest",
+      "environment": {
+        "XDG_CACHE_HOME": "$work/idle-cache",
+        "RYI_IDLE_SECS": "1"
+      },
+      "raw_stdout": true,
+      "unasserted_stdout": true,
+      "unasserted_stderr": true,
+      "expect_exit_code": 0
+    },
+    {
+      "action": "claim",
+      "kind": "cells_equal",
+      "name": "idle_stdout",
+      "left": "idle",
+      "right": "plain"
+    },
+    {
+      "action": "api",
+      "name": "idle_started",
+      "api": "guard",
+      "cache": "$work/idle-cache",
+      "operation": "inspect",
+      "fields": [
+        "socket_exists"
+      ],
+      "expect": {
+        "socket_exists": true
+      }
+    },
+    {
+      "action": "api",
+      "name": "idle_exited",
+      "api": "guard",
+      "cache": "$work/idle-cache",
+      "operation": "wait_socket_absent",
+      "seconds": 10,
+      "poll_ms": 100,
+      "fields": [
+        "socket_exists"
+      ],
+      "expect": {
+        "socket_exists": false
+      }
+    },
+    {
+      "action": "api",
+      "name": "setup",
+      "api": "guard",
+      "cache": "$work/race-cache",
+      "operation": "register"
+    },
+    {
+      "action": "api",
+      "name": "racing_clients",
+      "api": "parallel_clients",
+      "stdout_file": "$work/plain.jsonl",
+      "commands": [
+        {
+          "action": "command",
+          "program": "$work/bin/ryi",
+          "arguments": [
+            "fast",
+            "$manifest/tests/fixtures/type_ladder/src/_0_types.rs"
+          ],
+          "cwd": "$manifest",
+          "environment": {
+            "XDG_CACHE_HOME": "$work/race-cache",
+            "RYI_IDLE_SECS": "5",
+            "DL_TRAIL": "0",
+            "RUST_LOG": "off"
+          }
+        },
+        {
+          "action": "command",
+          "program": "$work/bin/ryi",
+          "arguments": [
+            "fast",
+            "$manifest/tests/fixtures/type_ladder/src/_0_types.rs"
+          ],
+          "cwd": "$manifest",
+          "environment": {
+            "XDG_CACHE_HOME": "$work/race-cache",
+            "RYI_IDLE_SECS": "5",
+            "DL_TRAIL": "0",
+            "RUST_LOG": "off"
+          }
+        }
+      ],
+      "expect": {
+        "clients": [
+          {
+            "success": true,
+            "matches_direct": true
+          },
+          {
+            "success": true,
+            "matches_direct": true
+          }
+        ]
+      }
+    },
+    {
+      "action": "api",
+      "name": "race_started",
+      "api": "guard",
+      "cache": "$work/race-cache",
+      "operation": "inspect",
+      "fields": [
+        "socket_exists"
+      ],
+      "expect": {
+        "socket_exists": true
+      }
+    },
+    {
+      "action": "api",
+      "name": "stop_cache",
+      "api": "guard",
+      "cache": "$work/cache",
+      "operation": "stop",
+      "expect": {
+        "stopped": true
+      }
+    },
+    {
+      "action": "api",
+      "name": "cleanup_cache",
+      "api": "guard",
+      "cache": "$work/cache",
+      "operation": "inspect",
+      "fields": [
+        "socket_exists",
+        "has_pid"
+      ],
+      "expect": {
+        "socket_exists": false,
+        "has_pid": false
+      }
+    },
+    {
+      "action": "api",
+      "name": "stop_idle-cache",
+      "api": "guard",
+      "cache": "$work/idle-cache",
+      "operation": "stop",
+      "expect": {
+        "stopped": true
+      }
+    },
+    {
+      "action": "api",
+      "name": "cleanup_idle-cache",
+      "api": "guard",
+      "cache": "$work/idle-cache",
+      "operation": "inspect",
+      "fields": [
+        "socket_exists",
+        "has_pid"
+      ],
+      "expect": {
+        "socket_exists": false,
+        "has_pid": false
+      }
+    },
+    {
+      "action": "api",
+      "name": "stop_race-cache",
+      "api": "guard",
+      "cache": "$work/race-cache",
+      "operation": "stop",
+      "expect": {
+        "stopped": true
+      }
+    },
+    {
+      "action": "api",
+      "name": "cleanup_race-cache",
+      "api": "guard",
+      "cache": "$work/race-cache",
+      "operation": "inspect",
+      "fields": [
+        "socket_exists",
+        "has_pid"
+      ],
+      "expect": {
+        "socket_exists": false,
+        "has_pid": false
+      }
+    }
+  ],
+  "short_work": true
+}
