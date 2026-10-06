@@ -1,0 +1,107 @@
+{
+  "test": "default_corpus_walk_is_tracked_and_explicit_root_includes_ignored_files",
+  "source_range": "232-251",
+  "fixture": {
+    "group": "cleave_rust",
+    "variant": "basic",
+    "label": "corpus-walk"
+  },
+  "steps": [
+    {
+      "action": "copy_tree",
+      "source": "$fixtures/cleave_rust/basic",
+      "target": "$work/repo"
+    },
+    {
+      "action": "directory",
+      "path": "$work/state"
+    },
+    {
+      "action": "git",
+      "args": [
+        "init",
+        "-q",
+        "."
+      ],
+      "cwd": "$work/repo"
+    },
+    {
+      "action": "write",
+      "path": "$work/repo/tracked.rs",
+      "text": "pub fn tracked() {}\n"
+    },
+    {
+      "action": "write",
+      "path": "$work/repo/scratch.rs",
+      "text": "pub fn scratch() {}\n"
+    },
+    {
+      "action": "write",
+      "path": "$work/repo/.gitignore",
+      "text": ".probe/\n"
+    },
+    {
+      "action": "directory",
+      "path": "$work/repo/.probe"
+    },
+    {
+      "action": "write",
+      "path": "$work/repo/.probe/noise.rs",
+      "text": "pub fn noise() {}\n"
+    },
+    {
+      "action": "git",
+      "args": [
+        "add",
+        "tracked.rs"
+      ],
+      "cwd": "$work/repo"
+    },
+    {
+      "action": "api",
+      "name": "walk_files_with_untracked",
+      "arguments": {
+        "root": "$work/repo",
+        "untracked": false
+      },
+      "capture": "walk_default"
+    },
+    {
+      "action": "api",
+      "name": "walk_files_with_untracked",
+      "arguments": {
+        "root": "$work/repo",
+        "untracked": true
+      },
+      "capture": "walk_explicit"
+    },
+    {
+      "action": "claim",
+      "kind": "list_contains",
+      "cell": "walk_default",
+      "value": "tracked.rs",
+      "name": "default_includes_tracked"
+    },
+    {
+      "action": "claim",
+      "kind": "list_absent",
+      "cell": "walk_default",
+      "value": "scratch.rs",
+      "name": "default_excludes_untracked"
+    },
+    {
+      "action": "claim",
+      "kind": "list_contains",
+      "cell": "walk_explicit",
+      "value": "scratch.rs",
+      "name": "explicit_includes_untracked"
+    },
+    {
+      "action": "claim",
+      "kind": "list_contains",
+      "cell": "walk_explicit",
+      "value": ".probe/noise.rs",
+      "name": "explicit_includes_ignored"
+    }
+  ]
+}

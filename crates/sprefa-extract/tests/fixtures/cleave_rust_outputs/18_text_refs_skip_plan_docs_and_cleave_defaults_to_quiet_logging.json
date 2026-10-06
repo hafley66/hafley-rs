@@ -1,0 +1,124 @@
+{
+  "test": "text_refs_skip_plan_docs_and_cleave_defaults_to_quiet_logging",
+  "source_range": "734-758",
+  "fixture": {
+    "group": "cleave_ratchet",
+    "variant": "text_refs",
+    "label": "text-refs"
+  },
+  "steps": [
+    {
+      "action": "copy_tree",
+      "source": "$fixtures/cleave_ratchet/text_refs",
+      "target": "$work/repo"
+    },
+    {
+      "action": "directory",
+      "path": "$work/state"
+    },
+    {
+      "action": "git",
+      "args": [
+        "init",
+        "-q",
+        "."
+      ],
+      "cwd": "$work/repo"
+    },
+    {
+      "action": "git",
+      "args": [
+        "add",
+        "-A"
+      ],
+      "cwd": "$work/repo"
+    },
+    {
+      "action": "command",
+      "program": "$ryii",
+      "arguments": [
+        "cleave",
+        "src/source.rs#target",
+        "src/dest.rs",
+        "--root",
+        "$work/repo",
+        "--state",
+        "$work/state",
+        "--text-refs"
+      ],
+      "cwd": "$work/repo",
+      "expect_exit_code": 0,
+      "capture": "out_text_refs",
+      "raw_stdout": true,
+      "env_remove": [
+        "RUST_LOG"
+      ],
+      "stdout_redactions": [
+        {
+          "pattern": "(?m)^(stage )[0-9a-f]{64}( committed| dry run, tree untouched)$",
+          "replacement": "${1}$$STAGE${2}"
+        }
+      ]
+    },
+    {
+      "action": "claim",
+      "kind": "absent",
+      "cell": "out_text_refs.stdout",
+      "text": "text-ref plans/",
+      "name": "text_refs_plans_not_logged"
+    },
+    {
+      "action": "claim",
+      "kind": "absent",
+      "cell": "out_text_refs.stderr",
+      "text": "INFO sprefa_extract",
+      "name": "quiet_logging_default"
+    },
+    {
+      "action": "command",
+      "program": "$ryii",
+      "arguments": [
+        "cleave",
+        "src/source.rs#target",
+        "src/dest.rs",
+        "--commit",
+        "--root",
+        "$work/repo",
+        "--state",
+        "$work/state"
+      ],
+      "cwd": "$work/repo",
+      "environment": {
+        "HAFLEY_TRACE": "$work/cleave.json",
+        "RUST_LOG": "sprefa_extract=debug,hafley_scm=debug"
+      },
+      "expect_exit_code": 0,
+      "capture": "stdout_commit",
+      "raw_stdout": true,
+      "unasserted_stderr": true,
+      "stdout_redactions": [
+        {
+          "pattern": "(?m)^(stage )[0-9a-f]{64}( committed| dry run, tree untouched)$",
+          "replacement": "${1}$$STAGE${2}"
+        }
+      ]
+    },
+    {
+      "action": "command",
+      "program": "$cargo",
+      "arguments": [
+        "check",
+        "--quiet",
+        "--offline"
+      ],
+      "cwd": "$work/repo",
+      "environment": {
+        "CARGO_TARGET_DIR": "$work/target",
+        "KACHE_DISABLED": "1"
+      },
+      "expect_exit_code": 0,
+      "capture": "cargo_check",
+      "raw_stdout": true
+    }
+  ]
+}

@@ -1,0 +1,176 @@
+{
+  "test": "a_type_travels_with_its_docs_derives_impls_and_public_reexport",
+  "source_range": "664-732",
+  "fixture": {
+    "group": "cleave_rust",
+    "variant": "basic",
+    "label": "real-crate"
+  },
+  "steps": [
+    {
+      "action": "copy_tree",
+      "source": "$fixtures/cleave_rust/basic",
+      "target": "$work/repo"
+    },
+    {
+      "action": "directory",
+      "path": "$work/state"
+    },
+    {
+      "action": "git",
+      "args": [
+        "init",
+        "-q",
+        "."
+      ],
+      "cwd": "$work/repo"
+    },
+    {
+      "action": "write",
+      "path": "$work/repo/src/util.rs",
+      "text": "use std::fmt;\n\n/// Why a plan stops.\n#[derive(Debug, Clone)]\npub enum Stop {\n    /// Nothing matched.\n    Missing(String),\n}\n\nimpl fmt::Display for Stop {\n    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {\n        match self {\n            Stop::Missing(name) => write!(formatter, \"no {name}\"),\n        }\n    }\n}\n\nimpl std::error::Error for Stop {}\n\npub fn describe(stop: &Stop) -> String {\n    use std::fmt::Write;\n    let mut out = String::new();\n    let _ = write!(out, \"{stop}\");\n    out\n}\n"
+    },
+    {
+      "action": "write",
+      "path": "$work/repo/src/lib.rs",
+      "text": "pub mod app;\npub mod config;\npub mod log;\npub mod util;\n\npub use util::{describe, Stop};\n"
+    },
+    {
+      "action": "write",
+      "path": "$work/repo/src/app.rs",
+      "text": "pub fn boot(dir: &str) -> String {\n    dir.to_string()\n}\n"
+    },
+    {
+      "action": "git",
+      "args": [
+        "add",
+        "-A"
+      ],
+      "cwd": "$work/repo"
+    },
+    {
+      "action": "command",
+      "program": "$ryii",
+      "arguments": [
+        "cleave",
+        "src/util.rs#Stop",
+        "src/stops.rs",
+        "--commit",
+        "--root",
+        "$work/repo",
+        "--state",
+        "$work/state"
+      ],
+      "cwd": "$work/repo",
+      "environment": {
+        "HAFLEY_TRACE": "$work/cleave.json",
+        "RUST_LOG": "sprefa_extract=debug,hafley_scm=debug"
+      },
+      "expect_exit_code": 0,
+      "capture": "stdout_commit",
+      "raw_stdout": true,
+      "unasserted_stderr": true,
+      "stdout_redactions": [
+        {
+          "pattern": "(?m)^(stage )[0-9a-f]{64}( committed| dry run, tree untouched)$",
+          "replacement": "${1}$$STAGE${2}"
+        }
+      ]
+    },
+    {
+      "action": "read_tree",
+      "path": "$work/repo/src/stops.rs",
+      "capture": "stops_after"
+    },
+    {
+      "action": "read_tree",
+      "path": "$work/repo/src/util.rs",
+      "capture": "util_after"
+    },
+    {
+      "action": "read_tree",
+      "path": "$work/repo/src/lib.rs",
+      "capture": "lib_after"
+    },
+    {
+      "action": "claim",
+      "kind": "contains",
+      "cell": "stops_after",
+      "text": "/// Why a plan stops.\n#[derive(Debug, Clone)]\npub enum Stop",
+      "name": "stops_docs_and_derives_travel"
+    },
+    {
+      "action": "claim",
+      "kind": "contains",
+      "cell": "stops_after",
+      "text": "impl fmt::Display for Stop",
+      "name": "stops_display_impl_travels"
+    },
+    {
+      "action": "claim",
+      "kind": "contains",
+      "cell": "stops_after",
+      "text": "impl std::error::Error for Stop {}",
+      "name": "stops_error_impl_travels"
+    },
+    {
+      "action": "claim",
+      "kind": "contains",
+      "cell": "stops_after",
+      "text": "use std::fmt;",
+      "name": "stops_keeps_fmt_import"
+    },
+    {
+      "action": "claim",
+      "kind": "absent",
+      "cell": "util_after",
+      "text": "Why a plan stops",
+      "name": "util_loses_docs"
+    },
+    {
+      "action": "claim",
+      "kind": "absent",
+      "cell": "util_after",
+      "text": "impl fmt::Display",
+      "name": "util_loses_impl"
+    },
+    {
+      "action": "claim",
+      "kind": "contains",
+      "cell": "util_after",
+      "text": "    use std::fmt::Write;\n    let mut out",
+      "name": "util_fn_local_use_never_anchors"
+    },
+    {
+      "action": "claim",
+      "kind": "contains",
+      "cell": "lib_after",
+      "text": "pub use util::describe;",
+      "name": "lib_keeps_describe_reexport"
+    },
+    {
+      "action": "claim",
+      "kind": "contains",
+      "cell": "lib_after",
+      "text": "pub use crate::stops::Stop;",
+      "name": "lib_respells_stop_reexport"
+    },
+    {
+      "action": "command",
+      "program": "$cargo",
+      "arguments": [
+        "check",
+        "--quiet",
+        "--offline"
+      ],
+      "cwd": "$work/repo",
+      "environment": {
+        "CARGO_TARGET_DIR": "$work/target",
+        "KACHE_DISABLED": "1"
+      },
+      "expect_exit_code": 0,
+      "capture": "cargo_check",
+      "raw_stdout": true
+    }
+  ]
+}

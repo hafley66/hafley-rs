@@ -1,0 +1,120 @@
+{
+  "scenario": "rs-move-widget",
+  "claim_tests": [
+    "relocation_rust_types",
+    "origin_conservation_rust"
+  ],
+  "steps": [
+    {
+      "action": "directory",
+      "path": "$work/base"
+    },
+    {
+      "action": "copy",
+      "source": "tests/fixtures/rust_findings/impl_owner/decl.rs",
+      "path": "$work/base/decl.rs"
+    },
+    {
+      "action": "copy",
+      "source": "tests/fixtures/rust_findings/impl_owner/impls.rs",
+      "path": "$work/base/impls.rs"
+    },
+    {
+      "action": "copy",
+      "source": "tests/fixtures/rust_findings/impl_owner/lib.rs",
+      "path": "$work/base/lib.rs"
+    },
+    {
+      "action": "copy",
+      "source": "tests/fixtures/rust_findings/impl_owner/render.rs",
+      "path": "$work/base/render.rs"
+    },
+    {
+      "action": "copy",
+      "source": "tests/fixtures/origin/rust_same_file.rs",
+      "path": "$work/base/rust_same_file.rs"
+    },
+    {
+      "action": "api",
+      "name": "base",
+      "api": "resolve_rows",
+      "root": "$work/base",
+      "files": [
+        "decl.rs",
+        "impls.rs",
+        "lib.rs",
+        "render.rs",
+        "rust_same_file.rs"
+      ]
+    },
+    {
+      "action": "directory",
+      "path": "$work/after"
+    },
+    {
+      "action": "copy",
+      "source": "tests/fixtures/rust_findings/impl_owner/decl.rs",
+      "path": "$work/after/decl.rs"
+    },
+    {
+      "action": "copy",
+      "source": "tests/fixtures/rust_findings/impl_owner/impls.rs",
+      "path": "$work/after/impls.rs"
+    },
+    {
+      "action": "copy",
+      "source": "tests/fixtures/rust_findings/impl_owner/lib.rs",
+      "path": "$work/after/lib.rs"
+    },
+    {
+      "action": "copy",
+      "source": "tests/fixtures/rust_findings/impl_owner/render.rs",
+      "path": "$work/after/render.rs"
+    },
+    {
+      "action": "copy",
+      "source": "tests/fixtures/origin/rust_same_file.rs",
+      "path": "$work/after/rust_same_file.rs"
+    },
+    {
+      "action": "replace",
+      "path": "$work/after/decl.rs",
+      "from": "pub struct Widget {\n    pub tag: u32,\n}\n\n",
+      "to": "",
+      "count": 1
+    },
+    {
+      "action": "write",
+      "path": "$work/after/transplanted.rs",
+      "text": "pub struct Widget {\n    pub tag: u32,\n}\n"
+    },
+    {
+      "action": "replace",
+      "path": "$work/after/lib.rs",
+      "from": "pub mod decl;",
+      "to": "pub mod decl;\npub mod transplanted;",
+      "count": 1
+    },
+    {
+      "action": "replace",
+      "path": "$work/after/impls.rs",
+      "from": "use crate::decl::{Holder, Widget};",
+      "to": "use crate::decl::Holder;\nuse crate::transplanted::Widget;",
+      "count": 1
+    },
+    {
+      "action": "api",
+      "name": "after",
+      "api": "resolve_rows",
+      "root": "$work/after",
+      "files": [
+        "decl.rs",
+        "impls.rs",
+        "lib.rs",
+        "render.rs",
+        "rust_same_file.rs",
+        "transplanted.rs"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,123 @@
+{
+  "claim_test": "project_scip_dependency_and_pattern_modes_match_their_existing_jsonl",
+  "unasserted_index_fields": ["index_mtime_unix_ms", "staleness"],
+  "steps": [
+    {"action": "directory", "path": "$work/06"},
+    {
+      "action": "run", "name": "00_plain",
+      "arguments": ["fast", "tests/fixtures/ts/scip/alpha.ts", "tests/fixtures/ts/scip/gamma.ts"],
+      "stdout_to": "$work/06/0.jsonl", "success": true
+    },
+    {
+      "action": "run", "name": "00_export",
+      "arguments": ["fast", "tests/fixtures/ts/scip/alpha.ts", "tests/fixtures/ts/scip/gamma.ts",
+        "--sqlite", "$work/06/0.db"],
+      "raw_stdout": true, "success": true
+    },
+    {
+      "action": "api", "name": "00_match", "api": "jsonl_matches",
+      "database": "$work/06/0.db", "jsonl": "$work/06/0.jsonl", "mode": "retains_raw",
+      "redact": ["index_mtime_unix_ms", "staleness"]
+    },
+    {
+      "action": "run", "name": "01_plain",
+      "arguments": ["--resolve", "--arms", "call,type,flow",
+        "tests/fixtures/ts/scip/alpha.ts", "tests/fixtures/ts/scip/gamma.ts"],
+      "stdout_to": "$work/06/1.jsonl", "success": true
+    },
+    {
+      "action": "run", "name": "01_export",
+      "arguments": ["--resolve", "--arms", "call,type,flow",
+        "tests/fixtures/ts/scip/alpha.ts", "tests/fixtures/ts/scip/gamma.ts",
+        "--sqlite", "$work/06/1.db"],
+      "raw_stdout": true, "success": true
+    },
+    {
+      "action": "api", "name": "01_match", "api": "jsonl_matches",
+      "database": "$work/06/1.db", "jsonl": "$work/06/1.jsonl", "mode": "retains_raw",
+      "redact": ["index_mtime_unix_ms", "staleness"]
+    },
+    {
+      "action": "run", "name": "02_plain",
+      "arguments": ["scip", "--raw", "--occurrence-text",
+        "--scip-index", "tests/fixtures/scip_relationship/fixture.scip",
+        "--root", "tests/fixtures/scip_relationship",
+        "tests/fixtures/scip_relationship/animal.ts"],
+      "stdout_to": "$work/06/2.jsonl", "success": true
+    },
+    {
+      "action": "run", "name": "02_export",
+      "arguments": ["scip", "--raw", "--occurrence-text",
+        "--scip-index", "tests/fixtures/scip_relationship/fixture.scip",
+        "--root", "tests/fixtures/scip_relationship",
+        "tests/fixtures/scip_relationship/animal.ts",
+        "--sqlite", "$work/06/2.db"],
+      "raw_stdout": true, "success": true
+    },
+    {
+      "action": "api", "name": "02_match", "api": "jsonl_matches",
+      "database": "$work/06/2.db", "jsonl": "$work/06/2.jsonl", "mode": "exact",
+      "redact": ["index_mtime_unix_ms", "staleness"]
+    },
+    {
+      "action": "run", "name": "03_plain",
+      "arguments": ["scip",
+        "--scip-index", "tests/fixtures/scip_relationship/fixture.scip",
+        "tests/fixtures/scip_relationship"],
+      "stdout_to": "$work/06/3.jsonl", "success": true
+    },
+    {
+      "action": "run", "name": "03_export",
+      "arguments": ["scip",
+        "--scip-index", "tests/fixtures/scip_relationship/fixture.scip",
+        "tests/fixtures/scip_relationship",
+        "--sqlite", "$work/06/3.db"],
+      "raw_stdout": true, "success": true
+    },
+    {
+      "action": "api", "name": "03_match", "api": "jsonl_matches",
+      "database": "$work/06/3.db", "jsonl": "$work/06/3.jsonl", "mode": "exact",
+      "redact": ["index_mtime_unix_ms", "staleness"]
+    },
+    {
+      "action": "run", "name": "04_plain",
+      "arguments": ["--scip-deps",
+        "--scip-index", "tests/fixtures/scip_move/fixture.scip",
+        "--root", "tests/fixtures/scip_move",
+        "tests/fixtures/scip_move/src/app.ts"],
+      "stdout_to": "$work/06/4.jsonl", "success": true
+    },
+    {
+      "action": "run", "name": "04_export",
+      "arguments": ["--scip-deps",
+        "--scip-index", "tests/fixtures/scip_move/fixture.scip",
+        "--root", "tests/fixtures/scip_move",
+        "tests/fixtures/scip_move/src/app.ts",
+        "--sqlite", "$work/06/4.db"],
+      "raw_stdout": true, "success": true
+    },
+    {
+      "action": "api", "name": "04_match", "api": "jsonl_matches",
+      "database": "$work/06/4.db", "jsonl": "$work/06/4.jsonl", "mode": "exact",
+      "redact": ["index_mtime_unix_ms", "staleness"]
+    },
+    {
+      "action": "run", "name": "05_plain",
+      "arguments": ["--deps", "--root", "tests/fixtures/ts/scip",
+        "tests/fixtures/ts/scip/alpha.ts", "tests/fixtures/ts/scip/gamma.ts"],
+      "stdout_to": "$work/06/5.jsonl", "success": true
+    },
+    {
+      "action": "run", "name": "05_export",
+      "arguments": ["--deps", "--root", "tests/fixtures/ts/scip",
+        "tests/fixtures/ts/scip/alpha.ts", "tests/fixtures/ts/scip/gamma.ts",
+        "--sqlite", "$work/06/5.db"],
+      "raw_stdout": true, "success": true
+    },
+    {
+      "action": "api", "name": "05_match", "api": "jsonl_matches",
+      "database": "$work/06/5.db", "jsonl": "$work/06/5.jsonl", "mode": "exact",
+      "redact": ["index_mtime_unix_ms", "staleness"]
+    }
+  ]
+}

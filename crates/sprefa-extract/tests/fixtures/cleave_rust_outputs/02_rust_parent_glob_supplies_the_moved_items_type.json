@@ -1,0 +1,161 @@
+{
+  "test": "rust_parent_glob_supplies_the_moved_items_type",
+  "source_range": "197-215",
+  "fixture": {
+    "group": "cleave_rust",
+    "variant": "glob",
+    "label": "parent-import"
+  },
+  "steps": [
+    {
+      "action": "copy_tree",
+      "source": "$fixtures/cleave_rust/glob",
+      "target": "$work/repo"
+    },
+    {
+      "action": "directory",
+      "path": "$work/state"
+    },
+    {
+      "action": "git",
+      "args": [
+        "init",
+        "-q",
+        "."
+      ],
+      "cwd": "$work/repo"
+    },
+    {
+      "action": "command",
+      "program": "$ryii",
+      "arguments": [
+        "cleave",
+        "src/parent/inner.rs#lifted",
+        "src/target.rs",
+        "--json",
+        "--root",
+        "$work/repo",
+        "--state",
+        "$work/state"
+      ],
+      "cwd": "$work/repo",
+      "environment": {
+        "HAFLEY_TRACE": "$work/cleave.json",
+        "RUST_LOG": "sprefa_extract=debug,hafley_scm=debug"
+      },
+      "expect_exit_code": 0,
+      "capture": "stdout_plan",
+      "raw_stdout": true,
+      "unasserted_stderr": true,
+      "stdout_redactions": [
+        {
+          "pattern": "(?m)^(stage )[0-9a-f]{64}( committed| dry run, tree untouched)$",
+          "replacement": "${1}$$STAGE${2}"
+        }
+      ]
+    },
+    {
+      "action": "claim",
+      "kind": "json_column",
+      "cell": "stdout_plan",
+      "line_prefix": "{",
+      "pointer": "travelling",
+      "column": "name",
+      "expect": [
+        "Kind"
+      ],
+      "name": "travelling_names"
+    },
+    {
+      "action": "claim",
+      "kind": "json_column",
+      "cell": "stdout_plan",
+      "line_prefix": "{",
+      "pointer": "travelling",
+      "column": "dest_module",
+      "expect": [
+        "crate::types"
+      ],
+      "name": "travelling_dest_modules"
+    },
+    {
+      "action": "claim",
+      "kind": "json_len",
+      "cell": "stdout_plan",
+      "line_prefix": "{",
+      "pointer": "orphans",
+      "expect": 0,
+      "name": "orphans_empty"
+    },
+    {
+      "action": "command",
+      "program": "$ryii",
+      "arguments": [
+        "cleave",
+        "src/parent/inner.rs#lifted",
+        "src/target.rs",
+        "--commit",
+        "--root",
+        "$work/repo",
+        "--state",
+        "$work/state"
+      ],
+      "cwd": "$work/repo",
+      "environment": {
+        "HAFLEY_TRACE": "$work/cleave.json",
+        "RUST_LOG": "sprefa_extract=debug,hafley_scm=debug"
+      },
+      "expect_exit_code": 0,
+      "capture": "stdout_commit",
+      "raw_stdout": true,
+      "unasserted_stderr": true,
+      "stdout_redactions": [
+        {
+          "pattern": "(?m)^(stage )[0-9a-f]{64}( committed| dry run, tree untouched)$",
+          "replacement": "${1}$$STAGE${2}"
+        }
+      ]
+    },
+    {
+      "action": "read_tree",
+      "path": "$work/repo/src/parent/inner.rs",
+      "capture": "inner_after"
+    },
+    {
+      "action": "read_tree",
+      "path": "$work/repo/src/target.rs",
+      "capture": "target_after"
+    },
+    {
+      "action": "claim",
+      "kind": "contains",
+      "cell": "inner_after",
+      "text": "use crate::target::lifted;",
+      "name": "inner_imports_lifted"
+    },
+    {
+      "action": "claim",
+      "kind": "contains",
+      "cell": "target_after",
+      "text": "use crate::types::Kind;",
+      "name": "target_imports_kind"
+    },
+    {
+      "action": "command",
+      "program": "$cargo",
+      "arguments": [
+        "check",
+        "--quiet",
+        "--offline"
+      ],
+      "cwd": "$work/repo",
+      "environment": {
+        "CARGO_TARGET_DIR": "$work/target",
+        "KACHE_DISABLED": "1"
+      },
+      "expect_exit_code": 0,
+      "capture": "cargo_check",
+      "raw_stdout": true
+    }
+  ]
+}

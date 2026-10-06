@@ -1,0 +1,67 @@
+{
+  "steps": [
+    {
+      "source": "$fixtures/rust_rename/variant/before",
+      "target": "$work/repo",
+      "action": "copy_tree"
+    },
+    {
+      "path": "$work/state",
+      "action": "directory"
+    },
+    {
+      "action": "api",
+      "name": "index",
+      "api": "scip_index",
+      "language": "rust",
+      "root": "$work/repo",
+      "into": "$work/index.scip"
+    },
+    {
+      "action": "run",
+      "name": "rename",
+      "arguments": [
+        "rename",
+        "src/lib.rs#Old",
+        "Prior",
+        "--root",
+        "$work/repo",
+        "--state",
+        "$work/state",
+        "--verify-scip",
+        "$work/index.scip"
+      ],
+      "cwd": "$work/repo",
+      "expect_exit_code": 0,
+      "raw_stdout": true,
+      "stdout_redactions": [
+        {
+          "pattern": "(?m)^(stage )[0-9a-f]{64}( committed| dry run, tree untouched)$",
+          "replacement": "${1}$$STAGE${2}"
+        }
+      ]
+    },
+    {
+      "action": "compare",
+      "name": "claim_0",
+      "left": "rename",
+      "projection": "prefix",
+      "prefix": "scip-verify ",
+      "text": "scip-verify disagreements=0\n"
+    }
+  ],
+  "old_assertions": [
+    {
+      "cell": "stdout",
+      "kind": "exact_filtered_lines",
+      "filter": "lines starting with \"scip-verify \"",
+      "value": [
+        "scip-verify disagreements=0"
+      ],
+      "claim": "rust-analyzer binds enum variants too: the oracle for the variant fixture, same claim"
+    }
+  ],
+  "notes": [
+    "no --commit (dry run); index built in-process before the verb runs"
+  ]
+}

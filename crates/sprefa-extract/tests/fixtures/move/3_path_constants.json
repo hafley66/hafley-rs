@@ -1,0 +1,176 @@
+{
+  "steps": [
+    {
+      "action": "copy_tree",
+      "source": "$fixtures/ts_move/paths",
+      "target": "$work/repo"
+    },
+    {
+      "action": "directory",
+      "path": "$work/state"
+    },
+    {
+      "action": "git",
+      "cwd": "$work/repo",
+      "args": [
+        "init",
+        "-q",
+        "."
+      ]
+    },
+    {
+      "action": "git",
+      "cwd": "$work/repo",
+      "args": [
+        "add",
+        "-A"
+      ]
+    },
+    {
+      "action": "git",
+      "cwd": "$work/repo",
+      "args": [
+        "-c",
+        "user.email=extract@move.test",
+        "-c",
+        "user.name=extract-move",
+        "commit",
+        "-qm",
+        "fixture"
+      ]
+    },
+    {
+      "action": "write",
+      "path": "$work/state/moves.tsv",
+      "text": "$work/repo/tests/0_moved.test.ts\t$work/repo/tests/3_integration/0_moved.test.ts\n$work/repo/tests/1_helpers.test.ts\t$work/repo/tests/3_integration/1_helpers.test.ts\n$work/repo/tests/helpers/one.mjs\t$work/repo/tests/3_integration/helpers/one.mjs\n"
+    },
+    {
+      "action": "run",
+      "name": "move",
+      "arguments": [
+        "move",
+        "--list",
+        "$work/state/moves.tsv",
+        "--root",
+        "$work/repo",
+        "--state",
+        "$work/state",
+        "--commit"
+      ],
+      "expect_exit_code": 0,
+      "raw_stdout": true,
+      "stdout_redactions": [
+        {
+          "pattern": "(?m)^((?:\\[root [^\\n]+?\\] )?stage )[0-9a-f]{64}(.*)$",
+          "replacement": "${1}$$STAGE${2}"
+        }
+      ]
+    },
+    {
+      "action": "read_tree",
+      "name": "tests/3_integration/0_moved.test.ts",
+      "path": "$work/repo/tests/3_integration/0_moved.test.ts"
+    },
+    {
+      "action": "claim",
+      "name": "claim_11",
+      "kind": "contains",
+      "cell": "tests/3_integration/0_moved.test.ts",
+      "text": "new URL(\"../../results/4_fixture_memory.json\""
+    },
+    {
+      "action": "claim",
+      "name": "claim_12",
+      "kind": "contains",
+      "cell": "tests/3_integration/0_moved.test.ts",
+      "text": "new URL(\"../../fixtures/sequence/\""
+    },
+    {
+      "action": "claim",
+      "name": "claim_13",
+      "kind": "contains",
+      "cell": "tests/3_integration/0_moved.test.ts",
+      "text": "resolve(import.meta.dirname, \"../../fixtures/sequence\")"
+    },
+    {
+      "action": "claim",
+      "name": "claim_14",
+      "kind": "contains",
+      "cell": "tests/3_integration/0_moved.test.ts",
+      "text": "fileURLToPath(import.meta.url)), \"../..\")"
+    },
+    {
+      "action": "claim",
+      "name": "claim_15",
+      "kind": "contains",
+      "cell": "tests/3_integration/0_moved.test.ts",
+      "text": "new URL(\"../../bin\""
+    },
+    {
+      "action": "claim",
+      "name": "claim_16",
+      "kind": "contains",
+      "cell": "tests/3_integration/0_moved.test.ts",
+      "text": "const greeting = \"hello\""
+    },
+    {
+      "action": "claim",
+      "name": "claim_17",
+      "kind": "contains",
+      "cell": "tests/3_integration/0_moved.test.ts",
+      "text": "readFile(\"./b\")"
+    },
+    {
+      "action": "claim",
+      "name": "claim_18",
+      "kind": "contains",
+      "cell": "tests/3_integration/0_moved.test.ts",
+      "text": "source(\"grapht\", \"./15_sequenceGeometry.ts\")"
+    },
+    {
+      "action": "claim",
+      "name": "claim_19",
+      "kind": "contains",
+      "cell": "tests/3_integration/0_moved.test.ts",
+      "text": "issue.path.join(\".\")"
+    },
+    {
+      "action": "claim",
+      "name": "claim_20",
+      "kind": "contains",
+      "cell": "tests/3_integration/0_moved.test.ts",
+      "text": "segments.join(\"..\")"
+    },
+    {
+      "action": "claim",
+      "name": "claim_21",
+      "kind": "contains",
+      "cell": "tests/3_integration/0_moved.test.ts",
+      "text": "[\"a\", \"b\"].join(\"./\")"
+    },
+    {
+      "action": "read_tree",
+      "name": "tests/3_integration/1_helpers.test.ts",
+      "path": "$work/repo/tests/3_integration/1_helpers.test.ts"
+    },
+    {
+      "action": "claim",
+      "name": "claim_22",
+      "kind": "text_equals",
+      "cell": "tests/3_integration/1_helpers.test.ts",
+      "text": "const helpers = new URL(\"./helpers\", import.meta.url)\nconst one = new URL(\"./helpers/one.mjs\", import.meta.url)\n\nexport { helpers, one }\n"
+    },
+    {
+      "action": "read_tree",
+      "name": "tests/2_unmoved.test.ts",
+      "path": "$work/repo/tests/2_unmoved.test.ts"
+    },
+    {
+      "action": "claim",
+      "name": "claim_23",
+      "kind": "text_equals",
+      "cell": "tests/2_unmoved.test.ts",
+      "text": "import { readFile } from \"node:fs/promises\"\nimport { resolve } from \"node:path\"\n\nconst fixtureDirectory = new URL(\"../fixtures/sequence/\", import.meta.url)\nconst packageRoot = resolve(import.meta.dirname, \"..\")\n\nconst greeting = \"hello\"\nconst body = readFile(\"./b\")\n\nexport { fixtureDirectory, packageRoot, greeting, body }\n"
+    }
+  ]
+}

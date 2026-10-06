@@ -1,0 +1,112 @@
+{
+  "test": "unsupported_macro_items_are_ungraded_and_fail_the_plan",
+  "source_range": "332-373",
+  "fixture": {
+    "group": "cleave_rust",
+    "variant": "basic",
+    "label": "unsupported-macro-item"
+  },
+  "steps": [
+    {
+      "action": "copy_tree",
+      "source": "$fixtures/cleave_rust/basic",
+      "target": "$work/repo"
+    },
+    {
+      "action": "directory",
+      "path": "$work/state"
+    },
+    {
+      "action": "git",
+      "args": [
+        "init",
+        "-q",
+        "."
+      ],
+      "cwd": "$work/repo"
+    },
+    {
+      "action": "write",
+      "path": "$work/repo/src/lib.rs",
+      "text": "pub mod opts;\npub mod moved;\n"
+    },
+    {
+      "action": "write",
+      "path": "$work/repo/src/opts.rs",
+      "text": "lazy_static! { static ref UNSUPPORTED: std::cell::RefCell<u32> = std::cell::RefCell::new(0); }\npub(crate) fn param_f32() -> u32 { *UNSUPPORTED.borrow() }\n"
+    },
+    {
+      "action": "write",
+      "path": "$work/repo/src/moved.rs",
+      "text": ""
+    },
+    {
+      "action": "command",
+      "program": "$ryii",
+      "arguments": [
+        "cleave",
+        "src/opts.rs#UNSUPPORTED",
+        "src/moved.rs",
+        "--root",
+        "$work/repo",
+        "--state",
+        "$work/state"
+      ],
+      "cwd": "$work/repo",
+      "expect_exit_code": 2,
+      "capture": "out_unsupported",
+      "raw_stdout": true,
+      "stdout_redactions": [
+        {
+          "pattern": "(?m)^(stage )[0-9a-f]{64}( committed| dry run, tree untouched)$",
+          "replacement": "${1}$$STAGE${2}"
+        }
+      ]
+    },
+    {
+      "action": "claim",
+      "kind": "contains",
+      "cell": "out_unsupported.stderr",
+      "text": "unsupported lazy_static! macro",
+      "name": "unsupported_stderr_lazy_static"
+    },
+    {
+      "action": "command",
+      "program": "$ryii",
+      "arguments": [
+        "cleave",
+        "src/opts.rs#param_f32",
+        "src/moved.rs",
+        "--drag",
+        "--root",
+        "$work/repo",
+        "--state",
+        "$work/state"
+      ],
+      "cwd": "$work/repo",
+      "expect_exit_code": 2,
+      "capture": "out_param_f32",
+      "raw_stdout": true,
+      "stdout_redactions": [
+        {
+          "pattern": "(?m)^(stage )[0-9a-f]{64}( committed| dry run, tree untouched)$",
+          "replacement": "${1}$$STAGE${2}"
+        }
+      ]
+    },
+    {
+      "action": "claim",
+      "kind": "contains",
+      "cell": "out_param_f32.stdout",
+      "text": "ungraded UNSUPPORTED",
+      "name": "param_f32_stdout_ungraded"
+    },
+    {
+      "action": "claim",
+      "kind": "contains",
+      "cell": "out_param_f32.stderr",
+      "text": "cleave --drag left ungraded names",
+      "name": "param_f32_stderr_ungraded_note"
+    }
+  ]
+}

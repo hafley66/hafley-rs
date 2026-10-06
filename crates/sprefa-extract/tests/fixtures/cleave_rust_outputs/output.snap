@@ -1,0 +1,479 @@
+---
+source: tests/support/2_fixture_runner.rs
+---
+{
+  "00_body_locals_never_enter_the_drag_set_or_gain_visibility": {
+    "dragged_actions": [
+      "exported"
+    ],
+    "dragged_names": [
+      "helper"
+    ],
+    "no_body_local_visibility": true,
+    "no_double_visibility": true,
+    "stdout_drag": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/util.rs#target -> src/config.rs\ndrag helper exported pass 1\ndrag fixpoint 1 passes\nreplace src/config.rs -> src/config.rs  update src/config.rs (248 bytes)\n    --- original\n    +++ modified\n    @@ -1,7 +1,13 @@\n     use std::path::Path;\n    +use crate::util::helper;\n    \n     pub const CONFIG_NAME: &str = \"config.json\";\n    \n     pub fn config_root() -> String {\n         Path::new(\".\").display().to_string()\n     }\n    +\n    +pub fn target(value: i32) -> i32 {\n    +    let start = helper(value);\n    +    start\n    +}\nreplace src/util.rs -> src/util.rs  update src/util.rs (104 bytes)\n    --- original\n    +++ modified\n    @@ -1,6 +1,2 @@\n    -pub fn target(value: i32) -> i32 {\n    -    let start = helper(value);\n    -    start\n    -}\n     pub(crate) fn helper(value: i32) -> i32 { value + 1 }\n     pub fn other(value: i32) -> i32 { helper(value) }\nstage $STAGE dry run, tree untouched\n{\"record\":\"cleave_plan\",\"src\":\"src/util.rs\",\"dest\":\"src/config.rs\",\"item\":\"target\",\"item_span\":{\"start\":0,\"len\":78},\"travelling\":[],\"orphans\":[],\"callers\":[],\"dragged\":[{\"name\":\"helper\",\"span\":{\"start\":78,\"len\":54},\"iteration\":1,\"action\":\"exported\"}],\"drag_iterations\":1,\"unresolved\":[]}\n"
+    }
+  },
+  "01_source_keeps_its_same_file_caller_after_the_item_moves": {
+    "cargo_check": {
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    "config_after": "use crate::util::helper;\npub fn baseline() -> i32 {\n    0\n}\n\npub fn target(value: i32) -> i32 {\n    helper(value)\n}\n",
+    "config_imports_helper": true,
+    "stdout_commit": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/util.rs#target -> src/config.rs\ndrag helper exported pass 1\ndrag fixpoint 1 passes\nreplace src/config.rs -> src/config.rs  update src/config.rs (116 bytes)\n    --- original\n    +++ modified\n    @@ -1,3 +1,8 @@\n    +use crate::util::helper;\n     pub fn baseline() -> i32 {\n         0\n     }\n    +\n    +pub fn target(value: i32) -> i32 {\n    +    helper(value)\n    +}\nreplace src/util.rs -> src/util.rs  update src/util.rs (134 bytes)\n    --- original\n    +++ modified\n    @@ -1,11 +1,8 @@\n    -pub fn target(value: i32) -> i32 {\n    -    helper(value)\n    -}\n    -\n    +use crate::config::target;\n     pub fn caller(value: i32) -> i32 {\n         target(value)\n     }\n    \n    -fn helper(value: i32) -> i32 {\n    +pub fn helper(value: i32) -> i32 {\n         value + 1\n     }\nstage $STAGE committed\n"
+    },
+    "util_after": "use crate::config::target;\npub fn caller(value: i32) -> i32 {\n    target(value)\n}\n\npub fn helper(value: i32) -> i32 {\n    value + 1\n}\n",
+    "util_imports_target": true
+  },
+  "02_rust_parent_glob_supplies_the_moved_items_type": {
+    "cargo_check": {
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    "inner_after": "use super::*;\nuse crate::target::lifted;\n\npub fn caller(value: Kind) -> Kind {\n    lifted(value)\n}\n",
+    "inner_imports_lifted": true,
+    "orphans_empty": 0,
+    "stdout_commit": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/parent/inner.rs#lifted -> src/target.rs\ntravel Kind from crate::types::Kind as crate::types (relative)\ndrag fixpoint 1 passes\nreplace src/parent/inner.rs -> src/parent/inner.rs  update src/parent/inner.rs (99 bytes)\n    --- original\n    +++ modified\n    @@ -1,9 +1,6 @@\n     use super::*;\n    +use crate::target::lifted;\n    \n    -pub fn lifted(value: Kind) -> Kind {\n    -    value\n    -}\n    -\n     pub fn caller(value: Kind) -> Kind {\n         lifted(value)\n     }\nreplace src/target.rs -> src/target.rs  update src/target.rs (109 bytes)\n    --- original\n    +++ modified\n    @@ -1,3 +1,8 @@\n    +use crate::types::Kind;\n     pub fn baseline() -> i32 {\n         0\n     }\n    +\n    +pub fn lifted(value: Kind) -> Kind {\n    +    value\n    +}\nstage $STAGE committed\n"
+    },
+    "stdout_plan": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/parent/inner.rs#lifted -> src/target.rs\ntravel Kind from crate::types::Kind as crate::types (relative)\ndrag fixpoint 1 passes\nreplace src/parent/inner.rs -> src/parent/inner.rs  update src/parent/inner.rs (99 bytes)\n    --- original\n    +++ modified\n    @@ -1,9 +1,6 @@\n     use super::*;\n    +use crate::target::lifted;\n    \n    -pub fn lifted(value: Kind) -> Kind {\n    -    value\n    -}\n    -\n     pub fn caller(value: Kind) -> Kind {\n         lifted(value)\n     }\nreplace src/target.rs -> src/target.rs  update src/target.rs (109 bytes)\n    --- original\n    +++ modified\n    @@ -1,3 +1,8 @@\n    +use crate::types::Kind;\n     pub fn baseline() -> i32 {\n         0\n     }\n    +\n    +pub fn lifted(value: Kind) -> Kind {\n    +    value\n    +}\nstage $STAGE dry run, tree untouched\n{\"record\":\"cleave_plan\",\"src\":\"src/parent/inner.rs\",\"dest\":\"src/target.rs\",\"item\":\"lifted\",\"item_span\":{\"start\":15,\"len\":49},\"travelling\":[{\"name\":\"Kind\",\"module\":\"crate::types::Kind\",\"dest_module\":\"crate::types\",\"span\":{\"start\":18,\"len\":4},\"kind\":\"relative\"}],\"orphans\":[],\"callers\":[],\"dragged\":[],\"drag_iterations\":1,\"unresolved\":[]}\n"
+    },
+    "target_after": "use crate::types::Kind;\npub fn baseline() -> i32 {\n    0\n}\n\npub fn lifted(value: Kind) -> Kind {\n    value\n}\n",
+    "target_imports_kind": true,
+    "travelling_dest_modules": [
+      "crate::types"
+    ],
+    "travelling_names": [
+      "Kind"
+    ]
+  },
+  "03_untouched_imports_are_not_reported_as_orphans": {
+    "orphans_exclude_log": true,
+    "stdout_plan": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/util.rs#target -> src/app.rs\ntravel Config from crate::config::Config as crate::config::Config (package)\norphan Config from crate::config::Config\ndrag fixpoint 1 passes\nreplace src/app.rs -> src/app.rs  update src/app.rs (176 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,8 @@\n     use crate::util::{load_config, slug};\n    +use crate::config::Config;\n    \n     pub fn boot(dir: &str) -> String {\n         slug(&load_config(dir))\n     }\n    +\n    +pub fn target() -> Config { Config::new() }\nreplace src/util.rs -> src/util.rs  update src/util.rs (63 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,3 @@\n    -use crate::config::Config;\n     use crate::log::Log;\n    \n    -pub fn target() -> Config { Config::new() }\n     pub fn untouched() -> Log { Log::new() }\nstage $STAGE dry run, tree untouched\n{\"record\":\"cleave_plan\",\"src\":\"src/util.rs\",\"dest\":\"src/app.rs\",\"item\":\"target\",\"item_span\":{\"start\":49,\"len\":44},\"travelling\":[{\"name\":\"Config\",\"module\":\"crate::config::Config\",\"dest_module\":\"crate::config::Config\",\"span\":{\"start\":19,\"len\":6},\"kind\":\"package\"}],\"orphans\":[{\"name\":\"Config\",\"module\":\"crate::config::Config\",\"dest_module\":\"crate::config::Config\",\"span\":{\"start\":19,\"len\":6},\"kind\":\"package\"}],\"callers\":[],\"dragged\":[],\"drag_iterations\":1,\"unresolved\":[]}\n"
+    }
+  },
+  "04_default_corpus_walk_is_tracked_and_explicit_root_includes_ignored_files": {
+    "default_excludes_untracked": false,
+    "default_includes_tracked": true,
+    "explicit_includes_ignored": true,
+    "explicit_includes_untracked": true,
+    "walk_default": [
+      "tracked.rs"
+    ],
+    "walk_explicit": [
+      ".gitignore",
+      ".probe/noise.rs",
+      "Cargo.toml",
+      "scratch.rs",
+      "src/app.rs",
+      "src/config.rs",
+      "src/lib.rs",
+      "src/log.rs",
+      "src/util.rs",
+      "tracked.rs"
+    ]
+  },
+  "05_batch_keeps_every_row_source_parseable_while_composing": {
+    "batch_no_invalid_rust_stop": true,
+    "stdout_batch": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/_1_pattern.rs#Pattern -> src/_1b_extract.rs\ntravel Deserialize from serde::Deserialize as serde::Deserialize (package)\ntravel Serialize from serde::Serialize as serde::Serialize (package)\norphan Deserialize from serde::Deserialize\norphan Serialize from serde::Serialize\ncaller src/_0_types.rs\ncaller src/_4_worktree.rs\ncaller src/_5_git_tree.rs\ncaller src/_7_source_tree.rs\ncaller src/lib.rs\nplan src/_0a_durable_write.rs#DeviceSyncCounts -> src/_0b_counts.rs\ndrag impl DeviceSyncCounts moved pass 1\ncaller src/lib.rs\nreplace src/_0_types.rs -> src/_0_types.rs  update src/_0_types.rs (36550 bytes)\n    --- original\n    +++ modified\n    @@ -4,7 +4,7 @@\n    \n     use serde::{Deserialize, Deserializer, Serialize, Serializer};\n    \n    -use crate::_1_pattern::Pattern;\n    +use crate::_1b_extract::Pattern;\n    \n     /// Serde bridge for `Arc<str>`, which has no derived `Deserialize` because it\n     /// is unsized. Coordinates serialize as their plain string key and deserialize\nreplace src/_0a_durable_write.rs -> src/_0a_durable_write.rs  update src/_0a_durable_write.rs (5784 bytes)\n    --- original\n    +++ modified\n    @@ -8,6 +8,7 @@\n     use std::time::Instant;\n    \n     use tempfile::NamedTempFile;\n    +use crate::_0b_counts::DeviceSyncCounts;\n    \n     /// How far a write has to reach before the next step may proceed.\n     #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]\n    @@ -22,26 +23,6 @@\n         Flush,\n     }\n    \n    -/// Process-wide sync tally. Instrumentation for tests and the phase example;\n    -/// no engine decision reads it back.\n    -#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]\n    -pub struct DeviceSyncCounts {\n    -    pub data: u64,\n    -    pub fences: u64,\n    -    pub flushes: u64,\n    -}\n    -\n    -impl std::ops::Sub for DeviceSyncCounts {\n    -    type Output = Self;\n    -    fn sub(self, earlier: Self) -> Self {\n    -        Self {\n    -            data: self.data - earlier.data,\n    -            fences: self.fences - earlier.fences,\n    -            flushes: self.flushes - earlier.flushes,\n    -        }\n    -    }\n    -}\n    -\n     static DATA: AtomicU64 = AtomicU64::new(0);\n     static FENCES: AtomicU64 = AtomicU64::new(0);\n     static FLUSHES: AtomicU64 = AtomicU64::new(0);\ncreate  - -> src/_0b_counts.rs  create src/_0b_counts.rs (553 bytes)\n    --- original\n    +++ modified\n    @@ -0,0 +1,19 @@\n    +/// Process-wide sync tally. Instrumentation for tests and the phase example;\n    +/// no engine decision reads it back.\n    +#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]\n    +pub struct DeviceSyncCounts {\n    +    pub data: u64,\n    +    pub fences: u64,\n    +    pub flushes: u64,\n    +}\n    +\n    +impl std::ops::Sub for DeviceSyncCounts {\n    +    type Output = Self;\n    +    fn sub(self, earlier: Self) -> Self {\n    +        Self {\n    +            data: self.data - earlier.data,\n    +            fences: self.fences - earlier.fences,\n    +            flushes: self.flushes - earlier.flushes,\n    +        }\n    +    }\n    +}\nreplace src/_1_pattern.rs -> src/_1_pattern.rs  update src/_1_pattern.rs (421 bytes)\n    --- original\n    +++ modified\n    @@ -1,10 +1,6 @@\n     use anyhow::{Context, Result};\n     use globset::{Glob, GlobSet, GlobSetBuilder};\n    -use serde::{Deserialize, Serialize};\n    -\n    -#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]\n    -pub struct Pattern(pub String);\n    -\n    +use crate::_1b_extract::Pattern;\n     pub(crate) fn compile(patterns: &[Pattern]) -> Result<GlobSet> {\n         let mut builder = GlobSetBuilder::new();\n         for pattern in patterns {\ncreate  - -> src/_1b_extract.rs  create src/_1b_extract.rs (142 bytes)\n    --- original\n    +++ modified\n    @@ -0,0 +1,5 @@\n    +use serde::Deserialize;\n    +use serde::Serialize;\n    +\n    +#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]\n    +pub struct Pattern(pub String);\nreplace src/_4_worktree.rs -> src/_4_worktree.rs  update src/_4_worktree.rs (5296 bytes)\n    --- original\n    +++ modified\n    @@ -6,7 +6,8 @@\n     use ignore::WalkBuilder;\n    \n     use crate::_0_types::{ContentId, RepoPath, Repository, RevisionId, SourceEntry, SourceRef};\n    -use crate::_1_pattern::{compile, Pattern};\n    +use crate::_1_pattern::compile;\n    +use crate::_1b_extract::Pattern;\n    \n     #[derive(Clone, Debug)]\n     struct CachedFile {\nreplace src/_5_git_tree.rs -> src/_5_git_tree.rs  update src/_5_git_tree.rs (2507 bytes)\n    --- original\n    +++ modified\n    @@ -6,7 +6,8 @@\n     use crate::_0_types::{\n         ContentId, ObjectId, RepoPath, Repository, RevisionId, SourceEntry, SourceRef,\n     };\n    -use crate::_1_pattern::{compile, Pattern};\n    +use crate::_1_pattern::compile;\n    +use crate::_1b_extract::Pattern;\n    \n     pub fn enumerate(\n         repository: &Repository,\nreplace src/_7_source_tree.rs -> src/_7_source_tree.rs  update src/_7_source_tree.rs (8649 bytes)\n    --- original\n    +++ modified\n    @@ -8,9 +8,9 @@\n         ContentId, DirectoryEntry, GitFilesQuery, ReadRequest, Repository, Revision, RevisionId,\n         SourceBytes, SourceBytesRef, SourceEntry, SourceQuery, SourceSnapshot,\n     };\n    -use crate::_1_pattern::Pattern;\n     use crate::_4_worktree::WorktreeCache;\n     use crate::_6_git_batch::GitBatch;\n    +use crate::_1b_extract::Pattern;\n    \n     pub struct SourceTree {\n         repository: Repository,\nreplace src/lib.rs -> src/lib.rs  update src/lib.rs (1489 bytes)\n    --- original\n    +++ modified\n    @@ -25,10 +25,12 @@\n     mod _8_watch;\n     mod _8a_watch_core;\n     mod _9_git_files;\n    +pub(crate) mod _1b_extract;\n    +pub(crate) mod _0b_counts;\n    \n     pub use _0_types::*;\n     pub(crate) use _0a_durable_write::elapsed_millis;\n    -pub use _0a_durable_write::{device_sync_counts, DeviceSyncCounts};\n    +pub use _0a_durable_write::device_sync_counts;\n     pub use _11_refs::{diff_refs, Refs};\n     pub use _12_revision_graph::RevisionGraph;\n     pub use _13_fetch::Acquisition;\n    @@ -35,7 +37,6 @@\n     pub use _14_multi_repo_refresh::{\n         run_multi_repo_refresh, MultiRepoRefreshConfig, MultiRepoRefreshReceipt,\n     };\n    -pub use _1_pattern::Pattern;\n     pub use _2_repository::{discover, open};\n     pub use _2a_directory::DirectoryRoot;\n     pub use _4a_git_root::{GitWorktreeRoot, SourceRoot};\n    @@ -49,3 +50,5 @@\n     pub use _7f_commit::*;\n     pub use _8_watch::{git_dirs, DirectoryWatcher, RepositoryWatcher, SourceWatcher};\n     pub use _9_git_files::{enumerate, hash_object};\n    +pub use crate::_1b_extract::Pattern;\n    +pub use crate::_0b_counts::DeviceSyncCounts;\nstage $STAGE dry run, tree untouched\n"
+    }
+  },
+  "06_thread_local_static_is_named_unsupported_and_fails_the_plan": {
+    "live_params_stderr_unsupported": true,
+    "out_live_params": {
+      "exit_code": 2,
+      "stdout": "",
+      "stderr": "src/opts.rs item LIVE_PARAMS is generated by unsupported thread_local! macro\n"
+    },
+    "out_param_f32": {
+      "exit_code": 2,
+      "stdout": "root $work/repo\nplan src/opts.rs#param_f32 -> src/moved.rs\nungraded LIVE_PARAMS\nnext: ryi graph --uses LIVE_PARAMS $work/repo\n",
+      "stderr": "cleave --drag left ungraded names: LIVE_PARAMS\n"
+    },
+    "param_f32_stderr_ungraded_note": true,
+    "param_f32_stdout_ungraded": true
+  },
+  "07_unsupported_macro_items_are_ungraded_and_fail_the_plan": {
+    "out_param_f32": {
+      "exit_code": 2,
+      "stdout": "root $work/repo\nplan src/opts.rs#param_f32 -> src/moved.rs\nungraded UNSUPPORTED\nnext: ryi graph --uses UNSUPPORTED $work/repo\n",
+      "stderr": "cleave --drag left ungraded names: UNSUPPORTED\n"
+    },
+    "out_unsupported": {
+      "exit_code": 2,
+      "stdout": "",
+      "stderr": "src/opts.rs item UNSUPPORTED is generated by unsupported lazy_static! macro\n"
+    },
+    "param_f32_stderr_ungraded_note": true,
+    "param_f32_stdout_ungraded": true,
+    "unsupported_stderr_lazy_static": true
+  },
+  "08_macro_rules_items_are_named_unsupported": {
+    "out_param": {
+      "exit_code": 2,
+      "stdout": "",
+      "stderr": "src/opts.rs item param is generated by unsupported macro_rules! macro\n"
+    },
+    "param_stderr_macro_rules": true
+  },
+  "09_undeclared_destinations_stop_before_rewriting_callers": {
+    "created_stdout_module_decl": true,
+    "out_created": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/util.rs#load_config -> src/not_declared.rs\ntravel read_to_string from std::fs::read_to_string as std::fs::read_to_string (package)\ntravel Path from std::path::Path as std::path::Path (package)\ntravel log_line from crate::log::log_line as crate::log (relative)\norphan read_to_string from std::fs::read_to_string\norphan Path from std::path::Path\norphan log_line from crate::log::log_line\ndrag fixpoint 1 passes\ncaller src/app.rs\nreplace src/app.rs -> src/app.rs  update src/app.rs (127 bytes)\n    --- original\n    +++ modified\n    @@ -1,4 +1,5 @@\n    -use crate::util::{load_config, slug};\n    +use crate::util::slug;\n    +use crate::not_declared::load_config;\n    \n     pub fn boot(dir: &str) -> String {\n         slug(&load_config(dir))\nreplace src/lib.rs -> src/lib.rs  update src/lib.rs (78 bytes)\n    --- original\n    +++ modified\n    @@ -2,3 +2,4 @@\n     pub mod config;\n     pub mod log;\n     pub mod util;\n    +pub mod not_declared;\nreplace src/util.rs -> src/util.rs  update src/util.rs (60 bytes)\n    --- original\n    +++ modified\n    @@ -1,13 +1,3 @@\n    -use std::fs::read_to_string;\n    -use std::path::Path;\n    -\n    -use crate::log::log_line;\n    -\n     pub fn slug(raw: &str) -> String {\n         raw.to_lowercase()\n     }\n    -\n    -pub fn load_config(dir: &str) -> String {\n    -    log_line(\"load\");\n    -    read_to_string(Path::new(dir).join(\"config.json\")).unwrap_or_default()\n    -}\nstage $STAGE dry run, tree untouched\ncreate  - -> src/not_declared.rs  create src/not_declared.rs (218 bytes)\n    --- original\n    +++ modified\n    @@ -0,0 +1,8 @@\n    +use std::fs::read_to_string;\n    +use std::path::Path;\n    +use crate::log::log_line;\n    +\n    +pub fn load_config(dir: &str) -> String {\n    +    log_line(\"load\");\n    +    read_to_string(Path::new(dir).join(\"config.json\")).unwrap_or_default()\n    +}\nstage $STAGE dry run, tree untouched\n",
+      "stderr": ""
+    },
+    "out_undeclared": {
+      "exit_code": 2,
+      "stdout": "",
+      "stderr": "cleave destination crates/new/src/x.rs is not declared by a Rust module; declare it or choose a declared module path\n"
+    },
+    "undeclared_stderr_not_a_module": true
+  },
+  "10_numbered_module_alias_and_child_glob_survive_a_verified_move": {
+    "call_after": "use super::*;\nuse crate::type_facts::helper;\n\npub fn project_call() -> usize {\n    1\n}\n\npub fn target() -> usize {\n    project_call() + helper(\"value\")\n}\n",
+    "call_holds_target": true,
+    "cargo_check": {
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "warning: unused import: `type_facts::helper`\n --> src/lib.rs:2:5\n  |\n2 | use type_facts::helper;\n  |     ^^^^^^^^^^^^^^^^^^\n  |\n  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default\n\nwarning: unused import: `call_facts::project_call`\n --> src/lib.rs:3:5\n  |\n3 | use call_facts::project_call;\n  |     ^^^^^^^^^^^^^^^^^^^^^^^^\n\nwarning: unused import: `super::*`\n --> src/2_call.rs:1:5\n  |\n1 | use super::*;\n  |     ^^^^^^^^\n\n"
+    },
+    "lib_after": "use std::fmt::Debug;\nuse type_facts::helper;\nuse call_facts::project_call;\nuse crate::call_facts::target;\n\n#[path = \"1_type.rs\"]\nmod type_facts;\n#[path = \"2_call.rs\"]\nmod call_facts;\n\npub fn current() -> usize {\n    target()\n}\n",
+    "lib_imports_target": true,
+    "lib_keeps_debug_import": true,
+    "stdout_commit": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/lib.rs#target -> src/2_call.rs\ntravel helper from type_facts::helper as crate::type_facts (relative)\norphan helper from type_facts::helper\norphan project_call from call_facts::project_call\ndrag fixpoint 1 passes\nreplace src/2_call.rs -> src/2_call.rs  update src/2_call.rs (154 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,10 @@\n     use super::*;\n    +use crate::type_facts::helper;\n    \n     pub fn project_call() -> usize {\n         1\n     }\n    +\n    +pub fn target() -> usize {\n    +    project_call() + helper(\"value\")\n    +}\nreplace src/lib.rs -> src/lib.rs  update src/lib.rs (227 bytes)\n    --- original\n    +++ modified\n    @@ -1,6 +1,7 @@\n     use std::fmt::Debug;\n     use type_facts::helper;\n     use call_facts::project_call;\n    +use crate::call_facts::target;\n    \n     #[path = \"1_type.rs\"]\n     mod type_facts;\n    @@ -7,10 +8,6 @@\n     #[path = \"2_call.rs\"]\n     mod call_facts;\n    \n    -fn target() -> usize {\n    -    project_call() + helper(\"value\")\n    -}\n    -\n     pub fn current() -> usize {\n         target()\n     }\nstage $STAGE committed\nverify ok\n"
+    }
+  },
+  "11_the_plan_partitions_the_same_three_file_trace_the_ts_fixture_states": {
+    "drag_iterations": 1,
+    "dragged_empty": 0,
+    "orphan_names": [
+      "read_to_string",
+      "Path",
+      "log_line"
+    ],
+    "plan_callers": [
+      "src/app.rs"
+    ],
+    "plan_dest": "src/config.rs",
+    "plan_item": "load_config",
+    "plan_record": "cleave_plan",
+    "plan_src": "src/util.rs",
+    "stdout_plan": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/util.rs#load_config -> src/config.rs\ntravel read_to_string from std::fs::read_to_string as std::fs::read_to_string (package)\ntravel Path from std::path::Path as std::path::Path (carried)\ntravel log_line from crate::log::log_line as crate::log (relative)\norphan read_to_string from std::fs::read_to_string\norphan Path from std::path::Path\norphan log_line from crate::log::log_line\ndrag fixpoint 1 passes\ncaller src/app.rs\nreplace src/app.rs -> src/app.rs  update src/app.rs (121 bytes)\n    --- original\n    +++ modified\n    @@ -1,4 +1,5 @@\n    -use crate::util::{load_config, slug};\n    +use crate::util::slug;\n    +use crate::config::load_config;\n    \n     pub fn boot(dir: &str) -> String {\n         slug(&load_config(dir))\nreplace src/config.rs -> src/config.rs  update src/config.rs (341 bytes)\n    --- original\n    +++ modified\n    @@ -1,7 +1,14 @@\n     use std::path::Path;\n    +use std::fs::read_to_string;\n    +use crate::log::log_line;\n    \n     pub const CONFIG_NAME: &str = \"config.json\";\n    \n     pub fn config_root() -> String {\n         Path::new(\".\").display().to_string()\n     }\n    +\n    +pub fn load_config(dir: &str) -> String {\n    +    log_line(\"load\");\n    +    read_to_string(Path::new(dir).join(\"config.json\")).unwrap_or_default()\n    +}\nreplace src/util.rs -> src/util.rs  update src/util.rs (60 bytes)\n    --- original\n    +++ modified\n    @@ -1,13 +1,3 @@\n    -use std::fs::read_to_string;\n    -use std::path::Path;\n    -\n    -use crate::log::log_line;\n    -\n     pub fn slug(raw: &str) -> String {\n         raw.to_lowercase()\n     }\n    -\n    -pub fn load_config(dir: &str) -> String {\n    -    log_line(\"load\");\n    -    read_to_string(Path::new(dir).join(\"config.json\")).unwrap_or_default()\n    -}\nstage $STAGE dry run, tree untouched\n{\"record\":\"cleave_plan\",\"src\":\"src/util.rs\",\"dest\":\"src/config.rs\",\"item\":\"load_config\",\"item_span\":{\"start\":139,\"len\":141},\"travelling\":[{\"name\":\"read_to_string\",\"module\":\"std::fs::read_to_string\",\"dest_module\":\"std::fs::read_to_string\",\"span\":{\"start\":13,\"len\":14},\"kind\":\"package\"},{\"name\":\"Path\",\"module\":\"std::path::Path\",\"dest_module\":\"std::path::Path\",\"span\":{\"start\":44,\"len\":4},\"kind\":\"carried\"},{\"name\":\"log_line\",\"module\":\"crate::log::log_line\",\"dest_module\":\"crate::log\",\"span\":{\"start\":67,\"len\":8},\"kind\":\"relative\"}],\"orphans\":[{\"name\":\"read_to_string\",\"module\":\"std::fs::read_to_string\",\"dest_module\":\"std::fs::read_to_string\",\"span\":{\"start\":13,\"len\":14},\"kind\":\"package\"},{\"name\":\"Path\",\"module\":\"std::path::Path\",\"dest_module\":\"std::path::Path\",\"span\":{\"start\":44,\"len\":4},\"kind\":\"carried\"},{\"name\":\"log_line\",\"module\":\"crate::log::log_line\",\"dest_module\":\"crate::log\",\"span\":{\"start\":67,\"len\":8},\"kind\":\"relative\"}],\"callers\":[\"src/app.rs\"],\"dragged\":[],\"drag_iterations\":1,\"unresolved\":[]}\n"
+    },
+    "travelling_dest_modules": [
+      "std::fs::read_to_string",
+      "std::path::Path",
+      "crate::log"
+    ],
+    "travelling_kinds": [
+      "package",
+      "carried",
+      "relative"
+    ],
+    "travelling_names": [
+      "read_to_string",
+      "Path",
+      "log_line"
+    ],
+    "unresolved_empty": 0
+  },
+  "12_a_commit_moves_the_item_its_uses_and_the_caller_and_still_compiles": {
+    "app_after": "use crate::util::slug;\nuse crate::config::load_config;\n\npub fn boot(dir: &str) -> String {\n    slug(&load_config(dir))\n}\n",
+    "app_before": "use crate::util::{load_config, slug};\n\npub fn boot(dir: &str) -> String {\n    slug(&load_config(dir))\n}\n",
+    "app_exact_content": "use crate::util::slug;\nuse crate::config::load_config;\n\npub fn boot(dir: &str) -> String {\n    slug(&load_config(dir))\n}\n",
+    "app_use_lines_after": 2,
+    "app_use_lines_before": 1,
+    "cargo_check": {
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    "config_after": "use std::path::Path;\nuse std::fs::read_to_string;\nuse crate::log::log_line;\n\npub const CONFIG_NAME: &str = \"config.json\";\n\npub fn config_root() -> String {\n    Path::new(\".\").display().to_string()\n}\n\npub fn load_config(dir: &str) -> String {\n    log_line(\"load\");\n    read_to_string(Path::new(dir).join(\"config.json\")).unwrap_or_default()\n}\n",
+    "config_before": "use std::path::Path;\n\npub const CONFIG_NAME: &str = \"config.json\";\n\npub fn config_root() -> String {\n    Path::new(\".\").display().to_string()\n}\n",
+    "config_use_lines_after": 3,
+    "config_use_lines_before": 1,
+    "stdout_commit": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/util.rs#load_config -> src/config.rs\ntravel read_to_string from std::fs::read_to_string as std::fs::read_to_string (package)\ntravel Path from std::path::Path as std::path::Path (carried)\ntravel log_line from crate::log::log_line as crate::log (relative)\norphan read_to_string from std::fs::read_to_string\norphan Path from std::path::Path\norphan log_line from crate::log::log_line\ndrag fixpoint 1 passes\ncaller src/app.rs\nreplace src/app.rs -> src/app.rs  update src/app.rs (121 bytes)\n    --- original\n    +++ modified\n    @@ -1,4 +1,5 @@\n    -use crate::util::{load_config, slug};\n    +use crate::util::slug;\n    +use crate::config::load_config;\n    \n     pub fn boot(dir: &str) -> String {\n         slug(&load_config(dir))\nreplace src/config.rs -> src/config.rs  update src/config.rs (341 bytes)\n    --- original\n    +++ modified\n    @@ -1,7 +1,14 @@\n     use std::path::Path;\n    +use std::fs::read_to_string;\n    +use crate::log::log_line;\n    \n     pub const CONFIG_NAME: &str = \"config.json\";\n    \n     pub fn config_root() -> String {\n         Path::new(\".\").display().to_string()\n     }\n    +\n    +pub fn load_config(dir: &str) -> String {\n    +    log_line(\"load\");\n    +    read_to_string(Path::new(dir).join(\"config.json\")).unwrap_or_default()\n    +}\nreplace src/util.rs -> src/util.rs  update src/util.rs (60 bytes)\n    --- original\n    +++ modified\n    @@ -1,13 +1,3 @@\n    -use std::fs::read_to_string;\n    -use std::path::Path;\n    -\n    -use crate::log::log_line;\n    -\n     pub fn slug(raw: &str) -> String {\n         raw.to_lowercase()\n     }\n    -\n    -pub fn load_config(dir: &str) -> String {\n    -    log_line(\"load\");\n    -    read_to_string(Path::new(dir).join(\"config.json\")).unwrap_or_default()\n    -}\nstage $STAGE committed\n"
+    },
+    "util_after": "pub fn slug(raw: &str) -> String {\n    raw.to_lowercase()\n}\n",
+    "util_before": "use std::fs::read_to_string;\nuse std::path::Path;\n\nuse crate::log::log_line;\n\npub fn slug(raw: &str) -> String {\n    raw.to_lowercase()\n}\n\npub fn load_config(dir: &str) -> String {\n    log_line(\"load\");\n    read_to_string(Path::new(dir).join(\"config.json\")).unwrap_or_default()\n}\n",
+    "util_exact_content": "pub fn slug(raw: &str) -> String {\n    raw.to_lowercase()\n}\n",
+    "util_use_lines_after": 0,
+    "util_use_lines_before": 3
+  },
+  "13_a_missing_destination_is_created_with_every_use_line": {
+    "app_after": "use crate::util::slug;\nuse crate::loader::load_config;\n\npub fn boot(dir: &str) -> String {\n    slug(&load_config(dir))\n}\n",
+    "app_imports_loader": true,
+    "cargo_check": {
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    "lib_after": "pub mod app;\npub mod config;\npub mod loader;\npub mod log;\npub mod util;\n",
+    "lib_declares_loader": true,
+    "loader_after": "use std::fs::read_to_string;\nuse std::path::Path;\nuse crate::log::log_line;\n\npub fn load_config(dir: &str) -> String {\n    log_line(\"load\");\n    read_to_string(Path::new(dir).join(\"config.json\")).unwrap_or_default()\n}\n",
+    "loader_use_lines": 3,
+    "stdout_commit": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/util.rs#load_config -> src/loader.rs\ntravel read_to_string from std::fs::read_to_string as std::fs::read_to_string (package)\ntravel Path from std::path::Path as std::path::Path (package)\ntravel log_line from crate::log::log_line as crate::log (relative)\norphan read_to_string from std::fs::read_to_string\norphan Path from std::path::Path\norphan log_line from crate::log::log_line\ndrag fixpoint 1 passes\ncaller src/app.rs\nreplace src/app.rs -> src/app.rs  update src/app.rs (121 bytes)\n    --- original\n    +++ modified\n    @@ -1,4 +1,5 @@\n    -use crate::util::{load_config, slug};\n    +use crate::util::slug;\n    +use crate::loader::load_config;\n    \n     pub fn boot(dir: &str) -> String {\n         slug(&load_config(dir))\nreplace src/util.rs -> src/util.rs  update src/util.rs (60 bytes)\n    --- original\n    +++ modified\n    @@ -1,13 +1,3 @@\n    -use std::fs::read_to_string;\n    -use std::path::Path;\n    -\n    -use crate::log::log_line;\n    -\n     pub fn slug(raw: &str) -> String {\n         raw.to_lowercase()\n     }\n    -\n    -pub fn load_config(dir: &str) -> String {\n    -    log_line(\"load\");\n    -    read_to_string(Path::new(dir).join(\"config.json\")).unwrap_or_default()\n    -}\nstage $STAGE committed\ncreate  - -> src/loader.rs  create src/loader.rs (218 bytes)\n    --- original\n    +++ modified\n    @@ -0,0 +1,8 @@\n    +use std::fs::read_to_string;\n    +use std::path::Path;\n    +use crate::log::log_line;\n    +\n    +pub fn load_config(dir: &str) -> String {\n    +    log_line(\"load\");\n    +    read_to_string(Path::new(dir).join(\"config.json\")).unwrap_or_default()\n    +}\nstage $STAGE committed\n"
+    }
+  },
+  "14_drag_moves_the_sole_user_helper_and_exports_the_shared_one": {
+    "cargo_check": {
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    "config_after": "use std::path::Path;\nuse std::fs::read_to_string;\nuse crate::log::log_line;\nuse crate::util::pad;\n\npub const CONFIG_NAME: &str = \"config.json\";\n\npub fn config_root() -> String {\n    Path::new(\".\").display().to_string()\n}\n\npub fn slug(raw: &str) -> String {\n    raw.to_lowercase()\n}\n\npub fn load_config(dir: &str) -> String {\n    log_line(\"load\");\n    pad(&slug(&read_to_string(dir).unwrap_or_default()))\n}\n",
+    "config_imports_pad_once": 1,
+    "config_never_copies_pad": 0,
+    "config_slug_lands_once": 1,
+    "drag_iterations": 1,
+    "dragged_actions": [
+      "exported",
+      "moved"
+    ],
+    "dragged_names": [
+      "pad",
+      "slug"
+    ],
+    "stdout_commit": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/util.rs#load_config -> src/config.rs\ntravel read_to_string from std::fs::read_to_string as std::fs::read_to_string (package)\ntravel log_line from crate::log::log_line as crate::log (relative)\norphan read_to_string from std::fs::read_to_string\norphan log_line from crate::log::log_line\ndrag pad exported pass 1\ndrag slug moved pass 1\ndrag fixpoint 1 passes\ncaller src/app.rs\nreplace src/app.rs -> src/app.rs  update src/app.rs (123 bytes)\n    --- original\n    +++ modified\n    @@ -1,4 +1,5 @@\n    -use crate::util::{label, load_config};\n    +use crate::util::label;\n    +use crate::config::load_config;\n    \n     pub fn boot(dir: &str) -> String {\n         label(&load_config(dir))\nreplace src/config.rs -> src/config.rs  update src/config.rs (406 bytes)\n    --- original\n    +++ modified\n    @@ -1,7 +1,19 @@\n     use std::path::Path;\n    +use std::fs::read_to_string;\n    +use crate::log::log_line;\n    +use crate::util::pad;\n    \n     pub const CONFIG_NAME: &str = \"config.json\";\n    \n     pub fn config_root() -> String {\n         Path::new(\".\").display().to_string()\n     }\n    +\n    +pub fn slug(raw: &str) -> String {\n    +    raw.to_lowercase()\n    +}\n    +\n    +pub fn load_config(dir: &str) -> String {\n    +    log_line(\"load\");\n    +    pad(&slug(&read_to_string(dir).unwrap_or_default()))\n    +}\nreplace src/util.rs -> src/util.rs  update src/util.rs (156 bytes)\n    --- original\n    +++ modified\n    @@ -1,22 +1,9 @@\n    -use std::fs::read_to_string;\n    -\n    -use crate::log::log_line;\n    -\n    -fn pad(raw: &str) -> String {\n    +pub fn pad(raw: &str) -> String {\n         let mut out = String::from(\" \");\n         out.push_str(raw);\n         out\n     }\n    \n    -fn slug(raw: &str) -> String {\n    -    raw.to_lowercase()\n    -}\n    -\n     pub fn label(raw: &str) -> String {\n         pad(raw)\n     }\n    -\n    -pub fn load_config(dir: &str) -> String {\n    -    log_line(\"load\");\n    -    pad(&slug(&read_to_string(dir).unwrap_or_default()))\n    -}\nstage $STAGE committed\n"
+    },
+    "stdout_plan": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/util.rs#load_config -> src/config.rs\ntravel read_to_string from std::fs::read_to_string as std::fs::read_to_string (package)\ntravel log_line from crate::log::log_line as crate::log (relative)\norphan read_to_string from std::fs::read_to_string\norphan log_line from crate::log::log_line\ndrag pad exported pass 1\ndrag slug moved pass 1\ndrag fixpoint 1 passes\ncaller src/app.rs\nreplace src/app.rs -> src/app.rs  update src/app.rs (123 bytes)\n    --- original\n    +++ modified\n    @@ -1,4 +1,5 @@\n    -use crate::util::{label, load_config};\n    +use crate::util::label;\n    +use crate::config::load_config;\n    \n     pub fn boot(dir: &str) -> String {\n         label(&load_config(dir))\nreplace src/config.rs -> src/config.rs  update src/config.rs (406 bytes)\n    --- original\n    +++ modified\n    @@ -1,7 +1,19 @@\n     use std::path::Path;\n    +use std::fs::read_to_string;\n    +use crate::log::log_line;\n    +use crate::util::pad;\n    \n     pub const CONFIG_NAME: &str = \"config.json\";\n    \n     pub fn config_root() -> String {\n         Path::new(\".\").display().to_string()\n     }\n    +\n    +pub fn slug(raw: &str) -> String {\n    +    raw.to_lowercase()\n    +}\n    +\n    +pub fn load_config(dir: &str) -> String {\n    +    log_line(\"load\");\n    +    pad(&slug(&read_to_string(dir).unwrap_or_default()))\n    +}\nreplace src/util.rs -> src/util.rs  update src/util.rs (156 bytes)\n    --- original\n    +++ modified\n    @@ -1,22 +1,9 @@\n    -use std::fs::read_to_string;\n    -\n    -use crate::log::log_line;\n    -\n    -fn pad(raw: &str) -> String {\n    +pub fn pad(raw: &str) -> String {\n         let mut out = String::from(\" \");\n         out.push_str(raw);\n         out\n     }\n    \n    -fn slug(raw: &str) -> String {\n    -    raw.to_lowercase()\n    -}\n    -\n     pub fn label(raw: &str) -> String {\n         pad(raw)\n     }\n    -\n    -pub fn load_config(dir: &str) -> String {\n    -    log_line(\"load\");\n    -    pad(&slug(&read_to_string(dir).unwrap_or_default()))\n    -}\nstage $STAGE dry run, tree untouched\n{\"record\":\"cleave_plan\",\"src\":\"src/util.rs\",\"dest\":\"src/config.rs\",\"item\":\"load_config\",\"item_span\":{\"start\":267,\"len\":123},\"travelling\":[{\"name\":\"read_to_string\",\"module\":\"std::fs::read_to_string\",\"dest_module\":\"std::fs::read_to_string\",\"span\":{\"start\":13,\"len\":14},\"kind\":\"package\"},{\"name\":\"log_line\",\"module\":\"crate::log::log_line\",\"dest_module\":\"crate::log\",\"span\":{\"start\":46,\"len\":8},\"kind\":\"relative\"}],\"orphans\":[{\"name\":\"read_to_string\",\"module\":\"std::fs::read_to_string\",\"dest_module\":\"std::fs::read_to_string\",\"span\":{\"start\":13,\"len\":14},\"kind\":\"package\"},{\"name\":\"log_line\",\"module\":\"crate::log::log_line\",\"dest_module\":\"crate::log\",\"span\":{\"start\":46,\"len\":8},\"kind\":\"relative\"}],\"callers\":[\"src/app.rs\"],\"dragged\":[{\"name\":\"pad\",\"span\":{\"start\":57,\"len\":100},\"iteration\":1,\"action\":\"exported\"},{\"name\":\"slug\",\"span\":{\"start\":158,\"len\":56},\"iteration\":1,\"action\":\"moved\"}],\"drag_iterations\":1,\"unresolved\":[]}\n"
+    },
+    "util_after": "pub fn pad(raw: &str) -> String {\n    let mut out = String::from(\" \");\n    out.push_str(raw);\n    out\n}\n\npub fn label(raw: &str) -> String {\n    pad(raw)\n}\n",
+    "util_exports_pad": true,
+    "util_loses_slug": true
+  },
+  "15_a_failed_verify_rolls_the_rust_tree_back": {
+    "out_failed_verify": {
+      "exit_code": 3,
+      "stdout": "root $work/repo\nplan src/util.rs#load_config -> src/config.rs\ntravel read_to_string from std::fs::read_to_string as std::fs::read_to_string (package)\ntravel Path from std::path::Path as std::path::Path (carried)\ntravel log_line from crate::log::log_line as crate::log (relative)\norphan read_to_string from std::fs::read_to_string\norphan Path from std::path::Path\norphan log_line from crate::log::log_line\ndrag fixpoint 1 passes\ncaller src/app.rs\nreplace src/app.rs -> src/app.rs  update src/app.rs (121 bytes)\n    --- original\n    +++ modified\n    @@ -1,4 +1,5 @@\n    -use crate::util::{load_config, slug};\n    +use crate::util::slug;\n    +use crate::config::load_config;\n    \n     pub fn boot(dir: &str) -> String {\n         slug(&load_config(dir))\nreplace src/config.rs -> src/config.rs  update src/config.rs (341 bytes)\n    --- original\n    +++ modified\n    @@ -1,7 +1,14 @@\n     use std::path::Path;\n    +use std::fs::read_to_string;\n    +use crate::log::log_line;\n    \n     pub const CONFIG_NAME: &str = \"config.json\";\n    \n     pub fn config_root() -> String {\n         Path::new(\".\").display().to_string()\n     }\n    +\n    +pub fn load_config(dir: &str) -> String {\n    +    log_line(\"load\");\n    +    read_to_string(Path::new(dir).join(\"config.json\")).unwrap_or_default()\n    +}\nreplace src/util.rs -> src/util.rs  update src/util.rs (60 bytes)\n    --- original\n    +++ modified\n    @@ -1,13 +1,3 @@\n    -use std::fs::read_to_string;\n    -use std::path::Path;\n    -\n    -use crate::log::log_line;\n    -\n     pub fn slug(raw: &str) -> String {\n         raw.to_lowercase()\n     }\n    -\n    -pub fn load_config(dir: &str) -> String {\n    -    log_line(\"load\");\n    -    read_to_string(Path::new(dir).join(\"config.json\")).unwrap_or_default()\n    -}\nstage $STAGE committed\nverify failed (rc=1): rolled back 3 files\n",
+      "stderr": ""
+    },
+    "rollback_held": true,
+    "run_trail_count": 1,
+    "util_after": "use std::fs::read_to_string;\nuse std::path::Path;\n\nuse crate::log::log_line;\n\npub fn slug(raw: &str) -> String {\n    raw.to_lowercase()\n}\n\npub fn load_config(dir: &str) -> String {\n    log_line(\"load\");\n    read_to_string(Path::new(dir).join(\"config.json\")).unwrap_or_default()\n}\n",
+    "util_before": "use std::fs::read_to_string;\nuse std::path::Path;\n\nuse crate::log::log_line;\n\npub fn slug(raw: &str) -> String {\n    raw.to_lowercase()\n}\n\npub fn load_config(dir: &str) -> String {\n    log_line(\"load\");\n    read_to_string(Path::new(dir).join(\"config.json\")).unwrap_or_default()\n}\n"
+  },
+  "16_qualified_calls_reexports_and_relative_uses_survive_a_cleave": {
+    "app_after": "pub fn boot(dir: &str) -> String {\n    crate::config::target(dir)\n}\n",
+    "app_call_respelled": true,
+    "cargo_check": {
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "warning: unused import: `log::log_line as note`\n --> src/lib.rs:7:5\n  |\n7 | use log::log_line as note;\n  |     ^^^^^^^^^^^^^^^^^^^^^\n  |\n  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default\n\n"
+    },
+    "config_after": "use std::path::Path;\nuse crate::log::log_line as note;\n\npub const CONFIG_NAME: &str = \"config.json\";\n\npub fn config_root() -> String {\n    Path::new(\".\").display().to_string()\n}\n\npub fn target(raw: &str) -> String {\n    note(raw);\n    raw.to_string()\n}\n",
+    "config_travels_relative_use": true,
+    "lib_after": "pub mod app;\npub mod config;\npub mod log;\npub mod util;\n\npub use log::log_line;\nuse log::log_line as note;\n",
+    "lib_keeps_public_reexport": true,
+    "stdout_commit": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/lib.rs#target -> src/config.rs\ntravel note from log::log_line as crate::log::log_line (package)\norphan note from log::log_line\ndrag fixpoint 1 passes\nreplace src/app.rs -> src/app.rs  update src/app.rs (68 bytes)\n    --- original\n    +++ modified\n    @@ -1,3 +1,3 @@\n     pub fn boot(dir: &str) -> String {\n    -    crate::target(dir)\n    +    crate::config::target(dir)\n     }\nreplace src/config.rs -> src/config.rs  update src/config.rs (253 bytes)\n    --- original\n    +++ modified\n    @@ -1,7 +1,13 @@\n     use std::path::Path;\n    +use crate::log::log_line as note;\n    \n     pub const CONFIG_NAME: &str = \"config.json\";\n    \n     pub fn config_root() -> String {\n         Path::new(\".\").display().to_string()\n     }\n    +\n    +pub fn target(raw: &str) -> String {\n    +    note(raw);\n    +    raw.to_string()\n    +}\nreplace src/lib.rs -> src/lib.rs  update src/lib.rs (107 bytes)\n    --- original\n    +++ modified\n    @@ -5,8 +5,3 @@\n    \n     pub use log::log_line;\n     use log::log_line as note;\n    -\n    -pub fn target(raw: &str) -> String {\n    -    note(raw);\n    -    raw.to_string()\n    -}\nstage $STAGE committed\n"
+    }
+  },
+  "17_a_type_travels_with_its_docs_derives_impls_and_public_reexport": {
+    "cargo_check": {
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    "lib_after": "pub mod app;\npub mod config;\npub mod log;\npub mod util;\npub mod stops;\n\npub use util::describe;\npub use crate::stops::Stop;\n",
+    "lib_keeps_describe_reexport": true,
+    "lib_respells_stop_reexport": true,
+    "stdout_commit": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/util.rs#Stop -> src/stops.rs\ntravel fmt from std::fmt as std::fmt (package)\norphan fmt from std::fmt\ndrag impl Stop moved pass 1\ndrag impl Stop moved pass 1\ndrag fixpoint 1 passes\ncaller src/lib.rs\nreplace src/lib.rs -> src/lib.rs  update src/lib.rs (124 bytes)\n    --- original\n    +++ modified\n    @@ -2,5 +2,7 @@\n     pub mod config;\n     pub mod log;\n     pub mod util;\n    +pub mod stops;\n    \n    -pub use util::{describe, Stop};\n    +pub use util::describe;\n    +pub use crate::stops::Stop;\nreplace src/util.rs -> src/util.rs  update src/util.rs (168 bytes)\n    --- original\n    +++ modified\n    @@ -1,22 +1,4 @@\n    -use std::fmt;\n    -\n    -/// Why a plan stops.\n    -#[derive(Debug, Clone)]\n    -pub enum Stop {\n    -    /// Nothing matched.\n    -    Missing(String),\n    -}\n    -\n    -impl fmt::Display for Stop {\n    -    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {\n    -        match self {\n    -            Stop::Missing(name) => write!(formatter, \"no {name}\"),\n    -        }\n    -    }\n    -}\n    -\n    -impl std::error::Error for Stop {}\n    -\n    +use crate::stops::Stop;\n     pub fn describe(stop: &Stop) -> String {\n         use std::fmt::Write;\n         let mut out = String::new();\nstage $STAGE committed\ncreate  - -> src/stops.rs  create src/stops.rs (368 bytes)\n    --- original\n    +++ modified\n    @@ -0,0 +1,18 @@\n    +use std::fmt;\n    +\n    +/// Why a plan stops.\n    +#[derive(Debug, Clone)]\n    +pub enum Stop {\n    +    /// Nothing matched.\n    +    Missing(String),\n    +}\n    +\n    +impl fmt::Display for Stop {\n    +    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {\n    +        match self {\n    +            Stop::Missing(name) => write!(formatter, \"no {name}\"),\n    +        }\n    +    }\n    +}\n    +\n    +impl std::error::Error for Stop {}\nstage $STAGE committed\n"
+    },
+    "stops_after": "use std::fmt;\n\n/// Why a plan stops.\n#[derive(Debug, Clone)]\npub enum Stop {\n    /// Nothing matched.\n    Missing(String),\n}\n\nimpl fmt::Display for Stop {\n    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {\n        match self {\n            Stop::Missing(name) => write!(formatter, \"no {name}\"),\n        }\n    }\n}\n\nimpl std::error::Error for Stop {}\n",
+    "stops_display_impl_travels": true,
+    "stops_docs_and_derives_travel": true,
+    "stops_error_impl_travels": true,
+    "stops_keeps_fmt_import": true,
+    "util_after": "use crate::stops::Stop;\npub fn describe(stop: &Stop) -> String {\n    use std::fmt::Write;\n    let mut out = String::new();\n    let _ = write!(out, \"{stop}\");\n    out\n}\n",
+    "util_fn_local_use_never_anchors": true,
+    "util_loses_docs": true,
+    "util_loses_impl": true
+  },
+  "18_text_refs_skip_plan_docs_and_cleave_defaults_to_quiet_logging": {
+    "cargo_check": {
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    "out_text_refs": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/source.rs#target -> src/dest.rs\ndrag fixpoint 1 passes\ndelete  src/source.rs -> -  delete src/source.rs\n    --- original\n    +++ modified\n    @@ -1 +0,0 @@\n    -pub fn target() -> u8 { 1 }\nreplace src/dest.rs -> src/dest.rs  update src/dest.rs (28 bytes)\n    --- original\n    +++ modified\n    @@ -0,0 +1 @@\n    +pub fn target() -> u8 { 1 }\nreplace src/lib.rs -> src/lib.rs  update src/lib.rs (14 bytes)\n    --- original\n    +++ modified\n    @@ -1,2 +1 @@\n    -pub mod source;\n     pub mod dest;\nstage $STAGE dry run, tree untouched\n",
+      "stderr": ""
+    },
+    "quiet_logging_default": true,
+    "stdout_commit": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/source.rs#target -> src/dest.rs\ndrag fixpoint 1 passes\ndelete  src/source.rs -> -  delete src/source.rs\n    --- original\n    +++ modified\n    @@ -1 +0,0 @@\n    -pub fn target() -> u8 { 1 }\nreplace src/dest.rs -> src/dest.rs  update src/dest.rs (28 bytes)\n    --- original\n    +++ modified\n    @@ -0,0 +1 @@\n    +pub fn target() -> u8 { 1 }\nreplace src/lib.rs -> src/lib.rs  update src/lib.rs (14 bytes)\n    --- original\n    +++ modified\n    @@ -1,2 +1 @@\n    -pub mod source;\n     pub mod dest;\nstage $STAGE committed\n"
+    },
+    "text_refs_plans_not_logged": true
+  },
+  "19_cfg_attributes_gate_imports_when_the_feature_is_off": {
+    "cargo_check_checker": {
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    "cargo_check_off": {
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    "source_after": "#[cfg_attr(\n    feature = \"checker\",\n    cfg(feature = \"checker\")\n)]\n#[cfg(feature = \"checker\")]\nuse crate::dest::target;\n#[cfg(feature = \"checker\")]\npub fn caller() -> u8 { target() }\n",
+    "source_gated_import_exact": true,
+    "stdout_commit": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/source.rs#target -> src/dest.rs\ndrag fixpoint 1 passes\nreplace src/lib.rs -> src/lib.rs  update src/lib.rs (127 bytes)\n    --- original\n    +++ modified\n    @@ -1 +1,7 @@\n     pub mod source;\n    +#[cfg_attr(\n    +    feature = \"checker\",\n    +    cfg(feature = \"checker\")\n    +)]\n    +#[cfg(feature = \"checker\")]\n    +pub mod dest;\nreplace src/source.rs -> src/source.rs  update src/source.rs (185 bytes)\n    --- original\n    +++ modified\n    @@ -3,7 +3,6 @@\n         cfg(feature = \"checker\")\n     )]\n     #[cfg(feature = \"checker\")]\n    -pub fn target() -> u8 { 1 }\n    -\n    +use crate::dest::target;\n     #[cfg(feature = \"checker\")]\n     pub fn caller() -> u8 { target() }\nstage $STAGE committed\ncreate  - -> src/dest.rs  create src/dest.rs (125 bytes)\n    --- original\n    +++ modified\n    @@ -0,0 +1,6 @@\n    +#[cfg_attr(\n    +    feature = \"checker\",\n    +    cfg(feature = \"checker\")\n    +)]\n    +#[cfg(feature = \"checker\")]\n    +pub fn target() -> u8 { 1 }\nstage $STAGE committed\n"
+    }
+  },
+  "20_moved_struct_fields_are_visible_to_remaining_sibling_code": {
+    "cargo_check": {
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "warning: function `read` is never used\n --> src/source.rs:2:15\n  |\n2 | pub(crate) fn read() -> u8 {\n  |               ^^^^\n  |\n  = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default\n\nwarning: struct `Packet` is never constructed\n --> src/dest.rs:1:19\n  |\n1 | pub(crate) struct Packet { pub(crate) value: u8 }\n  |                   ^^^^^^\n\n"
+    },
+    "stdout_commit": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/source.rs#Packet -> src/dest.rs\ndrag fixpoint 1 passes\nreplace src/dest.rs -> src/dest.rs  update src/dest.rs (50 bytes)\n    --- original\n    +++ modified\n    @@ -0,0 +1 @@\n    +pub(crate) struct Packet { pub(crate) value: u8 }\nreplace src/source.rs -> src/source.rs  update src/source.rs (86 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,4 @@\n    -pub(crate) struct Packet { value: u8 }\n    -\n    +use crate::dest::Packet;\n     pub(crate) fn read() -> u8 {\n         Packet { value: 7 }.value\n     }\nstage $STAGE committed\n"
+    }
+  },
+  "21_moved_struct_fields_used_in_a_child_literal_remain_visible": {
+    "cargo_check": {
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "warning: type `Packet` is more private than the item `packet`\n --> src/source.rs:2:1\n  |\n2 | pub fn packet() -> Packet {\n  | ^^^^^^^^^^^^^^^^^^^^^^^^^ function `packet` is reachable at visibility `pub`\n  |\nnote: but type `Packet` is only usable at visibility `pub(crate)`\n --> src/dest.rs:4:1\n  |\n4 | pub(crate) struct Packet { pub(crate) value: u8 }\n  | ^^^^^^^^^^^^^^^^^^^^^^^^\n  = note: `#[warn(private_interfaces)]` on by default\n\nwarning: field `value` is never read\n --> src/dest.rs:4:39\n  |\n4 | pub(crate) struct Packet { pub(crate) value: u8 }\n  |                   ------              ^^^^^\n  |                   |\n  |                   field in this struct\n  |\n  = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default\n\n"
+    },
+    "stdout_commit": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/source.rs#Packet -> src/dest.rs\ndrag fixpoint 1 passes\nreplace src/dest.rs -> src/dest.rs  update src/dest.rs (71 bytes)\n    --- original\n    +++ modified\n    @@ -1 +1,4 @@\n    \n    +\n    +#[derive(Default)]\n    +pub(crate) struct Packet { pub(crate) value: u8 }\nreplace src/source.rs -> src/source.rs  update src/source.rs (166 bytes)\n    --- original\n    +++ modified\n    @@ -1,6 +1,4 @@\n    -#[derive(Default)]\n    -pub(crate) struct Packet { value: u8 }\n    -\n    +use crate::dest::Packet;\n     pub fn packet() -> Packet {\n         Packet::default()\n     }\nstage $STAGE committed\n"
+    }
+  },
+  "22_moved_struct_fields_used_in_a_child_pattern_remain_visible": {
+    "cargo_check": {
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "warning: type `Packet` is more private than the item `packet`\n --> src/source.rs:9:1\n  |\n9 | pub fn packet() -> Packet {\n  | ^^^^^^^^^^^^^^^^^^^^^^^^^ function `packet` is reachable at visibility `pub`\n  |\nnote: but type `Packet` is only usable at visibility `pub(crate)`\n --> src/dest.rs:4:1\n  |\n4 | pub(crate) struct Packet { pub(crate) value: u8 }\n  | ^^^^^^^^^^^^^^^^^^^^^^^^\n  = note: `#[warn(private_interfaces)]` on by default\n\n"
+    },
+    "stdout_commit": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/source.rs#Packet -> src/dest.rs\ndrag fixpoint 1 passes\nreplace src/dest.rs -> src/dest.rs  update src/dest.rs (71 bytes)\n    --- original\n    +++ modified\n    @@ -1 +1,4 @@\n    \n    +\n    +#[derive(Default)]\n    +pub(crate) struct Packet { pub(crate) value: u8 }\nreplace src/source.rs -> src/source.rs  update src/source.rs (197 bytes)\n    --- original\n    +++ modified\n    @@ -1,6 +1,4 @@\n    -#[derive(Default)]\n    -pub(crate) struct Packet { value: u8 }\n    -\n    +use crate::dest::Packet;\n     pub mod child {\n         pub fn read() -> u8 {\n             let super::Packet { value } = super::packet();\nstage $STAGE committed\n"
+    }
+  },
+  "23_fast_cleave_stops_on_private_fields_before_checker_load": {
+    "fast_stop_reason_names_checker": true,
+    "fast_stop_reason_names_field": true,
+    "fast_stop_reason_names_slow": true,
+    "out_fast_stop": {
+      "exit_code": 2,
+      "stdout": "",
+      "stderr": "private_field_use_needs_checker: Packet.value; rerun with --slow\n"
+    }
+  },
+  "24_fast_cleave_public_fields_never_loads_checker": {
+    "dest_after": "pub(crate) struct Packet { pub(crate) value: u8 }\n",
+    "dest_keeps_crate_visibility": true,
+    "stdout_commit": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/source.rs#Packet -> src/dest.rs\ndrag fixpoint 1 passes\nreplace src/dest.rs -> src/dest.rs  update src/dest.rs (50 bytes)\n    --- original\n    +++ modified\n    @@ -0,0 +1 @@\n    +pub(crate) struct Packet { pub(crate) value: u8 }\nreplace src/source.rs -> src/source.rs  update src/source.rs (86 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,4 @@\n    -pub(crate) struct Packet { pub(crate) value: u8 }\n    -\n    +use crate::dest::Packet;\n     pub(crate) fn read() -> u8 {\n         Packet { value: 7 }.value\n     }\nstage $STAGE committed\n"
+    }
+  },
+  "25_moved_dependencies_keep_accessible_public_reexport_paths": {
+    "cargo_check": {
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "warning: unused import: `crate::types::PublicItem`\n --> src/branch/hidden.rs:1:16\n  |\n1 | pub(super) use crate::types::PublicItem;\n  |                ^^^^^^^^^^^^^^^^^^^^^^^^\n  |\n  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default\n\n"
+    },
+    "dest_after": "use crate::types::PublicItem;\n\n\npub fn target() -> u8 { PublicItem(7).0 }\n",
+    "dest_uses_public_reexport_path": true,
+    "stdout_commit": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/branch/source.rs#target -> src/dest.rs\ntravel PublicItem from super::hidden::PublicItem as crate::types (relative)\norphan PublicItem from super::hidden::PublicItem\ndrag fixpoint 1 passes\ndelete  src/branch/source.rs -> -  delete src/branch/source.rs\n    --- original\n    +++ modified\n    @@ -1,3 +0,0 @@\n    -use super::hidden::PublicItem;\n    -\n    -pub fn target() -> u8 { PublicItem(7).0 }\nreplace src/branch/mod.rs -> src/branch/mod.rs  update src/branch/mod.rs (16 bytes)\n    --- original\n    +++ modified\n    @@ -1,2 +1 @@\n     pub mod hidden;\n    -pub mod source;\nreplace src/dest.rs -> src/dest.rs  update src/dest.rs (74 bytes)\n    --- original\n    +++ modified\n    @@ -1 +1,4 @@\n    +use crate::types::PublicItem;\n    +\n    \n    +pub fn target() -> u8 { PublicItem(7).0 }\nstage $STAGE committed\n"
+    }
+  },
+  "26_cfg_attributes_gate_new_module_declarations": {
+    "cargo_check_checker": {
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    "cargo_check_off": {
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    "lib_after": "pub mod source;\n#[cfg_attr(\n    feature = \"checker\",\n    cfg(feature = \"checker\")\n)]\n#[cfg(feature = \"checker\")]\npub mod dest;\n",
+    "lib_gated_module_exact": true,
+    "stdout_commit": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/source.rs#target -> src/dest.rs\ndrag fixpoint 1 passes\nreplace src/lib.rs -> src/lib.rs  update src/lib.rs (127 bytes)\n    --- original\n    +++ modified\n    @@ -1 +1,7 @@\n     pub mod source;\n    +#[cfg_attr(\n    +    feature = \"checker\",\n    +    cfg(feature = \"checker\")\n    +)]\n    +#[cfg(feature = \"checker\")]\n    +pub mod dest;\nreplace src/source.rs -> src/source.rs  update src/source.rs (185 bytes)\n    --- original\n    +++ modified\n    @@ -3,7 +3,6 @@\n         cfg(feature = \"checker\")\n     )]\n     #[cfg(feature = \"checker\")]\n    -pub fn target() -> u8 { 1 }\n    -\n    +use crate::dest::target;\n     #[cfg(feature = \"checker\")]\n     pub fn caller() -> u8 { target() }\nstage $STAGE committed\ncreate  - -> src/dest.rs  create src/dest.rs (125 bytes)\n    --- original\n    +++ modified\n    @@ -0,0 +1,6 @@\n    +#[cfg_attr(\n    +    feature = \"checker\",\n    +    cfg(feature = \"checker\")\n    +)]\n    +#[cfg(feature = \"checker\")]\n    +pub fn target() -> u8 { 1 }\nstage $STAGE committed\n"
+    }
+  },
+  "27_a_new_file_is_declared_beside_the_path_include_that_owns_src": {
+    "cargo_check_all_targets": {
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    "lib_after": "pub fn library() -> u32 {\n    0\n}\n",
+    "lib_exact_content": "pub fn library() -> u32 {\n    0\n}\n",
+    "stdout_commit": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/shared.rs#count -> src/counting.rs\ndrag Lines exported pass 1\ndrag fixpoint 1 passes\nreplace src/bin/tool.rs -> src/bin/tool.rs  update src/bin/tool.rs (141 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,6 @@\n     #[path = \"../shared.rs\"]\n     mod shared;\n    +#[path = \"../counting.rs\"] pub(crate) mod counting;\n    \n     fn main() {\n         println!(\"{}\", shared::total());\nreplace src/shared.rs -> src/shared.rs  update src/shared.rs (117 bytes)\n    --- original\n    +++ modified\n    @@ -1,9 +1,6 @@\n    +use crate::counting::count;\n     pub struct Lines(pub Vec<u32>);\n    \n    -pub fn count(lines: &Lines) -> u32 {\n    -    lines.0.len() as u32\n    -}\n    -\n     pub fn total() -> u32 {\n         count(&Lines(vec![1, 2]))\n     }\nstage $STAGE committed\ncreate  - -> src/counting.rs  create src/counting.rs (91 bytes)\n    --- original\n    +++ modified\n    @@ -0,0 +1,5 @@\n    +use crate::shared::Lines;\n    +\n    +pub fn count(lines: &Lines) -> u32 {\n    +    lines.0.len() as u32\n    +}\nstage $STAGE committed\n"
+    },
+    "tool_after": "#[path = \"../shared.rs\"]\nmod shared;\n#[path = \"../counting.rs\"] pub(crate) mod counting;\n\nfn main() {\n    println!(\"{}\", shared::total());\n}\n",
+    "tool_exact_content": "#[path = \"../shared.rs\"]\nmod shared;\n#[path = \"../counting.rs\"] pub(crate) mod counting;\n\nfn main() {\n    println!(\"{}\", shared::total());\n}\n"
+  },
+  "28_a_path_declared_child_of_a_bin_root_takes_a_cleaved_item": {
+    "cargo_check_all_targets": {
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    "child_after": "pub fn one() -> u32 {\n    1\n}\n\npub fn two() -> u32 {\n    2\n}\n",
+    "child_exact_content": "pub fn one() -> u32 {\n    1\n}\n\npub fn two() -> u32 {\n    2\n}\n",
+    "stdout_commit": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/bin/tool.rs#two -> src/bin/tool/1_a.rs\ndrag fixpoint 1 passes\nreplace src/bin/tool.rs -> src/bin/tool.rs  update src/bin/tool.rs (103 bytes)\n    --- original\n    +++ modified\n    @@ -1,10 +1,7 @@\n    +use crate::a::two;\n     #[path = \"tool/1_a.rs\"]\n     mod a;\n    \n    -fn two() -> u32 {\n    -    2\n    -}\n    -\n     fn main() {\n         println!(\"{}\", a::one() + two());\n     }\nreplace src/bin/tool/1_a.rs -> src/bin/tool/1_a.rs  update src/bin/tool/1_a.rs (61 bytes)\n    --- original\n    +++ modified\n    @@ -1,3 +1,7 @@\n     pub fn one() -> u32 {\n         1\n     }\n    +\n    +pub fn two() -> u32 {\n    +    2\n    +}\nstage $STAGE committed\n"
+    },
+    "tool_after": "use crate::a::two;\n#[path = \"tool/1_a.rs\"]\nmod a;\n\nfn main() {\n    println!(\"{}\", a::one() + two());\n}\n",
+    "tool_exact_content": "use crate::a::two;\n#[path = \"tool/1_a.rs\"]\nmod a;\n\nfn main() {\n    println!(\"{}\", a::one() + two());\n}\n"
+  },
+  "29_an_unloadable_manifest_stops_the_rust_cleave_with_the_reason": {
+    "bad_manifest_first_line_exact": "no cargo workspace: ROOT/Cargo.toml: `cargo metadata` exited with an error: error: key with no value, expected `=`",
+    "out_bad_manifest": {
+      "exit_code": 2,
+      "stdout": "",
+      "stderr": "no cargo workspace: $work/repo/Cargo.toml: `cargo metadata` exited with an error: error: key with no value, expected `=`\n --> Cargo.toml:1:9\n  |\n1 | invalid manifest\n  |         ^\n\n"
+    }
+  }
+}

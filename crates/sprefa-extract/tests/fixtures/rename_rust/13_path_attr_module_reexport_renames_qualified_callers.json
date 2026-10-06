@@ -1,0 +1,90 @@
+{
+  "steps": [
+    {
+      "source": "$fixtures/rust_rename/path_attr_reexport/before",
+      "target": "$work/repo",
+      "action": "copy_tree"
+    },
+    {
+      "path": "$work/state",
+      "action": "directory"
+    },
+    {
+      "action": "run",
+      "name": "rename",
+      "arguments": [
+        "rename",
+        "src/read/0_root.rs#io_path",
+        "io_x",
+        "--root",
+        "$work/repo",
+        "--state",
+        "$work/state",
+        "--commit"
+      ],
+      "cwd": "$work/repo",
+      "expect_exit_code": 0,
+      "raw_stdout": true,
+      "stdout_redactions": [
+        {
+          "pattern": "(?m)^(stage )[0-9a-f]{64}( committed| dry run, tree untouched)$",
+          "replacement": "${1}$$STAGE${2}"
+        }
+      ]
+    },
+    {
+      "action": "claim",
+      "name": "claim_0",
+      "cell": "rename.stdout",
+      "kind": "contains",
+      "text": "src/read/0_root.rs  1 uses"
+    },
+    {
+      "action": "claim",
+      "name": "claim_1",
+      "cell": "rename.stdout",
+      "kind": "contains",
+      "text": "src/read/mod.rs  1 uses"
+    },
+    {
+      "action": "claim",
+      "name": "claim_2",
+      "cell": "rename.stdout",
+      "kind": "contains",
+      "text": "src/user.rs  2 uses"
+    },
+    {
+      "action": "tree_matches",
+      "name": "claim_3",
+      "left": "$work/repo",
+      "fixture": "$fixtures/rust_rename/path_attr_reexport/after"
+    }
+  ],
+  "old_assertions": [
+    {
+      "cell": "stdout",
+      "kind": "contains",
+      "value": "src/read/0_root.rs  1 uses",
+      "claim": "decl seat"
+    },
+    {
+      "cell": "stdout",
+      "kind": "contains",
+      "value": "src/read/mod.rs  1 uses",
+      "claim": "re-export seat"
+    },
+    {
+      "cell": "stdout",
+      "kind": "contains",
+      "value": "src/user.rs  2 uses",
+      "claim": "qualified call paths in sibling module"
+    },
+    {
+      "cell": "tree_vs_after",
+      "kind": "diff_rq_empty",
+      "value": "diff -rq $work/repo <after>",
+      "claim": "re-export from #[path]-declared file carries the renamed item into sibling module's qualified call paths"
+    }
+  ],
+  "notes": []
+}

@@ -1,0 +1,188 @@
+{
+  "test": "the_plan_partitions_the_same_three_file_trace_the_ts_fixture_states",
+  "source_range": "467-504",
+  "fixture": {
+    "group": "cleave_rust",
+    "variant": "basic",
+    "label": "plan"
+  },
+  "steps": [
+    {
+      "action": "copy_tree",
+      "source": "$fixtures/cleave_rust/basic",
+      "target": "$work/repo"
+    },
+    {
+      "action": "directory",
+      "path": "$work/state"
+    },
+    {
+      "action": "git",
+      "args": [
+        "init",
+        "-q",
+        "."
+      ],
+      "cwd": "$work/repo"
+    },
+    {
+      "action": "command",
+      "program": "$ryii",
+      "arguments": [
+        "cleave",
+        "src/util.rs#load_config",
+        "src/config.rs",
+        "--json",
+        "--root",
+        "$work/repo",
+        "--state",
+        "$work/state"
+      ],
+      "cwd": "$work/repo",
+      "environment": {
+        "HAFLEY_TRACE": "$work/cleave.json",
+        "RUST_LOG": "sprefa_extract=debug,hafley_scm=debug"
+      },
+      "expect_exit_code": 0,
+      "capture": "stdout_plan",
+      "raw_stdout": true,
+      "unasserted_stderr": true,
+      "stdout_redactions": [
+        {
+          "pattern": "(?m)^(stage )[0-9a-f]{64}( committed| dry run, tree untouched)$",
+          "replacement": "${1}$$STAGE${2}"
+        }
+      ]
+    },
+    {
+      "action": "claim",
+      "kind": "json_scalar",
+      "cell": "stdout_plan",
+      "line_prefix": "{",
+      "pointer": "record",
+      "expect": "cleave_plan",
+      "name": "plan_record"
+    },
+    {
+      "action": "claim",
+      "kind": "json_scalar",
+      "cell": "stdout_plan",
+      "line_prefix": "{",
+      "pointer": "src",
+      "expect": "src/util.rs",
+      "name": "plan_src"
+    },
+    {
+      "action": "claim",
+      "kind": "json_scalar",
+      "cell": "stdout_plan",
+      "line_prefix": "{",
+      "pointer": "dest",
+      "expect": "src/config.rs",
+      "name": "plan_dest"
+    },
+    {
+      "action": "claim",
+      "kind": "json_scalar",
+      "cell": "stdout_plan",
+      "line_prefix": "{",
+      "pointer": "item",
+      "expect": "load_config",
+      "name": "plan_item"
+    },
+    {
+      "action": "claim",
+      "kind": "json_column",
+      "cell": "stdout_plan",
+      "line_prefix": "{",
+      "pointer": "travelling",
+      "column": "name",
+      "expect": [
+        "read_to_string",
+        "Path",
+        "log_line"
+      ],
+      "name": "travelling_names"
+    },
+    {
+      "action": "claim",
+      "kind": "json_column",
+      "cell": "stdout_plan",
+      "line_prefix": "{",
+      "pointer": "orphans",
+      "column": "name",
+      "expect": [
+        "read_to_string",
+        "Path",
+        "log_line"
+      ],
+      "name": "orphan_names"
+    },
+    {
+      "action": "claim",
+      "kind": "json_column",
+      "cell": "stdout_plan",
+      "line_prefix": "{",
+      "pointer": "travelling",
+      "column": "kind",
+      "expect": [
+        "package",
+        "carried",
+        "relative"
+      ],
+      "name": "travelling_kinds"
+    },
+    {
+      "action": "claim",
+      "kind": "json_column",
+      "cell": "stdout_plan",
+      "line_prefix": "{",
+      "pointer": "travelling",
+      "column": "dest_module",
+      "expect": [
+        "std::fs::read_to_string",
+        "std::path::Path",
+        "crate::log"
+      ],
+      "name": "travelling_dest_modules"
+    },
+    {
+      "action": "claim",
+      "kind": "json_equals",
+      "cell": "stdout_plan",
+      "line_prefix": "{",
+      "pointer": "callers",
+      "expect": [
+        "src/app.rs"
+      ],
+      "name": "plan_callers"
+    },
+    {
+      "action": "claim",
+      "kind": "json_len",
+      "cell": "stdout_plan",
+      "line_prefix": "{",
+      "pointer": "dragged",
+      "expect": 0,
+      "name": "dragged_empty"
+    },
+    {
+      "action": "claim",
+      "kind": "json_scalar",
+      "cell": "stdout_plan",
+      "line_prefix": "{",
+      "pointer": "drag_iterations",
+      "expect": 1,
+      "name": "drag_iterations"
+    },
+    {
+      "action": "claim",
+      "kind": "json_len",
+      "cell": "stdout_plan",
+      "line_prefix": "{",
+      "pointer": "unresolved",
+      "expect": 0,
+      "name": "unresolved_empty"
+    }
+  ]
+}

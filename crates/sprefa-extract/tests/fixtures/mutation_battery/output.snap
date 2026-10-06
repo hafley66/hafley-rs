@@ -1,0 +1,687 @@
+---
+source: tests/support/2_fixture_runner.rs
+---
+{
+  "go-dup-trim": {
+    "after": {
+      "calls": [
+        {
+          "caller_path": "docs.go",
+          "caller_name": "Mode",
+          "callee_path": "docs.go",
+          "callee_name": "Mode",
+          "kind": "name_resolve",
+          "origin": "corpus_unique"
+        },
+        {
+          "caller_path": "edges.go",
+          "caller_name": "Label",
+          "callee_path": "edges.go",
+          "callee_name": "Label",
+          "kind": "implements",
+          "origin": "iface_impl"
+        },
+        {
+          "caller_path": "sample.go",
+          "caller_name": "MakeEngine",
+          "callee_path": "sample.go",
+          "callee_name": "Trim",
+          "kind": "name_resolve",
+          "origin": "corpus_unique"
+        },
+        {
+          "caller_path": "sample.go",
+          "caller_name": "Mode",
+          "callee_path": "sample.go",
+          "callee_name": "Mode",
+          "kind": "name_resolve",
+          "origin": "corpus_unique"
+        }
+      ],
+      "types": [
+        {
+          "owner_path": "edges.go",
+          "owner_name": "Pricing",
+          "target_path": "edges.go",
+          "target_name": "Entity",
+          "kind": "impl",
+          "origin": "same_file"
+        },
+        {
+          "owner_path": "edges.go",
+          "owner_name": "Repo",
+          "target_path": "edges.go",
+          "target_name": "Cache",
+          "kind": "field",
+          "origin": "same_file"
+        },
+        {
+          "owner_path": "edges.go",
+          "owner_name": "Repo",
+          "target_path": "edges.go",
+          "target_name": "Entity",
+          "kind": "generic",
+          "origin": "same_file"
+        },
+        {
+          "owner_path": "edges.go",
+          "owner_name": "Repo",
+          "target_path": "edges.go",
+          "target_name": "Item",
+          "kind": "field",
+          "origin": "same_file"
+        },
+        {
+          "owner_path": "edges.go",
+          "owner_name": "Repo",
+          "target_path": "edges.go",
+          "target_name": "Pricing",
+          "kind": "impl",
+          "origin": "same_file"
+        },
+        {
+          "owner_path": "edges.go",
+          "owner_name": "Repo",
+          "target_path": "edges.go",
+          "target_name": "Store",
+          "kind": "impl",
+          "origin": "same_file"
+        }
+      ]
+    },
+    "base": {
+      "calls": [
+        {
+          "caller_path": "docs.go",
+          "caller_name": "MakeEngine",
+          "callee_path": "docs.go",
+          "callee_name": "Trim",
+          "kind": "name_resolve",
+          "origin": "corpus_unique"
+        },
+        {
+          "caller_path": "docs.go",
+          "caller_name": "Mode",
+          "callee_path": "docs.go",
+          "callee_name": "Mode",
+          "kind": "name_resolve",
+          "origin": "corpus_unique"
+        },
+        {
+          "caller_path": "edges.go",
+          "caller_name": "Label",
+          "callee_path": "edges.go",
+          "callee_name": "Label",
+          "kind": "implements",
+          "origin": "iface_impl"
+        },
+        {
+          "caller_path": "sample.go",
+          "caller_name": "MakeEngine",
+          "callee_path": "sample.go",
+          "callee_name": "Trim",
+          "kind": "name_resolve",
+          "origin": "corpus_unique"
+        },
+        {
+          "caller_path": "sample.go",
+          "caller_name": "Mode",
+          "callee_path": "sample.go",
+          "callee_name": "Mode",
+          "kind": "name_resolve",
+          "origin": "corpus_unique"
+        }
+      ],
+      "types": [
+        {
+          "owner_path": "edges.go",
+          "owner_name": "Pricing",
+          "target_path": "edges.go",
+          "target_name": "Entity",
+          "kind": "impl",
+          "origin": "same_file"
+        },
+        {
+          "owner_path": "edges.go",
+          "owner_name": "Repo",
+          "target_path": "edges.go",
+          "target_name": "Cache",
+          "kind": "field",
+          "origin": "same_file"
+        },
+        {
+          "owner_path": "edges.go",
+          "owner_name": "Repo",
+          "target_path": "edges.go",
+          "target_name": "Entity",
+          "kind": "generic",
+          "origin": "same_file"
+        },
+        {
+          "owner_path": "edges.go",
+          "owner_name": "Repo",
+          "target_path": "edges.go",
+          "target_name": "Item",
+          "kind": "field",
+          "origin": "same_file"
+        },
+        {
+          "owner_path": "edges.go",
+          "owner_name": "Repo",
+          "target_path": "edges.go",
+          "target_name": "Pricing",
+          "kind": "impl",
+          "origin": "same_file"
+        },
+        {
+          "owner_path": "edges.go",
+          "owner_name": "Repo",
+          "target_path": "edges.go",
+          "target_name": "Store",
+          "kind": "impl",
+          "origin": "same_file"
+        }
+      ]
+    }
+  },
+  "go-move-modifier-flags": {
+    "after": {
+      "calls": [],
+      "types": [
+        {
+          "owner_path": "b.go",
+          "owner_name": "ModifierList",
+          "target_path": "moved.go",
+          "target_name": "ModifierFlags",
+          "kind": "field",
+          "origin": "same_file"
+        },
+        {
+          "owner_path": "b.go",
+          "owner_name": "Session",
+          "target_path": "a.go",
+          "target_name": "Snapshot",
+          "kind": "field",
+          "origin": "same_file"
+        },
+        {
+          "owner_path": "b.go",
+          "owner_name": "Wrapper",
+          "target_path": "b.go",
+          "target_name": "ModifierList",
+          "kind": "field",
+          "origin": "same_file"
+        }
+      ]
+    },
+    "base": {
+      "calls": [],
+      "types": [
+        {
+          "owner_path": "b.go",
+          "owner_name": "ModifierList",
+          "target_path": "a.go",
+          "target_name": "ModifierFlags",
+          "kind": "field",
+          "origin": "same_file"
+        },
+        {
+          "owner_path": "b.go",
+          "owner_name": "Session",
+          "target_path": "a.go",
+          "target_name": "Snapshot",
+          "kind": "field",
+          "origin": "same_file"
+        },
+        {
+          "owner_path": "b.go",
+          "owner_name": "Wrapper",
+          "target_path": "b.go",
+          "target_name": "ModifierList",
+          "kind": "field",
+          "origin": "same_file"
+        }
+      ]
+    }
+  },
+  "go-move-trim": {
+    "after": {
+      "calls": [
+        {
+          "caller_path": "docs.go",
+          "caller_name": "MakeEngine",
+          "callee_path": "moved.go",
+          "callee_name": "Trim",
+          "kind": "name_resolve",
+          "origin": "corpus_unique"
+        },
+        {
+          "caller_path": "docs.go",
+          "caller_name": "Mode",
+          "callee_path": "docs.go",
+          "callee_name": "Mode",
+          "kind": "name_resolve",
+          "origin": "corpus_unique"
+        },
+        {
+          "caller_path": "edges.go",
+          "caller_name": "Label",
+          "callee_path": "edges.go",
+          "callee_name": "Label",
+          "kind": "implements",
+          "origin": "iface_impl"
+        },
+        {
+          "caller_path": "sample.go",
+          "caller_name": "MakeEngine",
+          "callee_path": "sample.go",
+          "callee_name": "Trim",
+          "kind": "name_resolve",
+          "origin": "corpus_unique"
+        },
+        {
+          "caller_path": "sample.go",
+          "caller_name": "Mode",
+          "callee_path": "sample.go",
+          "callee_name": "Mode",
+          "kind": "name_resolve",
+          "origin": "corpus_unique"
+        }
+      ],
+      "types": [
+        {
+          "owner_path": "edges.go",
+          "owner_name": "Pricing",
+          "target_path": "edges.go",
+          "target_name": "Entity",
+          "kind": "impl",
+          "origin": "same_file"
+        },
+        {
+          "owner_path": "edges.go",
+          "owner_name": "Repo",
+          "target_path": "edges.go",
+          "target_name": "Cache",
+          "kind": "field",
+          "origin": "same_file"
+        },
+        {
+          "owner_path": "edges.go",
+          "owner_name": "Repo",
+          "target_path": "edges.go",
+          "target_name": "Entity",
+          "kind": "generic",
+          "origin": "same_file"
+        },
+        {
+          "owner_path": "edges.go",
+          "owner_name": "Repo",
+          "target_path": "edges.go",
+          "target_name": "Item",
+          "kind": "field",
+          "origin": "same_file"
+        },
+        {
+          "owner_path": "edges.go",
+          "owner_name": "Repo",
+          "target_path": "edges.go",
+          "target_name": "Pricing",
+          "kind": "impl",
+          "origin": "same_file"
+        },
+        {
+          "owner_path": "edges.go",
+          "owner_name": "Repo",
+          "target_path": "edges.go",
+          "target_name": "Store",
+          "kind": "impl",
+          "origin": "same_file"
+        }
+      ]
+    },
+    "base": {
+      "calls": [
+        {
+          "caller_path": "docs.go",
+          "caller_name": "MakeEngine",
+          "callee_path": "docs.go",
+          "callee_name": "Trim",
+          "kind": "name_resolve",
+          "origin": "corpus_unique"
+        },
+        {
+          "caller_path": "docs.go",
+          "caller_name": "Mode",
+          "callee_path": "docs.go",
+          "callee_name": "Mode",
+          "kind": "name_resolve",
+          "origin": "corpus_unique"
+        },
+        {
+          "caller_path": "edges.go",
+          "caller_name": "Label",
+          "callee_path": "edges.go",
+          "callee_name": "Label",
+          "kind": "implements",
+          "origin": "iface_impl"
+        },
+        {
+          "caller_path": "sample.go",
+          "caller_name": "MakeEngine",
+          "callee_path": "sample.go",
+          "callee_name": "Trim",
+          "kind": "name_resolve",
+          "origin": "corpus_unique"
+        },
+        {
+          "caller_path": "sample.go",
+          "caller_name": "Mode",
+          "callee_path": "sample.go",
+          "callee_name": "Mode",
+          "kind": "name_resolve",
+          "origin": "corpus_unique"
+        }
+      ],
+      "types": [
+        {
+          "owner_path": "edges.go",
+          "owner_name": "Pricing",
+          "target_path": "edges.go",
+          "target_name": "Entity",
+          "kind": "impl",
+          "origin": "same_file"
+        },
+        {
+          "owner_path": "edges.go",
+          "owner_name": "Repo",
+          "target_path": "edges.go",
+          "target_name": "Cache",
+          "kind": "field",
+          "origin": "same_file"
+        },
+        {
+          "owner_path": "edges.go",
+          "owner_name": "Repo",
+          "target_path": "edges.go",
+          "target_name": "Entity",
+          "kind": "generic",
+          "origin": "same_file"
+        },
+        {
+          "owner_path": "edges.go",
+          "owner_name": "Repo",
+          "target_path": "edges.go",
+          "target_name": "Item",
+          "kind": "field",
+          "origin": "same_file"
+        },
+        {
+          "owner_path": "edges.go",
+          "owner_name": "Repo",
+          "target_path": "edges.go",
+          "target_name": "Pricing",
+          "kind": "impl",
+          "origin": "same_file"
+        },
+        {
+          "owner_path": "edges.go",
+          "owner_name": "Repo",
+          "target_path": "edges.go",
+          "target_name": "Store",
+          "kind": "impl",
+          "origin": "same_file"
+        }
+      ]
+    }
+  },
+  "py-dup-imported-fn": {
+    "after": {
+      "calls": [
+        {
+          "caller_path": "main.py",
+          "caller_name": null,
+          "callee_path": "main.py",
+          "callee_name": "local_fn",
+          "kind": "name_resolve",
+          "origin": "corpus_unique"
+        }
+      ],
+      "types": []
+    },
+    "base": {
+      "calls": [
+        {
+          "caller_path": "main.py",
+          "caller_name": null,
+          "callee_path": "helper.py",
+          "callee_name": "imported_fn",
+          "kind": "name_resolve",
+          "origin": "corpus_unique"
+        },
+        {
+          "caller_path": "main.py",
+          "caller_name": null,
+          "callee_path": "main.py",
+          "callee_name": "local_fn",
+          "kind": "name_resolve",
+          "origin": "corpus_unique"
+        }
+      ],
+      "types": []
+    }
+  },
+  "py-dup-local-fn": {
+    "after": {
+      "calls": [
+        {
+          "caller_path": "main.py",
+          "caller_name": null,
+          "callee_path": "helper.py",
+          "callee_name": "imported_fn",
+          "kind": "name_resolve",
+          "origin": "corpus_unique"
+        }
+      ],
+      "types": []
+    },
+    "base": {
+      "calls": [
+        {
+          "caller_path": "main.py",
+          "caller_name": null,
+          "callee_path": "helper.py",
+          "callee_name": "imported_fn",
+          "kind": "name_resolve",
+          "origin": "corpus_unique"
+        },
+        {
+          "caller_path": "main.py",
+          "caller_name": null,
+          "callee_path": "main.py",
+          "callee_name": "local_fn",
+          "kind": "name_resolve",
+          "origin": "corpus_unique"
+        }
+      ],
+      "types": []
+    }
+  },
+  "py-move-imported-fn": {
+    "after": {
+      "calls": [
+        {
+          "caller_path": "main.py",
+          "caller_name": null,
+          "callee_path": "main.py",
+          "callee_name": "local_fn",
+          "kind": "name_resolve",
+          "origin": "corpus_unique"
+        },
+        {
+          "caller_path": "main.py",
+          "caller_name": null,
+          "callee_path": "moved.py",
+          "callee_name": "imported_fn",
+          "kind": "name_resolve",
+          "origin": "corpus_unique"
+        }
+      ],
+      "types": []
+    },
+    "base": {
+      "calls": [
+        {
+          "caller_path": "main.py",
+          "caller_name": null,
+          "callee_path": "helper.py",
+          "callee_name": "imported_fn",
+          "kind": "name_resolve",
+          "origin": "corpus_unique"
+        },
+        {
+          "caller_path": "main.py",
+          "caller_name": null,
+          "callee_path": "main.py",
+          "callee_name": "local_fn",
+          "kind": "name_resolve",
+          "origin": "corpus_unique"
+        }
+      ],
+      "types": []
+    }
+  },
+  "py-shadow-imported-fn": {
+    "after": {
+      "calls": [
+        {
+          "caller_path": "main.py",
+          "caller_name": null,
+          "callee_path": "main.py",
+          "callee_name": "consume",
+          "kind": "name_resolve",
+          "origin": "corpus_unique"
+        },
+        {
+          "caller_path": "main.py",
+          "caller_name": null,
+          "callee_path": "main.py",
+          "callee_name": "local_fn",
+          "kind": "name_resolve",
+          "origin": "corpus_unique"
+        }
+      ],
+      "types": []
+    },
+    "base": {
+      "calls": [
+        {
+          "caller_path": "main.py",
+          "caller_name": null,
+          "callee_path": "helper.py",
+          "callee_name": "imported_fn",
+          "kind": "name_resolve",
+          "origin": "corpus_unique"
+        },
+        {
+          "caller_path": "main.py",
+          "caller_name": null,
+          "callee_path": "main.py",
+          "callee_name": "local_fn",
+          "kind": "name_resolve",
+          "origin": "corpus_unique"
+        }
+      ],
+      "types": []
+    }
+  },
+  "rs-move-widget": {
+    "after": {
+      "calls": [],
+      "types": []
+    },
+    "base": {
+      "calls": [],
+      "types": []
+    }
+  },
+  "ts-dup-step": {
+    "after": {
+      "calls": [
+        {
+          "caller_path": "driver.ts",
+          "caller_name": "run",
+          "callee_path": "generator.ts",
+          "callee_name": "main",
+          "kind": "import_resolve",
+          "origin": "module_plane"
+        },
+        {
+          "caller_path": "generator.ts",
+          "caller_name": "main",
+          "callee_path": "generator.ts",
+          "callee_name": "step",
+          "kind": "name_resolve",
+          "origin": "same_file"
+        }
+      ],
+      "types": []
+    },
+    "base": {
+      "calls": [
+        {
+          "caller_path": "driver.ts",
+          "caller_name": "run",
+          "callee_path": "generator.ts",
+          "callee_name": "main",
+          "kind": "import_resolve",
+          "origin": "module_plane"
+        },
+        {
+          "caller_path": "generator.ts",
+          "caller_name": "main",
+          "callee_path": "generator.ts",
+          "callee_name": "step",
+          "kind": "name_resolve",
+          "origin": "same_file"
+        }
+      ],
+      "types": []
+    }
+  },
+  "ts-move-tidy": {
+    "after": {
+      "calls": [
+        {
+          "caller_path": "consumer.ts",
+          "caller_name": "run",
+          "callee_path": "ns.ts",
+          "callee_name": "normalize",
+          "kind": "import_resolve",
+          "origin": "module_plane"
+        }
+      ],
+      "types": []
+    },
+    "base": {
+      "calls": [
+        {
+          "caller_path": "consumer.ts",
+          "caller_name": "run",
+          "callee_path": "consumer.ts",
+          "callee_name": "tidy",
+          "kind": "name_resolve",
+          "origin": "receiver"
+        },
+        {
+          "caller_path": "consumer.ts",
+          "caller_name": "run",
+          "callee_path": "ns.ts",
+          "callee_name": "normalize",
+          "kind": "import_resolve",
+          "origin": "module_plane"
+        }
+      ],
+      "types": []
+    }
+  }
+}

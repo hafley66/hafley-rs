@@ -1,0 +1,44 @@
+{
+  "claim_test": "fast_skips_large_json_under_small_heap_cap",
+  "steps": [
+    {"action": "directory", "path": "$work/00"},
+    {
+      "action": "write",
+      "path": "$work/00/huge.json",
+      "prefix": "[",
+      "repeat": {"text": "{\"value\":1},", "count": 399999},
+      "suffix": "{\"value\":1}]"
+    },
+    {
+      "action": "write",
+      "path": "$work/00/small.ts",
+      "text": "export function answer() { return 42; }\n"
+    },
+    {
+      "action": "run",
+      "name": "fast",
+      "arguments": ["fast", "$work/00/huge.json", "$work/00/small.ts", "--sqlite", "$work/00/facts.db"],
+      "environment": {"SPREFA_EXTRACT_THREADS": "2"},
+      "raw_stdout": true,
+      "success": true
+    },
+    {
+      "action": "sqlite_rows",
+      "name": "size_skip",
+      "path": "$work/00/facts.db",
+      "sql": "SELECT path, bytes, \"limit\" FROM size_skip"
+    },
+    {
+      "action": "sqlite_rows",
+      "name": "file_count",
+      "path": "$work/00/facts.db",
+      "sql": "SELECT count(*) FROM file"
+    },
+    {
+      "action": "sqlite_rows",
+      "name": "source_nodes",
+      "path": "$work/00/facts.db",
+      "sql": "SELECT count(*) FROM node WHERE _input_path = '$work/00/small.ts'"
+    }
+  ]
+}

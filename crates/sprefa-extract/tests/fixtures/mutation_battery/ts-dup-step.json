@@ -1,0 +1,63 @@
+{
+  "scenario": "ts-dup-step",
+  "claim_tests": [
+    "duplicate_def_ts",
+    "origin_conservation_ts"
+  ],
+  "steps": [
+    {
+      "action": "directory",
+      "path": "$work/base"
+    },
+    {
+      "action": "copy",
+      "source": "tests/fixtures/ts_findings/default_import_alias/generator.ts",
+      "path": "$work/base/generator.ts"
+    },
+    {
+      "action": "copy",
+      "source": "tests/fixtures/ts_findings/default_import_alias/driver.ts",
+      "path": "$work/base/driver.ts"
+    },
+    {
+      "action": "api",
+      "name": "base",
+      "api": "resolve_rows",
+      "root": "$work/base",
+      "files": [
+        "generator.ts",
+        "driver.ts"
+      ]
+    },
+    {
+      "action": "directory",
+      "path": "$work/after"
+    },
+    {
+      "action": "copy",
+      "source": "tests/fixtures/ts_findings/default_import_alias/generator.ts",
+      "path": "$work/after/generator.ts"
+    },
+    {
+      "action": "copy",
+      "source": "tests/fixtures/ts_findings/default_import_alias/driver.ts",
+      "path": "$work/after/driver.ts"
+    },
+    {
+      "action": "write",
+      "path": "$work/after/dup.ts",
+      "text": "export function step(): void {}\n"
+    },
+    {
+      "action": "api",
+      "name": "after",
+      "api": "resolve_rows",
+      "root": "$work/after",
+      "files": [
+        "generator.ts",
+        "driver.ts",
+        "dup.ts"
+      ]
+    }
+  ]
+}

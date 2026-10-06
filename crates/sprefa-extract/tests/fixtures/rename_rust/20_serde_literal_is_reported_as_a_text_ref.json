@@ -1,0 +1,71 @@
+{
+  "steps": [
+    {
+      "source": "$fixtures/rust_rename/serde/before",
+      "target": "$work/repo",
+      "action": "copy_tree"
+    },
+    {
+      "path": "$work/state",
+      "action": "directory"
+    },
+    {
+      "action": "run",
+      "name": "rename",
+      "arguments": [
+        "rename",
+        "src/util.rs#size",
+        "width",
+        "--root",
+        "$work/repo",
+        "--state",
+        "$work/state",
+        "--text-refs"
+      ],
+      "cwd": "$work/repo",
+      "expect_exit_code": 0,
+      "raw_stdout": true,
+      "stdout_redactions": [
+        {
+          "pattern": "(?m)^(stage )[0-9a-f]{64}( committed| dry run, tree untouched)$",
+          "replacement": "${1}$$STAGE${2}"
+        }
+      ]
+    },
+    {
+      "action": "compare",
+      "name": "claim_0",
+      "left": "rename",
+      "projection": "prefix",
+      "prefix": "text-ref ",
+      "text": "text-ref src/util.rs:9 \"size\" -> \"width\"\n"
+    },
+    {
+      "action": "tree_matches",
+      "name": "claim_1",
+      "left": "$work/repo",
+      "fixture": "$fixtures/rust_rename/serde/before"
+    }
+  ],
+  "old_assertions": [
+    {
+      "cell": "stdout",
+      "kind": "exact_filtered_lines",
+      "filter": "lines starting with \"text-ref \"",
+      "value": [
+        "text-ref src/util.rs:9 \"size\" -> \"width\""
+      ],
+      "claim": "exactly the one literal carrier; the literal is a string, never a symbol, so the rename NEVER touches it and the report is the only place it surfaces",
+      "derived": "serde_line=9 (first line containing \"size\" in committed serde/before/src/util.rs)"
+    },
+    {
+      "cell": "tree_vs_before",
+      "kind": "diff_rq_empty",
+      "value": "diff -rq $work/repo <before>",
+      "claim": "the report changed nothing"
+    }
+  ],
+  "notes": [
+    "no --commit; old row value is assert_eq! against a vec![format!(...)] - exact single row"
+  ]
+}

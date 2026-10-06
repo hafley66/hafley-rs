@@ -1,0 +1,81 @@
+{
+  "test": "fast_cleave_stops_on_private_fields_before_checker_load",
+  "source_range": "813-834",
+  "fixture": {
+    "group": "cleave_ratchet",
+    "variant": "private_fields",
+    "label": "private-fast-stop"
+  },
+  "steps": [
+    {
+      "action": "copy_tree",
+      "source": "$fixtures/cleave_ratchet/private_fields",
+      "target": "$work/repo"
+    },
+    {
+      "action": "directory",
+      "path": "$work/state"
+    },
+    {
+      "action": "git",
+      "args": [
+        "init",
+        "-q",
+        "."
+      ],
+      "cwd": "$work/repo"
+    },
+    {
+      "action": "git",
+      "args": [
+        "add",
+        "-A"
+      ],
+      "cwd": "$work/repo"
+    },
+    {
+      "action": "command",
+      "program": "$ryii",
+      "arguments": [
+        "cleave",
+        "src/source.rs#Packet",
+        "src/dest.rs",
+        "--root",
+        "$work/repo",
+        "--state",
+        "$work/state"
+      ],
+      "cwd": "$work/repo",
+      "expect_exit_code": 2,
+      "capture": "out_fast_stop",
+      "raw_stdout": true,
+      "stdout_redactions": [
+        {
+          "pattern": "(?m)^(stage )[0-9a-f]{64}( committed| dry run, tree untouched)$",
+          "replacement": "${1}$$STAGE${2}"
+        }
+      ]
+    },
+    {
+      "action": "claim",
+      "kind": "contains",
+      "cell": "out_fast_stop.stderr",
+      "text": "private_field_use_needs_checker",
+      "name": "fast_stop_reason_names_checker"
+    },
+    {
+      "action": "claim",
+      "kind": "contains",
+      "cell": "out_fast_stop.stderr",
+      "text": "Packet.value",
+      "name": "fast_stop_reason_names_field"
+    },
+    {
+      "action": "claim",
+      "kind": "contains",
+      "cell": "out_fast_stop.stderr",
+      "text": "--slow",
+      "name": "fast_stop_reason_names_slow"
+    }
+  ]
+}

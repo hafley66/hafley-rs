@@ -1,0 +1,485 @@
+---
+source: tests/support/2_fixture_runner.rs
+---
+{
+  "01_rust_rename_matches_the_hand_written_after": {
+    "claim_0": true,
+    "claim_1": true,
+    "claim_2": true,
+    "claim_3": {
+      "files": {
+        "Cargo.toml": "[package]\nname = \"rust-rename-local\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        "src/": {
+          "directory": true
+        },
+        "src/lib.rs": "mod util;\n\nuse crate::util::Tool;\n\npub fn build() -> Tool {\n    Tool::new(4)\n}\n\npub fn width(helper: &Tool) -> u32 {\n    helper.size\n}\n\npub fn label() -> String {\n    format!(\"Helper\")\n}\n\nmod other {\n    pub struct Helper;\n}\n\n#[cfg(test)]\nmod tests {\n    use crate::util::Tool as H;\n\n    #[test]\n    fn builds() {\n        assert_eq!(H::new(2).size, 2);\n    }\n}\n",
+        "src/util.rs": "pub struct Tool {\n    pub size: u32,\n}\n\nimpl Tool {\n    pub fn new(size: u32) -> Tool {\n        Tool { size }\n    }\n}\n"
+      }
+    },
+    "rename": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/util.rs Helper -> Tool\n  src/lib.rs  5 uses\n  src/util.rs  4 uses\nreplace src/lib.rs -> src/lib.rs  update src/lib.rs (361 bytes)\n    --- original\n    +++ modified\n    @@ -1,12 +1,12 @@\n     mod util;\n    \n    -use crate::util::Helper;\n    +use crate::util::Tool;\n    \n    -pub fn build() -> Helper {\n    -    Helper::new(4)\n    +pub fn build() -> Tool {\n    +    Tool::new(4)\n     }\n    \n    -pub fn width(helper: &Helper) -> u32 {\n    +pub fn width(helper: &Tool) -> u32 {\n         helper.size\n     }\n    \n    @@ -20,7 +20,7 @@\n    \n     #[cfg(test)]\n     mod tests {\n    -    use crate::util::Helper as H;\n    +    use crate::util::Tool as H;\n    \n         #[test]\n         fn builds() {\nreplace src/util.rs -> src/util.rs  update src/util.rs (118 bytes)\n    --- original\n    +++ modified\n    @@ -1,9 +1,9 @@\n    -pub struct Helper {\n    +pub struct Tool {\n         pub size: u32,\n     }\n    \n    -impl Helper {\n    -    pub fn new(size: u32) -> Helper {\n    -        Helper { size }\n    +impl Tool {\n    +    pub fn new(size: u32) -> Tool {\n    +        Tool { size }\n         }\n     }\nstage $STAGE committed\n",
+      "stderr": ""
+    }
+  },
+  "02_batch_renames_library_reexports_with_a_main_target": {
+    "claim_1": {
+      "files": {
+        "Cargo.toml": "[package]\nname = \"rust-rename-reexport\"\nversion = \"0.0.0\"\nedition = \"2021\"\n\n[workspace]\n",
+        "src/": {
+          "directory": true
+        },
+        "src/_0_types.rs": "pub struct RepoIdentity;\n",
+        "src/_1_pattern.rs": "pub struct GlobPattern;\n",
+        "src/consumer.rs": "use crate::{GlobPattern, RepoIdentity};\n\npub fn consume(_: GlobPattern, _: RepoIdentity) {}\n",
+        "src/lib.rs": "mod _0_types;\nmod _1_pattern;\nmod consumer;\n\npub use _0_types::RepoIdentity;\npub use _1_pattern::GlobPattern;\n",
+        "src/main.rs": "fn main() {}\n"
+      }
+    },
+    "rename": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/_1_pattern.rs Pattern -> GlobPattern\n  src/_1_pattern.rs  1 uses\n  src/consumer.rs  2 uses\n  src/lib.rs  1 uses\nplan src/_0_types.rs RepositoryId -> RepoIdentity\n  src/_0_types.rs  1 uses\n  src/consumer.rs  2 uses\n  src/lib.rs  1 uses\nreplace src/_0_types.rs -> src/_0_types.rs  update src/_0_types.rs (25 bytes)\n    --- original\n    +++ modified\n    @@ -1 +1 @@\n    -pub struct RepositoryId;\n    +pub struct RepoIdentity;\nreplace src/_1_pattern.rs -> src/_1_pattern.rs  update src/_1_pattern.rs (24 bytes)\n    --- original\n    +++ modified\n    @@ -1 +1 @@\n    -pub struct Pattern;\n    +pub struct GlobPattern;\nreplace src/consumer.rs -> src/consumer.rs  update src/consumer.rs (92 bytes)\n    --- original\n    +++ modified\n    @@ -1,3 +1,3 @@\n    -use crate::{Pattern, RepositoryId};\n    +use crate::{GlobPattern, RepoIdentity};\n    \n    -pub fn consume(_: Pattern, _: RepositoryId) {}\n    +pub fn consume(_: GlobPattern, _: RepoIdentity) {}\nreplace src/lib.rs -> src/lib.rs  update src/lib.rs (110 bytes)\n    --- original\n    +++ modified\n    @@ -2,5 +2,5 @@\n     mod _1_pattern;\n     mod consumer;\n    \n    -pub use _0_types::RepositoryId;\n    -pub use _1_pattern::Pattern;\n    +pub use _0_types::RepoIdentity;\n    +pub use _1_pattern::GlobPattern;\nstage $STAGE committed\n",
+      "stderr": ""
+    }
+  },
+  "03_glob_importer_is_a_dynamic_stop": {
+    "claim_1": true,
+    "claim_2": true,
+    "claim_3": {
+      "files": {
+        "Cargo.toml": "[package]\nname = \"rust-rename-glob\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        "src/": {
+          "directory": true
+        },
+        "src/lib.rs": "mod util;\n\nuse crate::util::*;\n\npub fn build() -> Helper {\n    Helper::new(4)\n}\n",
+        "src/util.rs": "pub struct Helper {\n    pub size: u32,\n}\n\nimpl Helper {\n    pub fn new(size: u32) -> Helper {\n        Helper { size }\n    }\n}\n"
+      }
+    },
+    "rename": {
+      "exit_code": 6,
+      "stdout": "",
+      "stderr": "src/lib.rs:3: glob import reaches the symbol at runtime\n"
+    }
+  },
+  "04_shadowed_items_need_no_at": {
+    "claim_0": {
+      "files": {
+        "Cargo.toml": "[package]\nname = \"rust-rename-shadow\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        "src/": {
+          "directory": true
+        },
+        "src/lib.rs": "mod util;\n\npub use util::Tool;\n",
+        "src/util.rs": "pub struct Tool;\n\npub fn scratch() -> u32 {\n    struct Helper(u32);\n    let inner = Helper(3);\n    inner.0\n}\n\nmod nested {\n    pub struct Helper;\n}\n\npub fn both() -> (Tool, nested::Helper) {\n    (Tool, nested::Helper)\n}\n"
+      }
+    },
+    "rename": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/util.rs Helper -> Tool\n  src/lib.rs  1 uses\n  src/util.rs  3 uses\nreplace src/lib.rs -> src/lib.rs  update src/lib.rs (31 bytes)\n    --- original\n    +++ modified\n    @@ -1,3 +1,3 @@\n     mod util;\n    \n    -pub use util::Helper;\n    +pub use util::Tool;\nreplace src/util.rs -> src/util.rs  update src/util.rs (220 bytes)\n    --- original\n    +++ modified\n    @@ -1,4 +1,4 @@\n    -pub struct Helper;\n    +pub struct Tool;\n    \n     pub fn scratch() -> u32 {\n         struct Helper(u32);\n    @@ -10,6 +10,6 @@\n         pub struct Helper;\n     }\n    \n    -pub fn both() -> (Helper, nested::Helper) {\n    -    (Helper, nested::Helper)\n    +pub fn both() -> (Tool, nested::Helper) {\n    +    (Tool, nested::Helper)\n     }\nstage $STAGE committed\n",
+      "stderr": ""
+    }
+  },
+  "05_renamed_fixture_crate_passes_cargo_check": {
+    "cargo": {
+      "exit_code": 0
+    },
+    "rename": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/util.rs Helper -> Tool\n  src/lib.rs  5 uses\n  src/util.rs  4 uses\nreplace src/lib.rs -> src/lib.rs  update src/lib.rs (361 bytes)\n    --- original\n    +++ modified\n    @@ -1,12 +1,12 @@\n     mod util;\n    \n    -use crate::util::Helper;\n    +use crate::util::Tool;\n    \n    -pub fn build() -> Helper {\n    -    Helper::new(4)\n    +pub fn build() -> Tool {\n    +    Tool::new(4)\n     }\n    \n    -pub fn width(helper: &Helper) -> u32 {\n    +pub fn width(helper: &Tool) -> u32 {\n         helper.size\n     }\n    \n    @@ -20,7 +20,7 @@\n    \n     #[cfg(test)]\n     mod tests {\n    -    use crate::util::Helper as H;\n    +    use crate::util::Tool as H;\n    \n         #[test]\n         fn builds() {\nreplace src/util.rs -> src/util.rs  update src/util.rs (118 bytes)\n    --- original\n    +++ modified\n    @@ -1,9 +1,9 @@\n    -pub struct Helper {\n    +pub struct Tool {\n         pub size: u32,\n     }\n    \n    -impl Helper {\n    -    pub fn new(size: u32) -> Helper {\n    -        Helper { size }\n    +impl Tool {\n    +    pub fn new(size: u32) -> Tool {\n    +        Tool { size }\n         }\n     }\nstage $STAGE committed\n",
+      "stderr": ""
+    }
+  },
+  "06_library_reexports_and_consumers_rename_with_the_library_root": {
+    "cargo": {
+      "exit_code": 0
+    },
+    "claim_0": true,
+    "claim_1": true,
+    "claim_2": true,
+    "claim_3": true,
+    "claim_4": true,
+    "claim_5": true,
+    "claim_6": true,
+    "claim_7": true,
+    "claim_8": true,
+    "file_src/lib.rs": "mod types;\nmod users;\n\npub use types::ItemPattern;\npub use types::*;\n",
+    "file_src/main.rs": "fn main() {\n    let _ = rust_rename_reexport::ItemPattern;\n    let _ = rust_rename_reexport::RepoIdentity;\n}\n",
+    "file_src/users.rs": "use crate::{ItemPattern, RepoIdentity};\n\npub fn imported(value: ItemPattern) -> crate::ItemPattern {\n    value\n}\n\npub fn glob_imported(value: RepoIdentity) -> crate::RepoIdentity {\n    value\n}\n",
+    "glob_plan": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/types.rs RepositoryId -> RepoIdentity\n  src/main.rs  1 uses\n  src/types.rs  1 uses\n  src/users.rs  3 uses\nreplace src/main.rs -> src/main.rs  update src/main.rs (109 bytes)\n    --- original\n    +++ modified\n    @@ -1,4 +1,4 @@\n     fn main() {\n         let _ = rust_rename_reexport::ItemPattern;\n    -    let _ = rust_rename_reexport::RepositoryId;\n    +    let _ = rust_rename_reexport::RepoIdentity;\n     }\nreplace src/types.rs -> src/types.rs  update src/types.rs (49 bytes)\n    --- original\n    +++ modified\n    @@ -1,2 +1,2 @@\n     pub struct ItemPattern;\n    -pub struct RepositoryId;\n    +pub struct RepoIdentity;\nreplace src/users.rs -> src/users.rs  update src/users.rs (193 bytes)\n    --- original\n    +++ modified\n    @@ -1,9 +1,9 @@\n    -use crate::{ItemPattern, RepositoryId};\n    +use crate::{ItemPattern, RepoIdentity};\n    \n     pub fn imported(value: ItemPattern) -> crate::ItemPattern {\n         value\n     }\n    \n    -pub fn glob_imported(value: RepositoryId) -> crate::RepositoryId {\n    +pub fn glob_imported(value: RepoIdentity) -> crate::RepoIdentity {\n         value\n     }\nstage $STAGE committed\n",
+      "stderr": ""
+    },
+    "plan": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/types.rs Pattern -> ItemPattern\n  src/lib.rs  1 uses\n  src/main.rs  1 uses\n  src/types.rs  1 uses\n  src/users.rs  3 uses\nreplace src/lib.rs -> src/lib.rs  update src/lib.rs (69 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,5 @@\n     mod types;\n     mod users;\n    \n    -pub use types::Pattern;\n    +pub use types::ItemPattern;\n     pub use types::*;\nreplace src/main.rs -> src/main.rs  update src/main.rs (109 bytes)\n    --- original\n    +++ modified\n    @@ -1,4 +1,4 @@\n     fn main() {\n    -    let _ = rust_rename_reexport::Pattern;\n    +    let _ = rust_rename_reexport::ItemPattern;\n         let _ = rust_rename_reexport::RepositoryId;\n     }\nreplace src/types.rs -> src/types.rs  update src/types.rs (49 bytes)\n    --- original\n    +++ modified\n    @@ -1,2 +1,2 @@\n    -pub struct Pattern;\n    +pub struct ItemPattern;\n     pub struct RepositoryId;\nreplace src/users.rs -> src/users.rs  update src/users.rs (193 bytes)\n    --- original\n    +++ modified\n    @@ -1,6 +1,6 @@\n    -use crate::{Pattern, RepositoryId};\n    +use crate::{ItemPattern, RepositoryId};\n    \n    -pub fn imported(value: Pattern) -> crate::Pattern {\n    +pub fn imported(value: ItemPattern) -> crate::ItemPattern {\n         value\n     }\n    \nstage $STAGE committed\n",
+      "stderr": ""
+    }
+  },
+  "07_macro_body_paths_rename_and_locals_stay": {
+    "claim_0": {
+      "files": {
+        "Cargo.toml": "[package]\nname = \"rust-rename-macro\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        "src/": {
+          "directory": true
+        },
+        "src/_1b_ground.rs": "pub fn decide() -> u8 {\n    128\n}\n",
+        "src/advance.rs": "use crate::_1b_ground::{self};\n\npub fn stepped() -> u8 {\n    _1b_ground::decide()\n}\n",
+        "src/lib.rs": "#[path = \"_1b_ground.rs\"]\npub mod _1b_ground;\n\npub mod advance;\npub mod status;\n\nmacro_rules! check {\n    ($value:expr) => { $value };\n}\n\npub struct Inventory {\n    pub ground: u8,\n}\n\npub fn run(inventory: &Inventory) -> u8 {\n    let ground = \"ground\";\n    let stepped = check!(_1b_ground::decide());\n    let field = check!(inventory.ground);\n    let named = check!(ground);\n    let _ = ground;\n    let _ = named;\n    stepped + field\n}\n\npub fn tally(steps: &[u8]) -> u8 {\n    let mut total = 0;\n    for ground in steps {\n        total += check!(*ground);\n    }\n    total\n}\n",
+        "src/status.rs": "use crate::{Inventory, _1b_ground};\n\npub fn total(inventory: &Inventory) -> u8 {\n    inventory.ground + _1b_ground::decide()\n}\n\n#[cfg(test)]\nmod tests {\n    use super::*;\n\n    #[test]\n    fn decides() {\n        assert_eq!(_1b_ground::decide(), 128);\n    }\n}\n",
+        "src/twins.rs": "pub struct Wyll;\n\npub struct Wyll;\n"
+      }
+    },
+    "rename": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/lib.rs ground -> _1b_ground\n  src/advance.rs  2 uses\n  src/lib.rs  2 uses\n  src/status.rs  3 uses\nreplace src/advance.rs -> src/advance.rs  update src/advance.rs (84 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,5 @@\n    -use crate::ground::{self};\n    +use crate::_1b_ground::{self};\n    \n     pub fn stepped() -> u8 {\n    -    ground::decide()\n    +    _1b_ground::decide()\n     }\nreplace src/lib.rs -> src/lib.rs  update src/lib.rs (573 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,5 @@\n     #[path = \"_1b_ground.rs\"]\n    -pub mod ground;\n    +pub mod _1b_ground;\n    \n     pub mod advance;\n     pub mod status;\n    @@ -14,7 +14,7 @@\n    \n     pub fn run(inventory: &Inventory) -> u8 {\n         let ground = \"ground\";\n    -    let stepped = check!(ground::decide());\n    +    let stepped = check!(_1b_ground::decide());\n         let field = check!(inventory.ground);\n         let named = check!(ground);\n         let _ = ground;\nreplace src/status.rs -> src/status.rs  update src/status.rs (258 bytes)\n    --- original\n    +++ modified\n    @@ -1,7 +1,7 @@\n    -use crate::{Inventory, ground};\n    +use crate::{Inventory, _1b_ground};\n    \n     pub fn total(inventory: &Inventory) -> u8 {\n    -    inventory.ground + ground::decide()\n    +    inventory.ground + _1b_ground::decide()\n     }\n    \n     #[cfg(test)]\n    @@ -10,6 +10,6 @@\n    \n         #[test]\n         fn decides() {\n    -        assert_eq!(ground::decide(), 128);\n    +        assert_eq!(_1b_ground::decide(), 128);\n         }\n     }\nstage $STAGE committed\n",
+      "stderr": ""
+    }
+  },
+  "08_renamed_macro_fixture_crate_passes_cargo_check": {
+    "cargo": {
+      "exit_code": 0
+    },
+    "rename": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/lib.rs ground -> _1b_ground\n  src/advance.rs  2 uses\n  src/lib.rs  2 uses\n  src/status.rs  3 uses\nreplace src/advance.rs -> src/advance.rs  update src/advance.rs (84 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,5 @@\n    -use crate::ground::{self};\n    +use crate::_1b_ground::{self};\n    \n     pub fn stepped() -> u8 {\n    -    ground::decide()\n    +    _1b_ground::decide()\n     }\nreplace src/lib.rs -> src/lib.rs  update src/lib.rs (573 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,5 @@\n     #[path = \"_1b_ground.rs\"]\n    -pub mod ground;\n    +pub mod _1b_ground;\n    \n     pub mod advance;\n     pub mod status;\n    @@ -14,7 +14,7 @@\n    \n     pub fn run(inventory: &Inventory) -> u8 {\n         let ground = \"ground\";\n    -    let stepped = check!(ground::decide());\n    +    let stepped = check!(_1b_ground::decide());\n         let field = check!(inventory.ground);\n         let named = check!(ground);\n         let _ = ground;\nreplace src/status.rs -> src/status.rs  update src/status.rs (258 bytes)\n    --- original\n    +++ modified\n    @@ -1,7 +1,7 @@\n    -use crate::{Inventory, ground};\n    +use crate::{Inventory, _1b_ground};\n    \n     pub fn total(inventory: &Inventory) -> u8 {\n    -    inventory.ground + ground::decide()\n    +    inventory.ground + _1b_ground::decide()\n     }\n    \n     #[cfg(test)]\n    @@ -10,6 +10,6 @@\n    \n         #[test]\n         fn decides() {\n    -        assert_eq!(ground::decide(), 128);\n    +        assert_eq!(_1b_ground::decide(), 128);\n         }\n     }\nstage $STAGE committed\n",
+      "stderr": ""
+    }
+  },
+  "09_list_commit_is_atomic_across_rows": {
+    "claim_0": true,
+    "claim_2": {
+      "files": {
+        "Cargo.toml": "[package]\nname = \"rust-rename-macro\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        "src/": {
+          "directory": true
+        },
+        "src/_1b_ground.rs": "pub fn decide() -> u8 {\n    128\n}\n",
+        "src/advance.rs": "use crate::ground::{self};\n\npub fn stepped() -> u8 {\n    ground::decide()\n}\n",
+        "src/lib.rs": "#[path = \"_1b_ground.rs\"]\npub mod ground;\n\npub mod advance;\npub mod status;\n\nmacro_rules! check {\n    ($value:expr) => { $value };\n}\n\npub struct Inventory {\n    pub ground: u8,\n}\n\npub fn run(inventory: &Inventory) -> u8 {\n    let ground = \"ground\";\n    let stepped = check!(ground::decide());\n    let field = check!(inventory.ground);\n    let named = check!(ground);\n    let _ = ground;\n    let _ = named;\n    stepped + field\n}\n\npub fn tally(steps: &[u8]) -> u8 {\n    let mut total = 0;\n    for ground in steps {\n        total += check!(*ground);\n    }\n    total\n}\n",
+        "src/status.rs": "use crate::{Inventory, ground};\n\npub fn total(inventory: &Inventory) -> u8 {\n    inventory.ground + ground::decide()\n}\n\n#[cfg(test)]\nmod tests {\n    use super::*;\n\n    #[test]\n    fn decides() {\n        assert_eq!(ground::decide(), 128);\n    }\n}\n",
+        "src/twins.rs": "pub struct Wyll;\n\npub struct Wyll;\n"
+      }
+    },
+    "rename": {
+      "exit_code": 8,
+      "stdout": "",
+      "stderr": "src/twins.rs: rust-analyzer Names refused the rename: outside_workspace\n"
+    }
+  },
+  "10_list_rows_read_earlier_edits_chained_list": {
+    "claim_src/lib.rs": "mod util;\n\nuse crate::util::Instrument;\n\npub fn build() -> Instrument {\n    Instrument::new(4)\n}\n\npub fn width(helper: &Instrument) -> u32 {\n    helper.size\n}\n\npub fn label() -> String {\n    format!(\"Helper\")\n}\n\nmod other {\n    pub struct Helper;\n}\n\n#[cfg(test)]\nmod tests {\n    use crate::util::Instrument as H;\n\n    #[test]\n    fn builds() {\n        assert_eq!(H::new(2).size, 2);\n    }\n}\n",
+    "claim_src/util.rs": "pub struct Instrument {\n    pub size: u32,\n}\n\nimpl Instrument {\n    pub fn new(size: u32) -> Instrument {\n        Instrument { size }\n    }\n}\n",
+    "rename": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/util.rs Helper -> Tool\n  src/lib.rs  5 uses\n  src/util.rs  4 uses\nplan src/util.rs Tool -> Instrument\n  src/lib.rs  5 uses\n  src/util.rs  4 uses\nreplace src/lib.rs -> src/lib.rs  update src/lib.rs (391 bytes)\n    --- original\n    +++ modified\n    @@ -1,12 +1,12 @@\n     mod util;\n    \n    -use crate::util::Helper;\n    +use crate::util::Instrument;\n    \n    -pub fn build() -> Helper {\n    -    Helper::new(4)\n    +pub fn build() -> Instrument {\n    +    Instrument::new(4)\n     }\n    \n    -pub fn width(helper: &Helper) -> u32 {\n    +pub fn width(helper: &Instrument) -> u32 {\n         helper.size\n     }\n    \n    @@ -20,7 +20,7 @@\n    \n     #[cfg(test)]\n     mod tests {\n    -    use crate::util::Helper as H;\n    +    use crate::util::Instrument as H;\n    \n         #[test]\n         fn builds() {\nreplace src/util.rs -> src/util.rs  update src/util.rs (142 bytes)\n    --- original\n    +++ modified\n    @@ -1,9 +1,9 @@\n    -pub struct Helper {\n    +pub struct Instrument {\n         pub size: u32,\n     }\n    \n    -impl Helper {\n    -    pub fn new(size: u32) -> Helper {\n    -        Helper { size }\n    +impl Instrument {\n    +    pub fn new(size: u32) -> Instrument {\n    +        Instrument { size }\n         }\n     }\nstage $STAGE committed\n",
+      "stderr": ""
+    },
+    "skip": true,
+    "src/lib.rs": "mod util;\n\nuse crate::util::Instrument;\n\npub fn build() -> Instrument {\n    Instrument::new(4)\n}\n\npub fn width(helper: &Instrument) -> u32 {\n    helper.size\n}\n\npub fn label() -> String {\n    format!(\"Helper\")\n}\n\nmod other {\n    pub struct Helper;\n}\n\n#[cfg(test)]\nmod tests {\n    use crate::util::Instrument as H;\n\n    #[test]\n    fn builds() {\n        assert_eq!(H::new(2).size, 2);\n    }\n}\n",
+    "src/util.rs": "pub struct Instrument {\n    pub size: u32,\n}\n\nimpl Instrument {\n    pub fn new(size: u32) -> Instrument {\n        Instrument { size }\n    }\n}\n"
+  },
+  "10_list_rows_read_earlier_edits_chained_list_indexed": {
+    "claim_src/lib.rs": "mod util;\n\nuse crate::util::Instrument;\n\npub fn build() -> Instrument {\n    Instrument::new(4)\n}\n\npub fn width(helper: &Instrument) -> u32 {\n    helper.size\n}\n\npub fn label() -> String {\n    format!(\"Helper\")\n}\n\nmod other {\n    pub struct Helper;\n}\n\n#[cfg(test)]\nmod tests {\n    use crate::util::Instrument as H;\n\n    #[test]\n    fn builds() {\n        assert_eq!(H::new(2).size, 2);\n    }\n}\n",
+    "claim_src/util.rs": "pub struct Instrument {\n    pub size: u32,\n}\n\nimpl Instrument {\n    pub fn new(size: u32) -> Instrument {\n        Instrument { size }\n    }\n}\n",
+    "rename": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/util.rs Helper -> Tool\n  src/lib.rs  5 uses\n  src/util.rs  4 uses\nplan src/util.rs Tool -> Instrument\n  src/lib.rs  5 uses\n  src/util.rs  4 uses\nscip-verify skipped for sequential rename batch\nreplace src/lib.rs -> src/lib.rs  update src/lib.rs (391 bytes)\n    --- original\n    +++ modified\n    @@ -1,12 +1,12 @@\n     mod util;\n    \n    -use crate::util::Helper;\n    +use crate::util::Instrument;\n    \n    -pub fn build() -> Helper {\n    -    Helper::new(4)\n    +pub fn build() -> Instrument {\n    +    Instrument::new(4)\n     }\n    \n    -pub fn width(helper: &Helper) -> u32 {\n    +pub fn width(helper: &Instrument) -> u32 {\n         helper.size\n     }\n    \n    @@ -20,7 +20,7 @@\n    \n     #[cfg(test)]\n     mod tests {\n    -    use crate::util::Helper as H;\n    +    use crate::util::Instrument as H;\n    \n         #[test]\n         fn builds() {\nreplace src/util.rs -> src/util.rs  update src/util.rs (142 bytes)\n    --- original\n    +++ modified\n    @@ -1,9 +1,9 @@\n    -pub struct Helper {\n    +pub struct Instrument {\n         pub size: u32,\n     }\n    \n    -impl Helper {\n    -    pub fn new(size: u32) -> Helper {\n    -        Helper { size }\n    +impl Instrument {\n    +    pub fn new(size: u32) -> Instrument {\n    +        Instrument { size }\n         }\n     }\nstage $STAGE committed\n",
+      "stderr": ""
+    },
+    "skip": true,
+    "src/lib.rs": "mod util;\n\nuse crate::util::Instrument;\n\npub fn build() -> Instrument {\n    Instrument::new(4)\n}\n\npub fn width(helper: &Instrument) -> u32 {\n    helper.size\n}\n\npub fn label() -> String {\n    format!(\"Helper\")\n}\n\nmod other {\n    pub struct Helper;\n}\n\n#[cfg(test)]\nmod tests {\n    use crate::util::Instrument as H;\n\n    #[test]\n    fn builds() {\n        assert_eq!(H::new(2).size, 2);\n    }\n}\n",
+    "src/util.rs": "pub struct Instrument {\n    pub size: u32,\n}\n\nimpl Instrument {\n    pub fn new(size: u32) -> Instrument {\n        Instrument { size }\n    }\n}\n"
+  },
+  "12_path_attr_places_the_file_and_renames_its_seats": {
+    "claim_0": {
+      "files": {
+        "Cargo.toml": "[package]\nname = \"rust-rename-path\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        "src/": {
+          "directory": true
+        },
+        "src/elsewhere/": {
+          "directory": true
+        },
+        "src/elsewhere/impl.rs": "pub struct Tool;\n\nimpl Tool {\n    pub fn new() -> Tool {\n        Tool\n    }\n}\n",
+        "src/lib.rs": "#[path = \"elsewhere/impl.rs\"]\nmod util;\nmod other;\n\nuse crate::util::Tool;\n\npub fn build() -> Tool {\n    Tool::new()\n}\n",
+        "src/other.rs": "pub struct Helper;\n"
+      }
+    },
+    "rename": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/elsewhere/impl.rs Helper -> Tool\n  src/elsewhere/impl.rs  4 uses\n  src/lib.rs  3 uses\nreplace src/elsewhere/impl.rs -> src/elsewhere/impl.rs  update src/elsewhere/impl.rs (78 bytes)\n    --- original\n    +++ modified\n    @@ -1,7 +1,7 @@\n    -pub struct Helper;\n    +pub struct Tool;\n    \n    -impl Helper {\n    -    pub fn new() -> Helper {\n    -        Helper\n    +impl Tool {\n    +    pub fn new() -> Tool {\n    +        Tool\n         }\n     }\nreplace src/lib.rs -> src/lib.rs  update src/lib.rs (119 bytes)\n    --- original\n    +++ modified\n    @@ -2,8 +2,8 @@\n     mod util;\n     mod other;\n    \n    -use crate::util::Helper;\n    +use crate::util::Tool;\n    \n    -pub fn build() -> Helper {\n    -    Helper::new()\n    +pub fn build() -> Tool {\n    +    Tool::new()\n     }\nstage $STAGE committed\n",
+      "stderr": ""
+    }
+  },
+  "13_path_attr_module_reexport_renames_qualified_callers": {
+    "claim_0": true,
+    "claim_1": true,
+    "claim_2": true,
+    "claim_3": {
+      "files": {
+        "Cargo.toml": "[workspace]\n\n[package]\nname = \"rust-rename-path-attr-reexport\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        "src/": {
+          "directory": true
+        },
+        "src/lib.rs": "pub mod read;\npub mod user;\n",
+        "src/read/": {
+          "directory": true
+        },
+        "src/read/0_root.rs": "pub fn io_x() -> u32 { 1 }\n",
+        "src/read/mod.rs": "#[path = \"0_root.rs\"]\nmod root;\npub use root::{io_x};\n",
+        "src/user.rs": "pub fn a() -> u32 { crate::read::io_x() }\npub fn b() -> u32 { crate::read::io_x() + 1 }\n"
+      }
+    },
+    "rename": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/read/0_root.rs io_path -> io_x\n  src/read/0_root.rs  1 uses\n  src/read/mod.rs  1 uses\n  src/user.rs  2 uses\nreplace src/read/0_root.rs -> src/read/0_root.rs  update src/read/0_root.rs (27 bytes)\n    --- original\n    +++ modified\n    @@ -1 +1 @@\n    -pub fn io_path() -> u32 { 1 }\n    +pub fn io_x() -> u32 { 1 }\nreplace src/read/mod.rs -> src/read/mod.rs  update src/read/mod.rs (54 bytes)\n    --- original\n    +++ modified\n    @@ -1,3 +1,3 @@\n     #[path = \"0_root.rs\"]\n     mod root;\n    -pub use root::{io_path};\n    +pub use root::{io_x};\nreplace src/user.rs -> src/user.rs  update src/user.rs (88 bytes)\n    --- original\n    +++ modified\n    @@ -1,2 +1,2 @@\n    -pub fn a() -> u32 { crate::read::io_path() }\n    -pub fn b() -> u32 { crate::read::io_path() + 1 }\n    +pub fn a() -> u32 { crate::read::io_x() }\n    +pub fn b() -> u32 { crate::read::io_x() + 1 }\nstage $STAGE committed\n",
+      "stderr": ""
+    }
+  },
+  "14_field_seats_rename_through_the_receiver_plane": {
+    "claim_0": {
+      "files": {
+        "Cargo.toml": "[package]\nname = \"rust-rename-field\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        "src/": {
+          "directory": true
+        },
+        "src/lib.rs": "mod util;\n\nuse crate::util::Helper;\n\npub struct Other {\n    pub size: u32,\n}\n\npub fn width(h: &Helper) -> u32 {\n    h.width\n}\n\npub fn other(o: &Other) -> u32 {\n    o.size\n}\n\npub fn build() -> u32 {\n    let h = Helper { width: 4 };\n    let read = h.width;\n    let Helper { width: size, .. } = h;\n    read + size\n}\n",
+        "src/util.rs": "pub struct Helper {\n    pub width: u32,\n}\n\nimpl Helper {\n    pub fn grow(&mut self) {\n        self.width += 1;\n    }\n}\n"
+      }
+    },
+    "rename": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/util.rs size -> width\n  src/lib.rs  4 uses\n  src/util.rs  2 uses\nshorthand\nreplace src/lib.rs -> src/lib.rs  update src/lib.rs (313 bytes)\n    --- original\n    +++ modified\n    @@ -7,7 +7,7 @@\n     }\n    \n     pub fn width(h: &Helper) -> u32 {\n    -    h.size\n    +    h.width\n     }\n    \n     pub fn other(o: &Other) -> u32 {\n    @@ -15,8 +15,8 @@\n     }\n    \n     pub fn build() -> u32 {\n    -    let h = Helper { size: 4 };\n    -    let read = h.size;\n    -    let Helper { size, .. } = h;\n    +    let h = Helper { width: 4 };\n    +    let read = h.width;\n    +    let Helper { width: size, .. } = h;\n         read + size\n     }\nreplace src/util.rs -> src/util.rs  update src/util.rs (119 bytes)\n    --- original\n    +++ modified\n    @@ -1,9 +1,9 @@\n     pub struct Helper {\n    -    pub size: u32,\n    +    pub width: u32,\n     }\n    \n     impl Helper {\n         pub fn grow(&mut self) {\n    -        self.size += 1;\n    +        self.width += 1;\n         }\n     }\nstage $STAGE committed\n",
+      "stderr": ""
+    }
+  },
+  "15_untyped_field_access_is_a_dynamic_stop": {
+    "claim_1": true,
+    "claim_2": 1,
+    "claim_3": {
+      "files": {
+        "Cargo.toml": "[package]\nname = \"rust-rename-field-stop\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        "src/": {
+          "directory": true
+        },
+        "src/lib.rs": "mod util;\nmod maker;\n\nuse crate::maker::make;\n\npub fn use_it() -> u32 {\n    let v = make();\n    v.size\n}\n",
+        "src/maker.rs": "use crate::util::Helper;\n\npub fn make() -> Helper {\n    Helper { size: 0 }\n}\n",
+        "src/util.rs": "pub struct Helper {\n    pub size: u32,\n}\n"
+      }
+    },
+    "rename": {
+      "exit_code": 6,
+      "stdout": "",
+      "stderr": "src/lib.rs:8: untyped field reaches the symbol at runtime\n"
+    }
+  },
+  "16_untyped_field_access_abstains_beside_typed_access": {
+    "claim_1": true,
+    "claim_2": true,
+    "claim_3": true,
+    "claim_4": "",
+    "claim_5": {
+      "files": {
+        "Cargo.toml": "[package]\nname = \"rust-rename-field-abstain\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        "src/": {
+          "directory": true
+        },
+        "src/lib.rs": "mod util;\nmod maker;\n\nuse crate::maker::make;\nuse crate::util::Helper;\n\npub fn use_it() -> u32 {\n    let v = make();\n    v.size\n}\n\npub fn known(h: &Helper) -> u32 {\n    h.size\n}\n",
+        "src/maker.rs": "use crate::util::Helper;\n\npub fn make() -> Helper {\n    Helper { size: 0 }\n}\n",
+        "src/util.rs": "pub struct Helper {\n    pub size: u32,\n}\n"
+      }
+    },
+    "rename": {
+      "exit_code": 7,
+      "stdout": "root $work/repo\nplan src/util.rs size -> width\n  src/lib.rs  1 uses\n  src/maker.rs  1 uses\n  src/util.rs  1 uses\nreplace src/lib.rs -> src/lib.rs  update src/lib.rs (179 bytes)\n    --- original\n    +++ modified\n    @@ -10,5 +10,5 @@\n     }\n    \n     pub fn known(h: &Helper) -> u32 {\n    -    h.size\n    +    h.width\n     }\nreplace src/maker.rs -> src/maker.rs  update src/maker.rs (78 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,5 @@\n     use crate::util::Helper;\n    \n     pub fn make() -> Helper {\n    -    Helper { size: 0 }\n    +    Helper { width: 0 }\n     }\nreplace src/util.rs -> src/util.rs  update src/util.rs (42 bytes)\n    --- original\n    +++ modified\n    @@ -1,3 +1,3 @@\n     pub struct Helper {\n    -    pub size: u32,\n    +    pub width: u32,\n     }\nstage $STAGE dry run, tree untouched\n{\"abstains\":[{\"file\":\"src/lib.rs\",\"line\":9,\"span\":{\"start\":123,\"len\":4},\"symbol\":\"size\",\"reason\":\"needs_types\",\"receiver\":\"v\"}]}\n",
+      "stderr": ""
+    }
+  },
+  "17_variant_seats_rename_through_owner_and_use": {
+    "claim_0": {
+      "files": {
+        "Cargo.toml": "[package]\nname = \"rust-rename-variant\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        "src/": {
+          "directory": true
+        },
+        "src/lib.rs": "mod uses;\nmod other;\n\npub enum Kind {\n    Prior,\n    New,\n}\n\npub fn make() -> Kind {\n    Kind::Prior\n}\n\npub fn label(k: &Kind) -> &'static str {\n    match k {\n        Kind::Prior => \"old\",\n        Kind::New => \"new\",\n    }\n}\n",
+        "src/other.rs": "pub enum Kind {\n    Old,\n}\n",
+        "src/uses.rs": "use crate::Kind::Prior;\n\npub fn via_use() -> crate::Kind {\n    Prior\n}\n"
+      }
+    },
+    "rename": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/lib.rs Old -> Prior\n  src/lib.rs  3 uses\n  src/uses.rs  2 uses\nreplace src/lib.rs -> src/lib.rs  update src/lib.rs (225 bytes)\n    --- original\n    +++ modified\n    @@ -2,17 +2,17 @@\n     mod other;\n    \n     pub enum Kind {\n    -    Old,\n    +    Prior,\n         New,\n     }\n    \n     pub fn make() -> Kind {\n    -    Kind::Old\n    +    Kind::Prior\n     }\n    \n     pub fn label(k: &Kind) -> &'static str {\n         match k {\n    -        Kind::Old => \"old\",\n    +        Kind::Prior => \"old\",\n             Kind::New => \"new\",\n         }\n     }\nreplace src/uses.rs -> src/uses.rs  update src/uses.rs (71 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,5 @@\n    -use crate::Kind::Old;\n    +use crate::Kind::Prior;\n    \n     pub fn via_use() -> crate::Kind {\n    -    Old\n    +    Prior\n     }\nstage $STAGE committed\n",
+      "stderr": ""
+    }
+  },
+  "18_variant_seats_rename_through_owner_reexports": {
+    "claim_0": {
+      "equal": true
+    },
+    "claim_1": {
+      "files": {
+        "Cargo.toml": "[package]\nname = \"variant_reexport\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        "src/": {
+          "directory": true
+        },
+        "src/lib.rs": "extern crate self as variant_reexport;\n\nmod read;\nmod types;\n\npub use types::*;\n\npub fn build(flag: bool) -> Result<(), QueryError> {\n    if flag {\n        return Err(QueryError::ScmOnly { pattern: 1, op: String::new() });\n    }\n    Ok(())\n}\n",
+        "src/read.rs": "use crate::types::QueryError;\n\npub fn text(error: &variant_reexport::QueryError) -> String {\n    match error {\n        variant_reexport::QueryError::Parse(text) => text.clone(),\n        variant_reexport::QueryError::ScmOnly { pattern, op } => format!(\"{pattern} {op}\"),\n    }\n}\n\npub fn only(error: &QueryError) -> bool {\n    match error {\n        QueryError::ScmOnly { .. } => true,\n        _ => false,\n    }\n}\n",
+        "src/types/": {
+          "directory": true
+        },
+        "src/types/mod.rs": "mod query_error;\n\npub use query_error::QueryError;\n",
+        "src/types/query_error.rs": "#[derive(Debug)]\npub enum QueryError {\n    Parse(String),\n    ScmOnly { pattern: u16, op: String },\n}\n"
+      }
+    },
+    "rename": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/types/query_error.rs Only -> ScmOnly\n  src/lib.rs  1 uses\n  src/read.rs  2 uses\n  src/types/query_error.rs  1 uses\nreplace src/lib.rs -> src/lib.rs  update src/lib.rs (242 bytes)\n    --- original\n    +++ modified\n    @@ -7,7 +7,7 @@\n    \n     pub fn build(flag: bool) -> Result<(), QueryError> {\n         if flag {\n    -        return Err(QueryError::Only { pattern: 1, op: String::new() });\n    +        return Err(QueryError::ScmOnly { pattern: 1, op: String::new() });\n         }\n         Ok(())\n     }\nreplace src/read.rs -> src/read.rs  update src/read.rs (411 bytes)\n    --- original\n    +++ modified\n    @@ -3,13 +3,13 @@\n     pub fn text(error: &variant_reexport::QueryError) -> String {\n         match error {\n             variant_reexport::QueryError::Parse(text) => text.clone(),\n    -        variant_reexport::QueryError::Only { pattern, op } => format!(\"{pattern} {op}\"),\n    +        variant_reexport::QueryError::ScmOnly { pattern, op } => format!(\"{pattern} {op}\"),\n         }\n     }\n    \n     pub fn only(error: &QueryError) -> bool {\n         match error {\n    -        QueryError::Only { .. } => true,\n    +        QueryError::ScmOnly { .. } => true,\n             _ => false,\n         }\n     }\nreplace src/types/query_error.rs -> src/types/query_error.rs  update src/types/query_error.rs (102 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,5 @@\n     #[derive(Debug)]\n     pub enum QueryError {\n         Parse(String),\n    -    Only { pattern: u16, op: String },\n    +    ScmOnly { pattern: u16, op: String },\n     }\nstage $STAGE committed\n",
+      "stderr": ""
+    }
+  },
+  "19_serde_field_seat_renames_and_leaves_the_literal": {
+    "claim_0": {
+      "files": {
+        "Cargo.lock": "# This file is automatically @generated by Cargo.\n# It is not intended for manual editing.\nversion = 4\n\n[[package]]\nname = \"proc-macro2\"\nversion = \"1.0.107\"\nsource = \"registry+https://github.com/rust-lang/crates.io-index\"\nchecksum = \"985e7ec9bb745e6ce6535b544d84d6cd6f7ad8bd711c398938ae983b91a766d9\"\ndependencies = [\n \"unicode-ident\",\n]\n\n[[package]]\nname = \"quote\"\nversion = \"1.0.47\"\nsource = \"registry+https://github.com/rust-lang/crates.io-index\"\nchecksum = \"1fbf4db142a473a8d80c26bbf18454ed458bf8d26c8219c331daecfdbd079001\"\ndependencies = [\n \"proc-macro2\",\n]\n\n[[package]]\nname = \"rust-rename-serde\"\nversion = \"0.1.0\"\ndependencies = [\n \"serde\",\n]\n\n[[package]]\nname = \"serde\"\nversion = \"1.0.229\"\nsource = \"registry+https://github.com/rust-lang/crates.io-index\"\nchecksum = \"4148590afebada386688f18773da617792bf2ef03ffc1e4cbd2b1d45b023e0ba\"\ndependencies = [\n \"serde_core\",\n \"serde_derive\",\n]\n\n[[package]]\nname = \"serde_core\"\nversion = \"1.0.229\"\nsource = \"registry+https://github.com/rust-lang/crates.io-index\"\nchecksum = \"67dca2c9c51e58a4791a4b1ed58308b39c64224d349a935ab5039aa360942a48\"\ndependencies = [\n \"serde_derive\",\n]\n\n[[package]]\nname = \"serde_derive\"\nversion = \"1.0.229\"\nsource = \"registry+https://github.com/rust-lang/crates.io-index\"\nchecksum = \"e7a5d71263a5a7d47b41f6b3f06ba276f10cc18b0931f1799f710578e2309348\"\ndependencies = [\n \"proc-macro2\",\n \"quote\",\n \"syn\",\n]\n\n[[package]]\nname = \"syn\"\nversion = \"3.0.6\"\nsource = \"registry+https://github.com/rust-lang/crates.io-index\"\nchecksum = \"8593e8e72159ed2257d083c7a454a85cbf854f37a0966d8d483aff8c8a3ebcee\"\ndependencies = [\n \"proc-macro2\",\n \"quote\",\n \"unicode-ident\",\n]\n\n[[package]]\nname = \"unicode-ident\"\nversion = \"1.0.26\"\nsource = \"registry+https://github.com/rust-lang/crates.io-index\"\nchecksum = \"d245f478577f809a851594d02313b640fb437e0bb33866753cff937863096954\"\n",
+        "Cargo.toml": "[package]\nname = \"rust-rename-serde\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\nserde = { version = \"=1.0.229\", features = [\"derive\"] }\n",
+        "src/": {
+          "directory": true
+        },
+        "src/lib.rs": "mod util;\n\nuse crate::util::Helper;\n\npub fn width(h: &Helper) -> u32 {\n    h.width\n}\n",
+        "src/util.rs": "use serde::Serialize;\n\npub struct Helper {\n    pub width: u32,\n}\n\n#[derive(Serialize)]\npub struct S {\n    #[serde(rename = \"size\")]\n    pub len: u32,\n}\n"
+      }
+    },
+    "rename": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/util.rs size -> width\n  src/lib.rs  1 uses\n  src/util.rs  1 uses\nreplace src/lib.rs -> src/lib.rs  update src/lib.rs (85 bytes)\n    --- original\n    +++ modified\n    @@ -3,5 +3,5 @@\n     use crate::util::Helper;\n    \n     pub fn width(h: &Helper) -> u32 {\n    -    h.size\n    +    h.width\n     }\nreplace src/util.rs -> src/util.rs  update src/util.rs (152 bytes)\n    --- original\n    +++ modified\n    @@ -1,7 +1,7 @@\n     use serde::Serialize;\n    \n     pub struct Helper {\n    -    pub size: u32,\n    +    pub width: u32,\n     }\n    \n     #[derive(Serialize)]\nstage $STAGE committed\n",
+      "stderr": ""
+    }
+  },
+  "20_serde_literal_is_reported_as_a_text_ref": {
+    "claim_0": {
+      "equal": true
+    },
+    "claim_1": {
+      "files": {
+        "Cargo.lock": "# This file is automatically @generated by Cargo.\n# It is not intended for manual editing.\nversion = 4\n\n[[package]]\nname = \"proc-macro2\"\nversion = \"1.0.107\"\nsource = \"registry+https://github.com/rust-lang/crates.io-index\"\nchecksum = \"985e7ec9bb745e6ce6535b544d84d6cd6f7ad8bd711c398938ae983b91a766d9\"\ndependencies = [\n \"unicode-ident\",\n]\n\n[[package]]\nname = \"quote\"\nversion = \"1.0.47\"\nsource = \"registry+https://github.com/rust-lang/crates.io-index\"\nchecksum = \"1fbf4db142a473a8d80c26bbf18454ed458bf8d26c8219c331daecfdbd079001\"\ndependencies = [\n \"proc-macro2\",\n]\n\n[[package]]\nname = \"rust-rename-serde\"\nversion = \"0.1.0\"\ndependencies = [\n \"serde\",\n]\n\n[[package]]\nname = \"serde\"\nversion = \"1.0.229\"\nsource = \"registry+https://github.com/rust-lang/crates.io-index\"\nchecksum = \"4148590afebada386688f18773da617792bf2ef03ffc1e4cbd2b1d45b023e0ba\"\ndependencies = [\n \"serde_core\",\n \"serde_derive\",\n]\n\n[[package]]\nname = \"serde_core\"\nversion = \"1.0.229\"\nsource = \"registry+https://github.com/rust-lang/crates.io-index\"\nchecksum = \"67dca2c9c51e58a4791a4b1ed58308b39c64224d349a935ab5039aa360942a48\"\ndependencies = [\n \"serde_derive\",\n]\n\n[[package]]\nname = \"serde_derive\"\nversion = \"1.0.229\"\nsource = \"registry+https://github.com/rust-lang/crates.io-index\"\nchecksum = \"e7a5d71263a5a7d47b41f6b3f06ba276f10cc18b0931f1799f710578e2309348\"\ndependencies = [\n \"proc-macro2\",\n \"quote\",\n \"syn\",\n]\n\n[[package]]\nname = \"syn\"\nversion = \"3.0.6\"\nsource = \"registry+https://github.com/rust-lang/crates.io-index\"\nchecksum = \"8593e8e72159ed2257d083c7a454a85cbf854f37a0966d8d483aff8c8a3ebcee\"\ndependencies = [\n \"proc-macro2\",\n \"quote\",\n \"unicode-ident\",\n]\n\n[[package]]\nname = \"unicode-ident\"\nversion = \"1.0.26\"\nsource = \"registry+https://github.com/rust-lang/crates.io-index\"\nchecksum = \"d245f478577f809a851594d02313b640fb437e0bb33866753cff937863096954\"\n",
+        "Cargo.toml": "[package]\nname = \"rust-rename-serde\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\nserde = { version = \"=1.0.229\", features = [\"derive\"] }\n",
+        "src/": {
+          "directory": true
+        },
+        "src/lib.rs": "mod util;\n\nuse crate::util::Helper;\n\npub fn width(h: &Helper) -> u32 {\n    h.size\n}\n",
+        "src/util.rs": "use serde::Serialize;\n\npub struct Helper {\n    pub size: u32,\n}\n\n#[derive(Serialize)]\npub struct S {\n    #[serde(rename = \"size\")]\n    pub len: u32,\n}\n"
+      }
+    },
+    "rename": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/util.rs size -> width\n  src/lib.rs  1 uses\n  src/util.rs  1 uses\nreplace src/lib.rs -> src/lib.rs  update src/lib.rs (85 bytes)\n    --- original\n    +++ modified\n    @@ -3,5 +3,5 @@\n     use crate::util::Helper;\n    \n     pub fn width(h: &Helper) -> u32 {\n    -    h.size\n    +    h.width\n     }\nreplace src/util.rs -> src/util.rs  update src/util.rs (152 bytes)\n    --- original\n    +++ modified\n    @@ -1,7 +1,7 @@\n     use serde::Serialize;\n    \n     pub struct Helper {\n    -    pub size: u32,\n    +    pub width: u32,\n     }\n    \n     #[derive(Serialize)]\nstage $STAGE dry run, tree untouched\ntext-ref src/util.rs:9 \"size\" -> \"width\"\n",
+      "stderr": ""
+    }
+  },
+  "21_fn_body_use_scopes_the_bare_name_to_its_block": {
+    "claim_0": {
+      "files": {
+        "Cargo.toml": "[package]\nname = \"rust-rename-fnuse\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        "src/": {
+          "directory": true
+        },
+        "src/lib.rs": "mod util;\n\nstruct Helper;\n\nfn a() {\n    use crate::util::Tool;\n    Tool::new();\n}\n\nfn b() -> Helper {\n    Helper\n}\n",
+        "src/util.rs": "pub struct Tool;\n\nimpl Tool {\n    pub fn new() -> Tool {\n        Tool\n    }\n}\n"
+      }
+    },
+    "rename": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/util.rs Helper -> Tool\n  src/lib.rs  2 uses\n  src/util.rs  4 uses\nreplace src/lib.rs -> src/lib.rs  update src/lib.rs (115 bytes)\n    --- original\n    +++ modified\n    @@ -3,8 +3,8 @@\n     struct Helper;\n    \n     fn a() {\n    -    use crate::util::Helper;\n    -    Helper::new();\n    +    use crate::util::Tool;\n    +    Tool::new();\n     }\n    \n     fn b() -> Helper {\nreplace src/util.rs -> src/util.rs  update src/util.rs (78 bytes)\n    --- original\n    +++ modified\n    @@ -1,7 +1,7 @@\n    -pub struct Helper;\n    +pub struct Tool;\n    \n    -impl Helper {\n    -    pub fn new() -> Helper {\n    -        Helper\n    +impl Tool {\n    +    pub fn new() -> Tool {\n    +        Tool\n         }\n     }\nstage $STAGE committed\n",
+      "stderr": ""
+    }
+  },
+  "22_0_new_fixture_crates_pass_cargo_check_path": {
+    "cargo": {
+      "exit_code": 0
+    },
+    "rename": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/elsewhere/impl.rs Helper -> Tool\n  src/elsewhere/impl.rs  4 uses\n  src/lib.rs  3 uses\nreplace src/elsewhere/impl.rs -> src/elsewhere/impl.rs  update src/elsewhere/impl.rs (78 bytes)\n    --- original\n    +++ modified\n    @@ -1,7 +1,7 @@\n    -pub struct Helper;\n    +pub struct Tool;\n    \n    -impl Helper {\n    -    pub fn new() -> Helper {\n    -        Helper\n    +impl Tool {\n    +    pub fn new() -> Tool {\n    +        Tool\n         }\n     }\nreplace src/lib.rs -> src/lib.rs  update src/lib.rs (119 bytes)\n    --- original\n    +++ modified\n    @@ -2,8 +2,8 @@\n     mod util;\n     mod other;\n    \n    -use crate::util::Helper;\n    +use crate::util::Tool;\n    \n    -pub fn build() -> Helper {\n    -    Helper::new()\n    +pub fn build() -> Tool {\n    +    Tool::new()\n     }\nstage $STAGE committed\n",
+      "stderr": ""
+    }
+  },
+  "22_1_new_fixture_crates_pass_cargo_check_field": {
+    "cargo": {
+      "exit_code": 0
+    },
+    "rename": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/util.rs size -> width\n  src/lib.rs  4 uses\n  src/util.rs  2 uses\nshorthand\nreplace src/lib.rs -> src/lib.rs  update src/lib.rs (313 bytes)\n    --- original\n    +++ modified\n    @@ -7,7 +7,7 @@\n     }\n    \n     pub fn width(h: &Helper) -> u32 {\n    -    h.size\n    +    h.width\n     }\n    \n     pub fn other(o: &Other) -> u32 {\n    @@ -15,8 +15,8 @@\n     }\n    \n     pub fn build() -> u32 {\n    -    let h = Helper { size: 4 };\n    -    let read = h.size;\n    -    let Helper { size, .. } = h;\n    +    let h = Helper { width: 4 };\n    +    let read = h.width;\n    +    let Helper { width: size, .. } = h;\n         read + size\n     }\nreplace src/util.rs -> src/util.rs  update src/util.rs (119 bytes)\n    --- original\n    +++ modified\n    @@ -1,9 +1,9 @@\n     pub struct Helper {\n    -    pub size: u32,\n    +    pub width: u32,\n     }\n    \n     impl Helper {\n         pub fn grow(&mut self) {\n    -        self.size += 1;\n    +        self.width += 1;\n         }\n     }\nstage $STAGE committed\n",
+      "stderr": ""
+    }
+  },
+  "22_2_new_fixture_crates_pass_cargo_check_variant": {
+    "cargo": {
+      "exit_code": 0
+    },
+    "rename": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/lib.rs Old -> Prior\n  src/lib.rs  3 uses\n  src/uses.rs  2 uses\nreplace src/lib.rs -> src/lib.rs  update src/lib.rs (225 bytes)\n    --- original\n    +++ modified\n    @@ -2,17 +2,17 @@\n     mod other;\n    \n     pub enum Kind {\n    -    Old,\n    +    Prior,\n         New,\n     }\n    \n     pub fn make() -> Kind {\n    -    Kind::Old\n    +    Kind::Prior\n     }\n    \n     pub fn label(k: &Kind) -> &'static str {\n         match k {\n    -        Kind::Old => \"old\",\n    +        Kind::Prior => \"old\",\n             Kind::New => \"new\",\n         }\n     }\nreplace src/uses.rs -> src/uses.rs  update src/uses.rs (71 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,5 @@\n    -use crate::Kind::Old;\n    +use crate::Kind::Prior;\n    \n     pub fn via_use() -> crate::Kind {\n    -    Old\n    +    Prior\n     }\nstage $STAGE committed\n",
+      "stderr": ""
+    }
+  },
+  "22_3_new_fixture_crates_pass_cargo_check_variant_reexport": {
+    "cargo": {
+      "exit_code": 0
+    },
+    "rename": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/types/query_error.rs Only -> ScmOnly\n  src/lib.rs  1 uses\n  src/read.rs  2 uses\n  src/types/query_error.rs  1 uses\nreplace src/lib.rs -> src/lib.rs  update src/lib.rs (242 bytes)\n    --- original\n    +++ modified\n    @@ -7,7 +7,7 @@\n    \n     pub fn build(flag: bool) -> Result<(), QueryError> {\n         if flag {\n    -        return Err(QueryError::Only { pattern: 1, op: String::new() });\n    +        return Err(QueryError::ScmOnly { pattern: 1, op: String::new() });\n         }\n         Ok(())\n     }\nreplace src/read.rs -> src/read.rs  update src/read.rs (411 bytes)\n    --- original\n    +++ modified\n    @@ -3,13 +3,13 @@\n     pub fn text(error: &variant_reexport::QueryError) -> String {\n         match error {\n             variant_reexport::QueryError::Parse(text) => text.clone(),\n    -        variant_reexport::QueryError::Only { pattern, op } => format!(\"{pattern} {op}\"),\n    +        variant_reexport::QueryError::ScmOnly { pattern, op } => format!(\"{pattern} {op}\"),\n         }\n     }\n    \n     pub fn only(error: &QueryError) -> bool {\n         match error {\n    -        QueryError::Only { .. } => true,\n    +        QueryError::ScmOnly { .. } => true,\n             _ => false,\n         }\n     }\nreplace src/types/query_error.rs -> src/types/query_error.rs  update src/types/query_error.rs (102 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,5 @@\n     #[derive(Debug)]\n     pub enum QueryError {\n         Parse(String),\n    -    Only { pattern: u16, op: String },\n    +    ScmOnly { pattern: u16, op: String },\n     }\nstage $STAGE committed\n",
+      "stderr": ""
+    }
+  },
+  "22_4_new_fixture_crates_pass_cargo_check_serde": {
+    "cargo": {
+      "exit_code": 0
+    },
+    "rename": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/util.rs size -> width\n  src/lib.rs  1 uses\n  src/util.rs  1 uses\nreplace src/lib.rs -> src/lib.rs  update src/lib.rs (85 bytes)\n    --- original\n    +++ modified\n    @@ -3,5 +3,5 @@\n     use crate::util::Helper;\n    \n     pub fn width(h: &Helper) -> u32 {\n    -    h.size\n    +    h.width\n     }\nreplace src/util.rs -> src/util.rs  update src/util.rs (152 bytes)\n    --- original\n    +++ modified\n    @@ -1,7 +1,7 @@\n     use serde::Serialize;\n    \n     pub struct Helper {\n    -    pub size: u32,\n    +    pub width: u32,\n     }\n    \n     #[derive(Serialize)]\nstage $STAGE committed\n",
+      "stderr": ""
+    }
+  },
+  "22_5_new_fixture_crates_pass_cargo_check_fnuse": {
+    "cargo": {
+      "exit_code": 0
+    },
+    "rename": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/util.rs Helper -> Tool\n  src/lib.rs  2 uses\n  src/util.rs  4 uses\nreplace src/lib.rs -> src/lib.rs  update src/lib.rs (115 bytes)\n    --- original\n    +++ modified\n    @@ -3,8 +3,8 @@\n     struct Helper;\n    \n     fn a() {\n    -    use crate::util::Helper;\n    -    Helper::new();\n    +    use crate::util::Tool;\n    +    Tool::new();\n     }\n    \n     fn b() -> Helper {\nreplace src/util.rs -> src/util.rs  update src/util.rs (78 bytes)\n    --- original\n    +++ modified\n    @@ -1,7 +1,7 @@\n    -pub struct Helper;\n    +pub struct Tool;\n    \n    -impl Helper {\n    -    pub fn new() -> Helper {\n    -        Helper\n    +impl Tool {\n    +    pub fn new() -> Tool {\n    +        Tool\n         }\n     }\nstage $STAGE committed\n",
+      "stderr": ""
+    }
+  },
+  "23_scip_verify_agrees_on_the_field_fixture": {
+    "claim_0": {
+      "equal": true
+    },
+    "index": {
+      "index": "$work/index.scip",
+      "is_file": true
+    },
+    "rename": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/util.rs size -> width\n  src/lib.rs  4 uses\n  src/util.rs  2 uses\nscip-merge 0 sites from $work/index.scip\nshorthand\nscip-verify disagreements=0\nreplace src/lib.rs -> src/lib.rs  update src/lib.rs (313 bytes)\n    --- original\n    +++ modified\n    @@ -7,7 +7,7 @@\n     }\n    \n     pub fn width(h: &Helper) -> u32 {\n    -    h.size\n    +    h.width\n     }\n    \n     pub fn other(o: &Other) -> u32 {\n    @@ -15,8 +15,8 @@\n     }\n    \n     pub fn build() -> u32 {\n    -    let h = Helper { size: 4 };\n    -    let read = h.size;\n    -    let Helper { size, .. } = h;\n    +    let h = Helper { width: 4 };\n    +    let read = h.width;\n    +    let Helper { width: size, .. } = h;\n         read + size\n     }\nreplace src/util.rs -> src/util.rs  update src/util.rs (119 bytes)\n    --- original\n    +++ modified\n    @@ -1,9 +1,9 @@\n     pub struct Helper {\n    -    pub size: u32,\n    +    pub width: u32,\n     }\n    \n     impl Helper {\n         pub fn grow(&mut self) {\n    -        self.size += 1;\n    +        self.width += 1;\n         }\n     }\nstage $STAGE dry run, tree untouched\n",
+      "stderr": ""
+    }
+  },
+  "24_scip_verify_agrees_on_the_variant_fixture": {
+    "claim_0": {
+      "equal": true
+    },
+    "index": {
+      "index": "$work/index.scip",
+      "is_file": true
+    },
+    "rename": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan src/lib.rs Old -> Prior\n  src/lib.rs  3 uses\n  src/uses.rs  2 uses\nscip-merge 0 sites from $work/index.scip\nscip-verify disagreements=0\nreplace src/lib.rs -> src/lib.rs  update src/lib.rs (225 bytes)\n    --- original\n    +++ modified\n    @@ -2,17 +2,17 @@\n     mod other;\n    \n     pub enum Kind {\n    -    Old,\n    +    Prior,\n         New,\n     }\n    \n     pub fn make() -> Kind {\n    -    Kind::Old\n    +    Kind::Prior\n     }\n    \n     pub fn label(k: &Kind) -> &'static str {\n         match k {\n    -        Kind::Old => \"old\",\n    +        Kind::Prior => \"old\",\n             Kind::New => \"new\",\n         }\n     }\nreplace src/uses.rs -> src/uses.rs  update src/uses.rs (71 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,5 @@\n    -use crate::Kind::Old;\n    +use crate::Kind::Prior;\n    \n     pub fn via_use() -> crate::Kind {\n    -    Old\n    +    Prior\n     }\nstage $STAGE dry run, tree untouched\n",
+      "stderr": ""
+    }
+  }
+}

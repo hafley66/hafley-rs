@@ -1,0 +1,475 @@
+---
+source: tests/support/2_fixture_runner.rs
+---
+{
+  "0_one_row_plan": {
+    "batch": {
+      "exit_code": 0,
+      "stdout": "root $work/right\nplan lib/b.pl -> core/b.pl\nmove    lib/b.pl -> core/b.pl  move lib/b.pl -> core/b.pl (51 bytes)\nstage $STAGE dry run, tree untouched\n",
+      "stderr": ""
+    },
+    "positional": {
+      "exit_code": 0,
+      "stdout": "root $work/left\nplan lib/b.pl -> core/b.pl\nmove    lib/b.pl -> core/b.pl  move lib/b.pl -> core/b.pl (51 bytes)\nstage $STAGE dry run, tree untouched\n",
+      "stderr": ""
+    },
+    "same_plan": {
+      "equal": true
+    }
+  },
+  "1_directory_commit": {
+    "claim_1": 1,
+    "claim_2": true,
+    "move": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan tests/helpers/one.mjs -> tests/3_integration/helpers/one.mjs\nplan tests/helpers/two.mjs -> tests/3_integration/helpers/two.mjs\nmove    tests/helpers/one.mjs -> tests/3_integration/helpers/one.mjs  move tests/helpers/one.mjs -> tests/3_integration/helpers/one.mjs (21 bytes)\nmove    tests/helpers/two.mjs -> tests/3_integration/helpers/two.mjs  move tests/helpers/two.mjs -> tests/3_integration/helpers/two.mjs (21 bytes)\nstage $STAGE committed\nrmdir tests/helpers\n",
+      "stderr": ""
+    },
+    "path_3": {
+      "exists": false
+    },
+    "path_4": {
+      "exists": true
+    },
+    "path_5": {
+      "exists": true
+    },
+    "path_6": {
+      "exists": true
+    }
+  },
+  "2_directory_dry": {
+    "claim_10": "",
+    "claim_7": 1,
+    "claim_8": true,
+    "move": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan tests/helpers/one.mjs -> tests/3_integration/helpers/one.mjs\nplan tests/helpers/two.mjs -> tests/3_integration/helpers/two.mjs\nmove    tests/helpers/one.mjs -> tests/3_integration/helpers/one.mjs  move tests/helpers/one.mjs -> tests/3_integration/helpers/one.mjs (21 bytes)\nmove    tests/helpers/two.mjs -> tests/3_integration/helpers/two.mjs  move tests/helpers/two.mjs -> tests/3_integration/helpers/two.mjs (21 bytes)\nstage $STAGE dry run, tree untouched\nrmdir tests/helpers dry run, tree untouched\n",
+      "stderr": ""
+    },
+    "path_9": {
+      "exists": true
+    },
+    "status": {
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    }
+  },
+  "3_path_constants": {
+    "claim_11": true,
+    "claim_12": true,
+    "claim_13": true,
+    "claim_14": true,
+    "claim_15": true,
+    "claim_16": true,
+    "claim_17": true,
+    "claim_18": true,
+    "claim_19": true,
+    "claim_20": true,
+    "claim_21": true,
+    "claim_22": "const helpers = new URL(\"./helpers\", import.meta.url)\nconst one = new URL(\"./helpers/one.mjs\", import.meta.url)\n\nexport { helpers, one }\n",
+    "claim_23": "import { readFile } from \"node:fs/promises\"\nimport { resolve } from \"node:path\"\n\nconst fixtureDirectory = new URL(\"../fixtures/sequence/\", import.meta.url)\nconst packageRoot = resolve(import.meta.dirname, \"..\")\n\nconst greeting = \"hello\"\nconst body = readFile(\"./b\")\n\nexport { fixtureDirectory, packageRoot, greeting, body }\n",
+    "move": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan tests/0_moved.test.ts -> tests/3_integration/0_moved.test.ts\nplan tests/1_helpers.test.ts -> tests/3_integration/1_helpers.test.ts\nplan tests/helpers/one.mjs -> tests/3_integration/helpers/one.mjs\nreplace tests/0_moved.test.ts -> tests/0_moved.test.ts  update tests/0_moved.test.ts (998 bytes)\n    --- original\n    +++ modified\n    @@ -6,11 +6,11 @@\n     declare const issue: { path: string[] }\n     declare const segments: string[]\n    \n    -const receipts = new URL(\"../results/4_fixture_memory.json\", import.meta.url)\n    -const fixtureDirectory = new URL(\"../fixtures/sequence/\", import.meta.url)\n    -const fixtures = resolve(import.meta.dirname, \"../fixtures/sequence\")\n    -const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), \"..\")\n    -const bin = fileURLToPath(new URL(\"../bin\", import.meta.url))\n    +const receipts = new URL(\"../../results/4_fixture_memory.json\", import.meta.url)\n    +const fixtureDirectory = new URL(\"../../fixtures/sequence/\", import.meta.url)\n    +const fixtures = resolve(import.meta.dirname, \"../../fixtures/sequence\")\n    +const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), \"../..\")\n    +const bin = fileURLToPath(new URL(\"../../bin\", import.meta.url))\n    \n     const greeting = \"hello\"\n     const body = readFile(\"./b\")\nstage $STAGE committed\nmove    tests/0_moved.test.ts -> tests/3_integration/0_moved.test.ts  move tests/0_moved.test.ts -> tests/3_integration/0_moved.test.ts (998 bytes)\nmove    tests/1_helpers.test.ts -> tests/3_integration/1_helpers.test.ts  move tests/1_helpers.test.ts -> tests/3_integration/1_helpers.test.ts (137 bytes)\nmove    tests/helpers/one.mjs -> tests/3_integration/helpers/one.mjs  move tests/helpers/one.mjs -> tests/3_integration/helpers/one.mjs (21 bytes)\nstage $STAGE committed\nrmdir tests/helpers\n",
+      "stderr": ""
+    },
+    "tests/2_unmoved.test.ts": "import { readFile } from \"node:fs/promises\"\nimport { resolve } from \"node:path\"\n\nconst fixtureDirectory = new URL(\"../fixtures/sequence/\", import.meta.url)\nconst packageRoot = resolve(import.meta.dirname, \"..\")\n\nconst greeting = \"hello\"\nconst body = readFile(\"./b\")\n\nexport { fixtureDirectory, packageRoot, greeting, body }\n",
+    "tests/3_integration/0_moved.test.ts": "import { readFile } from \"node:fs/promises\"\nimport { dirname, resolve } from \"node:path\"\nimport { fileURLToPath } from \"node:url\"\n\ndeclare function source(packageName: string, filename: string): Promise<string>\ndeclare const issue: { path: string[] }\ndeclare const segments: string[]\n\nconst receipts = new URL(\"../../results/4_fixture_memory.json\", import.meta.url)\nconst fixtureDirectory = new URL(\"../../fixtures/sequence/\", import.meta.url)\nconst fixtures = resolve(import.meta.dirname, \"../../fixtures/sequence\")\nconst packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), \"../..\")\nconst bin = fileURLToPath(new URL(\"../../bin\", import.meta.url))\n\nconst greeting = \"hello\"\nconst body = readFile(\"./b\")\nconst picked = source(\"grapht\", \"./15_sequenceGeometry.ts\")\nconst label = issue.path.join(\".\")\nconst stem = segments.join(\"..\")\nconst tail = [\"a\", \"b\"].join(\"./\")\n\nexport { receipts, fixtureDirectory, fixtures, packageRoot, bin, greeting, body, picked }\nexport { label, stem, tail }\n",
+    "tests/3_integration/1_helpers.test.ts": "const helpers = new URL(\"./helpers\", import.meta.url)\nconst one = new URL(\"./helpers/one.mjs\", import.meta.url)\n\nexport { helpers, one }\n"
+  },
+  "4_verify_rollback": {
+    "claim_24": true,
+    "move": {
+      "exit_code": 3,
+      "stdout": "root $work/repo\nplan tests/helpers/one.mjs -> tests/3_integration/helpers/one.mjs\nplan tests/helpers/two.mjs -> tests/3_integration/helpers/two.mjs\nmove    tests/helpers/one.mjs -> tests/3_integration/helpers/one.mjs  move tests/helpers/one.mjs -> tests/3_integration/helpers/one.mjs (21 bytes)\nmove    tests/helpers/two.mjs -> tests/3_integration/helpers/two.mjs  move tests/helpers/two.mjs -> tests/3_integration/helpers/two.mjs (21 bytes)\nstage $STAGE committed\nrmdir tests/helpers\nverify failed (rc=1): rolled back 2 files\n",
+      "stderr": ""
+    },
+    "path_25": {
+      "exists": true
+    },
+    "path_26": {
+      "exists": true
+    },
+    "rollback_tree": {
+      "files": {
+        ".git/COMMIT_EDITMSG": {
+          "byte_identical_to_before": true
+        },
+        ".git/HEAD": {
+          "byte_identical_to_before": true
+        },
+        ".git/config": {
+          "byte_identical_to_before": true
+        },
+        ".git/description": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/applypatch-msg.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/commit-msg.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/fsmonitor-watchman.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/post-update.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/pre-applypatch.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/pre-commit.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/pre-merge-commit.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/pre-push.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/pre-rebase.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/pre-receive.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/prepare-commit-msg.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/push-to-checkout.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/update.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/index": {
+          "byte_identical_to_before": true
+        },
+        ".git/info/exclude": {
+          "byte_identical_to_before": true
+        },
+        ".git/logs/HEAD": {
+          "byte_identical_to_before": true
+        },
+        ".git/logs/refs/heads/main": {
+          "byte_identical_to_before": true
+        },
+        ".git/objects/": {
+          "byte_identical_files": 7
+        },
+        ".git/refs/heads/main": {
+          "byte_identical_to_before": true
+        },
+        "tests/0_keeper.test.mjs": "export const keeper = 3\n",
+        "tests/helpers/one.mjs": "export const one = 1\n",
+        "tests/helpers/two.mjs": "export const two = 2\n"
+      }
+    }
+  },
+  "5_verify_flag_pair": {
+    "claim_27": true,
+    "claim_28": true,
+    "move": {
+      "exit_code": 2,
+      "stdout": "",
+      "stderr": "--verify needs --commit\n"
+    }
+  },
+  "6_verify_dry": {
+    "move": {
+      "exit_code": 2,
+      "stdout": "",
+      "stderr": "--verify needs --commit\n"
+    },
+    "path_29": {
+      "exists": false
+    }
+  },
+  "7_multi_no_root": {
+    "alpha_unchanged": {
+      "files": {
+        ".git/HEAD": {
+          "byte_identical_to_before": true
+        },
+        ".git/config": {
+          "byte_identical_to_before": true
+        },
+        ".git/description": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/applypatch-msg.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/commit-msg.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/fsmonitor-watchman.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/post-update.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/pre-applypatch.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/pre-commit.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/pre-merge-commit.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/pre-push.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/pre-rebase.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/pre-receive.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/prepare-commit-msg.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/push-to-checkout.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/update.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/index": {
+          "byte_identical_to_before": true
+        },
+        ".git/info/exclude": {
+          "byte_identical_to_before": true
+        },
+        ".git/objects/": {
+          "byte_identical_files": 2
+        },
+        "a.pl": ":- module(a, [check/0]).\n:- use_module('lib/b').\n\ncheck :- b_fact(1).\n",
+        "lib/b.pl": ":- module(b, [b_fact/1]).\nb_fact(1).\n"
+      }
+    },
+    "beta_unchanged": {
+      "files": {
+        ".git/HEAD": {
+          "byte_identical_to_before": true
+        },
+        ".git/config": {
+          "byte_identical_to_before": true
+        },
+        ".git/description": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/applypatch-msg.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/commit-msg.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/fsmonitor-watchman.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/post-update.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/pre-applypatch.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/pre-commit.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/pre-merge-commit.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/pre-push.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/pre-rebase.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/pre-receive.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/prepare-commit-msg.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/push-to-checkout.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/update.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/index": {
+          "byte_identical_to_before": true
+        },
+        ".git/info/exclude": {
+          "byte_identical_to_before": true
+        },
+        ".git/objects/": {
+          "byte_identical_files": 2
+        },
+        "lib/c.pl": ":- module(c, [c_fact/1]).\nc_fact(2).\n",
+        "m.pl": ":- module(m, [go/0]).\n:- use_module('lib/c').\n\ngo :- c_fact(2).\n"
+      }
+    },
+    "claim_30": true,
+    "claim_31": true,
+    "move": {
+      "exit_code": 2,
+      "stdout": "",
+      "stderr": "move $work/rogue/x.pl is under none of the roots: $work/alpha, $work/beta\n"
+    }
+  },
+  "8_multi_rollback": {
+    "alpha_unchanged": {
+      "files": {
+        ".git/HEAD": {
+          "byte_identical_to_before": true
+        },
+        ".git/config": {
+          "byte_identical_to_before": true
+        },
+        ".git/description": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/applypatch-msg.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/commit-msg.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/fsmonitor-watchman.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/post-update.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/pre-applypatch.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/pre-commit.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/pre-merge-commit.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/pre-push.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/pre-rebase.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/pre-receive.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/prepare-commit-msg.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/push-to-checkout.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/update.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/index": {
+          "byte_identical_to_before": true
+        },
+        ".git/info/exclude": {
+          "byte_identical_to_before": true
+        },
+        ".git/objects/": {
+          "byte_identical_files": 2
+        },
+        "a.pl": ":- module(a, [check/0]).\n:- use_module('lib/b').\n\ncheck :- b_fact(1).\n",
+        "lib/b.pl": ":- module(b, [b_fact/1]).\nb_fact(1).\n"
+      }
+    },
+    "beta_unchanged": {
+      "files": {
+        ".git/HEAD": {
+          "byte_identical_to_before": true
+        },
+        ".git/config": {
+          "byte_identical_to_before": true
+        },
+        ".git/description": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/applypatch-msg.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/commit-msg.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/fsmonitor-watchman.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/post-update.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/pre-applypatch.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/pre-commit.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/pre-merge-commit.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/pre-push.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/pre-rebase.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/pre-receive.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/prepare-commit-msg.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/push-to-checkout.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/hooks/update.sample": {
+          "byte_identical_to_before": true
+        },
+        ".git/index": {
+          "byte_identical_to_before": true
+        },
+        ".git/info/exclude": {
+          "byte_identical_to_before": true
+        },
+        ".git/objects/": {
+          "byte_identical_files": 2
+        },
+        "lib/c.pl": ":- module(c, [c_fact/1]).\nc_fact(2).\n",
+        "m.pl": ":- module(m, [go/0]).\n:- use_module('lib/c').\n\ngo :- c_fact(2).\n"
+      }
+    },
+    "claim_32": true,
+    "move": {
+      "exit_code": 3,
+      "stdout": "[root $work/alpha] root $work/alpha\n[root $work/alpha] plan lib/b.pl -> core/b.pl\n[root $work/beta] root $work/beta\n[root $work/beta] plan lib/c.pl -> core/c.pl\n[root $work/alpha] move    lib/b.pl -> core/b.pl  move lib/b.pl -> core/b.pl (37 bytes)\n[root $work/alpha] stage $STAGE committed\n[root $work/alpha] rmdir lib\n[root $work/beta] move    lib/c.pl -> core/c.pl  move lib/c.pl -> core/c.pl (37 bytes)\n[root $work/beta] stage $STAGE committed\n[root $work/beta] rmdir lib\nverify failed (rc=1): rolled back 2 files\n",
+      "stderr": ""
+    }
+  },
+  "9_derived_root": {
+    "derived": {
+      "exit_code": 0,
+      "stdout": "root $work/left\nplan lib/b.pl -> core/b.pl\nmove    lib/b.pl -> core/b.pl  move lib/b.pl -> core/b.pl (51 bytes)\nstage $STAGE dry run, tree untouched\n",
+      "stderr": ""
+    },
+    "explicit": {
+      "exit_code": 0,
+      "stdout": "root $work/right\nplan lib/b.pl -> core/b.pl\nmove    lib/b.pl -> core/b.pl  move lib/b.pl -> core/b.pl (51 bytes)\nstage $STAGE dry run, tree untouched\n",
+      "stderr": ""
+    },
+    "same_plan": {
+      "equal": true
+    }
+  }
+}

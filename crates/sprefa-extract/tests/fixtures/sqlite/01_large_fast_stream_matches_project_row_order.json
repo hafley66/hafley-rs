@@ -1,0 +1,22 @@
+{
+  "claim_test": "large_fast_stream_matches_project_row_order",
+  "steps": [
+    {
+      "action": "api",
+      "name": "stream_order",
+      "api": "stream_order",
+      "count": 4097,
+      "extensions": {"2": "rs", "3": "json", "4": "yaml", "5": "go"},
+      "default_extension": "ts",
+      "default_content": "",
+      "contents": {
+        "0": "import { target } from './0001'; export const answer = target();\n",
+        "1": "export function target() { return 42; }\n",
+        "2": "fn helper() {} fn entry() { helper(); }\n",
+        "3": "{\"nested\": {\"answer\": 42}}\n",
+        "4": "nested:\n  answer: 42\n",
+        "5": "package sample\nfunc Helper() {}\nfunc Entry() { Helper() }\n"
+      }
+    }
+  ]
+}

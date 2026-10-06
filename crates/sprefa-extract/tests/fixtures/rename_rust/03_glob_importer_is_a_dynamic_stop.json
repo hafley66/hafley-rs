@@ -1,0 +1,87 @@
+{
+  "steps": [
+    {
+      "source": "$fixtures/rust_rename/glob/before",
+      "target": "$work/repo",
+      "action": "copy_tree"
+    },
+    {
+      "path": "$work/state",
+      "action": "directory"
+    },
+    {
+      "action": "run",
+      "name": "rename",
+      "arguments": [
+        "rename",
+        "src/util.rs#Helper",
+        "Tool",
+        "--root",
+        "$work/repo",
+        "--state",
+        "$work/state",
+        "--commit"
+      ],
+      "cwd": "$work/repo",
+      "expect_exit_code": 6,
+      "raw_stdout": true,
+      "stdout_redactions": [
+        {
+          "pattern": "(?m)^(stage )[0-9a-f]{64}( committed| dry run, tree untouched)$",
+          "replacement": "${1}$$STAGE${2}"
+        }
+      ]
+    },
+    {
+      "action": "claim",
+      "name": "claim_1",
+      "cell": "rename.stderr",
+      "kind": "contains",
+      "text": "src/lib.rs:3: "
+    },
+    {
+      "action": "claim",
+      "name": "claim_2",
+      "cell": "rename.stderr",
+      "kind": "contains",
+      "text": "glob import"
+    },
+    {
+      "action": "tree_matches",
+      "name": "claim_3",
+      "left": "$work/repo",
+      "fixture": "$fixtures/rust_rename/glob/before"
+    }
+  ],
+  "old_assertions": [
+    {
+      "cell": "exit_code",
+      "kind": "code",
+      "value": 6,
+      "claim": "Dynamic stop exits 6"
+    },
+    {
+      "cell": "stderr",
+      "kind": "contains",
+      "value": "src/lib.rs:3: ",
+      "claim": "stop names the use item's line (line derived at runtime from committed glob/before/src/lib.rs; derived constant glob_line=3)",
+      "derived": "glob_line=3"
+    },
+    {
+      "cell": "stderr",
+      "kind": "contains",
+      "value": "glob import",
+      "claim": "stop names the form"
+    },
+    {
+      "cell": "tree_vs_before",
+      "kind": "diff_rq_empty",
+      "value": "diff -rq $work/repo <before>",
+      "claim": "the stopped run edited nothing; tree keeps its bytes"
+    }
+  ],
+  "notes": [
+    "old exit assertion message: 'Dynamic exits 6'",
+    "line value is computed from committed fixture bytes, not hardcoded in the old test"
+  ]
+}

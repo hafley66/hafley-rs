@@ -1,0 +1,53 @@
+{
+  "steps": [
+    {
+      "action": "copy_tree",
+      "source": "$fixtures/rust_rename/variant/before",
+      "target": "$work/repo"
+    },
+    {
+      "action": "directory",
+      "path": "$work/state"
+    },
+    {
+      "action": "run",
+      "name": "rename",
+      "arguments": [
+        "rename",
+        "src/lib.rs#Old",
+        "Prior",
+        "--root",
+        "$work/repo",
+        "--state",
+        "$work/state",
+        "--commit"
+      ],
+      "cwd": "$work/repo",
+      "expect_exit_code": 0,
+      "raw_stdout": true,
+      "stdout_redactions": [
+        {
+          "pattern": "(?m)^(stage )[0-9a-f]{64}( committed| dry run, tree untouched)$",
+          "replacement": "${1}$$STAGE${2}"
+        }
+      ]
+    },
+    {
+      "action": "run",
+      "name": "cargo",
+      "arguments": [
+        "check",
+        "--offline"
+      ],
+      "cwd": "$work/repo",
+      "expect_exit_code": 0,
+      "raw_stdout": true,
+      "program": "$cargo",
+      "unasserted_stderr": true,
+      "unasserted_stdout": true,
+      "environment": {
+        "CARGO_TARGET_DIR": "$work/repo/target"
+      }
+    }
+  ]
+}

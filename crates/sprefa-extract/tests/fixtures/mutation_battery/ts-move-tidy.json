@@ -1,0 +1,70 @@
+{
+  "scenario": "ts-move-tidy",
+  "claim_tests": [
+    "relocation_ts",
+    "origin_conservation_ts"
+  ],
+  "steps": [
+    {
+      "action": "directory",
+      "path": "$work/base"
+    },
+    {
+      "action": "copy",
+      "source": "tests/fixtures/ts5_findings/known_receiver/consumer.ts",
+      "path": "$work/base/consumer.ts"
+    },
+    {
+      "action": "copy",
+      "source": "tests/fixtures/ts5_findings/known_receiver/ns.ts",
+      "path": "$work/base/ns.ts"
+    },
+    {
+      "action": "api",
+      "name": "base",
+      "api": "resolve_rows",
+      "root": "$work/base",
+      "files": [
+        "consumer.ts",
+        "ns.ts"
+      ]
+    },
+    {
+      "action": "directory",
+      "path": "$work/after"
+    },
+    {
+      "action": "copy",
+      "source": "tests/fixtures/ts5_findings/known_receiver/consumer.ts",
+      "path": "$work/after/consumer.ts"
+    },
+    {
+      "action": "copy",
+      "source": "tests/fixtures/ts5_findings/known_receiver/ns.ts",
+      "path": "$work/after/ns.ts"
+    },
+    {
+      "action": "replace",
+      "path": "$work/after/consumer.ts",
+      "from": "\n    tidy(text: string): string {\n        return text;\n    }\n",
+      "to": "\n",
+      "count": 1
+    },
+    {
+      "action": "write",
+      "path": "$work/after/fresh.ts",
+      "text": "export function tidy(text: string): string {\n    return text;\n}\n"
+    },
+    {
+      "action": "api",
+      "name": "after",
+      "api": "resolve_rows",
+      "root": "$work/after",
+      "files": [
+        "consumer.ts",
+        "ns.ts",
+        "fresh.ts"
+      ]
+    }
+  ]
+}

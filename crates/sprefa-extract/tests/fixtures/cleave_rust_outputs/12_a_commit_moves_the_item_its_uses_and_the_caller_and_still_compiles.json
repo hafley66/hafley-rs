@@ -1,0 +1,167 @@
+{
+  "test": "a_commit_moves_the_item_its_uses_and_the_caller_and_still_compiles",
+  "source_range": "506-534",
+  "fixture": {
+    "group": "cleave_rust",
+    "variant": "basic",
+    "label": "commit"
+  },
+  "steps": [
+    {
+      "action": "copy_tree",
+      "source": "$fixtures/cleave_rust/basic",
+      "target": "$work/repo"
+    },
+    {
+      "action": "directory",
+      "path": "$work/state"
+    },
+    {
+      "action": "git",
+      "args": [
+        "init",
+        "-q",
+        "."
+      ],
+      "cwd": "$work/repo"
+    },
+    {
+      "action": "read_tree",
+      "path": "$work/repo/src/util.rs",
+      "capture": "util_before"
+    },
+    {
+      "action": "read_tree",
+      "path": "$work/repo/src/config.rs",
+      "capture": "config_before"
+    },
+    {
+      "action": "read_tree",
+      "path": "$work/repo/src/app.rs",
+      "capture": "app_before"
+    },
+    {
+      "action": "claim",
+      "kind": "line_count",
+      "cell": "util_before",
+      "line_prefix": "use ",
+      "expect": 3,
+      "name": "util_use_lines_before"
+    },
+    {
+      "action": "claim",
+      "kind": "line_count",
+      "cell": "config_before",
+      "line_prefix": "use ",
+      "expect": 1,
+      "name": "config_use_lines_before"
+    },
+    {
+      "action": "claim",
+      "kind": "line_count",
+      "cell": "app_before",
+      "line_prefix": "use ",
+      "expect": 1,
+      "name": "app_use_lines_before"
+    },
+    {
+      "action": "command",
+      "program": "$ryii",
+      "arguments": [
+        "cleave",
+        "src/util.rs#load_config",
+        "src/config.rs",
+        "--commit",
+        "--root",
+        "$work/repo",
+        "--state",
+        "$work/state"
+      ],
+      "cwd": "$work/repo",
+      "environment": {
+        "HAFLEY_TRACE": "$work/cleave.json",
+        "RUST_LOG": "sprefa_extract=debug,hafley_scm=debug"
+      },
+      "expect_exit_code": 0,
+      "capture": "stdout_commit",
+      "raw_stdout": true,
+      "unasserted_stderr": true,
+      "stdout_redactions": [
+        {
+          "pattern": "(?m)^(stage )[0-9a-f]{64}( committed| dry run, tree untouched)$",
+          "replacement": "${1}$$STAGE${2}"
+        }
+      ]
+    },
+    {
+      "action": "read_tree",
+      "path": "$work/repo/src/util.rs",
+      "capture": "util_after"
+    },
+    {
+      "action": "read_tree",
+      "path": "$work/repo/src/config.rs",
+      "capture": "config_after"
+    },
+    {
+      "action": "read_tree",
+      "path": "$work/repo/src/app.rs",
+      "capture": "app_after"
+    },
+    {
+      "action": "claim",
+      "kind": "line_count",
+      "cell": "util_after",
+      "line_prefix": "use ",
+      "expect": 0,
+      "name": "util_use_lines_after"
+    },
+    {
+      "action": "claim",
+      "kind": "line_count",
+      "cell": "config_after",
+      "line_prefix": "use ",
+      "expect": 3,
+      "name": "config_use_lines_after"
+    },
+    {
+      "action": "claim",
+      "kind": "line_count",
+      "cell": "app_after",
+      "line_prefix": "use ",
+      "expect": 2,
+      "name": "app_use_lines_after"
+    },
+    {
+      "action": "claim",
+      "kind": "text_equals",
+      "cell": "util_after",
+      "text": "pub fn slug(raw: &str) -> String {\n    raw.to_lowercase()\n}\n",
+      "name": "util_exact_content"
+    },
+    {
+      "action": "claim",
+      "kind": "text_equals",
+      "cell": "app_after",
+      "text": "use crate::util::slug;\nuse crate::config::load_config;\n\npub fn boot(dir: &str) -> String {\n    slug(&load_config(dir))\n}\n",
+      "name": "app_exact_content"
+    },
+    {
+      "action": "command",
+      "program": "$cargo",
+      "arguments": [
+        "check",
+        "--quiet",
+        "--offline"
+      ],
+      "cwd": "$work/repo",
+      "environment": {
+        "CARGO_TARGET_DIR": "$work/target",
+        "KACHE_DISABLED": "1"
+      },
+      "expect_exit_code": 0,
+      "capture": "cargo_check",
+      "raw_stdout": true
+    }
+  ]
+}
