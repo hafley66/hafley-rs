@@ -1,0 +1,1040 @@
+[
+  {
+    "id": "valid-000",
+    "file": "fixtures/valid/000_Case.tsx",
+    "validity": "valid"
+  },
+  {
+    "id": "valid-001",
+    "file": "fixtures/valid/001_Case.tsx",
+    "validity": "valid",
+    "syntax": "flow"
+  },
+  {
+    "id": "valid-002",
+    "file": "fixtures/valid/002_Case.tsx",
+    "validity": "valid",
+    "syntax": "flow"
+  },
+  {
+    "id": "valid-003",
+    "file": "fixtures/valid/003_Case.tsx",
+    "validity": "valid"
+  },
+  {
+    "id": "valid-004",
+    "file": "fixtures/valid/004_Case.tsx",
+    "validity": "valid"
+  },
+  {
+    "id": "valid-005",
+    "file": "fixtures/valid/005_Case.tsx",
+    "validity": "valid"
+  },
+  {
+    "id": "valid-006",
+    "file": "fixtures/valid/006_Case.tsx",
+    "validity": "valid"
+  },
+  {
+    "id": "valid-007",
+    "file": "fixtures/valid/007_Case.tsx",
+    "validity": "valid"
+  },
+  {
+    "id": "valid-008",
+    "file": "fixtures/valid/008_Case.tsx",
+    "validity": "valid"
+  },
+  {
+    "id": "valid-009",
+    "file": "fixtures/valid/009_Case.tsx",
+    "validity": "valid"
+  },
+  {
+    "id": "valid-010",
+    "file": "fixtures/valid/010_Case.tsx",
+    "validity": "valid"
+  },
+  {
+    "id": "valid-011",
+    "file": "fixtures/valid/011_Case.tsx",
+    "validity": "valid"
+  },
+  {
+    "id": "valid-012",
+    "file": "fixtures/valid/012_Case.tsx",
+    "validity": "valid"
+  },
+  {
+    "id": "valid-013",
+    "file": "fixtures/valid/013_Case.tsx",
+    "validity": "valid"
+  },
+  {
+    "id": "valid-014",
+    "file": "fixtures/valid/014_Case.tsx",
+    "validity": "valid"
+  },
+  {
+    "id": "valid-015",
+    "file": "fixtures/valid/015_Case.tsx",
+    "validity": "valid"
+  },
+  {
+    "id": "valid-016",
+    "file": "fixtures/valid/016_Case.tsx",
+    "validity": "valid"
+  },
+  {
+    "id": "valid-017",
+    "file": "fixtures/valid/017_Case.tsx",
+    "validity": "valid"
+  },
+  {
+    "id": "valid-018",
+    "file": "fixtures/valid/018_Case.tsx",
+    "validity": "valid"
+  },
+  {
+    "id": "valid-019",
+    "file": "fixtures/valid/019_Case.tsx",
+    "validity": "valid"
+  },
+  {
+    "id": "valid-020",
+    "file": "fixtures/valid/020_Case.tsx",
+    "validity": "valid"
+  },
+  {
+    "id": "valid-021",
+    "file": "fixtures/valid/021_Case.tsx",
+    "validity": "valid"
+  },
+  {
+    "id": "valid-022",
+    "file": "fixtures/valid/022_Case.tsx",
+    "validity": "valid"
+  },
+  {
+    "id": "valid-023",
+    "file": "fixtures/valid/023_Case.tsx",
+    "validity": "valid"
+  },
+  {
+    "id": "valid-024",
+    "file": "fixtures/valid/024_Case.tsx",
+    "validity": "valid"
+  },
+  {
+    "id": "valid-025",
+    "file": "fixtures/valid/025_Case.tsx",
+    "validity": "valid"
+  },
+  {
+    "id": "valid-026",
+    "file": "fixtures/valid/026_Case.tsx",
+    "validity": "valid"
+  },
+  {
+    "id": "valid-027",
+    "file": "fixtures/valid/027_Case.tsx",
+    "validity": "valid"
+  },
+  {
+    "id": "valid-028",
+    "file": "fixtures/valid/028_Case.tsx",
+    "validity": "valid"
+  },
+  {
+    "id": "valid-029",
+    "file": "fixtures/valid/029_Case.tsx",
+    "validity": "valid"
+  },
+  {
+    "id": "valid-030",
+    "file": "fixtures/valid/030_Case.tsx",
+    "validity": "valid"
+  },
+  {
+    "id": "valid-031",
+    "file": "fixtures/valid/031_Case.tsx",
+    "validity": "valid"
+  },
+  {
+    "id": "valid-032",
+    "file": "fixtures/valid/032_Case.tsx",
+    "validity": "valid"
+  },
+  {
+    "id": "valid-033",
+    "file": "fixtures/valid/033_Case.tsx",
+    "validity": "valid"
+  },
+  {
+    "id": "valid-034",
+    "file": "fixtures/valid/034_Case.tsx",
+    "validity": "valid"
+  },
+  {
+    "id": "valid-035",
+    "file": "fixtures/valid/035_Case.tsx",
+    "validity": "valid"
+  },
+  {
+    "id": "valid-036",
+    "file": "fixtures/valid/036_Case.tsx",
+    "validity": "valid"
+  },
+  {
+    "id": "valid-037",
+    "file": "fixtures/valid/037_Case.tsx",
+    "validity": "valid"
+  },
+  {
+    "id": "valid-038",
+    "file": "fixtures/valid/038_Case.tsx",
+    "validity": "valid"
+  },
+  {
+    "id": "valid-039",
+    "file": "fixtures/valid/039_Case.tsx",
+    "validity": "valid"
+  },
+  {
+    "id": "valid-040",
+    "file": "fixtures/valid/040_Case.tsx",
+    "validity": "valid"
+  },
+  {
+    "id": "valid-041",
+    "file": "fixtures/valid/041_Case.tsx",
+    "validity": "valid"
+  },
+  {
+    "id": "valid-042",
+    "file": "fixtures/valid/042_Case.tsx",
+    "validity": "valid",
+    "settings": {
+      "react-hooks": {
+        "additionalEffectHooks": "(useMyEffect|useServerEffect)"
+      }
+    }
+  },
+  {
+    "id": "valid-043",
+    "file": "fixtures/valid/043_Case.tsx",
+    "validity": "valid"
+  },
+  {
+    "id": "valid-044",
+    "file": "fixtures/valid/044_Case.tsx",
+    "validity": "valid"
+  },
+  {
+    "id": "valid-045",
+    "file": "fixtures/valid/045_Case.tsx",
+    "validity": "valid"
+  },
+  {
+    "id": "valid-046",
+    "file": "fixtures/valid/046_Case.tsx",
+    "validity": "valid"
+  },
+  {
+    "id": "valid-047",
+    "file": "fixtures/valid/047_Case.tsx",
+    "validity": "valid"
+  },
+  {
+    "id": "valid-048",
+    "file": "fixtures/valid/048_Case.tsx",
+    "validity": "valid"
+  },
+  {
+    "id": "valid-049",
+    "file": "fixtures/valid/049_Case.tsx",
+    "validity": "valid"
+  },
+  {
+    "id": "invalid-000",
+    "file": "fixtures/invalid/000_Case.tsx",
+    "validity": "invalid",
+    "syntax": "flow",
+    "errors": [
+      {
+        "message": "React Hook \"useConditionalHook\" is called conditionally. React Hooks must be called in the exact same order in every component render."
+      }
+    ]
+  },
+  {
+    "id": "invalid-001",
+    "file": "fixtures/invalid/001_Case.tsx",
+    "validity": "invalid",
+    "syntax": "flow",
+    "errors": [
+      {
+        "message": "React Hook \"useConditionalHook\" is called conditionally. React Hooks must be called in the exact same order in every component render."
+      }
+    ]
+  },
+  {
+    "id": "invalid-002",
+    "file": "fixtures/invalid/002_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "React Hook \"useConditionalHook\" is called conditionally. React Hooks must be called in the exact same order in every component render."
+      }
+    ]
+  },
+  {
+    "id": "invalid-003",
+    "file": "fixtures/invalid/003_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "React Hook \"Hook.useState\" cannot be called at the top level. React Hooks must be called in a React function component or a custom React Hook function."
+      },
+      {
+        "message": "React Hook \"Hook.use42\" cannot be called at the top level. React Hooks must be called in a React function component or a custom React Hook function."
+      },
+      {
+        "message": "React Hook \"Hook.useHook\" cannot be called at the top level. React Hooks must be called in a React function component or a custom React Hook function."
+      }
+    ]
+  },
+  {
+    "id": "invalid-004",
+    "file": "fixtures/invalid/004_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "React Hook \"This.useHook\" cannot be called in a class component. React Hooks must be called in a React function component or a custom React Hook function."
+      },
+      {
+        "message": "React Hook \"Super.useHook\" cannot be called in a class component. React Hooks must be called in a React function component or a custom React Hook function."
+      }
+    ]
+  },
+  {
+    "id": "invalid-005",
+    "file": "fixtures/invalid/005_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "React Hook \"FooStore.useFeatureFlag\" cannot be called in a class component. React Hooks must be called in a React function component or a custom React Hook function."
+      }
+    ]
+  },
+  {
+    "id": "invalid-006",
+    "file": "fixtures/invalid/006_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "React Hook \"Namespace.useConditionalHook\" is called conditionally. React Hooks must be called in the exact same order in every component render."
+      }
+    ]
+  },
+  {
+    "id": "invalid-007",
+    "file": "fixtures/invalid/007_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "React Hook \"useConditionalHook\" is called conditionally. React Hooks must be called in the exact same order in every component render."
+      }
+    ]
+  },
+  {
+    "id": "invalid-008",
+    "file": "fixtures/invalid/008_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "React Hook \"useConditionalHook\" is called conditionally. React Hooks must be called in the exact same order in every component render."
+      }
+    ]
+  },
+  {
+    "id": "invalid-009",
+    "file": "fixtures/invalid/009_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "React Hook \"useConditionalHook\" is called conditionally. React Hooks must be called in the exact same order in every component render."
+      }
+    ]
+  },
+  {
+    "id": "invalid-010",
+    "file": "fixtures/invalid/010_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "React Hook \"useTernaryHook\" is called conditionally. React Hooks must be called in the exact same order in every component render."
+      }
+    ]
+  },
+  {
+    "id": "invalid-011",
+    "file": "fixtures/invalid/011_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "React Hook \"useHookInsideCallback\" cannot be called inside a callback. React Hooks must be called in a React function component or a custom React Hook function."
+      }
+    ]
+  },
+  {
+    "id": "invalid-012",
+    "file": "fixtures/invalid/012_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "React Hook \"useHookInsideCallback\" cannot be called inside a callback. React Hooks must be called in a React function component or a custom React Hook function."
+      }
+    ]
+  },
+  {
+    "id": "invalid-013",
+    "file": "fixtures/invalid/013_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "React Hook \"useHookInsideCallback\" cannot be called inside a callback. React Hooks must be called in a React function component or a custom React Hook function."
+      }
+    ]
+  },
+  {
+    "id": "invalid-014",
+    "file": "fixtures/invalid/014_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "React Hook \"useHookInsideCallback\" cannot be called inside a callback. React Hooks must be called in a React function component or a custom React Hook function."
+      }
+    ]
+  },
+  {
+    "id": "invalid-015",
+    "file": "fixtures/invalid/015_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "React Hook \"useState\" is called in function \"handleClick\" that is neither a React function component nor a custom React Hook function. React component names must start with an uppercase letter. React Hook names must start with the word \"use\"."
+      }
+    ]
+  },
+  {
+    "id": "invalid-016",
+    "file": "fixtures/invalid/016_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "React Hook \"useState\" is called in function \"handleClick\" that is neither a React function component nor a custom React Hook function. React component names must start with an uppercase letter. React Hook names must start with the word \"use\"."
+      }
+    ]
+  },
+  {
+    "id": "invalid-017",
+    "file": "fixtures/invalid/017_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "React Hook \"useHookInsideLoop\" may be executed more than once. Possibly because it is called in a loop. React Hooks must be called in the exact same order in every component render."
+      }
+    ]
+  },
+  {
+    "id": "invalid-018",
+    "file": "fixtures/invalid/018_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "React Hook \"useHookInsideLoop\" may be executed more than once. Possibly because it is called in a loop. React Hooks must be called in the exact same order in every component render."
+      }
+    ]
+  },
+  {
+    "id": "invalid-019",
+    "file": "fixtures/invalid/019_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "React Hook \"useHookInsideLoop\" may be executed more than once. Possibly because it is called in a loop. React Hooks must be called in the exact same order in every component render."
+      }
+    ]
+  },
+  {
+    "id": "invalid-020",
+    "file": "fixtures/invalid/020_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "React Hook \"useState\" is called in function \"renderItem\" that is neither a React function component nor a custom React Hook function. React component names must start with an uppercase letter. React Hook names must start with the word \"use\"."
+      }
+    ]
+  },
+  {
+    "id": "invalid-021",
+    "file": "fixtures/invalid/021_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "React Hook \"useHookInsideNormalFunction\" is called in function \"normalFunctionWithHook\" that is neither a React function component nor a custom React Hook function. React component names must start with an uppercase letter. React Hook names must start with the word \"use\"."
+      }
+    ]
+  },
+  {
+    "id": "invalid-022",
+    "file": "fixtures/invalid/022_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "React Hook \"useHookInsideNormalFunction\" is called in function \"_normalFunctionWithHook\" that is neither a React function component nor a custom React Hook function. React component names must start with an uppercase letter. React Hook names must start with the word \"use\"."
+      },
+      {
+        "message": "React Hook \"useHookInsideNormalFunction\" is called in function \"_useNotAHook\" that is neither a React function component nor a custom React Hook function. React component names must start with an uppercase letter. React Hook names must start with the word \"use\"."
+      }
+    ]
+  },
+  {
+    "id": "invalid-023",
+    "file": "fixtures/invalid/023_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "React Hook \"useHookInsideNormalFunction\" is called in function \"normalFunctionWithConditionalHook\" that is neither a React function component nor a custom React Hook function. React component names must start with an uppercase letter. React Hook names must start with the word \"use\"."
+      }
+    ]
+  },
+  {
+    "id": "invalid-024",
+    "file": "fixtures/invalid/024_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "React Hook \"useHook1\" may be executed more than once. Possibly because it is called in a loop. React Hooks must be called in the exact same order in every component render."
+      },
+      {
+        "message": "React Hook \"useHook2\" may be executed more than once. Possibly because it is called in a loop. React Hooks must be called in the exact same order in every component render."
+      },
+      {
+        "message": "React Hook \"useHook3\" may be executed more than once. Possibly because it is called in a loop. React Hooks must be called in the exact same order in every component render."
+      },
+      {
+        "message": "React Hook \"useHook4\" may be executed more than once. Possibly because it is called in a loop. React Hooks must be called in the exact same order in every component render."
+      }
+    ]
+  },
+  {
+    "id": "invalid-025",
+    "file": "fixtures/invalid/025_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "React Hook \"useHook1\" may be executed more than once. Possibly because it is called in a loop. React Hooks must be called in the exact same order in every component render."
+      },
+      {
+        "message": "React Hook \"useHook2\" may be executed more than once. Possibly because it is called in a loop. React Hooks must be called in the exact same order in every component render."
+      }
+    ]
+  },
+  {
+    "id": "invalid-026",
+    "file": "fixtures/invalid/026_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "React Hook \"useHook1\" may be executed more than once. Possibly because it is called in a loop. React Hooks must be called in the exact same order in every component render."
+      },
+      {
+        "message": "React Hook \"useHook2\" may be executed more than once. Possibly because it is called in a loop. React Hooks must be called in the exact same order in every component render."
+      },
+      {
+        "message": "React Hook \"useHook3\" may be executed more than once. Possibly because it is called in a loop. React Hooks must be called in the exact same order in every component render."
+      },
+      {
+        "message": "React Hook \"useHook4\" may be executed more than once. Possibly because it is called in a loop. React Hooks must be called in the exact same order in every component render."
+      }
+    ]
+  },
+  {
+    "id": "invalid-027",
+    "file": "fixtures/invalid/027_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "React Hook \"useHook1\" may be executed more than once. Possibly because it is called in a loop. React Hooks must be called in the exact same order in every component render."
+      },
+      {
+        "message": "React Hook \"useHook2\" may be executed more than once. Possibly because it is called in a loop. React Hooks must be called in the exact same order in every component render."
+      }
+    ]
+  },
+  {
+    "id": "invalid-028",
+    "file": "fixtures/invalid/028_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "React Hook \"useHook\" is called conditionally. React Hooks must be called in the exact same order in every component render."
+      }
+    ]
+  },
+  {
+    "id": "invalid-029",
+    "file": "fixtures/invalid/029_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "React Hook \"useState\" is called in function \"a\" that is neither a React function component nor a custom React Hook function. React component names must start with an uppercase letter. React Hook names must start with the word \"use\"."
+      },
+      {
+        "message": "React Hook \"useState\" is called in function \"b\" that is neither a React function component nor a custom React Hook function. React component names must start with an uppercase letter. React Hook names must start with the word \"use\"."
+      },
+      {
+        "message": "React Hook \"useState\" is called in function \"c\" that is neither a React function component nor a custom React Hook function. React component names must start with an uppercase letter. React Hook names must start with the word \"use\"."
+      },
+      {
+        "message": "React Hook \"useState\" is called in function \"d\" that is neither a React function component nor a custom React Hook function. React component names must start with an uppercase letter. React Hook names must start with the word \"use\"."
+      },
+      {
+        "message": "React Hook \"useState\" is called in function \"e\" that is neither a React function component nor a custom React Hook function. React component names must start with an uppercase letter. React Hook names must start with the word \"use\"."
+      },
+      {
+        "message": "React Hook \"useState\" is called in function \"f\" that is neither a React function component nor a custom React Hook function. React component names must start with an uppercase letter. React Hook names must start with the word \"use\"."
+      },
+      {
+        "message": "React Hook \"useState\" is called in function \"g\" that is neither a React function component nor a custom React Hook function. React component names must start with an uppercase letter. React Hook names must start with the word \"use\"."
+      },
+      {
+        "message": "React Hook \"useState\" is called in function \"j\" that is neither a React function component nor a custom React Hook function. React component names must start with an uppercase letter. React Hook names must start with the word \"use\"."
+      },
+      {
+        "message": "React Hook \"useState\" is called in function \"k\" that is neither a React function component nor a custom React Hook function. React component names must start with an uppercase letter. React Hook names must start with the word \"use\"."
+      }
+    ]
+  },
+  {
+    "id": "invalid-030",
+    "file": "fixtures/invalid/030_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "React Hook \"useState\" is called conditionally. React Hooks must be called in the exact same order in every component render. Did you accidentally call a React Hook after an early return?"
+      }
+    ]
+  },
+  {
+    "id": "invalid-031",
+    "file": "fixtures/invalid/031_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "React Hook \"useState\" is called conditionally. React Hooks must be called in the exact same order in every component render. Did you accidentally call a React Hook after an early return?"
+      }
+    ]
+  },
+  {
+    "id": "invalid-032",
+    "file": "fixtures/invalid/032_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "React Hook \"useState\" is called conditionally. React Hooks must be called in the exact same order in every component render. Did you accidentally call a React Hook after an early return?"
+      }
+    ]
+  },
+  {
+    "id": "invalid-033",
+    "file": "fixtures/invalid/033_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "React Hook \"useHook1\" is called conditionally. React Hooks must be called in the exact same order in every component render."
+      },
+      {
+        "message": "React Hook \"useHook2\" is called conditionally. React Hooks must be called in the exact same order in every component render."
+      }
+    ]
+  },
+  {
+    "id": "invalid-034",
+    "file": "fixtures/invalid/034_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "React Hook \"useState\" is called conditionally. React Hooks must be called in the exact same order in every component render."
+      }
+    ]
+  },
+  {
+    "id": "invalid-035",
+    "file": "fixtures/invalid/035_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "React Hook \"useState\" is called conditionally. React Hooks must be called in the exact same order in every component render."
+      },
+      {
+        "message": "React Hook \"useState\" is called conditionally. React Hooks must be called in the exact same order in every component render."
+      },
+      {
+        "message": "React Hook \"useState\" is called conditionally. React Hooks must be called in the exact same order in every component render."
+      }
+    ]
+  },
+  {
+    "id": "invalid-036",
+    "file": "fixtures/invalid/036_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "React Hook \"useCustomHook\" is called conditionally. React Hooks must be called in the exact same order in every component render."
+      }
+    ]
+  },
+  {
+    "id": "invalid-037",
+    "file": "fixtures/invalid/037_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "React Hook \"useCustomHook\" is called conditionally. React Hooks must be called in the exact same order in every component render."
+      }
+    ]
+  },
+  {
+    "id": "invalid-038",
+    "file": "fixtures/invalid/038_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "React Hook \"useCustomHook\" is called conditionally. React Hooks must be called in the exact same order in every component render."
+      }
+    ]
+  },
+  {
+    "id": "invalid-039",
+    "file": "fixtures/invalid/039_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "React Hook \"useProbablyAHook\" is called in function \"notAComponent\" that is neither a React function component nor a custom React Hook function. React component names must start with an uppercase letter. React Hook names must start with the word \"use\"."
+      }
+    ]
+  },
+  {
+    "id": "invalid-040",
+    "file": "fixtures/invalid/040_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "React Hook \"useState\" cannot be called at the top level. React Hooks must be called in a React function component or a custom React Hook function."
+      },
+      {
+        "message": "React Hook \"React.useCallback\" cannot be called at the top level. React Hooks must be called in a React function component or a custom React Hook function."
+      },
+      {
+        "message": "React Hook \"useCustomHook\" cannot be called at the top level. React Hooks must be called in a React function component or a custom React Hook function."
+      }
+    ]
+  },
+  {
+    "id": "invalid-041",
+    "file": "fixtures/invalid/041_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "React Hook \"useBasename\" cannot be called at the top level. React Hooks must be called in a React function component or a custom React Hook function."
+      }
+    ]
+  },
+  {
+    "id": "invalid-042",
+    "file": "fixtures/invalid/042_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "React Hook \"useFeatureFlag\" cannot be called in a class component. React Hooks must be called in a React function component or a custom React Hook function."
+      }
+    ]
+  },
+  {
+    "id": "invalid-043",
+    "file": "fixtures/invalid/043_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "React Hook \"React.useState\" cannot be called in a class component. React Hooks must be called in a React function component or a custom React Hook function."
+      }
+    ]
+  },
+  {
+    "id": "invalid-044",
+    "file": "fixtures/invalid/044_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "React Hook \"useState\" cannot be called in a class component. React Hooks must be called in a React function component or a custom React Hook function."
+      }
+    ]
+  },
+  {
+    "id": "invalid-045",
+    "file": "fixtures/invalid/045_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "React Hook \"useState\" cannot be called in a class component. React Hooks must be called in a React function component or a custom React Hook function."
+      }
+    ]
+  },
+  {
+    "id": "invalid-046",
+    "file": "fixtures/invalid/046_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "React Hook \"useState\" cannot be called in a class component. React Hooks must be called in a React function component or a custom React Hook function."
+      }
+    ]
+  },
+  {
+    "id": "invalid-047",
+    "file": "fixtures/invalid/047_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "React Hook \"useState\" cannot be called in a class component. React Hooks must be called in a React function component or a custom React Hook function."
+      }
+    ]
+  },
+  {
+    "id": "invalid-048",
+    "file": "fixtures/invalid/048_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "React Hook \"useState\" cannot be called in an async function."
+      }
+    ]
+  },
+  {
+    "id": "invalid-049",
+    "file": "fixtures/invalid/049_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "React Hook \"useState\" cannot be called in an async function."
+      }
+    ]
+  },
+  {
+    "id": "invalid-050",
+    "file": "fixtures/invalid/050_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "React Hook \"useId\" cannot be called in an async function."
+      },
+      {
+        "message": "React Hook \"React.useId\" cannot be called in an async function."
+      }
+    ]
+  },
+  {
+    "id": "invalid-051",
+    "file": "fixtures/invalid/051_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "React Hook \"useId\" cannot be called in an async function."
+      }
+    ]
+  },
+  {
+    "id": "invalid-052",
+    "file": "fixtures/invalid/052_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "React Hook \"useId\" is called in function \"notAHook\" that is neither a React function component nor a custom React Hook function. React component names must start with an uppercase letter. React Hook names must start with the word \"use\"."
+      }
+    ]
+  },
+  {
+    "id": "invalid-053",
+    "file": "fixtures/invalid/053_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "React Hook \"Hook.use\" cannot be called at the top level. React Hooks must be called in a React function component or a custom React Hook function."
+      },
+      {
+        "message": "React Hook \"Hook.useState\" cannot be called at the top level. React Hooks must be called in a React function component or a custom React Hook function."
+      },
+      {
+        "message": "React Hook \"Hook.use42\" cannot be called at the top level. React Hooks must be called in a React function component or a custom React Hook function."
+      },
+      {
+        "message": "React Hook \"Hook.useHook\" cannot be called at the top level. React Hooks must be called in a React function component or a custom React Hook function."
+      }
+    ]
+  },
+  {
+    "id": "invalid-054",
+    "file": "fixtures/invalid/054_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "React Hook \"use\" is called in function \"notAComponent\" that is neither a React function component nor a custom React Hook function. React component names must start with an uppercase letter. React Hook names must start with the word \"use\"."
+      }
+    ]
+  },
+  {
+    "id": "invalid-055",
+    "file": "fixtures/invalid/055_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "React Hook \"use\" cannot be called at the top level. React Hooks must be called in a React function component or a custom React Hook function."
+      }
+    ]
+  },
+  {
+    "id": "invalid-056",
+    "file": "fixtures/invalid/056_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "React Hook \"use\" cannot be called in a class component. React Hooks must be called in a React function component or a custom React Hook function."
+      }
+    ]
+  },
+  {
+    "id": "invalid-057",
+    "file": "fixtures/invalid/057_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "React Hook \"use\" cannot be called in an async function."
+      }
+    ]
+  },
+  {
+    "id": "invalid-058",
+    "file": "fixtures/invalid/058_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "React Hook \"use\" cannot be called in a try/catch block."
+      }
+    ]
+  },
+  {
+    "id": "invalid-059",
+    "file": "fixtures/invalid/059_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "React Hook \"use\" cannot be called in a try/catch block."
+      }
+    ]
+  },
+  {
+    "id": "invalid-060",
+    "file": "fixtures/invalid/060_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "`onClick` is a function created with React Hook \"useEffectEvent\", and can only be called from Effects and Effect Events in the same component."
+      }
+    ]
+  },
+  {
+    "id": "invalid-061",
+    "file": "fixtures/invalid/061_Case.tsx",
+    "validity": "invalid",
+    "settings": {
+      "react-hooks": {
+        "additionalEffectHooks": "useMyEffect"
+      }
+    },
+    "errors": [
+      {
+        "message": "`onClick` is a function created with React Hook \"useEffectEvent\", and can only be called from Effects and Effect Events in the same component."
+      }
+    ]
+  },
+  {
+    "id": "invalid-062",
+    "file": "fixtures/invalid/062_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "`onClick` is a function created with React Hook \"useEffectEvent\", and can only be called from Effects and Effect Events in the same component. It cannot be assigned to a variable or passed down."
+      }
+    ]
+  },
+  {
+    "id": "invalid-063",
+    "file": "fixtures/invalid/063_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "`onClick` is a function created with React Hook \"useEffectEvent\", and can only be called from Effects and Effect Events in the same component. It cannot be assigned to a variable or passed down.",
+        "line": 7
+      },
+      {
+        "message": "`onClick` is a function created with React Hook \"useEffectEvent\", and can only be called from Effects and Effect Events in the same component.",
+        "line": 15
+      }
+    ]
+  },
+  {
+    "id": "invalid-064",
+    "file": "fixtures/invalid/064_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "`onClick` is a function created with React Hook \"useEffectEvent\", and can only be called from Effects and Effect Events in the same component. It cannot be assigned to a variable or passed down."
+      }
+    ]
+  },
+  {
+    "id": "invalid-065",
+    "file": "fixtures/invalid/065_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "`onClick` is a function created with React Hook \"useEffectEvent\", and can only be called from Effects and Effect Events in the same component. It cannot be assigned to a variable or passed down.",
+        "line": 7
+      }
+    ]
+  },
+  {
+    "id": "invalid-066",
+    "file": "fixtures/invalid/066_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      {
+        "message": "`onClick` is a function created with React Hook \"useEffectEvent\", and can only be called from Effects and Effect Events in the same component. It cannot be assigned to a variable or passed down."
+      }
+    ]
+  },
+  {
+    "id": "invalid-067",
+    "file": "fixtures/invalid/067_Case.tsx",
+    "validity": "invalid",
+    "errors": [
+      "`onClick` is a function created with React Hook \"useEffectEvent\", and can only be called from Effects and Effect Events in the same component.",
+      "`onClick` is a function created with React Hook \"useEffectEvent\", and can only be called from Effects and Effect Events in the same component.",
+      "`onClick` is a function created with React Hook \"useEffectEvent\", and can only be called from Effects and Effect Events in the same component. It cannot be assigned to a variable or passed down.",
+      "`onClick` is a function created with React Hook \"useEffectEvent\", and can only be called from Effects and Effect Events in the same component. It cannot be assigned to a variable or passed down."
+    ]
+  }
+]
