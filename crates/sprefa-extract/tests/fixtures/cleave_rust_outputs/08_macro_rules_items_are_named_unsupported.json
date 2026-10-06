@@ -1,0 +1,74 @@
+{
+  "test": "macro_rules_items_are_named_unsupported",
+  "source_range": "375-406",
+  "fixture": {
+    "group": "cleave_rust",
+    "variant": "basic",
+    "label": "macro-rules-item"
+  },
+  "steps": [
+    {
+      "action": "copy_tree",
+      "source": "$fixtures/cleave_rust/basic",
+      "target": "$work/repo"
+    },
+    {
+      "action": "directory",
+      "path": "$work/state"
+    },
+    {
+      "action": "git",
+      "args": [
+        "init",
+        "-q",
+        "."
+      ],
+      "cwd": "$work/repo"
+    },
+    {
+      "action": "write",
+      "path": "$work/repo/src/lib.rs",
+      "text": "pub mod opts;\npub mod moved;\n"
+    },
+    {
+      "action": "write",
+      "path": "$work/repo/src/opts.rs",
+      "text": "macro_rules! param { ($value:expr) => { $value }; }\npub(crate) fn read() -> u32 { param!(1) }\n"
+    },
+    {
+      "action": "write",
+      "path": "$work/repo/src/moved.rs",
+      "text": ""
+    },
+    {
+      "action": "command",
+      "program": "$ryii",
+      "arguments": [
+        "cleave",
+        "src/opts.rs#param",
+        "src/moved.rs",
+        "--root",
+        "$work/repo",
+        "--state",
+        "$work/state"
+      ],
+      "cwd": "$work/repo",
+      "expect_exit_code": 2,
+      "capture": "out_param",
+      "raw_stdout": true,
+      "stdout_redactions": [
+        {
+          "pattern": "(?m)^(stage )[0-9a-f]{64}( committed| dry run, tree untouched)$",
+          "replacement": "${1}$$STAGE${2}"
+        }
+      ]
+    },
+    {
+      "action": "claim",
+      "kind": "contains",
+      "cell": "out_param.stderr",
+      "text": "unsupported macro_rules! macro",
+      "name": "param_stderr_macro_rules"
+    }
+  ]
+}

@@ -1,0 +1,84 @@
+{
+  "test": "moved_struct_fields_used_in_a_child_literal_remain_visible",
+  "source_range": "791-800",
+  "fixture": {
+    "group": "cleave_ratchet",
+    "variant": "private_literal",
+    "label": "private-literal"
+  },
+  "steps": [
+    {
+      "action": "copy_tree",
+      "source": "$fixtures/cleave_ratchet/private_literal",
+      "target": "$work/repo"
+    },
+    {
+      "action": "directory",
+      "path": "$work/state"
+    },
+    {
+      "action": "git",
+      "args": [
+        "init",
+        "-q",
+        "."
+      ],
+      "cwd": "$work/repo"
+    },
+    {
+      "action": "git",
+      "args": [
+        "add",
+        "-A"
+      ],
+      "cwd": "$work/repo"
+    },
+    {
+      "action": "command",
+      "program": "$ryii",
+      "arguments": [
+        "cleave",
+        "src/source.rs#Packet",
+        "src/dest.rs",
+        "--slow",
+        "--commit",
+        "--root",
+        "$work/repo",
+        "--state",
+        "$work/state"
+      ],
+      "cwd": "$work/repo",
+      "environment": {
+        "HAFLEY_TRACE": "$work/cleave.json",
+        "RUST_LOG": "sprefa_extract=debug,hafley_scm=debug"
+      },
+      "expect_exit_code": 0,
+      "capture": "stdout_commit",
+      "raw_stdout": true,
+      "unasserted_stderr": true,
+      "stdout_redactions": [
+        {
+          "pattern": "(?m)^(stage )[0-9a-f]{64}( committed| dry run, tree untouched)$",
+          "replacement": "${1}$$STAGE${2}"
+        }
+      ]
+    },
+    {
+      "action": "command",
+      "program": "$cargo",
+      "arguments": [
+        "check",
+        "--quiet",
+        "--offline"
+      ],
+      "cwd": "$work/repo",
+      "environment": {
+        "CARGO_TARGET_DIR": "$work/target",
+        "KACHE_DISABLED": "1"
+      },
+      "expect_exit_code": 0,
+      "capture": "cargo_check",
+      "raw_stdout": true
+    }
+  ]
+}

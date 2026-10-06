@@ -1,0 +1,109 @@
+{
+  "test": "numbered_module_alias_and_child_glob_survive_a_verified_move",
+  "source_range": "448-465",
+  "fixture": {
+    "group": "cleave_rust",
+    "variant": "numbered",
+    "label": "module-alias"
+  },
+  "steps": [
+    {
+      "action": "copy_tree",
+      "source": "$fixtures/cleave_rust/numbered",
+      "target": "$work/repo"
+    },
+    {
+      "action": "directory",
+      "path": "$work/state"
+    },
+    {
+      "action": "git",
+      "args": [
+        "init",
+        "-q",
+        "."
+      ],
+      "cwd": "$work/repo"
+    },
+    {
+      "action": "command",
+      "program": "$ryii",
+      "arguments": [
+        "cleave",
+        "src/lib.rs#target",
+        "src/2_call.rs",
+        "--commit",
+        "--verify",
+        "cargo check --quiet",
+        "--root",
+        "$work/repo",
+        "--state",
+        "$work/state"
+      ],
+      "cwd": "$work/repo",
+      "environment": {
+        "HAFLEY_TRACE": "$work/cleave.json",
+        "RUST_LOG": "sprefa_extract=debug,hafley_scm=debug",
+        "KACHE_DISABLED": "1"
+      },
+      "expect_exit_code": 0,
+      "capture": "stdout_commit",
+      "raw_stdout": true,
+      "unasserted_stderr": true,
+      "stdout_redactions": [
+        {
+          "pattern": "(?m)^(stage )[0-9a-f]{64}( committed| dry run, tree untouched)$",
+          "replacement": "${1}$$STAGE${2}"
+        }
+      ]
+    },
+    {
+      "action": "read_tree",
+      "path": "$work/repo/src/lib.rs",
+      "capture": "lib_after"
+    },
+    {
+      "action": "read_tree",
+      "path": "$work/repo/src/2_call.rs",
+      "capture": "call_after"
+    },
+    {
+      "action": "claim",
+      "kind": "contains",
+      "cell": "lib_after",
+      "text": "use crate::call_facts::target;",
+      "name": "lib_imports_target"
+    },
+    {
+      "action": "claim",
+      "kind": "contains",
+      "cell": "lib_after",
+      "text": "use std::fmt::Debug;",
+      "name": "lib_keeps_debug_import"
+    },
+    {
+      "action": "claim",
+      "kind": "contains",
+      "cell": "call_after",
+      "text": "pub fn target()",
+      "name": "call_holds_target"
+    },
+    {
+      "action": "command",
+      "program": "$cargo",
+      "arguments": [
+        "check",
+        "--quiet",
+        "--offline"
+      ],
+      "cwd": "$work/repo",
+      "environment": {
+        "CARGO_TARGET_DIR": "$work/target",
+        "KACHE_DISABLED": "1"
+      },
+      "expect_exit_code": 0,
+      "capture": "cargo_check",
+      "raw_stdout": true
+    }
+  ]
+}

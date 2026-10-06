@@ -113,15 +113,65 @@ pub fn replace_strings(value: &Value, replacements: &[(&str, &str)]) -> Value {
 pub fn commands(case: &Value, api: impl Fn(&Value) -> Value) -> Value {
     use std::process::Command;
     let temporary = tempfile::tempdir().unwrap();
-    let work = temporary.path().to_str().unwrap();
-    let expand = |text: &str| text.replace("$work", work);
+    let canonical_work = temporary.path().canonicalize().unwrap();
+    let work = canonical_work.to_str().unwrap();
+    let expand = |text: &str| {
+        text.replace("$work", work)
+            .replace(
+                "$fixtures",
+                concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures"),
+            )
+            .replace("$manifest", env!("CARGO_MANIFEST_DIR"))
+            .replace("$ryii", env!("CARGO_BIN_EXE_ryii"))
+            .replace("$cargo", env!("CARGO"))
+    };
     let mut outputs = BTreeMap::<String, (String, String)>::new();
     let mut observed = BTreeMap::new();
     for step in case["steps"].as_array().unwrap() {
-        let name = step["name"].as_str().unwrap_or("setup");
+        let name = step["capture"]
+            .as_str()
+            .or_else(|| step["name"].as_str())
+            .unwrap_or("setup");
         let path = || std::path::PathBuf::from(expand(step["path"].as_str().unwrap()));
         match step["action"].as_str().unwrap() {
             "directory" => std::fs::create_dir_all(path()).unwrap(),
+            "copy_tree" => {
+                let target = std::path::PathBuf::from(expand(step["target"].as_str().unwrap()));
+                if step["fresh"] == true && target.exists() {
+                    std::fs::remove_dir_all(&target).unwrap();
+                }
+                copy_tree(
+                    std::path::Path::new(&expand(step["source"].as_str().unwrap())),
+                    &target,
+                );
+            }
+            "read_tree" => {
+                observed.insert(
+                    name.to_string(),
+                    serde_json::json!(std::fs::read_to_string(path()).unwrap()),
+                );
+            }
+            "replace" => {
+                let text = std::fs::read_to_string(path()).unwrap();
+                std::fs::write(
+                    path(),
+                    text.replace(step["from"].as_str().unwrap(), step["to"].as_str().unwrap()),
+                )
+                .unwrap();
+            }
+            "sql_query" => {
+                let db =
+                    rusqlite::Connection::open(expand(step["database"].as_str().unwrap())).unwrap();
+                let count: i64 = db
+                    .query_row(step["query"].as_str().unwrap(), [], |row| row.get(0))
+                    .unwrap();
+                assert_eq!(serde_json::json!(count), step["expect"]);
+                observed.insert(name.to_string(), serde_json::json!(count));
+            }
+            "claim" => {
+                let value = claim(step, &observed, &expand);
+                observed.insert(name.to_string(), value);
+            }
             "copy" => {
                 let target = path();
                 std::fs::create_dir_all(target.parent().unwrap()).unwrap();
@@ -244,18 +294,39 @@ pub fn commands(case: &Value, api: impl Fn(&Value) -> Value) -> Value {
                 }
                 observed.insert(name.to_string(), serde_json::json!({"rows":rows}));
             }
-            "run" => {
-                let mut command = Command::new(env!("CARGO_BIN_EXE_ryii"));
+            "run" | "command" | "git" => {
+                let program = if step["action"] == "git" {
+                    "git".to_string()
+                } else {
+                    expand(
+                        step["program"]
+                            .as_str()
+                            .unwrap_or(env!("CARGO_BIN_EXE_ryii")),
+                    )
+                };
+                let mut command = Command::new(program);
                 command.args(
-                    step["arguments"]
-                        .as_array()
-                        .unwrap()
-                        .iter()
-                        .map(|argument| expand(argument.as_str().unwrap())),
+                    step[if step["action"] == "git" {
+                        "args"
+                    } else {
+                        "arguments"
+                    }]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|argument| expand(argument.as_str().unwrap())),
                 );
                 if let Some(environment) = step["environment"].as_object() {
                     for (key, value) in environment {
                         command.env(key, expand(value.as_str().unwrap()));
+                    }
+                }
+                if let Some(cwd) = step["cwd"].as_str() {
+                    command.current_dir(expand(cwd));
+                }
+                if let Some(keys) = step["env_remove"].as_array() {
+                    for key in keys {
+                        command.env_remove(key.as_str().unwrap());
                     }
                 }
                 let started = std::time::Instant::now();
@@ -265,9 +336,21 @@ pub fn commands(case: &Value, api: impl Fn(&Value) -> Value) -> Value {
                 let stderr = String::from_utf8(output.stderr).unwrap();
                 assert_eq!(
                     output.status.success(),
-                    step["success"].as_bool().unwrap_or(true),
+                    step["success"]
+                        .as_bool()
+                        .unwrap_or_else(|| step["expect_exit_code"].as_i64().unwrap_or(0) == 0),
                     "{name}: {stderr}"
                 );
+                if let Some(code) = step["expect_exit_code"].as_i64() {
+                    assert_eq!(
+                        output.status.code(),
+                        Some(code as i32),
+                        "{name}: {stdout}\n{stderr}"
+                    );
+                }
+                if step["action"] == "git" {
+                    continue;
+                }
                 outputs.insert(name.to_string(), (stdout.clone(), stderr.clone()));
                 if let Some(target) = step["stdout_to"].as_str() {
                     std::fs::write(expand(target), &stdout).unwrap();
@@ -354,12 +437,47 @@ pub fn commands(case: &Value, api: impl Fn(&Value) -> Value) -> Value {
             _ => panic!("unknown fixture action: {step}"),
         }
     }
+    for step in case["steps"].as_array().unwrap() {
+        if let Some(redactions) = step["stdout_redactions"].as_array() {
+            let name = step["capture"]
+                .as_str()
+                .or_else(|| step["name"].as_str())
+                .unwrap();
+            let result = observed.get_mut(name).unwrap();
+            let mut text = result["stdout"].as_str().unwrap().to_string();
+            for redaction in redactions {
+                text = regex::Regex::new(redaction["pattern"].as_str().unwrap())
+                    .unwrap()
+                    .replace_all(&text, redaction["replacement"].as_str().unwrap())
+                    .into_owned();
+            }
+            result["stdout"] = Value::String(text);
+        }
+    }
     let raw: std::collections::BTreeSet<String> = case["steps"]
         .as_array()
         .unwrap()
         .iter()
         .filter(|step| step["raw_stdout"].as_bool().unwrap_or(false))
-        .map(|step| step["name"].as_str().unwrap_or("setup").to_string())
+        .map(|step| {
+            step["capture"]
+                .as_str()
+                .or_else(|| step["name"].as_str())
+                .unwrap_or("setup")
+                .to_string()
+        })
+        .collect();
+    let unasserted_stderr: std::collections::BTreeSet<_> = case["steps"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|step| step["unasserted_stderr"] == true)
+        .map(|step| {
+            step["capture"]
+                .as_str()
+                .or_else(|| step["name"].as_str())
+                .unwrap()
+        })
         .collect();
     // Keep record order and every stable field. Per-case exclusions remove only
     // timestamp/version evidence that the old test explicitly left unpinned.
@@ -383,9 +501,145 @@ pub fn commands(case: &Value, api: impl Fn(&Value) -> Value) -> Value {
                 }
                 result["stdout"] = Value::Array(records);
             }
-            result["stderr"] =
-                Value::String(result["stderr"].as_str().unwrap().replace(work, "$work"));
+            if unasserted_stderr.contains(name.as_str()) {
+                result.as_object_mut().unwrap().remove("stderr");
+            } else {
+                result["stderr"] =
+                    Value::String(result["stderr"].as_str().unwrap().replace(work, "$work"));
+            }
         }
     }
-    serde_json::json!(observed)
+    replace_strings(&serde_json::json!(observed), &[(work, "$work")])
+}
+
+fn copy_tree(source: &Path, target: &Path) {
+    std::fs::create_dir_all(target).unwrap();
+    for entry in std::fs::read_dir(source).unwrap() {
+        let entry = entry.unwrap();
+        let to = target.join(entry.file_name());
+        if entry.file_type().unwrap().is_dir() {
+            copy_tree(&entry.path(), &to);
+        } else {
+            std::fs::copy(entry.path(), to).unwrap();
+        }
+    }
+}
+
+fn claim(
+    step: &Value,
+    observed: &BTreeMap<String, Value>,
+    expand: &impl Fn(&str) -> String,
+) -> Value {
+    let cell = |key: &str| {
+        let key = step[key].as_str().unwrap();
+        let (name, field) = key
+            .rsplit_once('.')
+            .filter(|(_, field)| ["stdout", "stderr"].contains(field))
+            .unwrap_or((key, "stdout"));
+        let value = &observed[name];
+        if value.is_object() {
+            value[field].clone()
+        } else {
+            value.clone()
+        }
+    };
+    let kind = step["kind"].as_str().unwrap();
+    if kind == "cells_equal" {
+        let actual = cell("left") == cell("right");
+        assert!(actual, "{step}");
+        return serde_json::json!(actual);
+    }
+    let value = cell("cell");
+    let text = value.as_str().unwrap_or("");
+    let needle = || expand(step["text"].as_str().unwrap());
+    let (actual, expected) = match kind {
+        "contains" => (
+            serde_json::json!(text.contains(&needle())),
+            Value::Bool(true),
+        ),
+        "absent" => (
+            serde_json::json!(!text.contains(&needle())),
+            Value::Bool(true),
+        ),
+        "any_contains" => (
+            serde_json::json!(step["texts"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|needle| text.contains(&expand(needle.as_str().unwrap())))),
+            Value::Bool(true),
+        ),
+        "text_equals" => (value.clone(), Value::String(needle())),
+        "count_substring" => (
+            serde_json::json!(text.matches(&needle()).count()),
+            step["expect"].clone(),
+        ),
+        "line_count" => (
+            serde_json::json!(text
+                .lines()
+                .filter(|line| line.starts_with(step["line_prefix"].as_str().unwrap()))
+                .count()),
+            step["expect"].clone(),
+        ),
+        "line_equals" => {
+            let mut line = text
+                .lines()
+                .nth(step["line"].as_u64().unwrap() as usize)
+                .unwrap()
+                .to_string();
+            if let Some(replacements) = step["replace"].as_object() {
+                for (from, to) in replacements {
+                    line = line.replace(&expand(from), to.as_str().unwrap());
+                }
+            }
+            (Value::String(line), Value::String(needle()))
+        }
+        "list_contains" | "list_absent" => {
+            let present = value.as_array().unwrap().contains(&step["value"]);
+            (Value::Bool(present), Value::Bool(kind == "list_contains"))
+        }
+        _ if kind.starts_with("json_") => {
+            let row: Value = serde_json::from_str(
+                text.lines()
+                    .find(|line| line.starts_with(step["line_prefix"].as_str().unwrap_or("{")))
+                    .unwrap(),
+            )
+            .unwrap();
+            let selected = row
+                .pointer(&format!(
+                    "/{}",
+                    step["pointer"].as_str().unwrap().trim_start_matches('/')
+                ))
+                .unwrap();
+            let actual = match kind {
+                "json_column" => Value::Array(
+                    selected
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .map(|row| row[step["column"].as_str().unwrap()].clone())
+                        .collect(),
+                ),
+                "json_len" => serde_json::json!(selected.as_array().unwrap().len()),
+                "json_column_absent" => Value::Bool(
+                    !selected
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .any(|row| row[step["column"].as_str().unwrap()] == step["value"]),
+                ),
+                "json_scalar" | "json_equals" => selected.clone(),
+                _ => panic!("unknown claim: {step}"),
+            };
+            let expected = if kind == "json_column_absent" {
+                Value::Bool(true)
+            } else {
+                step["expect"].clone()
+            };
+            (actual, expected)
+        }
+        _ => panic!("unknown claim: {step}"),
+    };
+    assert_eq!(actual, expected, "{step}");
+    actual
 }

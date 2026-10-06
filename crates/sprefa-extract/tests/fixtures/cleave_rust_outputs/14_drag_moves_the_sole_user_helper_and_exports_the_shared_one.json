@@ -1,0 +1,189 @@
+{
+  "test": "drag_moves_the_sole_user_helper_and_exports_the_shared_one",
+  "source_range": "554-591",
+  "fixture": {
+    "group": "cleave_rust",
+    "variant": "drag",
+    "label": "split"
+  },
+  "steps": [
+    {
+      "action": "copy_tree",
+      "source": "$fixtures/cleave_rust/drag",
+      "target": "$work/repo"
+    },
+    {
+      "action": "directory",
+      "path": "$work/state"
+    },
+    {
+      "action": "git",
+      "args": [
+        "init",
+        "-q",
+        "."
+      ],
+      "cwd": "$work/repo"
+    },
+    {
+      "action": "command",
+      "program": "$ryii",
+      "arguments": [
+        "cleave",
+        "src/util.rs#load_config",
+        "src/config.rs",
+        "--drag",
+        "--json",
+        "--root",
+        "$work/repo",
+        "--state",
+        "$work/state"
+      ],
+      "cwd": "$work/repo",
+      "environment": {
+        "HAFLEY_TRACE": "$work/cleave.json",
+        "RUST_LOG": "sprefa_extract=debug,hafley_scm=debug"
+      },
+      "expect_exit_code": 0,
+      "capture": "stdout_plan",
+      "raw_stdout": true,
+      "unasserted_stderr": true,
+      "stdout_redactions": [
+        {
+          "pattern": "(?m)^(stage )[0-9a-f]{64}( committed| dry run, tree untouched)$",
+          "replacement": "${1}$$STAGE${2}"
+        }
+      ]
+    },
+    {
+      "action": "claim",
+      "kind": "json_column",
+      "cell": "stdout_plan",
+      "line_prefix": "{",
+      "pointer": "dragged",
+      "column": "name",
+      "expect": [
+        "pad",
+        "slug"
+      ],
+      "name": "dragged_names"
+    },
+    {
+      "action": "claim",
+      "kind": "json_column",
+      "cell": "stdout_plan",
+      "line_prefix": "{",
+      "pointer": "dragged",
+      "column": "action",
+      "expect": [
+        "exported",
+        "moved"
+      ],
+      "name": "dragged_actions"
+    },
+    {
+      "action": "claim",
+      "kind": "json_scalar",
+      "cell": "stdout_plan",
+      "line_prefix": "{",
+      "pointer": "drag_iterations",
+      "expect": 1,
+      "name": "drag_iterations"
+    },
+    {
+      "action": "command",
+      "program": "$ryii",
+      "arguments": [
+        "cleave",
+        "src/util.rs#load_config",
+        "src/config.rs",
+        "--drag",
+        "--commit",
+        "--root",
+        "$work/repo",
+        "--state",
+        "$work/state"
+      ],
+      "cwd": "$work/repo",
+      "environment": {
+        "HAFLEY_TRACE": "$work/cleave.json",
+        "RUST_LOG": "sprefa_extract=debug,hafley_scm=debug"
+      },
+      "expect_exit_code": 0,
+      "capture": "stdout_commit",
+      "raw_stdout": true,
+      "unasserted_stderr": true,
+      "stdout_redactions": [
+        {
+          "pattern": "(?m)^(stage )[0-9a-f]{64}( committed| dry run, tree untouched)$",
+          "replacement": "${1}$$STAGE${2}"
+        }
+      ]
+    },
+    {
+      "action": "read_tree",
+      "path": "$work/repo/src/util.rs",
+      "capture": "util_after"
+    },
+    {
+      "action": "read_tree",
+      "path": "$work/repo/src/config.rs",
+      "capture": "config_after"
+    },
+    {
+      "action": "claim",
+      "kind": "contains",
+      "cell": "util_after",
+      "text": "pub fn pad(",
+      "name": "util_exports_pad"
+    },
+    {
+      "action": "claim",
+      "kind": "absent",
+      "cell": "util_after",
+      "text": "fn slug(",
+      "name": "util_loses_slug"
+    },
+    {
+      "action": "claim",
+      "kind": "count_substring",
+      "cell": "config_after",
+      "text": "fn slug(",
+      "expect": 1,
+      "name": "config_slug_lands_once"
+    },
+    {
+      "action": "claim",
+      "kind": "count_substring",
+      "cell": "config_after",
+      "text": "use crate::util::pad;",
+      "expect": 1,
+      "name": "config_imports_pad_once"
+    },
+    {
+      "action": "claim",
+      "kind": "count_substring",
+      "cell": "config_after",
+      "text": "fn pad(",
+      "expect": 0,
+      "name": "config_never_copies_pad"
+    },
+    {
+      "action": "command",
+      "program": "$cargo",
+      "arguments": [
+        "check",
+        "--quiet",
+        "--offline"
+      ],
+      "cwd": "$work/repo",
+      "environment": {
+        "CARGO_TARGET_DIR": "$work/target",
+        "KACHE_DISABLED": "1"
+      },
+      "expect_exit_code": 0,
+      "capture": "cargo_check",
+      "raw_stdout": true
+    }
+  ]
+}

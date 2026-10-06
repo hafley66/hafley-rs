@@ -1,0 +1,99 @@
+{
+  "test": "source_keeps_its_same_file_caller_after_the_item_moves",
+  "source_range": "185-195",
+  "fixture": {
+    "group": "cleave_rust",
+    "variant": "same_file",
+    "label": "caller"
+  },
+  "steps": [
+    {
+      "action": "copy_tree",
+      "source": "$fixtures/cleave_rust/same_file",
+      "target": "$work/repo"
+    },
+    {
+      "action": "directory",
+      "path": "$work/state"
+    },
+    {
+      "action": "git",
+      "args": [
+        "init",
+        "-q",
+        "."
+      ],
+      "cwd": "$work/repo"
+    },
+    {
+      "action": "command",
+      "program": "$ryii",
+      "arguments": [
+        "cleave",
+        "src/util.rs#target",
+        "src/config.rs",
+        "--commit",
+        "--root",
+        "$work/repo",
+        "--state",
+        "$work/state"
+      ],
+      "cwd": "$work/repo",
+      "environment": {
+        "HAFLEY_TRACE": "$work/cleave.json",
+        "RUST_LOG": "sprefa_extract=debug,hafley_scm=debug"
+      },
+      "expect_exit_code": 0,
+      "capture": "stdout_commit",
+      "raw_stdout": true,
+      "unasserted_stderr": true,
+      "stdout_redactions": [
+        {
+          "pattern": "(?m)^(stage )[0-9a-f]{64}( committed| dry run, tree untouched)$",
+          "replacement": "${1}$$STAGE${2}"
+        }
+      ]
+    },
+    {
+      "action": "read_tree",
+      "path": "$work/repo/src/util.rs",
+      "capture": "util_after"
+    },
+    {
+      "action": "read_tree",
+      "path": "$work/repo/src/config.rs",
+      "capture": "config_after"
+    },
+    {
+      "action": "claim",
+      "kind": "contains",
+      "cell": "util_after",
+      "text": "use crate::config::target;",
+      "name": "util_imports_target"
+    },
+    {
+      "action": "claim",
+      "kind": "contains",
+      "cell": "config_after",
+      "text": "use crate::util::helper;",
+      "name": "config_imports_helper"
+    },
+    {
+      "action": "command",
+      "program": "$cargo",
+      "arguments": [
+        "check",
+        "--quiet",
+        "--offline"
+      ],
+      "cwd": "$work/repo",
+      "environment": {
+        "CARGO_TARGET_DIR": "$work/target",
+        "KACHE_DISABLED": "1"
+      },
+      "expect_exit_code": 0,
+      "capture": "cargo_check",
+      "raw_stdout": true
+    }
+  ]
+}

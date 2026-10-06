@@ -1,0 +1,91 @@
+{
+  "test": "undeclared_destinations_stop_before_rewriting_callers",
+  "source_range": "408-446",
+  "fixture": {
+    "group": "cleave_rust",
+    "variant": "basic",
+    "label": "undeclared-dest"
+  },
+  "steps": [
+    {
+      "action": "copy_tree",
+      "source": "$fixtures/cleave_rust/basic",
+      "target": "$work/repo"
+    },
+    {
+      "action": "directory",
+      "path": "$work/state"
+    },
+    {
+      "action": "git",
+      "args": [
+        "init",
+        "-q",
+        "."
+      ],
+      "cwd": "$work/repo"
+    },
+    {
+      "action": "command",
+      "program": "$ryii",
+      "arguments": [
+        "cleave",
+        "src/util.rs#load_config",
+        "crates/new/src/x.rs",
+        "--drag",
+        "--root",
+        "$work/repo",
+        "--state",
+        "$work/state"
+      ],
+      "cwd": "$work/repo",
+      "expect_exit_code": 2,
+      "capture": "out_undeclared",
+      "raw_stdout": true,
+      "stdout_redactions": [
+        {
+          "pattern": "(?m)^(stage )[0-9a-f]{64}( committed| dry run, tree untouched)$",
+          "replacement": "${1}$$STAGE${2}"
+        }
+      ]
+    },
+    {
+      "action": "claim",
+      "kind": "contains",
+      "cell": "out_undeclared.stderr",
+      "text": "is not declared by a Rust module",
+      "name": "undeclared_stderr_not_a_module"
+    },
+    {
+      "action": "command",
+      "program": "$ryii",
+      "arguments": [
+        "cleave",
+        "src/util.rs#load_config",
+        "src/not_declared.rs",
+        "--drag",
+        "--root",
+        "$work/repo",
+        "--state",
+        "$work/state"
+      ],
+      "cwd": "$work/repo",
+      "expect_exit_code": 0,
+      "capture": "out_created",
+      "raw_stdout": true,
+      "stdout_redactions": [
+        {
+          "pattern": "(?m)^(stage )[0-9a-f]{64}( committed| dry run, tree untouched)$",
+          "replacement": "${1}$$STAGE${2}"
+        }
+      ]
+    },
+    {
+      "action": "claim",
+      "kind": "contains",
+      "cell": "out_created.stdout",
+      "text": "mod not_declared;",
+      "name": "created_stdout_module_decl"
+    }
+  ]
+}

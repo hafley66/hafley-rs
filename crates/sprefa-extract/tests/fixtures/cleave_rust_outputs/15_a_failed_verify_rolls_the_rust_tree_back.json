@@ -1,0 +1,84 @@
+{
+  "test": "a_failed_verify_rolls_the_rust_tree_back",
+  "source_range": "593-627",
+  "fixture": {
+    "group": "cleave_rust",
+    "variant": "basic",
+    "label": "verify"
+  },
+  "steps": [
+    {
+      "action": "copy_tree",
+      "source": "$fixtures/cleave_rust/basic",
+      "target": "$work/repo"
+    },
+    {
+      "action": "directory",
+      "path": "$work/state"
+    },
+    {
+      "action": "git",
+      "args": [
+        "init",
+        "-q",
+        "."
+      ],
+      "cwd": "$work/repo"
+    },
+    {
+      "action": "read_tree",
+      "path": "$work/repo/src/util.rs",
+      "capture": "util_before"
+    },
+    {
+      "action": "command",
+      "program": "$ryii",
+      "arguments": [
+        "cleave",
+        "src/util.rs#load_config",
+        "src/config.rs",
+        "--commit",
+        "--verify",
+        "exit 1",
+        "--root",
+        "$work/repo",
+        "--state",
+        "$work/state"
+      ],
+      "cwd": "$work/repo",
+      "environment": {
+        "HAFLEY_TRACE": "$work/cleave.json",
+        "HOME": "$work",
+        "DL_TRAIL": "1"
+      },
+      "expect_exit_code": 3,
+      "capture": "out_failed_verify",
+      "raw_stdout": true,
+      "stdout_redactions": [
+        {
+          "pattern": "(?m)^(stage )[0-9a-f]{64}( committed| dry run, tree untouched)$",
+          "replacement": "${1}$$STAGE${2}"
+        }
+      ]
+    },
+    {
+      "action": "read_tree",
+      "path": "$work/repo/src/util.rs",
+      "capture": "util_after"
+    },
+    {
+      "action": "claim",
+      "kind": "cells_equal",
+      "left": "util_before",
+      "right": "util_after",
+      "name": "rollback_held"
+    },
+    {
+      "action": "sql_query",
+      "database": "$work/.agent/dl6.db",
+      "query": "SELECT count(*) FROM extract_run WHERE argv LIKE '%ryii cleave % --commit --verify %'",
+      "expect": 1,
+      "capture": "run_trail_count"
+    }
+  ]
+}

@@ -1,0 +1,100 @@
+{
+  "test": "a_path_declared_child_of_a_bin_root_takes_a_cleaved_item",
+  "source_range": "898-910",
+  "fixture": {
+    "group": "cleave_rust",
+    "variant": "path_bin_dir",
+    "label": "path-bin-dir"
+  },
+  "steps": [
+    {
+      "action": "copy_tree",
+      "source": "$fixtures/cleave_rust/path_bin_dir",
+      "target": "$work/repo"
+    },
+    {
+      "action": "directory",
+      "path": "$work/state"
+    },
+    {
+      "action": "git",
+      "args": [
+        "init",
+        "-q",
+        "."
+      ],
+      "cwd": "$work/repo"
+    },
+    {
+      "action": "command",
+      "program": "$ryii",
+      "arguments": [
+        "cleave",
+        "src/bin/tool.rs#two",
+        "src/bin/tool/1_a.rs",
+        "--commit",
+        "--root",
+        "$work/repo",
+        "--state",
+        "$work/state"
+      ],
+      "cwd": "$work/repo",
+      "environment": {
+        "HAFLEY_TRACE": "$work/cleave.json",
+        "RUST_LOG": "sprefa_extract=debug,hafley_scm=debug"
+      },
+      "expect_exit_code": 0,
+      "capture": "stdout_commit",
+      "raw_stdout": true,
+      "unasserted_stderr": true,
+      "stdout_redactions": [
+        {
+          "pattern": "(?m)^(stage )[0-9a-f]{64}( committed| dry run, tree untouched)$",
+          "replacement": "${1}$$STAGE${2}"
+        }
+      ]
+    },
+    {
+      "action": "command",
+      "program": "$cargo",
+      "arguments": [
+        "check",
+        "--quiet",
+        "--offline",
+        "--all-targets"
+      ],
+      "cwd": "$work/repo",
+      "environment": {
+        "CARGO_TARGET_DIR": "$work/target",
+        "KACHE_DISABLED": "1"
+      },
+      "expect_exit_code": 0,
+      "capture": "cargo_check_all_targets",
+      "raw_stdout": true
+    },
+    {
+      "action": "read_tree",
+      "path": "$work/repo/src/bin/tool.rs",
+      "capture": "tool_after"
+    },
+    {
+      "action": "read_tree",
+      "path": "$work/repo/src/bin/tool/1_a.rs",
+      "capture": "child_after"
+    },
+    {
+      "action": "claim",
+      "kind": "text_equals",
+      "cell": "tool_after",
+      "text": "use crate::a::two;\n#[path = \"tool/1_a.rs\"]\nmod a;\n\nfn main() {\n    println!(\"{}\", a::one() + two());\n}\n",
+      "name": "tool_exact_content"
+    },
+    {
+      "action": "claim",
+      "kind": "text_equals",
+      "cell": "child_after",
+      "text": "pub fn one() -> u32 {\n    1\n}\n\npub fn two() -> u32 {\n    2\n}\n",
+      "name": "child_exact_content"
+    }
+  ]
+}

@@ -1,0 +1,112 @@
+{
+  "test": "thread_local_static_is_named_unsupported_and_fails_the_plan",
+  "source_range": "280-330",
+  "fixture": {
+    "group": "cleave_rust",
+    "variant": "basic",
+    "label": "thread-local-drag"
+  },
+  "steps": [
+    {
+      "action": "copy_tree",
+      "source": "$fixtures/cleave_rust/basic",
+      "target": "$work/repo"
+    },
+    {
+      "action": "directory",
+      "path": "$work/state"
+    },
+    {
+      "action": "git",
+      "args": [
+        "init",
+        "-q",
+        "."
+      ],
+      "cwd": "$work/repo"
+    },
+    {
+      "action": "write",
+      "path": "$work/repo/src/lib.rs",
+      "text": "pub mod opts;\npub mod moved;\n"
+    },
+    {
+      "action": "write",
+      "path": "$work/repo/src/opts.rs",
+      "text": "use std::cell::RefCell;\nthread_local! { pub(crate) static LIVE_PARAMS: RefCell<u32> = RefCell::new(0); }\npub(crate) fn param_f32() -> u32 { LIVE_PARAMS.with(|value| *value.borrow()) }\n"
+    },
+    {
+      "action": "write",
+      "path": "$work/repo/src/moved.rs",
+      "text": ""
+    },
+    {
+      "action": "command",
+      "program": "$ryii",
+      "arguments": [
+        "cleave",
+        "src/opts.rs#LIVE_PARAMS",
+        "src/moved.rs",
+        "--root",
+        "$work/repo",
+        "--state",
+        "$work/state"
+      ],
+      "cwd": "$work/repo",
+      "expect_exit_code": 2,
+      "capture": "out_live_params",
+      "raw_stdout": true,
+      "stdout_redactions": [
+        {
+          "pattern": "(?m)^(stage )[0-9a-f]{64}( committed| dry run, tree untouched)$",
+          "replacement": "${1}$$STAGE${2}"
+        }
+      ]
+    },
+    {
+      "action": "claim",
+      "kind": "contains",
+      "cell": "out_live_params.stderr",
+      "text": "unsupported thread_local! macro",
+      "name": "live_params_stderr_unsupported"
+    },
+    {
+      "action": "command",
+      "program": "$ryii",
+      "arguments": [
+        "cleave",
+        "src/opts.rs#param_f32",
+        "src/moved.rs",
+        "--drag",
+        "--root",
+        "$work/repo",
+        "--state",
+        "$work/state"
+      ],
+      "cwd": "$work/repo",
+      "expect_exit_code": 2,
+      "capture": "out_param_f32",
+      "raw_stdout": true,
+      "stdout_redactions": [
+        {
+          "pattern": "(?m)^(stage )[0-9a-f]{64}( committed| dry run, tree untouched)$",
+          "replacement": "${1}$$STAGE${2}"
+        }
+      ]
+    },
+    {
+      "action": "claim",
+      "kind": "contains",
+      "cell": "out_param_f32.stdout",
+      "text": "ungraded LIVE_PARAMS",
+      "name": "param_f32_stdout_ungraded"
+    },
+    {
+      "action": "claim",
+      "kind": "contains",
+      "cell": "out_param_f32.stderr",
+      "text": "cleave --drag left ungraded names",
+      "name": "param_f32_stderr_ungraded_note"
+    }
+  ]
+}

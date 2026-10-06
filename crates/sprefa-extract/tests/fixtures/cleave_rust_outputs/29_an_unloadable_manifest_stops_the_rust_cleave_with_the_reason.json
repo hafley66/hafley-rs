@@ -1,0 +1,68 @@
+{
+  "test": "an_unloadable_manifest_stops_the_rust_cleave_with_the_reason",
+  "source_range": "912-933",
+  "fixture": {
+    "group": "cleave_rust",
+    "variant": "basic",
+    "label": "invalid-manifest"
+  },
+  "steps": [
+    {
+      "action": "copy_tree",
+      "source": "$fixtures/cleave_rust/basic",
+      "target": "$work/repo"
+    },
+    {
+      "action": "directory",
+      "path": "$work/state"
+    },
+    {
+      "action": "git",
+      "args": [
+        "init",
+        "-q",
+        "."
+      ],
+      "cwd": "$work/repo"
+    },
+    {
+      "action": "write",
+      "path": "$work/repo/Cargo.toml",
+      "text": "invalid manifest"
+    },
+    {
+      "action": "command",
+      "program": "$ryii",
+      "arguments": [
+        "cleave",
+        "src/util.rs#load_config",
+        "src/config.rs",
+        "--root",
+        "$work/repo",
+        "--state",
+        "$work/state"
+      ],
+      "cwd": "$work/repo",
+      "expect_exit_code": 2,
+      "capture": "out_bad_manifest",
+      "raw_stdout": true,
+      "stdout_redactions": [
+        {
+          "pattern": "(?m)^(stage )[0-9a-f]{64}( committed| dry run, tree untouched)$",
+          "replacement": "${1}$$STAGE${2}"
+        }
+      ]
+    },
+    {
+      "action": "claim",
+      "kind": "line_equals",
+      "cell": "out_bad_manifest.stderr",
+      "line": 0,
+      "replace": {
+        "$work/repo": "ROOT"
+      },
+      "text": "no cargo workspace: ROOT/Cargo.toml: `cargo metadata` exited with an error: error: key with no value, expected `=`",
+      "name": "bad_manifest_first_line_exact"
+    }
+  ]
+}
