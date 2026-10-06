@@ -9,3 +9,6 @@ target/
 __pycache__/
 *.pyc
 node_modules/
+
+# Local Rust resolution agreement outputs
+/crates/sprefa-extract/bench/rust-resolution-agreement/

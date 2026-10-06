@@ -62,10 +62,77 @@ fn names_index_joins_provider_coordinates() {
             ("2_bin.rs", "1_shared.rs".into(), Some("target".into()))
         ]
     );
+    let shared = root.join("1_shared.rs").to_string_lossy().to_string();
+    let source = std::fs::read_to_string(&shared).unwrap();
+    let mut associated = Vec::new();
+    for (written, offset, expected) in [
+        ("crate::shared::Item::new", None, "new"),
+        (
+            "Self::Variant",
+            Some(source.find("Self::Variant").unwrap() as u32),
+            "Variant",
+        ),
+        (
+            "Item::make",
+            Some(source.find("Self::helper").unwrap() as u32),
+            "make",
+        ),
+        ("crate::shared::Alias::new", None, "new"),
+        ("crate::shared::Kind::Variant", None, "Variant"),
+        (
+            "Self::helper",
+            Some(source.find("Self::helper").unwrap() as u32),
+            "helper",
+        ),
+    ] {
+        let file = if offset.is_some() {
+            &shared
+        } else {
+            &root.join("0_root.rs").to_string_lossy().to_string()
+        };
+        let resolved = index.binding_at(
+            file,
+            &written.split("::").map(str::to_string).collect::<Vec<_>>(),
+            offset,
+            hafley_scm::read::shape::FamilyTag::Call,
+        );
+        associated.push((
+            written,
+            resolved.ok().and_then(|bound| bound.target_name),
+            expected,
+        ));
+    }
+    assert_eq!(
+        associated,
+        vec![
+            ("crate::shared::Item::new", Some("new".into()), "new"),
+            ("Self::Variant", Some("Variant".into()), "Variant"),
+            ("Item::make", Some("make".into()), "make"),
+            ("crate::shared::Alias::new", Some("new".into()), "new"),
+            (
+                "crate::shared::Kind::Variant",
+                Some("Variant".into()),
+                "Variant"
+            ),
+            ("Self::helper", Some("helper".into()), "helper"),
+        ]
+    );
     assert_eq!(index.context_failures, vec![]);
     let root_file = root.join("0_root.rs").to_string_lossy().to_string();
-    let local = index.bindings(&root_file).into_iter().filter(|row| row.local == "local")
-        .map(|row| (row.target_path.strip_prefix(root.to_str().unwrap()).unwrap().to_string(), row.target_name)).collect::<Vec<_>>();
+    let local = index
+        .bindings(&root_file)
+        .into_iter()
+        .filter(|row| row.local == "local")
+        .map(|row| {
+            (
+                row.target_path
+                    .strip_prefix(root.to_str().unwrap())
+                    .unwrap()
+                    .to_string(),
+                row.target_name,
+            )
+        })
+        .collect::<Vec<_>>();
     assert_eq!(local, vec![("/1_shared.rs".into(), Some("target".into()))]);
     let file = root.join("0_root.rs").to_string_lossy().to_string();
     let text = std::fs::read_to_string(&file).unwrap();

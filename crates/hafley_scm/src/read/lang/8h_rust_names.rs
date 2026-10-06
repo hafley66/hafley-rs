@@ -2,7 +2,7 @@
 
 use super::modules::{host_path, vfs_path, ModulePlace, RustModuleTree};
 use super::*;
-use ra_ap_hir::{Module, ScopeDef};
+use ra_ap_hir::{AssocItem, HasVisibility, Module, ScopeDef};
 
 pub type NamesHost = RustModuleTree;
 
@@ -91,7 +91,10 @@ pub fn resolve_path_at(
             })
             .unwrap_or_default();
         chain.reverse();
-        let scoped = node.as_ref().and_then(|node| sema.scope(node));
+        let scoped = node
+            .as_ref()
+            .and_then(|node| sema.scope(node))
+            .or_else(|| sema.scope(parsed.syntax()));
         let syntax = ra_ap_syntax::SourceFile::parse(
             &format!("use {};", path.join("::")),
             ra_ap_ide::Edition::CURRENT,
@@ -102,10 +105,12 @@ pub fn resolve_path_at(
             .as_ref()
             .zip(written.as_ref())
             .and_then(|(scope, path)| scope.speculative_resolve(path));
-        if lexical
-            .as_ref()
-            .is_some_and(|resolution| !matches!(resolution, PathResolution::Def(_)))
-        {
+        if lexical.as_ref().is_some_and(|resolution| {
+            !matches!(
+                resolution,
+                PathResolution::Def(_) | PathResolution::SelfType(_)
+            )
+        }) {
             return Err(Abstain::NeedsTypes);
         }
         let mut places = Vec::new();
@@ -136,7 +141,7 @@ pub fn resolve_path_at(
                     .get(&PathBuf::from(root.to_string()))
                     .is_some_and(|names| path.first().is_some_and(|name| names.contains(name)))
             });
-            let definitions = if single && node.is_some() {
+            let mut definitions = if single && node.is_some() {
                 match lexical {
                     Some(PathResolution::Def(def)) => vec![def],
                     _ => Vec::new(),
@@ -144,6 +149,50 @@ pub fn resolve_path_at(
             } else {
                 resolve_module_path(db, module, path)
             };
+            if definitions.is_empty() && path.len() > 1 {
+                let prefix = &path[..path.len() - 1];
+                let mut heads = resolve_module_path(db, module, prefix)
+                    .into_iter()
+                    .map(PathResolution::Def)
+                    .collect::<Vec<_>>();
+                if let Some(scope) = scoped.as_ref() {
+                    let parsed = ra_ap_syntax::SourceFile::parse(
+                        &format!("use {};", prefix.join("::")),
+                        ra_ap_ide::Edition::CURRENT,
+                    )
+                    .tree();
+                    if let Some(written) = parsed.syntax().descendants().find_map(ast::Path::cast) {
+                        if let Some(head) = scope.speculative_resolve(&written) {
+                            if single || matches!(head, PathResolution::SelfType(_)) {
+                                heads = vec![head];
+                            }
+                        }
+                    }
+                }
+                if prefix == ["Self"] {
+                    if let Some(implementation) = node
+                        .as_ref()
+                        .and_then(|node| node.ancestors().find_map(ast::Impl::cast))
+                        .and_then(|implementation| sema.to_def(&implementation))
+                    {
+                        heads = vec![PathResolution::SelfType(implementation)];
+                    }
+                }
+                for head in heads {
+                    let from = if matches!(head, PathResolution::SelfType(_)) {
+                        scoped.as_ref().map_or(module, |scope| scope.module())
+                    } else {
+                        module
+                    };
+                    definitions.extend(associated_defs(
+                        db,
+                        from,
+                        head,
+                        scoped.as_ref(),
+                        path.last().unwrap(),
+                    ));
+                }
+            }
             for def in definitions {
                 let Some(nav) = def.try_to_nav(&sema).map(|nav| nav.call_site) else {
                     continue;
@@ -197,6 +246,79 @@ pub fn resolve_path_at(
             Ok(places)
         }
     })
+}
+
+/// Inherent associated items come from RA's indexed impl lookup. This lowers
+/// declared type heads, without querying inference for the caller's body.
+fn associated_defs(
+    db: &RootDatabase,
+    from: Module,
+    head: PathResolution<'_>,
+    scope: Option<&ra_ap_hir::SemanticsScope<'_>>,
+    name: &str,
+) -> Vec<ModuleDef> {
+    let mut definitions = Vec::new();
+    let mut items = Vec::new();
+    let ty = match head {
+        PathResolution::Def(ModuleDef::Adt(adt)) => Some(adt.ty(db)),
+        PathResolution::Def(ModuleDef::TypeAlias(alias)) => Some(alias.ty(db)),
+        PathResolution::SelfType(implementation) => Some(implementation.self_ty(db)),
+        PathResolution::Def(ModuleDef::Trait(trait_)) => {
+            items.extend(trait_.items(db));
+            None
+        }
+        _ => None,
+    };
+    if let Some(ty) = ty {
+        if let Some(ra_ap_hir::Adt::Enum(enum_)) = ty.as_adt() {
+            definitions.extend(
+                enum_
+                    .variants(db)
+                    .into_iter()
+                    .filter(|variant| variant.name(db).as_str() == name)
+                    .map(ModuleDef::EnumVariant),
+            );
+        }
+        ty.iterate_assoc_items(db, |item| {
+            if item
+                .name(db)
+                .is_some_and(|candidate| candidate.as_str() == name)
+                && item.is_visible_from(db, from)
+            {
+                items.push(item);
+            }
+            None::<()>
+        });
+        if items.is_empty() {
+            if let Some(scope) = scope {
+                ty.iterate_path_candidates(
+                    db,
+                    scope,
+                    &scope.visible_traits(),
+                    Some(&ra_ap_hir::Name::new_root(name)),
+                    |item| {
+                        items.push(item);
+                        None::<()>
+                    },
+                );
+            }
+        }
+    }
+    definitions.extend(
+        items
+            .into_iter()
+            .filter(|item| {
+                item.name(db)
+                    .is_some_and(|candidate| candidate.as_str() == name)
+                    && item.is_visible_from(db, from)
+            })
+            .map(|item| match item {
+                AssocItem::Function(item) => ModuleDef::Function(item),
+                AssocItem::Const(item) => ModuleDef::Const(item),
+                AssocItem::TypeAlias(item) => ModuleDef::TypeAlias(item),
+            }),
+    );
+    definitions
 }
 
 /// The engine's module resolver handles imports, glob ambiguity, visibility,

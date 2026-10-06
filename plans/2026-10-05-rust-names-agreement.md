@@ -1,48 +1,54 @@
-# Rust Names agreement, single run per implementation
+# Rust Names agreement
 
-Old CLI: build bb0fadcc. Provider: step 4 working tree. Both commands used
-`--resolve --arms call,type --root <worktree> --lines -`, with the same path list
-from Cargo workspace source directories and build scripts. No compiler, SCIP,
-sysroot, dependency-source load, or second corpus run.
-
-443 files were supplied. `rust_rename.rs` changed between the two runs and is
-excluded from both source and destination comparisons; 442 source files remain.
-The three retired shim files and unused files can legitimately have no module place.
+The coordinator authorized one corrected run per resolver after the first comparison.
+Old CLI: bb0fadcc. Provider: step 4 plus RA associated-item lookup and declaration
+use offsets. Both used `--resolve --arms call,type --root <worktree> --lines -`.
+The same 443 workspace source and build-script files were supplied; SHA256 content
+ids were checked before and after both runs. No sources changed between runs.
+No sysroot, dependency sources, compiler, SCIP or Types oracle was loaded.
 
 Normalization compares call destinations, named type destinations, written import
-routes, and module declaration routes. It excludes provenance, hop counts, duplicate
-rows and null type destinations. A module row uses its declared name as its local
-name, accommodating the old wire format. POSIX `sort -u` and `comm -23/-13` computed
-the differences. The CLI does not serialize target-specific ModulePlace rows; module
-route agreement is the available wire comparison. The provider fixture separately
-checks both target places for a file included by lib and bin.
+routes and module declaration routes. Provenance, hop counts, duplicate rows and
+null type destinations are excluded. Module locals are normalized to declared names.
+POSIX `sort -u` and `comm -23/-13` produced the differences. Module routes are wire
+rows, not target-specific ModulePlace records; the fixture covers shared target places.
 
 | Family | Equal | Old only | Provider only |
 | --- | ---: | ---: | ---: |
-| Calls | 15,281 | 6,939 | 575 |
-| Types | 10,395 | 1,695 | 257 |
-| Imports | 3,300 | 419 | 3,470 |
-| Written module routes | 393 | 142 | 0 |
+| Calls | 16,561 | 5,981 | 633 |
+| Types | 10,538 | 1,748 | 213 |
+| Imports | 3,431 | 302 | 3,549 |
+| Written module routes | 394 | 143 | 0 |
 
-Every changed route appears in [the TSV](2026-10-05-rust-names-agreement.tsv),
-with its source file:line, side, normalized route and contract verdict. Import
-locations anchor the matching written `use`, then a glob or declaration when the
-wire row has no individual source span. An implicit namespace can anchor line 1.
+| Old-only call category | Rows |
+| --- | ---: |
+| needs_types | 4,522 |
+| assoc | 666 |
+| unresolved | 591 |
+| external | 54 |
+| changed | 148 |
 
-Of the old-only call rows, 4,277 now abstain `needs_types`, 2,175 were not resolved
-by Names (including associated-item paths), 134 have no joined corpus destination,
-56 are external, and 297 changed destination or caller attribution. Names does not
-lower associated-item receiver types; these calls require Types. The generic
-`ambiguous` wire reason also covers unresolved qualified paths in this snapshot.
-The 638 old-only String and 474 Vec type routes illustrate corpus name matching
-reaching local declarations for std names; the provider does not load std.
-The 142 old-only module rows synthesize extern crate namespace routes rather than
-written module declarations. Cargo dependencies still resolve through the engine.
+Categories apply in this order: a resolved provider edge at the same source offset
+is changed; exact unresolved wire reasons identify needs_types and external; remaining
+qualified spellings with an uppercase head or Self are assoc; remaining rows are
+unresolved. Thus assoc counts spellings, including std and dependency paths, rather
+than proving 666 missing workspace impl functions. For example String::new and
+Vec::new have no loaded std source; sprefa's ScipMode::from_flags and RyiLang::from_path
+are hafley_scm re-exports outside sprefa's owning Cargo workspace. The legacy ambiguous
+wire reason also includes unresolved paths and missing corpus joins.
 
-The single-run import snapshot exposed missing use offsets in the corpus adapter.
-Step 4 corrected it: direct and glob queries use their declaration scope, retaining
-RA module ownership and lexical bindings. The TSV marks import verdicts as provider
-after scope correction, rather than asserting the earlier root-scope snapshot is
-correct. The nested import coordinate fixture passes after correction. The corpus
-was not rerun, as requested; these route counts describe the recorded pre-correction
-snapshot. The verdicts state the Names contract and do not claim a Types oracle run.
+Associated paths use RA indexed inherent items and in-scope trait path candidates
+on declared type heads, without caller-body inference. Constructors, aliases,
+trait functions, private Self::helper and enum variants are fixture-covered.
+Triage after the corrected run added RA enum-variant lookup for Self::Variant;
+that fixture first failed and then passed. Counts above remain the frozen run,
+without an additional corpus run.
+
+Every difference is listed locally with file:line in
+`crates/sprefa-extract/bench/rust-resolution-agreement/disagreements.tsv` (12,569 rows).
+The TSV is gitignored and removed from tracked plans. Its verdict column distinguishes
+contract-decided cases from cases requiring an independent oracle. Receiver calls
+require Types; external sources abstain; synthetic extern module declarations are
+removed. Remaining changed/unresolved destinations are explicitly marked for review;
+this comparison does not establish which destination is correct without an oracle.
+Import rows without source spans anchor line 1. No third corpus run was performed.
