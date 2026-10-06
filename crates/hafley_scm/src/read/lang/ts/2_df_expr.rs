@@ -40,6 +40,10 @@ pub(super) fn df_flow_expr(
         | E::NullLiteral(_)
         | E::BigIntLiteral(_)
         | E::RegExpLiteral(_) => df_push(sink, strings, span, DfNodeKind::Lit, None),
+        E::ClassExpression(class) => {
+            df_flow_class(class, file, strings, sink);
+            df_push(sink, strings, span, DfNodeKind::Expr, None)
+        }
         E::CallExpression(call) => df_flow_call(call, span, file, fn_sym, strings, scope, sink),
         // `new Foo(args)`: a `new` node carrying the class name; each arg flows in.
         E::NewExpression(new_expr) => {
@@ -277,6 +281,14 @@ pub(super) fn df_flow_expr(
         }
         // `x = y` as a value evaluates to the assigned value.
         E::AssignmentExpression(assignment) => {
+            DefaultValues {
+                file,
+                fn_sym,
+                strings,
+                scope,
+                sink,
+            }
+            .visit_assignment_target(&assignment.left);
             df_flow_expr(&assignment.right, file, fn_sym, strings, scope, sink)
         }
         // `test ? cons : alt`: the value is EITHER branch (both flow in); the

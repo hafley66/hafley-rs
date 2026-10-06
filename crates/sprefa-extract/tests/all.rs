@@ -537,6 +537,9 @@ mod v5_parity {
     pub(crate) mod capture_parity;
     #[path = "198_v5_support.rs"]
     pub mod v5_support;
+
+    #[path = "210_ts_df_lift_owners.rs"]
+    mod df_lift_owners;
 }
 
 #[test]

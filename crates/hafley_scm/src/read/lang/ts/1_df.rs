@@ -6,6 +6,9 @@ use rows::*;
 #[path = "2_df_expr.rs"]
 mod expr;
 use expr::df_flow_expr;
+#[path = "5_df_defaults.rs"]
+mod defaults;
+use defaults::DefaultValues;
 
 pub struct DfProjector<'a> {
     pub file: &'a str,
@@ -95,7 +98,15 @@ fn df_flow_stmt(
             ts::ExportDefaultDeclarationKind::ClassDeclaration(class) => {
                 df_flow_class(class, file, strings, sink);
             }
-            _ => {}
+            other => {
+                if let Some(expression) = other.as_expression() {
+                    let owner = DfOwner {
+                        kind: "function",
+                        name: "<top>".into(),
+                    };
+                    df_flow_expr(expression, file, &owner, strings, &mut Scope::new(), sink);
+                }
+            }
         },
         S::ClassDeclaration(class) => df_flow_class(class, file, strings, sink),
         S::VariableDeclaration(_) | S::ExpressionStatement(_) | S::ReturnStatement(_) => {
@@ -146,6 +157,13 @@ fn df_flow_decl(
             }
         }
         D::ClassDeclaration(class) => df_flow_class(class, file, strings, sink),
+        D::VariableDeclaration(var) => {
+            let owner = DfOwner {
+                kind: "function",
+                name: "<top>".into(),
+            };
+            df_flow_var(var, file, &owner, strings, &mut Scope::new(), sink);
+        }
         _ => {}
     }
 }
@@ -162,24 +180,34 @@ fn df_flow_class(
         .map(|id| id.name.to_string())
         .unwrap_or_default();
     for element in &class.body.body {
-        let ts::ClassElement::MethodDefinition(method) = element else {
-            continue;
+        let (key, params, body, value) = match element {
+            ts::ClassElement::MethodDefinition(method) => (
+                &method.key,
+                Some(&method.value.params),
+                method.value.body.as_deref(),
+                None,
+            ),
+            ts::ClassElement::PropertyDefinition(property) => {
+                (&property.key, None, None, property.value.as_ref())
+            }
+            _ => continue,
         };
-        let Some(body) = method.value.body.as_deref() else {
-            continue;
-        };
-        let method_name = match &method.key {
+        let name = match key {
             ts::PropertyKey::StaticIdentifier(key) => key.name.to_string(),
             _ => String::new(),
         };
         let fn_sym = DfOwner {
             kind: "method",
-            name: format!("{owner}.{method_name}"),
+            name: format!("{owner}.{name}"),
         };
         let mark = sink.nodes.len();
         let mut scope = Scope::new();
-        df_seed_params(&method.value.params, strings, &mut scope, sink);
-        df_flow_body(body, file, &fn_sym, strings, &mut scope, sink);
+        if let (Some(params), Some(body)) = (params, body) {
+            df_lift_fn(params, body, file, &fn_sym, strings, sink, &scope);
+        }
+        if let Some(value) = value {
+            df_flow_expr(value, file, &fn_sym, strings, &mut scope, sink);
+        }
         df_owner(sink, strings, mark, &fn_sym);
     }
 }
@@ -246,55 +274,35 @@ fn df_flow_body_stmt(
 ) {
     use ts::Statement as S;
     match stmt {
-        S::VariableDeclaration(var) => {
-            for declarator in &var.declarations {
-                if let ts::BindingPattern::BindingIdentifier(binding) = &declarator.id {
-                    match &declarator.init {
-                        Some(ts::Expression::ArrowFunctionExpression(arrow)) => {
-                            let sym = DfOwner {
-                                kind: "function",
-                                name: binding.name.to_string(),
-                            };
-                            df_lift_arrow(
-                                &arrow.params,
-                                &arrow.body,
-                                file,
-                                &sym,
-                                strings,
-                                sink,
-                                scope,
-                            );
-                            continue;
-                        }
-                        Some(ts::Expression::FunctionExpression(func)) => {
-                            if let Some(body) = func.body.as_deref() {
-                                let sym = DfOwner {
-                                    kind: "function",
-                                    name: binding.name.to_string(),
-                                };
-                                df_lift_fn(&func.params, body, file, &sym, strings, sink, scope);
-                            }
-                            continue;
-                        }
-                        _ => {}
-                    }
+        S::VariableDeclaration(var) => df_flow_var(var, file, fn_sym, strings, scope, sink),
+        S::FunctionDeclaration(func) => {
+            if let Some(body) = func.body.as_deref() {
+                let owner = DfOwner {
+                    kind: "function",
+                    name: func
+                        .id
+                        .as_ref()
+                        .map(|id| id.name.to_string())
+                        .unwrap_or_default(),
+                };
+                df_lift_fn(&func.params, body, file, &owner, strings, sink, scope);
+            }
+        }
+        S::LabeledStatement(label) => {
+            df_flow_body_stmt(&label.body, file, fn_sym, strings, scope, sink)
+        }
+        S::TryStatement(statement) => {
+            for inner in &statement.block.body {
+                df_flow_body_stmt(inner, file, fn_sym, strings, scope, sink);
+            }
+            if let Some(handler) = &statement.handler {
+                for inner in &handler.body.body {
+                    df_flow_body_stmt(inner, file, fn_sym, strings, scope, sink);
                 }
-                let rhs = declarator
-                    .init
-                    .as_ref()
-                    .map(|init| df_flow_expr(init, file, fn_sym, strings, scope, sink));
-                if let Some(name) = binding_name(&declarator.id) {
-                    let bind = df_push(
-                        sink,
-                        strings,
-                        declarator.span,
-                        DfNodeKind::LetBind,
-                        Some(&name),
-                    );
-                    if let Some(rhs) = rhs {
-                        df_edge(sink, rhs, bind);
-                    }
-                    scope.insert(name, bind);
+            }
+            if let Some(finalizer) = &statement.finalizer {
+                for inner in &finalizer.body {
+                    df_flow_body_stmt(inner, file, fn_sym, strings, scope, sink);
                 }
             }
         }
@@ -494,4 +502,64 @@ fn df_flow_member(
     let member = df_push(sink, strings, span, DfNodeKind::Member, property);
     df_edge(sink, object_id, member);
     member
+}
+
+fn df_flow_var(
+    var: &ts::VariableDeclaration,
+    file: &str,
+    fn_sym: &DfOwner,
+    strings: &mut Strings,
+    scope: &mut Scope,
+    sink: &mut FamilyBundle<DfF>,
+) {
+    for declarator in &var.declarations {
+        DefaultValues {
+            file,
+            fn_sym,
+            strings,
+            scope,
+            sink,
+        }
+        .visit_binding_pattern(&declarator.id);
+        if let ts::BindingPattern::BindingIdentifier(binding) = &declarator.id {
+            match &declarator.init {
+                Some(ts::Expression::ArrowFunctionExpression(arrow)) => {
+                    let sym = DfOwner {
+                        kind: "function",
+                        name: binding.name.to_string(),
+                    };
+                    df_lift_arrow(&arrow.params, &arrow.body, file, &sym, strings, sink, scope);
+                    continue;
+                }
+                Some(ts::Expression::FunctionExpression(func)) => {
+                    if let Some(body) = func.body.as_deref() {
+                        let sym = DfOwner {
+                            kind: "function",
+                            name: binding.name.to_string(),
+                        };
+                        df_lift_fn(&func.params, body, file, &sym, strings, sink, scope);
+                    }
+                    continue;
+                }
+                _ => {}
+            }
+        }
+        let rhs = declarator
+            .init
+            .as_ref()
+            .map(|init| df_flow_expr(init, file, fn_sym, strings, scope, sink));
+        if let Some(name) = binding_name(&declarator.id) {
+            let bind = df_push(
+                sink,
+                strings,
+                declarator.span,
+                DfNodeKind::LetBind,
+                Some(&name),
+            );
+            if let Some(rhs) = rhs {
+                df_edge(sink, rhs, bind);
+            }
+            scope.insert(name, bind);
+        }
+    }
 }

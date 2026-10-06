@@ -1,0 +1,43 @@
+---
+source: tests/210_ts_df_lift_owners.rs
+assertion_line: 104
+expression: "whole.join(\"\\n\\n\")"
+---
+0_statements.ts
+node call_res 110:121 - @outer
+node call_res 135:148 - @outer
+node call_res 40:51 - @inner
+node call_res 66:77 - @outer
+node call_res 89:98 - @outer
+
+1_bindings.ts
+direct closure 151:171 -> ret 144:172
+direct call_res 157:171 -> ret 157:171
+direct call_res 43:56 -> ret 43:56
+direct call_res 84:100 -> ret 84:100
+node new 105:107 - @outer
+node ret 144:172 - @exported
+node closure 151:171 1_bindings.ts::function::exported::closure::151 @exported
+node call_res 157:171 - @exported::closure::151
+node ret 157:171 - @exported::closure::151
+node closure 37:56 1_bindings.ts::function::outer::closure::37 @outer
+node call_res 43:56 - @outer::closure::37
+node ret 43:56 - @outer::closure::37
+node new 61:63 - @outer
+node closure 78:100 1_bindings.ts::function::outer::closure::78 @outer
+node call_res 84:100 - @outer::closure::78
+node ret 84:100 - @outer::closure::78
+
+2_class.ts
+direct call_res 25:36 -> ret 25:36
+node expr 1:68 - @<top>
+node closure 19:36 2_class.ts::method::.field::closure::19 @.field
+node call_res 25:36 - @.field::closure::19
+node ret 25:36 - @.field::closure::19
+node call_res 51:63 - @.method
+
+3_default.ts
+direct call_res 21:34 -> ret 21:34
+node closure 15:34 3_default.ts::function::<top>::closure::15 @<top>
+node call_res 21:34 - @<top>::closure::15
+node ret 21:34 - @<top>::closure::15
