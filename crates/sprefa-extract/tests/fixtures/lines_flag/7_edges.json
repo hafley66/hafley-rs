@@ -1,0 +1,42 @@
+{
+  "steps": [
+    {
+      "action": "copy",
+      "source": "$fixtures/lines_flag/inputs/edges_a.ts",
+      "path": "$work/a.ts"
+    },
+    {
+      "action": "copy",
+      "source": "$fixtures/lines_flag/inputs/edges_b.ts",
+      "path": "$work/b.ts"
+    },
+    {
+      "action": "run",
+      "name": "call",
+      "arguments": [
+        "--resolve",
+        "--lines",
+        "$work/a.ts",
+        "$work/b.ts"
+      ],
+      "expect_exit_code": 0,
+      "unasserted_stderr": true,
+      "raw_stdout": true
+    },
+    {
+      "action": "run",
+      "name": "type",
+      "arguments": [
+        "--resolve",
+        "--arms",
+        "type",
+        "--lines",
+        "$work/a.ts",
+        "$work/b.ts"
+      ],
+      "expect_exit_code": 0,
+      "unasserted_stderr": true,
+      "raw_stdout": true
+    }
+  ]
+}

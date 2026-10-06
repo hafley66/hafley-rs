@@ -1,0 +1,22 @@
+{
+  "steps": [
+    {
+      "action": "copy",
+      "source": "$fixtures/lines_flag/inputs/fixture.json",
+      "path": "$work/fixture.json"
+    },
+    {
+      "action": "run",
+      "name": "data",
+      "arguments": [
+        "--kinds",
+        "data",
+        "--lines",
+        "$work/fixture.json"
+      ],
+      "expect_exit_code": 0,
+      "unasserted_stderr": true,
+      "raw_stdout": true
+    }
+  ]
+}

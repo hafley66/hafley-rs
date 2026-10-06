@@ -1,0 +1,27 @@
+{
+  "steps": [
+    {
+      "action": "copy",
+      "source": "$fixtures/lines_flag/inputs/fixture.ts",
+      "path": "$work/fixture.ts"
+    },
+    {
+      "action": "run",
+      "name": "export",
+      "arguments": [
+        "--sqlite",
+        "$work/facts.db",
+        "$work/fixture.ts"
+      ],
+      "expect_exit_code": 0,
+      "unasserted_stderr": true,
+      "raw_stdout": true
+    },
+    {
+      "action": "sqlite_rows",
+      "name": "count",
+      "path": "$work/facts.db",
+      "sql": "SELECT count(*) FROM line_start"
+    }
+  ]
+}

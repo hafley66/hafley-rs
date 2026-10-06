@@ -1,0 +1,52 @@
+{
+  "steps": [
+    {
+      "action": "copy",
+      "source": "$fixtures/lines_flag/inputs/resolve_a.ts",
+      "path": "$work/root/a.ts"
+    },
+    {
+      "action": "copy",
+      "source": "$fixtures/lines_flag/inputs/helper_b.ts",
+      "path": "$work/root/b.ts"
+    },
+    {
+      "action": "run",
+      "name": "export",
+      "arguments": [
+        "--resolve",
+        "--lines",
+        "--sqlite",
+        "$work/root/facts.db",
+        "$work/root"
+      ],
+      "expect_exit_code": 0,
+      "unasserted_stderr": true,
+      "raw_stdout": true
+    },
+    {
+      "action": "sqlite_rows",
+      "name": "count",
+      "path": "$work/root/facts.db",
+      "sql": "SELECT count(*) FROM line_start"
+    },
+    {
+      "action": "sqlite_rows",
+      "name": "max_line",
+      "path": "$work/root/facts.db",
+      "sql": "SELECT max(line) FROM span_lines"
+    },
+    {
+      "action": "run",
+      "name": "stdout",
+      "arguments": [
+        "--resolve",
+        "--lines",
+        "$work/root"
+      ],
+      "expect_exit_code": 0,
+      "unasserted_stderr": true,
+      "raw_stdout": true
+    }
+  ]
+}

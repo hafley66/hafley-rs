@@ -1,0 +1,27 @@
+{
+  "steps": [
+    {
+      "action": "copy",
+      "source": "$fixtures/lines_flag/inputs/diet_a.ts",
+      "path": "$work/a.ts"
+    },
+    {
+      "action": "copy",
+      "source": "$fixtures/lines_flag/inputs/diet_b.ts",
+      "path": "$work/b.ts"
+    },
+    {
+      "action": "run",
+      "name": "fast",
+      "arguments": [
+        "fast",
+        "--lines",
+        "$work/a.ts",
+        "$work/b.ts"
+      ],
+      "expect_exit_code": 0,
+      "unasserted_stderr": true,
+      "raw_stdout": true
+    }
+  ]
+}

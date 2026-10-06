@@ -1,0 +1,39 @@
+{
+  "steps": [
+    {
+      "action": "copy",
+      "source": "$fixtures/lines_flag/inputs/resolve_a.ts",
+      "path": "$work/a.ts"
+    },
+    {
+      "action": "copy",
+      "source": "$fixtures/lines_flag/inputs/go_b.ts",
+      "path": "$work/b.ts"
+    },
+    {
+      "action": "run",
+      "name": "on",
+      "arguments": [
+        "--resolve",
+        "--lines",
+        "$work/a.ts",
+        "$work/b.ts"
+      ],
+      "expect_exit_code": 0,
+      "unasserted_stderr": true,
+      "raw_stdout": true
+    },
+    {
+      "action": "run",
+      "name": "off",
+      "arguments": [
+        "--resolve",
+        "$work/a.ts",
+        "$work/b.ts"
+      ],
+      "expect_exit_code": 0,
+      "unasserted_stderr": true,
+      "raw_stdout": true
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "steps": [
+    {
+      "action": "copy",
+      "source": "$fixtures/lines_flag/inputs/fixture.ts",
+      "path": "$work/fixture.ts"
+    },
+    {
+      "action": "run",
+      "name": "call",
+      "arguments": [
+        "--kinds",
+        "call",
+        "--lines",
+        "$work/fixture.ts"
+      ],
+      "expect_exit_code": 0,
+      "unasserted_stderr": true,
+      "raw_stdout": true
+    },
+    {
+      "action": "run",
+      "name": "all",
+      "arguments": [
+        "--lines",
+        "$work/fixture.ts"
+      ],
+      "expect_exit_code": 0,
+      "unasserted_stderr": true,
+      "raw_stdout": true
+    }
+  ]
+}
