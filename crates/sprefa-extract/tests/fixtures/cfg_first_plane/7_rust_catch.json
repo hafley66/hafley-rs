@@ -1,0 +1,11 @@
+{
+  "steps": [
+    {
+      "action": "api",
+      "name": "cfg",
+      "api": "cfg",
+      "input": "$fixtures/cfg_first_plane/inputs/7_rust_catch_parse.rs",
+      "path": "parse.rs"
+    }
+  ]
+}

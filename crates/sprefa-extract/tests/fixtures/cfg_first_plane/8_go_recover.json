@@ -1,0 +1,11 @@
+{
+  "steps": [
+    {
+      "action": "api",
+      "name": "cfg",
+      "api": "cfg",
+      "input": "$fixtures/cfg_first_plane/inputs/8_go_recover_parse.go",
+      "path": "parse.go"
+    }
+  ]
+}

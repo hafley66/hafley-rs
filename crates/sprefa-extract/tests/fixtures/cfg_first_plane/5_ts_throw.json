@@ -1,0 +1,11 @@
+{
+  "steps": [
+    {
+      "action": "api",
+      "name": "cfg",
+      "api": "cfg",
+      "input": "$fixtures/cfg_first_plane/inputs/5_ts_throw_parse.ts",
+      "path": "parse.ts"
+    }
+  ]
+}

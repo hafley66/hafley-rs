@@ -1,0 +1,1 @@
+function choose(flag: boolean) { if (flag) { left(); } else { right(); } after(); }

@@ -1,0 +1,11 @@
+{
+  "steps": [
+    {
+      "action": "api",
+      "name": "cfg",
+      "api": "cfg",
+      "input": "$fixtures/cfg_first_plane/inputs/2_ts_walk_walk.ts",
+      "path": "walk.ts"
+    }
+  ]
+}

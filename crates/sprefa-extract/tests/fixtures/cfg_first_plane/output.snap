@@ -1,0 +1,4551 @@
+---
+source: tests/support/2_fixture_runner.rs
+---
+{
+  "0_rust_walk": {
+    "cfg": [
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 0,
+          "end": 273
+        },
+        "kind": "entry",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 0,
+          "end": 273
+        },
+        "kind": "exit",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 38,
+          "end": 56
+        },
+        "kind": "stmt",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 61,
+          "end": 216
+        },
+        "kind": "loop",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 89,
+          "end": 134
+        },
+        "kind": "branch",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 115,
+          "end": 123
+        },
+        "kind": "jump",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 143,
+          "end": 187
+        },
+        "kind": "branch",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 171,
+          "end": 176
+        },
+        "kind": "jump",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 196,
+          "end": 210
+        },
+        "kind": "stmt",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 221,
+          "end": 261
+        },
+        "kind": "branch",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 245,
+          "end": 254
+        },
+        "kind": "ret",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 266,
+          "end": 271
+        },
+        "kind": "stmt",
+        "name": null
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "jump",
+        "from": {
+          "start": 115,
+          "end": 123
+        },
+        "from_kind": "jump",
+        "to": {
+          "start": 61,
+          "end": 216
+        },
+        "to_kind": "loop"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "arm",
+        "from": {
+          "start": 89,
+          "end": 134
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 115,
+          "end": 123
+        },
+        "to_kind": "jump"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "arm",
+        "from": {
+          "start": 143,
+          "end": 187
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 171,
+          "end": 176
+        },
+        "to_kind": "jump"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "next",
+        "from": {
+          "start": 89,
+          "end": 134
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 143,
+          "end": 187
+        },
+        "to_kind": "branch"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "next",
+        "from": {
+          "start": 143,
+          "end": 187
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 196,
+          "end": 210
+        },
+        "to_kind": "stmt"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "arm",
+        "from": {
+          "start": 61,
+          "end": 216
+        },
+        "from_kind": "loop",
+        "to": {
+          "start": 89,
+          "end": 134
+        },
+        "to_kind": "branch"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "next",
+        "from": {
+          "start": 196,
+          "end": 210
+        },
+        "from_kind": "stmt",
+        "to": {
+          "start": 61,
+          "end": 216
+        },
+        "to_kind": "loop"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "next",
+        "from": {
+          "start": 38,
+          "end": 56
+        },
+        "from_kind": "stmt",
+        "to": {
+          "start": 61,
+          "end": 216
+        },
+        "to_kind": "loop"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "exit",
+        "from": {
+          "start": 245,
+          "end": 254
+        },
+        "from_kind": "ret",
+        "to": {
+          "start": 0,
+          "end": 273
+        },
+        "to_kind": "exit"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "arm",
+        "from": {
+          "start": 221,
+          "end": 261
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 245,
+          "end": 254
+        },
+        "to_kind": "ret"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "next",
+        "from": {
+          "start": 61,
+          "end": 216
+        },
+        "from_kind": "loop",
+        "to": {
+          "start": 221,
+          "end": 261
+        },
+        "to_kind": "branch"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "jump",
+        "from": {
+          "start": 171,
+          "end": 176
+        },
+        "from_kind": "jump",
+        "to": {
+          "start": 221,
+          "end": 261
+        },
+        "to_kind": "branch"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "next",
+        "from": {
+          "start": 221,
+          "end": 261
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 266,
+          "end": 271
+        },
+        "to_kind": "stmt"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "next",
+        "from": {
+          "start": 0,
+          "end": 273
+        },
+        "from_kind": "entry",
+        "to": {
+          "start": 38,
+          "end": 56
+        },
+        "to_kind": "stmt"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "exit",
+        "from": {
+          "start": 266,
+          "end": 271
+        },
+        "from_kind": "stmt",
+        "to": {
+          "start": 0,
+          "end": 273
+        },
+        "to_kind": "exit"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "control",
+        "from": {
+          "start": 61,
+          "end": 216
+        },
+        "from_kind": "loop",
+        "to": {
+          "start": 89,
+          "end": 134
+        },
+        "to_kind": "branch"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "control",
+        "from": {
+          "start": 89,
+          "end": 134
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 115,
+          "end": 123
+        },
+        "to_kind": "jump"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "control",
+        "from": {
+          "start": 89,
+          "end": 134
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 61,
+          "end": 216
+        },
+        "to_kind": "loop"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "control",
+        "from": {
+          "start": 89,
+          "end": 134
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 143,
+          "end": 187
+        },
+        "to_kind": "branch"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "control",
+        "from": {
+          "start": 143,
+          "end": 187
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 171,
+          "end": 176
+        },
+        "to_kind": "jump"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "control",
+        "from": {
+          "start": 143,
+          "end": 187
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 196,
+          "end": 210
+        },
+        "to_kind": "stmt"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "control",
+        "from": {
+          "start": 143,
+          "end": 187
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 61,
+          "end": 216
+        },
+        "to_kind": "loop"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "control",
+        "from": {
+          "start": 221,
+          "end": 261
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 245,
+          "end": 254
+        },
+        "to_kind": "ret"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "control",
+        "from": {
+          "start": 221,
+          "end": 261
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 266,
+          "end": 271
+        },
+        "to_kind": "stmt"
+      }
+    ]
+  },
+  "10_kotlin_roles": {
+    "tables": {
+      "stub": [
+        {
+          "record": "node",
+          "family": "cfg",
+          "span": {
+            "start": 0,
+            "end": 308
+          },
+          "kind": "entry",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cfg",
+          "span": {
+            "start": 0,
+            "end": 308
+          },
+          "kind": "exit",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cfg",
+          "span": {
+            "start": 38,
+            "end": 51
+          },
+          "kind": "stmt",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cfg",
+          "span": {
+            "start": 56,
+            "end": 214
+          },
+          "kind": "loop",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cfg",
+          "span": {
+            "start": 86,
+            "end": 132
+          },
+          "kind": "branch",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cfg",
+          "span": {
+            "start": 114,
+            "end": 122
+          },
+          "kind": "jump",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cfg",
+          "span": {
+            "start": 141,
+            "end": 186
+          },
+          "kind": "branch",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cfg",
+          "span": {
+            "start": 171,
+            "end": 176
+          },
+          "kind": "jump",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cfg",
+          "span": {
+            "start": 195,
+            "end": 208
+          },
+          "kind": "stmt",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cfg",
+          "span": {
+            "start": 219,
+            "end": 306
+          },
+          "kind": "branch",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cfg",
+          "span": {
+            "start": 242,
+            "end": 243
+          },
+          "kind": "stmt",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cfg",
+          "span": {
+            "start": 247,
+            "end": 256
+          },
+          "kind": "jump",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cfg",
+          "span": {
+            "start": 273,
+            "end": 300
+          },
+          "kind": "jump",
+          "name": null
+        },
+        {
+          "record": "edge",
+          "family": "cfg",
+          "kind": "jump",
+          "from": {
+            "start": 114,
+            "end": 122
+          },
+          "from_kind": "jump",
+          "to": {
+            "start": 56,
+            "end": 214
+          },
+          "to_kind": "loop"
+        },
+        {
+          "record": "edge",
+          "family": "cfg",
+          "kind": "arm",
+          "from": {
+            "start": 86,
+            "end": 132
+          },
+          "from_kind": "branch",
+          "to": {
+            "start": 114,
+            "end": 122
+          },
+          "to_kind": "jump"
+        },
+        {
+          "record": "edge",
+          "family": "cfg",
+          "kind": "arm",
+          "from": {
+            "start": 141,
+            "end": 186
+          },
+          "from_kind": "branch",
+          "to": {
+            "start": 171,
+            "end": 176
+          },
+          "to_kind": "jump"
+        },
+        {
+          "record": "edge",
+          "family": "cfg",
+          "kind": "next",
+          "from": {
+            "start": 86,
+            "end": 132
+          },
+          "from_kind": "branch",
+          "to": {
+            "start": 141,
+            "end": 186
+          },
+          "to_kind": "branch"
+        },
+        {
+          "record": "edge",
+          "family": "cfg",
+          "kind": "next",
+          "from": {
+            "start": 141,
+            "end": 186
+          },
+          "from_kind": "branch",
+          "to": {
+            "start": 195,
+            "end": 208
+          },
+          "to_kind": "stmt"
+        },
+        {
+          "record": "edge",
+          "family": "cfg",
+          "kind": "arm",
+          "from": {
+            "start": 56,
+            "end": 214
+          },
+          "from_kind": "loop",
+          "to": {
+            "start": 86,
+            "end": 132
+          },
+          "to_kind": "branch"
+        },
+        {
+          "record": "edge",
+          "family": "cfg",
+          "kind": "next",
+          "from": {
+            "start": 195,
+            "end": 208
+          },
+          "from_kind": "stmt",
+          "to": {
+            "start": 56,
+            "end": 214
+          },
+          "to_kind": "loop"
+        },
+        {
+          "record": "edge",
+          "family": "cfg",
+          "kind": "next",
+          "from": {
+            "start": 38,
+            "end": 51
+          },
+          "from_kind": "stmt",
+          "to": {
+            "start": 56,
+            "end": 214
+          },
+          "to_kind": "loop"
+        },
+        {
+          "record": "edge",
+          "family": "cfg",
+          "kind": "next",
+          "from": {
+            "start": 242,
+            "end": 243
+          },
+          "from_kind": "stmt",
+          "to": {
+            "start": 247,
+            "end": 256
+          },
+          "to_kind": "jump"
+        },
+        {
+          "record": "edge",
+          "family": "cfg",
+          "kind": "arm",
+          "from": {
+            "start": 219,
+            "end": 306
+          },
+          "from_kind": "branch",
+          "to": {
+            "start": 242,
+            "end": 243
+          },
+          "to_kind": "stmt"
+        },
+        {
+          "record": "edge",
+          "family": "cfg",
+          "kind": "arm",
+          "from": {
+            "start": 219,
+            "end": 306
+          },
+          "from_kind": "branch",
+          "to": {
+            "start": 273,
+            "end": 300
+          },
+          "to_kind": "jump"
+        },
+        {
+          "record": "edge",
+          "family": "cfg",
+          "kind": "next",
+          "from": {
+            "start": 56,
+            "end": 214
+          },
+          "from_kind": "loop",
+          "to": {
+            "start": 219,
+            "end": 306
+          },
+          "to_kind": "branch"
+        },
+        {
+          "record": "edge",
+          "family": "cfg",
+          "kind": "jump",
+          "from": {
+            "start": 171,
+            "end": 176
+          },
+          "from_kind": "jump",
+          "to": {
+            "start": 219,
+            "end": 306
+          },
+          "to_kind": "branch"
+        },
+        {
+          "record": "edge",
+          "family": "cfg",
+          "kind": "next",
+          "from": {
+            "start": 0,
+            "end": 308
+          },
+          "from_kind": "entry",
+          "to": {
+            "start": 38,
+            "end": 51
+          },
+          "to_kind": "stmt"
+        },
+        {
+          "record": "edge",
+          "family": "cfg",
+          "kind": "exit",
+          "from": {
+            "start": 219,
+            "end": 306
+          },
+          "from_kind": "branch",
+          "to": {
+            "start": 0,
+            "end": 308
+          },
+          "to_kind": "exit"
+        },
+        {
+          "record": "edge",
+          "family": "cfg",
+          "kind": "control",
+          "from": {
+            "start": 56,
+            "end": 214
+          },
+          "from_kind": "loop",
+          "to": {
+            "start": 86,
+            "end": 132
+          },
+          "to_kind": "branch"
+        },
+        {
+          "record": "edge",
+          "family": "cfg",
+          "kind": "control",
+          "from": {
+            "start": 86,
+            "end": 132
+          },
+          "from_kind": "branch",
+          "to": {
+            "start": 114,
+            "end": 122
+          },
+          "to_kind": "jump"
+        },
+        {
+          "record": "edge",
+          "family": "cfg",
+          "kind": "control",
+          "from": {
+            "start": 86,
+            "end": 132
+          },
+          "from_kind": "branch",
+          "to": {
+            "start": 56,
+            "end": 214
+          },
+          "to_kind": "loop"
+        },
+        {
+          "record": "edge",
+          "family": "cfg",
+          "kind": "control",
+          "from": {
+            "start": 86,
+            "end": 132
+          },
+          "from_kind": "branch",
+          "to": {
+            "start": 141,
+            "end": 186
+          },
+          "to_kind": "branch"
+        },
+        {
+          "record": "edge",
+          "family": "cfg",
+          "kind": "control",
+          "from": {
+            "start": 141,
+            "end": 186
+          },
+          "from_kind": "branch",
+          "to": {
+            "start": 171,
+            "end": 176
+          },
+          "to_kind": "jump"
+        },
+        {
+          "record": "edge",
+          "family": "cfg",
+          "kind": "control",
+          "from": {
+            "start": 141,
+            "end": 186
+          },
+          "from_kind": "branch",
+          "to": {
+            "start": 195,
+            "end": 208
+          },
+          "to_kind": "stmt"
+        },
+        {
+          "record": "edge",
+          "family": "cfg",
+          "kind": "control",
+          "from": {
+            "start": 141,
+            "end": 186
+          },
+          "from_kind": "branch",
+          "to": {
+            "start": 56,
+            "end": 214
+          },
+          "to_kind": "loop"
+        },
+        {
+          "record": "edge",
+          "family": "cfg",
+          "kind": "control",
+          "from": {
+            "start": 219,
+            "end": 306
+          },
+          "from_kind": "branch",
+          "to": {
+            "start": 242,
+            "end": 243
+          },
+          "to_kind": "stmt"
+        },
+        {
+          "record": "edge",
+          "family": "cfg",
+          "kind": "control",
+          "from": {
+            "start": 219,
+            "end": 306
+          },
+          "from_kind": "branch",
+          "to": {
+            "start": 273,
+            "end": 300
+          },
+          "to_kind": "jump"
+        }
+      ],
+      "real": [
+        {
+          "record": "node",
+          "family": "cfg",
+          "span": {
+            "start": 0,
+            "end": 308
+          },
+          "kind": "entry",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cfg",
+          "span": {
+            "start": 0,
+            "end": 308
+          },
+          "kind": "exit",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cfg",
+          "span": {
+            "start": 38,
+            "end": 51
+          },
+          "kind": "stmt",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cfg",
+          "span": {
+            "start": 56,
+            "end": 214
+          },
+          "kind": "loop",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cfg",
+          "span": {
+            "start": 86,
+            "end": 132
+          },
+          "kind": "branch",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cfg",
+          "span": {
+            "start": 114,
+            "end": 122
+          },
+          "kind": "jump",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cfg",
+          "span": {
+            "start": 141,
+            "end": 186
+          },
+          "kind": "branch",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cfg",
+          "span": {
+            "start": 171,
+            "end": 176
+          },
+          "kind": "jump",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cfg",
+          "span": {
+            "start": 195,
+            "end": 208
+          },
+          "kind": "stmt",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cfg",
+          "span": {
+            "start": 219,
+            "end": 306
+          },
+          "kind": "branch",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cfg",
+          "span": {
+            "start": 242,
+            "end": 243
+          },
+          "kind": "stmt",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cfg",
+          "span": {
+            "start": 247,
+            "end": 256
+          },
+          "kind": "ret",
+          "name": null
+        },
+        {
+          "record": "node",
+          "family": "cfg",
+          "span": {
+            "start": 273,
+            "end": 300
+          },
+          "kind": "ret",
+          "name": null
+        },
+        {
+          "record": "edge",
+          "family": "cfg",
+          "kind": "jump",
+          "from": {
+            "start": 114,
+            "end": 122
+          },
+          "from_kind": "jump",
+          "to": {
+            "start": 56,
+            "end": 214
+          },
+          "to_kind": "loop"
+        },
+        {
+          "record": "edge",
+          "family": "cfg",
+          "kind": "arm",
+          "from": {
+            "start": 86,
+            "end": 132
+          },
+          "from_kind": "branch",
+          "to": {
+            "start": 114,
+            "end": 122
+          },
+          "to_kind": "jump"
+        },
+        {
+          "record": "edge",
+          "family": "cfg",
+          "kind": "arm",
+          "from": {
+            "start": 141,
+            "end": 186
+          },
+          "from_kind": "branch",
+          "to": {
+            "start": 171,
+            "end": 176
+          },
+          "to_kind": "jump"
+        },
+        {
+          "record": "edge",
+          "family": "cfg",
+          "kind": "next",
+          "from": {
+            "start": 86,
+            "end": 132
+          },
+          "from_kind": "branch",
+          "to": {
+            "start": 141,
+            "end": 186
+          },
+          "to_kind": "branch"
+        },
+        {
+          "record": "edge",
+          "family": "cfg",
+          "kind": "next",
+          "from": {
+            "start": 141,
+            "end": 186
+          },
+          "from_kind": "branch",
+          "to": {
+            "start": 195,
+            "end": 208
+          },
+          "to_kind": "stmt"
+        },
+        {
+          "record": "edge",
+          "family": "cfg",
+          "kind": "arm",
+          "from": {
+            "start": 56,
+            "end": 214
+          },
+          "from_kind": "loop",
+          "to": {
+            "start": 86,
+            "end": 132
+          },
+          "to_kind": "branch"
+        },
+        {
+          "record": "edge",
+          "family": "cfg",
+          "kind": "next",
+          "from": {
+            "start": 195,
+            "end": 208
+          },
+          "from_kind": "stmt",
+          "to": {
+            "start": 56,
+            "end": 214
+          },
+          "to_kind": "loop"
+        },
+        {
+          "record": "edge",
+          "family": "cfg",
+          "kind": "next",
+          "from": {
+            "start": 38,
+            "end": 51
+          },
+          "from_kind": "stmt",
+          "to": {
+            "start": 56,
+            "end": 214
+          },
+          "to_kind": "loop"
+        },
+        {
+          "record": "edge",
+          "family": "cfg",
+          "kind": "exit",
+          "from": {
+            "start": 247,
+            "end": 256
+          },
+          "from_kind": "ret",
+          "to": {
+            "start": 0,
+            "end": 308
+          },
+          "to_kind": "exit"
+        },
+        {
+          "record": "edge",
+          "family": "cfg",
+          "kind": "next",
+          "from": {
+            "start": 242,
+            "end": 243
+          },
+          "from_kind": "stmt",
+          "to": {
+            "start": 247,
+            "end": 256
+          },
+          "to_kind": "ret"
+        },
+        {
+          "record": "edge",
+          "family": "cfg",
+          "kind": "arm",
+          "from": {
+            "start": 219,
+            "end": 306
+          },
+          "from_kind": "branch",
+          "to": {
+            "start": 242,
+            "end": 243
+          },
+          "to_kind": "stmt"
+        },
+        {
+          "record": "edge",
+          "family": "cfg",
+          "kind": "throw",
+          "from": {
+            "start": 273,
+            "end": 300
+          },
+          "from_kind": "ret",
+          "to": {
+            "start": 0,
+            "end": 308
+          },
+          "to_kind": "exit"
+        },
+        {
+          "record": "edge",
+          "family": "cfg",
+          "kind": "arm",
+          "from": {
+            "start": 219,
+            "end": 306
+          },
+          "from_kind": "branch",
+          "to": {
+            "start": 273,
+            "end": 300
+          },
+          "to_kind": "ret"
+        },
+        {
+          "record": "edge",
+          "family": "cfg",
+          "kind": "next",
+          "from": {
+            "start": 56,
+            "end": 214
+          },
+          "from_kind": "loop",
+          "to": {
+            "start": 219,
+            "end": 306
+          },
+          "to_kind": "branch"
+        },
+        {
+          "record": "edge",
+          "family": "cfg",
+          "kind": "jump",
+          "from": {
+            "start": 171,
+            "end": 176
+          },
+          "from_kind": "jump",
+          "to": {
+            "start": 219,
+            "end": 306
+          },
+          "to_kind": "branch"
+        },
+        {
+          "record": "edge",
+          "family": "cfg",
+          "kind": "next",
+          "from": {
+            "start": 0,
+            "end": 308
+          },
+          "from_kind": "entry",
+          "to": {
+            "start": 38,
+            "end": 51
+          },
+          "to_kind": "stmt"
+        },
+        {
+          "record": "edge",
+          "family": "cfg",
+          "kind": "exit",
+          "from": {
+            "start": 219,
+            "end": 306
+          },
+          "from_kind": "branch",
+          "to": {
+            "start": 0,
+            "end": 308
+          },
+          "to_kind": "exit"
+        },
+        {
+          "record": "edge",
+          "family": "cfg",
+          "kind": "control",
+          "from": {
+            "start": 56,
+            "end": 214
+          },
+          "from_kind": "loop",
+          "to": {
+            "start": 86,
+            "end": 132
+          },
+          "to_kind": "branch"
+        },
+        {
+          "record": "edge",
+          "family": "cfg",
+          "kind": "control",
+          "from": {
+            "start": 86,
+            "end": 132
+          },
+          "from_kind": "branch",
+          "to": {
+            "start": 114,
+            "end": 122
+          },
+          "to_kind": "jump"
+        },
+        {
+          "record": "edge",
+          "family": "cfg",
+          "kind": "control",
+          "from": {
+            "start": 86,
+            "end": 132
+          },
+          "from_kind": "branch",
+          "to": {
+            "start": 56,
+            "end": 214
+          },
+          "to_kind": "loop"
+        },
+        {
+          "record": "edge",
+          "family": "cfg",
+          "kind": "control",
+          "from": {
+            "start": 86,
+            "end": 132
+          },
+          "from_kind": "branch",
+          "to": {
+            "start": 141,
+            "end": 186
+          },
+          "to_kind": "branch"
+        },
+        {
+          "record": "edge",
+          "family": "cfg",
+          "kind": "control",
+          "from": {
+            "start": 141,
+            "end": 186
+          },
+          "from_kind": "branch",
+          "to": {
+            "start": 171,
+            "end": 176
+          },
+          "to_kind": "jump"
+        },
+        {
+          "record": "edge",
+          "family": "cfg",
+          "kind": "control",
+          "from": {
+            "start": 141,
+            "end": 186
+          },
+          "from_kind": "branch",
+          "to": {
+            "start": 195,
+            "end": 208
+          },
+          "to_kind": "stmt"
+        },
+        {
+          "record": "edge",
+          "family": "cfg",
+          "kind": "control",
+          "from": {
+            "start": 141,
+            "end": 186
+          },
+          "from_kind": "branch",
+          "to": {
+            "start": 56,
+            "end": 214
+          },
+          "to_kind": "loop"
+        },
+        {
+          "record": "edge",
+          "family": "cfg",
+          "kind": "control",
+          "from": {
+            "start": 219,
+            "end": 306
+          },
+          "from_kind": "branch",
+          "to": {
+            "start": 242,
+            "end": 243
+          },
+          "to_kind": "stmt"
+        },
+        {
+          "record": "edge",
+          "family": "cfg",
+          "kind": "control",
+          "from": {
+            "start": 219,
+            "end": 306
+          },
+          "from_kind": "branch",
+          "to": {
+            "start": 247,
+            "end": 256
+          },
+          "to_kind": "ret"
+        },
+        {
+          "record": "edge",
+          "family": "cfg",
+          "kind": "control",
+          "from": {
+            "start": 219,
+            "end": 306
+          },
+          "from_kind": "branch",
+          "to": {
+            "start": 273,
+            "end": 300
+          },
+          "to_kind": "ret"
+        }
+      ]
+    }
+  },
+  "11_unsupported": {
+    "cfg": []
+  },
+  "1_go_walk": {
+    "cfg": [
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 11,
+          "end": 211
+        },
+        "kind": "entry",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 11,
+          "end": 211
+        },
+        "kind": "exit",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 41,
+          "end": 51
+        },
+        "kind": "stmt",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 53,
+          "end": 163
+        },
+        "kind": "loop",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 84,
+          "end": 113
+        },
+        "kind": "branch",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 101,
+          "end": 109
+        },
+        "kind": "jump",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 116,
+          "end": 144
+        },
+        "kind": "branch",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 135,
+          "end": 140
+        },
+        "kind": "jump",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 147,
+          "end": 160
+        },
+        "kind": "stmt",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 165,
+          "end": 195
+        },
+        "kind": "branch",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 183,
+          "end": 192
+        },
+        "kind": "ret",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 197,
+          "end": 209
+        },
+        "kind": "ret",
+        "name": null
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "jump",
+        "from": {
+          "start": 101,
+          "end": 109
+        },
+        "from_kind": "jump",
+        "to": {
+          "start": 53,
+          "end": 163
+        },
+        "to_kind": "loop"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "arm",
+        "from": {
+          "start": 84,
+          "end": 113
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 101,
+          "end": 109
+        },
+        "to_kind": "jump"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "arm",
+        "from": {
+          "start": 116,
+          "end": 144
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 135,
+          "end": 140
+        },
+        "to_kind": "jump"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "next",
+        "from": {
+          "start": 84,
+          "end": 113
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 116,
+          "end": 144
+        },
+        "to_kind": "branch"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "next",
+        "from": {
+          "start": 116,
+          "end": 144
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 147,
+          "end": 160
+        },
+        "to_kind": "stmt"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "arm",
+        "from": {
+          "start": 53,
+          "end": 163
+        },
+        "from_kind": "loop",
+        "to": {
+          "start": 84,
+          "end": 113
+        },
+        "to_kind": "branch"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "next",
+        "from": {
+          "start": 147,
+          "end": 160
+        },
+        "from_kind": "stmt",
+        "to": {
+          "start": 53,
+          "end": 163
+        },
+        "to_kind": "loop"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "next",
+        "from": {
+          "start": 41,
+          "end": 51
+        },
+        "from_kind": "stmt",
+        "to": {
+          "start": 53,
+          "end": 163
+        },
+        "to_kind": "loop"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "exit",
+        "from": {
+          "start": 183,
+          "end": 192
+        },
+        "from_kind": "ret",
+        "to": {
+          "start": 11,
+          "end": 211
+        },
+        "to_kind": "exit"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "arm",
+        "from": {
+          "start": 165,
+          "end": 195
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 183,
+          "end": 192
+        },
+        "to_kind": "ret"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "next",
+        "from": {
+          "start": 53,
+          "end": 163
+        },
+        "from_kind": "loop",
+        "to": {
+          "start": 165,
+          "end": 195
+        },
+        "to_kind": "branch"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "jump",
+        "from": {
+          "start": 135,
+          "end": 140
+        },
+        "from_kind": "jump",
+        "to": {
+          "start": 165,
+          "end": 195
+        },
+        "to_kind": "branch"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "exit",
+        "from": {
+          "start": 197,
+          "end": 209
+        },
+        "from_kind": "ret",
+        "to": {
+          "start": 11,
+          "end": 211
+        },
+        "to_kind": "exit"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "next",
+        "from": {
+          "start": 165,
+          "end": 195
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 197,
+          "end": 209
+        },
+        "to_kind": "ret"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "next",
+        "from": {
+          "start": 11,
+          "end": 211
+        },
+        "from_kind": "entry",
+        "to": {
+          "start": 41,
+          "end": 51
+        },
+        "to_kind": "stmt"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "control",
+        "from": {
+          "start": 53,
+          "end": 163
+        },
+        "from_kind": "loop",
+        "to": {
+          "start": 84,
+          "end": 113
+        },
+        "to_kind": "branch"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "control",
+        "from": {
+          "start": 84,
+          "end": 113
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 101,
+          "end": 109
+        },
+        "to_kind": "jump"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "control",
+        "from": {
+          "start": 84,
+          "end": 113
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 53,
+          "end": 163
+        },
+        "to_kind": "loop"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "control",
+        "from": {
+          "start": 84,
+          "end": 113
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 116,
+          "end": 144
+        },
+        "to_kind": "branch"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "control",
+        "from": {
+          "start": 116,
+          "end": 144
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 135,
+          "end": 140
+        },
+        "to_kind": "jump"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "control",
+        "from": {
+          "start": 116,
+          "end": 144
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 147,
+          "end": 160
+        },
+        "to_kind": "stmt"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "control",
+        "from": {
+          "start": 116,
+          "end": 144
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 53,
+          "end": 163
+        },
+        "to_kind": "loop"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "control",
+        "from": {
+          "start": 165,
+          "end": 195
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 183,
+          "end": 192
+        },
+        "to_kind": "ret"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "control",
+        "from": {
+          "start": 165,
+          "end": 195
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 197,
+          "end": 209
+        },
+        "to_kind": "ret"
+      }
+    ]
+  },
+  "2_ts_walk": {
+    "cfg": [
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 0,
+          "end": 251
+        },
+        "kind": "entry",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 0,
+          "end": 251
+        },
+        "kind": "exit",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 43,
+          "end": 57
+        },
+        "kind": "stmt",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 60,
+          "end": 193
+        },
+        "kind": "loop",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 92,
+          "end": 129
+        },
+        "kind": "branch",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 114,
+          "end": 123
+        },
+        "kind": "jump",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 134,
+          "end": 170
+        },
+        "kind": "branch",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 158,
+          "end": 164
+        },
+        "kind": "jump",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 175,
+          "end": 189
+        },
+        "kind": "stmt",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 196,
+          "end": 233
+        },
+        "kind": "branch",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 219,
+          "end": 229
+        },
+        "kind": "ret",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 236,
+          "end": 249
+        },
+        "kind": "ret",
+        "name": null
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "jump",
+        "from": {
+          "start": 114,
+          "end": 123
+        },
+        "from_kind": "jump",
+        "to": {
+          "start": 60,
+          "end": 193
+        },
+        "to_kind": "loop"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "arm",
+        "from": {
+          "start": 92,
+          "end": 129
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 114,
+          "end": 123
+        },
+        "to_kind": "jump"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "arm",
+        "from": {
+          "start": 134,
+          "end": 170
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 158,
+          "end": 164
+        },
+        "to_kind": "jump"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "next",
+        "from": {
+          "start": 92,
+          "end": 129
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 134,
+          "end": 170
+        },
+        "to_kind": "branch"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "next",
+        "from": {
+          "start": 134,
+          "end": 170
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 175,
+          "end": 189
+        },
+        "to_kind": "stmt"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "arm",
+        "from": {
+          "start": 60,
+          "end": 193
+        },
+        "from_kind": "loop",
+        "to": {
+          "start": 92,
+          "end": 129
+        },
+        "to_kind": "branch"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "next",
+        "from": {
+          "start": 175,
+          "end": 189
+        },
+        "from_kind": "stmt",
+        "to": {
+          "start": 60,
+          "end": 193
+        },
+        "to_kind": "loop"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "next",
+        "from": {
+          "start": 43,
+          "end": 57
+        },
+        "from_kind": "stmt",
+        "to": {
+          "start": 60,
+          "end": 193
+        },
+        "to_kind": "loop"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "exit",
+        "from": {
+          "start": 219,
+          "end": 229
+        },
+        "from_kind": "ret",
+        "to": {
+          "start": 0,
+          "end": 251
+        },
+        "to_kind": "exit"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "arm",
+        "from": {
+          "start": 196,
+          "end": 233
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 219,
+          "end": 229
+        },
+        "to_kind": "ret"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "next",
+        "from": {
+          "start": 60,
+          "end": 193
+        },
+        "from_kind": "loop",
+        "to": {
+          "start": 196,
+          "end": 233
+        },
+        "to_kind": "branch"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "jump",
+        "from": {
+          "start": 158,
+          "end": 164
+        },
+        "from_kind": "jump",
+        "to": {
+          "start": 196,
+          "end": 233
+        },
+        "to_kind": "branch"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "exit",
+        "from": {
+          "start": 236,
+          "end": 249
+        },
+        "from_kind": "ret",
+        "to": {
+          "start": 0,
+          "end": 251
+        },
+        "to_kind": "exit"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "next",
+        "from": {
+          "start": 196,
+          "end": 233
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 236,
+          "end": 249
+        },
+        "to_kind": "ret"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "next",
+        "from": {
+          "start": 0,
+          "end": 251
+        },
+        "from_kind": "entry",
+        "to": {
+          "start": 43,
+          "end": 57
+        },
+        "to_kind": "stmt"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "control",
+        "from": {
+          "start": 60,
+          "end": 193
+        },
+        "from_kind": "loop",
+        "to": {
+          "start": 92,
+          "end": 129
+        },
+        "to_kind": "branch"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "control",
+        "from": {
+          "start": 92,
+          "end": 129
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 114,
+          "end": 123
+        },
+        "to_kind": "jump"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "control",
+        "from": {
+          "start": 92,
+          "end": 129
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 60,
+          "end": 193
+        },
+        "to_kind": "loop"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "control",
+        "from": {
+          "start": 92,
+          "end": 129
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 134,
+          "end": 170
+        },
+        "to_kind": "branch"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "control",
+        "from": {
+          "start": 134,
+          "end": 170
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 158,
+          "end": 164
+        },
+        "to_kind": "jump"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "control",
+        "from": {
+          "start": 134,
+          "end": 170
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 175,
+          "end": 189
+        },
+        "to_kind": "stmt"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "control",
+        "from": {
+          "start": 134,
+          "end": 170
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 60,
+          "end": 193
+        },
+        "to_kind": "loop"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "control",
+        "from": {
+          "start": 196,
+          "end": 233
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 219,
+          "end": 229
+        },
+        "to_kind": "ret"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "control",
+        "from": {
+          "start": 196,
+          "end": 233
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 236,
+          "end": 249
+        },
+        "to_kind": "ret"
+      }
+    ]
+  },
+  "3_kotlin_walk": {
+    "cfg": [
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 0,
+          "end": 308
+        },
+        "kind": "entry",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 0,
+          "end": 308
+        },
+        "kind": "exit",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 38,
+          "end": 51
+        },
+        "kind": "stmt",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 56,
+          "end": 214
+        },
+        "kind": "loop",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 86,
+          "end": 132
+        },
+        "kind": "branch",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 114,
+          "end": 122
+        },
+        "kind": "jump",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 141,
+          "end": 186
+        },
+        "kind": "branch",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 171,
+          "end": 176
+        },
+        "kind": "jump",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 195,
+          "end": 208
+        },
+        "kind": "stmt",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 219,
+          "end": 306
+        },
+        "kind": "branch",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 242,
+          "end": 243
+        },
+        "kind": "stmt",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 247,
+          "end": 256
+        },
+        "kind": "ret",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 273,
+          "end": 300
+        },
+        "kind": "ret",
+        "name": null
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "jump",
+        "from": {
+          "start": 114,
+          "end": 122
+        },
+        "from_kind": "jump",
+        "to": {
+          "start": 56,
+          "end": 214
+        },
+        "to_kind": "loop"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "arm",
+        "from": {
+          "start": 86,
+          "end": 132
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 114,
+          "end": 122
+        },
+        "to_kind": "jump"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "arm",
+        "from": {
+          "start": 141,
+          "end": 186
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 171,
+          "end": 176
+        },
+        "to_kind": "jump"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "next",
+        "from": {
+          "start": 86,
+          "end": 132
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 141,
+          "end": 186
+        },
+        "to_kind": "branch"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "next",
+        "from": {
+          "start": 141,
+          "end": 186
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 195,
+          "end": 208
+        },
+        "to_kind": "stmt"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "arm",
+        "from": {
+          "start": 56,
+          "end": 214
+        },
+        "from_kind": "loop",
+        "to": {
+          "start": 86,
+          "end": 132
+        },
+        "to_kind": "branch"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "next",
+        "from": {
+          "start": 195,
+          "end": 208
+        },
+        "from_kind": "stmt",
+        "to": {
+          "start": 56,
+          "end": 214
+        },
+        "to_kind": "loop"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "next",
+        "from": {
+          "start": 38,
+          "end": 51
+        },
+        "from_kind": "stmt",
+        "to": {
+          "start": 56,
+          "end": 214
+        },
+        "to_kind": "loop"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "exit",
+        "from": {
+          "start": 247,
+          "end": 256
+        },
+        "from_kind": "ret",
+        "to": {
+          "start": 0,
+          "end": 308
+        },
+        "to_kind": "exit"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "next",
+        "from": {
+          "start": 242,
+          "end": 243
+        },
+        "from_kind": "stmt",
+        "to": {
+          "start": 247,
+          "end": 256
+        },
+        "to_kind": "ret"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "arm",
+        "from": {
+          "start": 219,
+          "end": 306
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 242,
+          "end": 243
+        },
+        "to_kind": "stmt"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "throw",
+        "from": {
+          "start": 273,
+          "end": 300
+        },
+        "from_kind": "ret",
+        "to": {
+          "start": 0,
+          "end": 308
+        },
+        "to_kind": "exit"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "arm",
+        "from": {
+          "start": 219,
+          "end": 306
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 273,
+          "end": 300
+        },
+        "to_kind": "ret"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "next",
+        "from": {
+          "start": 56,
+          "end": 214
+        },
+        "from_kind": "loop",
+        "to": {
+          "start": 219,
+          "end": 306
+        },
+        "to_kind": "branch"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "jump",
+        "from": {
+          "start": 171,
+          "end": 176
+        },
+        "from_kind": "jump",
+        "to": {
+          "start": 219,
+          "end": 306
+        },
+        "to_kind": "branch"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "next",
+        "from": {
+          "start": 0,
+          "end": 308
+        },
+        "from_kind": "entry",
+        "to": {
+          "start": 38,
+          "end": 51
+        },
+        "to_kind": "stmt"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "exit",
+        "from": {
+          "start": 219,
+          "end": 306
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 0,
+          "end": 308
+        },
+        "to_kind": "exit"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "control",
+        "from": {
+          "start": 56,
+          "end": 214
+        },
+        "from_kind": "loop",
+        "to": {
+          "start": 86,
+          "end": 132
+        },
+        "to_kind": "branch"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "control",
+        "from": {
+          "start": 86,
+          "end": 132
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 114,
+          "end": 122
+        },
+        "to_kind": "jump"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "control",
+        "from": {
+          "start": 86,
+          "end": 132
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 56,
+          "end": 214
+        },
+        "to_kind": "loop"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "control",
+        "from": {
+          "start": 86,
+          "end": 132
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 141,
+          "end": 186
+        },
+        "to_kind": "branch"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "control",
+        "from": {
+          "start": 141,
+          "end": 186
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 171,
+          "end": 176
+        },
+        "to_kind": "jump"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "control",
+        "from": {
+          "start": 141,
+          "end": 186
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 195,
+          "end": 208
+        },
+        "to_kind": "stmt"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "control",
+        "from": {
+          "start": 141,
+          "end": 186
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 56,
+          "end": 214
+        },
+        "to_kind": "loop"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "control",
+        "from": {
+          "start": 219,
+          "end": 306
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 242,
+          "end": 243
+        },
+        "to_kind": "stmt"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "control",
+        "from": {
+          "start": 219,
+          "end": 306
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 247,
+          "end": 256
+        },
+        "to_kind": "ret"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "control",
+        "from": {
+          "start": 219,
+          "end": 306
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 273,
+          "end": 300
+        },
+        "to_kind": "ret"
+      }
+    ]
+  },
+  "4_ts_do": {
+    "cfg": [
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 0,
+          "end": 119
+        },
+        "kind": "entry",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 0,
+          "end": 119
+        },
+        "kind": "exit",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 41,
+          "end": 54
+        },
+        "kind": "stmt",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 57,
+          "end": 102
+        },
+        "kind": "loop",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 60,
+          "end": 80
+        },
+        "kind": "stmt",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 105,
+          "end": 117
+        },
+        "kind": "ret",
+        "name": null
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "arm",
+        "from": {
+          "start": 57,
+          "end": 102
+        },
+        "from_kind": "loop",
+        "to": {
+          "start": 60,
+          "end": 80
+        },
+        "to_kind": "stmt"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "next",
+        "from": {
+          "start": 60,
+          "end": 80
+        },
+        "from_kind": "stmt",
+        "to": {
+          "start": 57,
+          "end": 102
+        },
+        "to_kind": "loop"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "next",
+        "from": {
+          "start": 41,
+          "end": 54
+        },
+        "from_kind": "stmt",
+        "to": {
+          "start": 57,
+          "end": 102
+        },
+        "to_kind": "loop"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "exit",
+        "from": {
+          "start": 105,
+          "end": 117
+        },
+        "from_kind": "ret",
+        "to": {
+          "start": 0,
+          "end": 119
+        },
+        "to_kind": "exit"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "next",
+        "from": {
+          "start": 57,
+          "end": 102
+        },
+        "from_kind": "loop",
+        "to": {
+          "start": 105,
+          "end": 117
+        },
+        "to_kind": "ret"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "next",
+        "from": {
+          "start": 0,
+          "end": 119
+        },
+        "from_kind": "entry",
+        "to": {
+          "start": 41,
+          "end": 54
+        },
+        "to_kind": "stmt"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "control",
+        "from": {
+          "start": 57,
+          "end": 102
+        },
+        "from_kind": "loop",
+        "to": {
+          "start": 60,
+          "end": 80
+        },
+        "to_kind": "stmt"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "control",
+        "from": {
+          "start": 57,
+          "end": 102
+        },
+        "from_kind": "loop",
+        "to": {
+          "start": 57,
+          "end": 102
+        },
+        "to_kind": "loop"
+      }
+    ]
+  },
+  "5_ts_throw": {
+    "cfg": [
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 0,
+          "end": 212
+        },
+        "kind": "entry",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 0,
+          "end": 212
+        },
+        "kind": "exit",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 39,
+          "end": 210
+        },
+        "kind": "branch",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 165,
+          "end": 166
+        },
+        "kind": "stmt",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 174,
+          "end": 206
+        },
+        "kind": "ret",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 62,
+          "end": 75
+        },
+        "kind": "stmt",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 136,
+          "end": 152
+        },
+        "kind": "stmt",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 49,
+          "end": 76
+        },
+        "kind": "stmt",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 81,
+          "end": 124
+        },
+        "kind": "branch",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 92,
+          "end": 124
+        },
+        "kind": "ret",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 129,
+          "end": 153
+        },
+        "kind": "ret",
+        "name": null
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "throw",
+        "from": {
+          "start": 174,
+          "end": 206
+        },
+        "from_kind": "ret",
+        "to": {
+          "start": 0,
+          "end": 212
+        },
+        "to_kind": "exit"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "next",
+        "from": {
+          "start": 165,
+          "end": 166
+        },
+        "from_kind": "stmt",
+        "to": {
+          "start": 174,
+          "end": 206
+        },
+        "to_kind": "ret"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "throw",
+        "from": {
+          "start": 62,
+          "end": 75
+        },
+        "from_kind": "stmt",
+        "to": {
+          "start": 165,
+          "end": 166
+        },
+        "to_kind": "stmt"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "throw",
+        "from": {
+          "start": 136,
+          "end": 152
+        },
+        "from_kind": "stmt",
+        "to": {
+          "start": 165,
+          "end": 166
+        },
+        "to_kind": "stmt"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "throw",
+        "from": {
+          "start": 92,
+          "end": 124
+        },
+        "from_kind": "ret",
+        "to": {
+          "start": 165,
+          "end": 166
+        },
+        "to_kind": "stmt"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "arm",
+        "from": {
+          "start": 81,
+          "end": 124
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 92,
+          "end": 124
+        },
+        "to_kind": "ret"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "next",
+        "from": {
+          "start": 49,
+          "end": 76
+        },
+        "from_kind": "stmt",
+        "to": {
+          "start": 81,
+          "end": 124
+        },
+        "to_kind": "branch"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "exit",
+        "from": {
+          "start": 129,
+          "end": 153
+        },
+        "from_kind": "ret",
+        "to": {
+          "start": 0,
+          "end": 212
+        },
+        "to_kind": "exit"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "next",
+        "from": {
+          "start": 81,
+          "end": 124
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 129,
+          "end": 153
+        },
+        "to_kind": "ret"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "next",
+        "from": {
+          "start": 39,
+          "end": 210
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 49,
+          "end": 76
+        },
+        "to_kind": "stmt"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "arm",
+        "from": {
+          "start": 39,
+          "end": 210
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 165,
+          "end": 166
+        },
+        "to_kind": "stmt"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "next",
+        "from": {
+          "start": 0,
+          "end": 212
+        },
+        "from_kind": "entry",
+        "to": {
+          "start": 39,
+          "end": 210
+        },
+        "to_kind": "branch"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "control",
+        "from": {
+          "start": 39,
+          "end": 210
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 49,
+          "end": 76
+        },
+        "to_kind": "stmt"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "control",
+        "from": {
+          "start": 39,
+          "end": 210
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 81,
+          "end": 124
+        },
+        "to_kind": "branch"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "control",
+        "from": {
+          "start": 39,
+          "end": 210
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 165,
+          "end": 166
+        },
+        "to_kind": "stmt"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "control",
+        "from": {
+          "start": 39,
+          "end": 210
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 174,
+          "end": 206
+        },
+        "to_kind": "ret"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "control",
+        "from": {
+          "start": 81,
+          "end": 124
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 92,
+          "end": 124
+        },
+        "to_kind": "ret"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "control",
+        "from": {
+          "start": 81,
+          "end": 124
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 165,
+          "end": 166
+        },
+        "to_kind": "stmt"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "control",
+        "from": {
+          "start": 81,
+          "end": 124
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 174,
+          "end": 206
+        },
+        "to_kind": "ret"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "control",
+        "from": {
+          "start": 81,
+          "end": 124
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 129,
+          "end": 153
+        },
+        "to_kind": "ret"
+      }
+    ]
+  },
+  "6_kotlin_throw": {
+    "cfg": [
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 0,
+          "end": 190
+        },
+        "kind": "entry",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 0,
+          "end": 190
+        },
+        "kind": "exit",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 43,
+          "end": 171
+        },
+        "kind": "branch",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 121,
+          "end": 171
+        },
+        "kind": "stmt",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 57,
+          "end": 67
+        },
+        "kind": "stmt",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 57,
+          "end": 67
+        },
+        "kind": "stmt",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 76,
+          "end": 114
+        },
+        "kind": "ret",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 176,
+          "end": 188
+        },
+        "kind": "ret",
+        "name": null
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "throw",
+        "from": {
+          "start": 57,
+          "end": 67
+        },
+        "from_kind": "stmt",
+        "to": {
+          "start": 121,
+          "end": 171
+        },
+        "to_kind": "stmt"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "throw",
+        "from": {
+          "start": 76,
+          "end": 114
+        },
+        "from_kind": "ret",
+        "to": {
+          "start": 121,
+          "end": 171
+        },
+        "to_kind": "stmt"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "next",
+        "from": {
+          "start": 57,
+          "end": 67
+        },
+        "from_kind": "stmt",
+        "to": {
+          "start": 76,
+          "end": 114
+        },
+        "to_kind": "ret"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "next",
+        "from": {
+          "start": 43,
+          "end": 171
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 57,
+          "end": 67
+        },
+        "to_kind": "stmt"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "arm",
+        "from": {
+          "start": 43,
+          "end": 171
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 121,
+          "end": 171
+        },
+        "to_kind": "stmt"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "exit",
+        "from": {
+          "start": 176,
+          "end": 188
+        },
+        "from_kind": "ret",
+        "to": {
+          "start": 0,
+          "end": 190
+        },
+        "to_kind": "exit"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "next",
+        "from": {
+          "start": 121,
+          "end": 171
+        },
+        "from_kind": "stmt",
+        "to": {
+          "start": 176,
+          "end": 188
+        },
+        "to_kind": "ret"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "next",
+        "from": {
+          "start": 0,
+          "end": 190
+        },
+        "from_kind": "entry",
+        "to": {
+          "start": 43,
+          "end": 171
+        },
+        "to_kind": "branch"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "control",
+        "from": {
+          "start": 43,
+          "end": 171
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 57,
+          "end": 67
+        },
+        "to_kind": "stmt"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "control",
+        "from": {
+          "start": 43,
+          "end": 171
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 76,
+          "end": 114
+        },
+        "to_kind": "ret"
+      }
+    ]
+  },
+  "7_rust_catch": {
+    "cfg": [
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 0,
+          "end": 125
+        },
+        "kind": "entry",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 0,
+          "end": 125
+        },
+        "kind": "exit",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 33,
+          "end": 122
+        },
+        "kind": "stmt",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 71,
+          "end": 82
+        },
+        "kind": "stmt",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 58,
+          "end": 121
+        },
+        "kind": "entry",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 58,
+          "end": 121
+        },
+        "kind": "exit",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 71,
+          "end": 83
+        },
+        "kind": "stmt",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 92,
+          "end": 114
+        },
+        "kind": "ret",
+        "name": null
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "throw",
+        "from": {
+          "start": 71,
+          "end": 82
+        },
+        "from_kind": "stmt",
+        "to": {
+          "start": 33,
+          "end": 122
+        },
+        "to_kind": "stmt"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "next",
+        "from": {
+          "start": 0,
+          "end": 125
+        },
+        "from_kind": "entry",
+        "to": {
+          "start": 33,
+          "end": 122
+        },
+        "to_kind": "stmt"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "exit",
+        "from": {
+          "start": 33,
+          "end": 122
+        },
+        "from_kind": "stmt",
+        "to": {
+          "start": 0,
+          "end": 125
+        },
+        "to_kind": "exit"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "throw",
+        "from": {
+          "start": 92,
+          "end": 114
+        },
+        "from_kind": "ret",
+        "to": {
+          "start": 33,
+          "end": 122
+        },
+        "to_kind": "stmt"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "next",
+        "from": {
+          "start": 71,
+          "end": 83
+        },
+        "from_kind": "stmt",
+        "to": {
+          "start": 92,
+          "end": 114
+        },
+        "to_kind": "ret"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "next",
+        "from": {
+          "start": 58,
+          "end": 121
+        },
+        "from_kind": "entry",
+        "to": {
+          "start": 71,
+          "end": 83
+        },
+        "to_kind": "stmt"
+      }
+    ]
+  },
+  "8_go_recover": {
+    "cfg": [
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 10,
+          "end": 135
+        },
+        "kind": "entry",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 10,
+          "end": 135
+        },
+        "kind": "exit",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 60,
+          "end": 69
+        },
+        "kind": "stmt",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 48,
+          "end": 98
+        },
+        "kind": "stmt",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 100,
+          "end": 110
+        },
+        "kind": "stmt",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 48,
+          "end": 96
+        },
+        "kind": "stmt",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 96,
+          "end": 98
+        },
+        "kind": "stmt",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 100,
+          "end": 110
+        },
+        "kind": "stmt",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 112,
+          "end": 133
+        },
+        "kind": "ret",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 48,
+          "end": 96
+        },
+        "kind": "entry",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 48,
+          "end": 96
+        },
+        "kind": "exit",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 57,
+          "end": 94
+        },
+        "kind": "branch",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 77,
+          "end": 94
+        },
+        "kind": "stmt",
+        "name": null
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "throw",
+        "from": {
+          "start": 48,
+          "end": 98
+        },
+        "from_kind": "stmt",
+        "to": {
+          "start": 60,
+          "end": 69
+        },
+        "to_kind": "stmt"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "throw",
+        "from": {
+          "start": 100,
+          "end": 110
+        },
+        "from_kind": "stmt",
+        "to": {
+          "start": 60,
+          "end": 69
+        },
+        "to_kind": "stmt"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "next",
+        "from": {
+          "start": 48,
+          "end": 96
+        },
+        "from_kind": "stmt",
+        "to": {
+          "start": 96,
+          "end": 98
+        },
+        "to_kind": "stmt"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "next",
+        "from": {
+          "start": 96,
+          "end": 98
+        },
+        "from_kind": "stmt",
+        "to": {
+          "start": 100,
+          "end": 110
+        },
+        "to_kind": "stmt"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "throw",
+        "from": {
+          "start": 112,
+          "end": 133
+        },
+        "from_kind": "ret",
+        "to": {
+          "start": 60,
+          "end": 69
+        },
+        "to_kind": "stmt"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "next",
+        "from": {
+          "start": 100,
+          "end": 110
+        },
+        "from_kind": "stmt",
+        "to": {
+          "start": 112,
+          "end": 133
+        },
+        "to_kind": "ret"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "next",
+        "from": {
+          "start": 10,
+          "end": 135
+        },
+        "from_kind": "entry",
+        "to": {
+          "start": 48,
+          "end": 96
+        },
+        "to_kind": "stmt"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "arm",
+        "from": {
+          "start": 57,
+          "end": 94
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 77,
+          "end": 94
+        },
+        "to_kind": "stmt"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "next",
+        "from": {
+          "start": 48,
+          "end": 96
+        },
+        "from_kind": "entry",
+        "to": {
+          "start": 57,
+          "end": 94
+        },
+        "to_kind": "branch"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "exit",
+        "from": {
+          "start": 57,
+          "end": 94
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 48,
+          "end": 96
+        },
+        "to_kind": "exit"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "exit",
+        "from": {
+          "start": 77,
+          "end": 94
+        },
+        "from_kind": "stmt",
+        "to": {
+          "start": 48,
+          "end": 96
+        },
+        "to_kind": "exit"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "control",
+        "from": {
+          "start": 57,
+          "end": 94
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 77,
+          "end": 94
+        },
+        "to_kind": "stmt"
+      }
+    ]
+  },
+  "9_control": {
+    "cfg": [
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 0,
+          "end": 83
+        },
+        "kind": "entry",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 0,
+          "end": 83
+        },
+        "kind": "exit",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 33,
+          "end": 72
+        },
+        "kind": "branch",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 43,
+          "end": 54
+        },
+        "kind": "stmt",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 55,
+          "end": 72
+        },
+        "kind": "stmt",
+        "name": null
+      },
+      {
+        "record": "node",
+        "family": "cfg",
+        "span": {
+          "start": 73,
+          "end": 81
+        },
+        "kind": "stmt",
+        "name": null
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "arm",
+        "from": {
+          "start": 33,
+          "end": 72
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 43,
+          "end": 54
+        },
+        "to_kind": "stmt"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "arm",
+        "from": {
+          "start": 33,
+          "end": 72
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 55,
+          "end": 72
+        },
+        "to_kind": "stmt"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "next",
+        "from": {
+          "start": 33,
+          "end": 72
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 73,
+          "end": 81
+        },
+        "to_kind": "stmt"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "next",
+        "from": {
+          "start": 43,
+          "end": 54
+        },
+        "from_kind": "stmt",
+        "to": {
+          "start": 73,
+          "end": 81
+        },
+        "to_kind": "stmt"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "next",
+        "from": {
+          "start": 55,
+          "end": 72
+        },
+        "from_kind": "stmt",
+        "to": {
+          "start": 73,
+          "end": 81
+        },
+        "to_kind": "stmt"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "next",
+        "from": {
+          "start": 0,
+          "end": 83
+        },
+        "from_kind": "entry",
+        "to": {
+          "start": 33,
+          "end": 72
+        },
+        "to_kind": "branch"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "exit",
+        "from": {
+          "start": 73,
+          "end": 81
+        },
+        "from_kind": "stmt",
+        "to": {
+          "start": 0,
+          "end": 83
+        },
+        "to_kind": "exit"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "control",
+        "from": {
+          "start": 33,
+          "end": 72
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 43,
+          "end": 54
+        },
+        "to_kind": "stmt"
+      },
+      {
+        "record": "edge",
+        "family": "cfg",
+        "kind": "control",
+        "from": {
+          "start": 33,
+          "end": 72
+        },
+        "from_kind": "branch",
+        "to": {
+          "start": 55,
+          "end": 72
+        },
+        "to_kind": "stmt"
+      }
+    ]
+  }
+}

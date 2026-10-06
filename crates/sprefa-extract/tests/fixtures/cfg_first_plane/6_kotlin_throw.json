@@ -1,0 +1,11 @@
+{
+  "steps": [
+    {
+      "action": "api",
+      "name": "cfg",
+      "api": "cfg",
+      "input": "$fixtures/cfg_first_plane/inputs/6_kotlin_throw_parse.kt",
+      "path": "parse.kt"
+    }
+  ]
+}

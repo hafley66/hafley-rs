@@ -1,0 +1,12 @@
+{
+  "steps": [
+    {
+      "action": "api",
+      "name": "cfg",
+      "api": "cfg",
+      "input": "$fixtures/cfg_first_plane/inputs/11_unsupported_walk.md",
+      "path": "walk.md",
+      "expect": []
+    }
+  ]
+}

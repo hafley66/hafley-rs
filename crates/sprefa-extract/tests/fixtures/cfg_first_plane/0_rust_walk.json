@@ -1,0 +1,11 @@
+{
+  "steps": [
+    {
+      "action": "api",
+      "name": "cfg",
+      "api": "cfg",
+      "input": "$fixtures/cfg_first_plane/inputs/0_rust_walk_walk.rs",
+      "path": "walk.rs"
+    }
+  ]
+}

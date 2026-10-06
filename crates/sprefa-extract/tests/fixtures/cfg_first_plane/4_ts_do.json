@@ -1,0 +1,11 @@
+{
+  "steps": [
+    {
+      "action": "api",
+      "name": "cfg",
+      "api": "cfg",
+      "input": "$fixtures/cfg_first_plane/inputs/4_ts_do_spin.ts",
+      "path": "spin.ts"
+    }
+  ]
+}

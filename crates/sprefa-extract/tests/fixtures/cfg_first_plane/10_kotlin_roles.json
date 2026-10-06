@@ -1,0 +1,33 @@
+{
+  "steps": [
+    {
+      "action": "api",
+      "name": "tables",
+      "api": "role_tables",
+      "input": "$fixtures/cfg_first_plane/inputs/3_kotlin_walk_walk.kt",
+      "path": "walk.kt",
+      "stub_roles": [
+        [
+          "function_declaration",
+          "callable"
+        ],
+        [
+          "if_expression",
+          "branch"
+        ],
+        [
+          "when_expression",
+          "branch"
+        ],
+        [
+          "for_statement",
+          "loop"
+        ],
+        [
+          "jump_expression",
+          "jump"
+        ]
+      ]
+    }
+  ]
+}
