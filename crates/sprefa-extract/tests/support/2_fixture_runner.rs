@@ -618,7 +618,14 @@ fn claim(
     };
     let kind = step["kind"].as_str().unwrap();
     if kind == "cells_equal" {
-        let actual = cell("left") == cell("right");
+        let normalize = |value: Value| {
+            if step["sort_lines"] == true {
+                let mut lines: Vec<_> = value.as_str().unwrap().lines().map(str::to_string).collect();
+                lines.sort();
+                serde_json::json!(lines)
+            } else { value }
+        };
+        let actual = normalize(cell("left")) == normalize(cell("right"));
         assert!(actual, "{step}");
         return serde_json::json!(actual);
     }
@@ -633,6 +640,11 @@ fn claim(
         "absent" => (
             serde_json::json!(!text.contains(&needle())),
             Value::Bool(true),
+        ),
+        "line_matches" | "no_line_matches" => (
+            Value::Bool(text.lines().any(|line| step["texts"].as_array().unwrap().iter()
+                .all(|needle| line.contains(&expand(needle.as_str().unwrap()))))),
+            Value::Bool(kind == "line_matches"),
         ),
         "any_contains" => (
             serde_json::json!(step["texts"]
@@ -857,5 +869,71 @@ pub fn editing_api(step: &Value) -> Value {
             serde_json::json!({"index":target.to_str().unwrap(),"is_file":target.is_file()})
         }
         _ => panic!("unknown editing API: {step}"),
+    }
+}
+
+pub fn capability_api(step: &Value) -> Value {
+    use sprefa_extract::{dispatch, flatten_jsonl, sources, renames, rehomes, FamilyMask, RESOLVE_ARMS, CHECKER_TIERS, INDEXERS};
+    match step["api"].as_str().unwrap() {
+        "roster" => {
+            let names: Vec<_> = sources().iter().map(|source| source.name()).collect();
+            let mut expected: Vec<_> = step["fixtures"].as_object().unwrap().keys().map(String::as_str).collect();
+            let mut actual = names.clone(); actual.sort(); expected.sort();
+            assert_eq!(actual, expected);
+            serde_json::json!({"sources":names,"fixtures":step["fixtures"]})
+        }
+        "dispatch" => {
+            let path = step["path"].as_str().unwrap();
+            let bytes = std::fs::read(path).unwrap();
+            let source = sources().iter().find(|source| source.name() == step["source"].as_str().unwrap()).unwrap();
+            let planes = source.planes();
+            let mut projected = BTreeMap::new();
+            for (name, declared, mask) in [
+                ("cst",planes.cst,FamilyMask{cst:true,..FamilyMask::NONE}),
+                ("types",planes.types,FamilyMask{types:true,..FamilyMask::NONE}),
+                ("call",planes.call,FamilyMask{call:true,..FamilyMask::NONE}),
+                ("df",planes.df,FamilyMask{df:true,..FamilyMask::NONE}),
+                ("data",planes.data,FamilyMask{data:true,..FamilyMask::NONE}),
+            ] {
+                let output = dispatch(path, &bytes, mask).unwrap();
+                let present = match name {
+                    "cst" => output.cst.is_some(), "types" => output.types.is_some(),
+                    "call" => output.call.is_some(), "df" => output.df.is_some(),
+                    "data" => output.data.is_some(), _ => unreachable!(),
+                };
+                assert_eq!(present, declared);
+                projected.insert(name, serde_json::json!({"declared":declared,"present":present}));
+            }
+            let output = flatten_jsonl(&dispatch(path, &bytes, FamilyMask::ALL).unwrap());
+            assert!(!output.is_empty());
+            serde_json::json!({"planes":projected,"stdout":output.join("\n"),"stderr":""})
+        }
+        "registry" => {
+            let source_rows: Vec<_> = sources().iter().map(|source| {
+                let p = source.planes(); let name = source.name();
+                let resolve = RESOLVE_ARMS.iter().find(|arm| arm.name == name);
+                let rehome = rehomes().iter().find(|arm| arm.name() == name);
+                let checker = CHECKER_TIERS.iter().find(|tier| tier.language == name);
+                let indexer_language = match name { "ts" => "typescript", "kotlin" => "kotlin/java", other => other };
+                let indexer = INDEXERS.iter().find(|indexer| indexer.lang == indexer_language);
+                let planes: Vec<_> = [("cst",p.cst),("types",p.types),("call",p.call),("df",p.df),("data",p.data)].into_iter().filter_map(|(name,present)| present.then_some(name)).collect();
+                serde_json::json!({"language":name,"source":true,
+                    "planes":planes,
+                    "resolve":{"declared":resolve.is_some(),"call":resolve.is_some_and(|arm|arm.call.is_some()),"types":resolve.is_some_and(|arm|arm.types.is_some())},
+                    "rehome":rehome.map(|arm|serde_json::json!({"core":true,"manifests":arm.manifests.is_some(),"shim":arm.shim.is_some(),"text_spellings":arm.text_spellings.is_some(),"plan_check":arm.plan_check.is_some()})),
+                    "rename":renames().iter().any(|arm|arm.name()==name),"checker":checker.map(|tier|tier.tool),"scip_indexer":indexer.map(|row|row.lang)})
+            }).collect();
+            serde_json::json!({"sources":source_rows,
+                "resolve":RESOLVE_ARMS.iter().map(|arm|arm.name).collect::<Vec<_>>(),
+                "rehome":rehomes().iter().map(|arm|arm.name()).collect::<Vec<_>>(),
+                "rename":renames().iter().map(|arm|arm.name()).collect::<Vec<_>>(),
+                "checkers":CHECKER_TIERS.iter().map(|tier|serde_json::json!({"language":tier.language,"tool":tier.tool})).collect::<Vec<_>>(),
+                "indexers":INDEXERS.iter().map(|row|row.lang).collect::<Vec<_>>()})
+        }
+        "library_only" => {
+            let reason = step["reason"].as_str().unwrap(); assert!(reason.len() > 40);
+            serde_json::json!({"reason":reason})
+        }
+        _ => editing_api(step),
     }
 }

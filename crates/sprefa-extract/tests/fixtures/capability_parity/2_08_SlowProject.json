@@ -1,0 +1,66 @@
+{
+  "steps": [
+    {
+      "action": "run",
+      "name": "cli",
+      "arguments": [
+        "slow",
+        "tests/fixtures/call_ladder/src/_6_local.rs",
+        "--root",
+        "tests/fixtures/call_ladder",
+        "--scip-index",
+        "tests/fixtures/call_ladder/index.scip",
+        "--no-checker"
+      ],
+      "expect_exit_code": 0,
+      "raw_stdout": true,
+      "stdout_redactions": [
+        {
+          "pattern": ",\"(?:index_mtime_unix_ms|staleness|reused)\":(?:[0-9]+|\"(?:[^\"\\\\]|\\\\.)*\"|true|false)",
+          "replacement": ""
+        }
+      ]
+    },
+    {
+      "action": "claim",
+      "name": "reach",
+      "kind": "line_matches",
+      "cell": "cli",
+      "texts": [
+        "\"record\":\"resolved_edge\"",
+        "\"resolution_origin\":\"scip\""
+      ]
+    },
+    {
+      "action": "run",
+      "name": "without",
+      "arguments": [
+        "fast",
+        "tests/fixtures/call_ladder/src/_6_local.rs"
+      ],
+      "expect_exit_code": 0,
+      "raw_stdout": true,
+      "stdout_redactions": [
+        {
+          "pattern": ",\"(?:index_mtime_unix_ms|staleness|reused)\":(?:[0-9]+|\"(?:[^\"\\\\]|\\\\.)*\"|true|false)",
+          "replacement": ""
+        }
+      ]
+    },
+    {
+      "action": "claim",
+      "name": "flag_required",
+      "kind": "no_line_matches",
+      "cell": "without",
+      "texts": [
+        "\"record\":\"resolved_edge\"",
+        "\"resolution_origin\":\"scip\""
+      ]
+    }
+  ],
+  "unasserted_index_fields": [
+    "index_mtime_unix_ms",
+    "staleness",
+    "reused"
+  ]
+}

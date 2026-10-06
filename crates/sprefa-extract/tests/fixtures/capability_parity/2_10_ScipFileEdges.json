@@ -1,0 +1,61 @@
+{
+  "steps": [
+    {
+      "action": "run",
+      "name": "cli",
+      "arguments": [
+        "--scip-deps",
+        "--root",
+        "tests/fixtures/capability_parity/inputs/2_scip",
+        "--scip-build",
+        "tests/fixtures/capability_parity/inputs/2_scip/alpha.ts"
+      ],
+      "expect_exit_code": 0,
+      "raw_stdout": true,
+      "stdout_redactions": [
+        {
+          "pattern": ",\"(?:index_mtime_unix_ms|staleness|reused)\":(?:[0-9]+|\"(?:[^\"\\\\]|\\\\.)*\"|true|false)",
+          "replacement": ""
+        }
+      ]
+    },
+    {
+      "action": "claim",
+      "name": "reach",
+      "kind": "line_matches",
+      "cell": "cli",
+      "texts": [
+        "\"record\":\"file_edge\""
+      ]
+    },
+    {
+      "action": "run",
+      "name": "without",
+      "arguments": [
+        "tests/fixtures/capability_parity/inputs/2_scip/gamma.ts"
+      ],
+      "expect_exit_code": 0,
+      "raw_stdout": true,
+      "stdout_redactions": [
+        {
+          "pattern": ",\"(?:index_mtime_unix_ms|staleness|reused)\":(?:[0-9]+|\"(?:[^\"\\\\]|\\\\.)*\"|true|false)",
+          "replacement": ""
+        }
+      ]
+    },
+    {
+      "action": "claim",
+      "name": "flag_required",
+      "kind": "no_line_matches",
+      "cell": "without",
+      "texts": [
+        "\"record\":\"file_edge\""
+      ]
+    }
+  ],
+  "unasserted_index_fields": [
+    "index_mtime_unix_ms",
+    "staleness",
+    "reused"
+  ]
+}

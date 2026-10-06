@@ -1,0 +1,10 @@
+{
+  "steps": [
+    {
+      "action": "api",
+      "name": "library_only",
+      "api": "library_only",
+      "reason": "the span-and-blob project-edge shape predates the flat-fields rule for host decoding. The CLI carries the same edges as record=resolved_type_edge with paths and names, which a line-oriented consumer can decode without a span join; flatten_project_type stays for golden_parity's normalize."
+    }
+  ]
+}

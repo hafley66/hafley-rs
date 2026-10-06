@@ -1,0 +1,64 @@
+{
+  "steps": [
+    {
+      "action": "run",
+      "name": "cli",
+      "arguments": [
+        "--package-deps",
+        "--root",
+        "tests/fixtures/packages",
+        "tests/fixtures/packages/crates/alpha/Cargo.toml",
+        "tests/fixtures/packages/crates/beta/Cargo.toml"
+      ],
+      "expect_exit_code": 0,
+      "raw_stdout": true,
+      "stdout_redactions": [
+        {
+          "pattern": ",\"(?:index_mtime_unix_ms|staleness|reused)\":(?:[0-9]+|\"(?:[^\"\\\\]|\\\\.)*\"|true|false)",
+          "replacement": ""
+        }
+      ]
+    },
+    {
+      "action": "claim",
+      "name": "reach",
+      "kind": "line_matches",
+      "cell": "cli",
+      "texts": [
+        "\"record\":\"package_edge\""
+      ]
+    },
+    {
+      "action": "run",
+      "name": "without",
+      "arguments": [
+        "--deps",
+        "--root",
+        "tests/fixtures/deps",
+        "tests/fixtures/deps/app.ts"
+      ],
+      "expect_exit_code": 0,
+      "raw_stdout": true,
+      "stdout_redactions": [
+        {
+          "pattern": ",\"(?:index_mtime_unix_ms|staleness|reused)\":(?:[0-9]+|\"(?:[^\"\\\\]|\\\\.)*\"|true|false)",
+          "replacement": ""
+        }
+      ]
+    },
+    {
+      "action": "claim",
+      "name": "flag_required",
+      "kind": "no_line_matches",
+      "cell": "without",
+      "texts": [
+        "\"record\":\"package_edge\""
+      ]
+    }
+  ],
+  "unasserted_index_fields": [
+    "index_mtime_unix_ms",
+    "staleness",
+    "reused"
+  ]
+}

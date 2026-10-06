@@ -1,0 +1,948 @@
+---
+source: tests/support/2_fixture_runner.rs
+---
+{
+  "0_registry": {
+    "declared": [
+      "Phase1Flatten",
+      "Phase1FamilyMask",
+      "ResolveCall",
+      "ResolveType",
+      "ScipIndexLoad",
+      "ScipIndexBuild",
+      "WireSchema",
+      "FlattenProjectType",
+      "ScipFacts",
+      "FileFact",
+      "ScipFileEdges",
+      "DietFileEdges",
+      "DietFileUnresolved",
+      "PackageEdges",
+      "SlowProject"
+    ],
+    "help": {
+      "exit_code": 0,
+      "stdout": "Source files -> flat graph facts (JSONL on stdout, or --sqlite)\n\nUsage: ryii [OPTIONS] [PATH]...\n       ryii <COMMAND>\n\nCommands:\n  capabilities  Declared language and tooling capabilities\n  fast          Syntax-only whole-project facts (no compiler)\n  slow          The SCIP oracle written as fast's tables\n  scip          Raw SCIP index rows\n  graph         Ask one question of the resolved call/type graph\n  cleave        Move one item into another file, with its imports\n  move          Move a file and repair every specifier that names it\n  rename        Rename a symbol and every occurrence bound to it\n  query         Run a tree-sitter query over files\n  region        Replace a generated region between sprefa markers\n  watch         Stream fact deltas as the worktree changes\n  diff          Fact delta between two commits\n  ingest        Validate and re-emit foreign TSI JSONL\n  schema        Print the output record schema\n  trail         Print the last N runs from the trail\n  stratify      Rank files from entrypoints and propose dependency-first numeric prefixes\n\nArguments:\n  [PATH]...  Files, directories, or globs; - reads a path list from stdin\n\nOptions:\n      --fast-receivers <written>  Resolve written receiver types in fast mode\n      --pattern <GLOB>            Keep files matching GLOB under each directory input; repeatable\n      --entry <FILE>              Run on the files FILE reaches over imports (universe: the PATH inputs, else FILE's project)\n      --depth <N>                 Import hops from --entry\n      --root <DIR>                Corpus root\n      --kinds <KINDS>             Fact kinds per file (cst,type,call,df,data,cfg)\n      --arms <ARMS>               Resolve arms under --resolve (call,type,flow)\n      --sqlite <PATH>             Write to a new SQLite database instead of stdout\n      --bench                     Time extraction and print per-family counts to stderr\n      --resolve                   Resolve cross-file edges over all given paths\n      --scip-index <FILE>         Load this index.scip\n      --rust-checker              Use rust-analyzer for Rust call/type targets\n      --ts-checker                Use the TypeScript compiler for TS call/type targets\n      --go-checker                Use go/types for Go call/type targets\n      --scip-build                Build the index with the language's indexer, then load it\n      --scip-timeout <SECS>       Seconds allowed for one indexer run under --scip-build\n      --scip-deps                 File-to-file edges folded from a SCIP index\n      --deps                      File-to-file edges resolved from syntax, no index\n      --package-deps              Manifest-to-manifest workspace edges\n      --file-fact                 Prepend one file record: path, digest, bytes, lines\n      --lines                     Add 1-based line/col beside every span\n      --witness                   Wrap output in the TSI envelope\n      --max-bytes <BYTES>         Skip inputs over this many bytes (0 = no limit)\n  -h, --help                      Print help\n  -V, --version                   Print version\n\nLogging: RUST_LOG (default sprefa_extract=info,hafley_scm=info), HAFLEY_LOG_FORMAT=json|text\nCapabilities: `ryii capabilities` prints the declared language matrix.\nSQLite with --resolve stores phase 1 per-file and phase 2 project rows; stdout streams phase 2 only. Every SQLite unresolved row has its path.\nBuild: git hash: 2c93c0a3d2d7, datetime: 2026-10-06T20:24:08Z\nDeclared language capabilities:\nLANGUAGE     PLANES                 RESOLVE  REHOME                 RENAME  CHECKER         SCIP\nrust         cst,types,call,df      call+types manifests,plan_check   yes     rust-analyzer   rust\ngo           cst,types,call,df      call+types                        no      go-types        go\nkotlin       cst,types,call,df      call+types                        yes     -               kotlin/java\nmarkdown     cst,types              +types                          no      -               -\nprolog       cst,types,call,df      call                            yes     -               -\npython       cst,types,call,df      call+types                        no      -               python\ndata         cst,data                                               no      -               -\nts           cst,types,call,df      call+types manifests,text_spellings,plan_check yes     tsgo            typescript\ngdscript     cst                                                    no      -               -\ncommonlisp   cst                                                    no      -               -\ntypespec     cst                                                    no      -               -\nfallback     cst,call               call                            no      -               -\ncpp                                                                 no      -               cpp\n",
+      "stderr": ""
+    },
+    "matrix": {
+      "exit_code": 0,
+      "stdout": "{\"language\":\"rust\",\"source\":true,\"planes\":[\"cst\",\"types\",\"call\",\"df\"],\"resolve\":{\"call\":true,\"types\":true,\"declared\":true},\"rehome\":{\"core\":true,\"manifests\":true,\"shim\":false,\"text_spellings\":false,\"plan_check\":true},\"rename\":true,\"checker\":\"rust-analyzer\",\"scip_indexer\":\"rust\"}\n{\"language\":\"go\",\"source\":true,\"planes\":[\"cst\",\"types\",\"call\",\"df\"],\"resolve\":{\"call\":true,\"types\":true,\"declared\":true},\"rehome\":null,\"rename\":false,\"checker\":\"go-types\",\"scip_indexer\":\"go\"}\n{\"language\":\"kotlin\",\"source\":true,\"planes\":[\"cst\",\"types\",\"call\",\"df\"],\"resolve\":{\"call\":true,\"types\":true,\"declared\":true},\"rehome\":{\"core\":true,\"manifests\":false,\"shim\":false,\"text_spellings\":false,\"plan_check\":false},\"rename\":true,\"checker\":null,\"scip_indexer\":\"kotlin/java\"}\n{\"language\":\"markdown\",\"source\":true,\"planes\":[\"cst\",\"types\"],\"resolve\":{\"call\":false,\"types\":true,\"declared\":true},\"rehome\":null,\"rename\":false,\"checker\":null,\"scip_indexer\":null}\n{\"language\":\"prolog\",\"source\":true,\"planes\":[\"cst\",\"types\",\"call\",\"df\"],\"resolve\":{\"call\":true,\"types\":false,\"declared\":true},\"rehome\":{\"core\":true,\"manifests\":false,\"shim\":false,\"text_spellings\":false,\"plan_check\":false},\"rename\":true,\"checker\":null,\"scip_indexer\":null}\n{\"language\":\"python\",\"source\":true,\"planes\":[\"cst\",\"types\",\"call\",\"df\"],\"resolve\":{\"call\":true,\"types\":true,\"declared\":true},\"rehome\":null,\"rename\":false,\"checker\":null,\"scip_indexer\":\"python\"}\n{\"language\":\"data\",\"source\":true,\"planes\":[\"cst\",\"data\"],\"resolve\":{\"call\":false,\"types\":false,\"declared\":true},\"rehome\":null,\"rename\":false,\"checker\":null,\"scip_indexer\":null}\n{\"language\":\"ts\",\"source\":true,\"planes\":[\"cst\",\"types\",\"call\",\"df\"],\"resolve\":{\"call\":true,\"types\":true,\"declared\":true},\"rehome\":{\"core\":true,\"manifests\":true,\"shim\":false,\"text_spellings\":true,\"plan_check\":true},\"rename\":true,\"checker\":\"tsgo\",\"scip_indexer\":\"typescript\"}\n{\"language\":\"gdscript\",\"source\":true,\"planes\":[\"cst\"],\"resolve\":{\"call\":false,\"types\":false,\"declared\":true},\"rehome\":null,\"rename\":false,\"checker\":null,\"scip_indexer\":null}\n{\"language\":\"commonlisp\",\"source\":true,\"planes\":[\"cst\"],\"resolve\":{\"call\":false,\"types\":false,\"declared\":true},\"rehome\":null,\"rename\":false,\"checker\":null,\"scip_indexer\":null}\n{\"language\":\"typespec\",\"source\":true,\"planes\":[\"cst\"],\"resolve\":{\"call\":false,\"types\":false,\"declared\":true},\"rehome\":null,\"rename\":false,\"checker\":null,\"scip_indexer\":null}\n{\"language\":\"fallback\",\"source\":true,\"planes\":[\"cst\",\"call\"],\"resolve\":{\"call\":true,\"types\":false,\"declared\":true},\"rehome\":null,\"rename\":false,\"checker\":null,\"scip_indexer\":null}\n{\"language\":\"cpp\",\"source\":false,\"planes\":[],\"resolve\":{\"call\":false,\"types\":false,\"declared\":false},\"rehome\":null,\"rename\":false,\"checker\":null,\"scip_indexer\":\"cpp\"}\n",
+      "stderr": ""
+    },
+    "registries": {
+      "sources": [
+        {
+          "language": "rust",
+          "source": true,
+          "planes": [
+            "cst",
+            "types",
+            "call",
+            "df"
+          ],
+          "resolve": {
+            "declared": true,
+            "call": true,
+            "types": true
+          },
+          "rehome": {
+            "core": true,
+            "manifests": true,
+            "shim": false,
+            "text_spellings": false,
+            "plan_check": true
+          },
+          "rename": true,
+          "checker": "rust-analyzer",
+          "scip_indexer": "rust"
+        },
+        {
+          "language": "go",
+          "source": true,
+          "planes": [
+            "cst",
+            "types",
+            "call",
+            "df"
+          ],
+          "resolve": {
+            "declared": true,
+            "call": true,
+            "types": true
+          },
+          "rehome": null,
+          "rename": false,
+          "checker": "go-types",
+          "scip_indexer": "go"
+        },
+        {
+          "language": "kotlin",
+          "source": true,
+          "planes": [
+            "cst",
+            "types",
+            "call",
+            "df"
+          ],
+          "resolve": {
+            "declared": true,
+            "call": true,
+            "types": true
+          },
+          "rehome": {
+            "core": true,
+            "manifests": false,
+            "shim": false,
+            "text_spellings": false,
+            "plan_check": false
+          },
+          "rename": true,
+          "checker": null,
+          "scip_indexer": "kotlin/java"
+        },
+        {
+          "language": "markdown",
+          "source": true,
+          "planes": [
+            "cst",
+            "types"
+          ],
+          "resolve": {
+            "declared": true,
+            "call": false,
+            "types": true
+          },
+          "rehome": null,
+          "rename": false,
+          "checker": null,
+          "scip_indexer": null
+        },
+        {
+          "language": "prolog",
+          "source": true,
+          "planes": [
+            "cst",
+            "types",
+            "call",
+            "df"
+          ],
+          "resolve": {
+            "declared": true,
+            "call": true,
+            "types": false
+          },
+          "rehome": {
+            "core": true,
+            "manifests": false,
+            "shim": false,
+            "text_spellings": false,
+            "plan_check": false
+          },
+          "rename": true,
+          "checker": null,
+          "scip_indexer": null
+        },
+        {
+          "language": "python",
+          "source": true,
+          "planes": [
+            "cst",
+            "types",
+            "call",
+            "df"
+          ],
+          "resolve": {
+            "declared": true,
+            "call": true,
+            "types": true
+          },
+          "rehome": null,
+          "rename": false,
+          "checker": null,
+          "scip_indexer": "python"
+        },
+        {
+          "language": "data",
+          "source": true,
+          "planes": [
+            "cst",
+            "data"
+          ],
+          "resolve": {
+            "declared": true,
+            "call": false,
+            "types": false
+          },
+          "rehome": null,
+          "rename": false,
+          "checker": null,
+          "scip_indexer": null
+        },
+        {
+          "language": "ts",
+          "source": true,
+          "planes": [
+            "cst",
+            "types",
+            "call",
+            "df"
+          ],
+          "resolve": {
+            "declared": true,
+            "call": true,
+            "types": true
+          },
+          "rehome": {
+            "core": true,
+            "manifests": true,
+            "shim": false,
+            "text_spellings": true,
+            "plan_check": true
+          },
+          "rename": true,
+          "checker": "tsgo",
+          "scip_indexer": "typescript"
+        },
+        {
+          "language": "gdscript",
+          "source": true,
+          "planes": [
+            "cst"
+          ],
+          "resolve": {
+            "declared": true,
+            "call": false,
+            "types": false
+          },
+          "rehome": null,
+          "rename": false,
+          "checker": null,
+          "scip_indexer": null
+        },
+        {
+          "language": "commonlisp",
+          "source": true,
+          "planes": [
+            "cst"
+          ],
+          "resolve": {
+            "declared": true,
+            "call": false,
+            "types": false
+          },
+          "rehome": null,
+          "rename": false,
+          "checker": null,
+          "scip_indexer": null
+        },
+        {
+          "language": "typespec",
+          "source": true,
+          "planes": [
+            "cst"
+          ],
+          "resolve": {
+            "declared": true,
+            "call": false,
+            "types": false
+          },
+          "rehome": null,
+          "rename": false,
+          "checker": null,
+          "scip_indexer": null
+        },
+        {
+          "language": "fallback",
+          "source": true,
+          "planes": [
+            "cst",
+            "call"
+          ],
+          "resolve": {
+            "declared": true,
+            "call": true,
+            "types": false
+          },
+          "rehome": null,
+          "rename": false,
+          "checker": null,
+          "scip_indexer": null
+        }
+      ],
+      "resolve": [
+        "ts",
+        "rust",
+        "go",
+        "kotlin",
+        "prolog",
+        "python",
+        "markdown",
+        "data",
+        "gdscript",
+        "commonlisp",
+        "typespec",
+        "fallback"
+      ],
+      "rehome": [
+        "rust",
+        "kotlin",
+        "prolog",
+        "ts"
+      ],
+      "rename": [
+        "ts",
+        "rust",
+        "kotlin",
+        "prolog"
+      ],
+      "checkers": [
+        {
+          "language": "ts",
+          "tool": "tsgo"
+        },
+        {
+          "language": "rust",
+          "tool": "rust-analyzer"
+        },
+        {
+          "language": "go",
+          "tool": "go-types"
+        }
+      ],
+      "indexers": [
+        "rust",
+        "typescript",
+        "python",
+        "go",
+        "kotlin/java",
+        "cpp"
+      ]
+    },
+    "source_roster": {
+      "sources": [
+        "rust",
+        "go",
+        "kotlin",
+        "markdown",
+        "prolog",
+        "python",
+        "data",
+        "ts",
+        "gdscript",
+        "commonlisp",
+        "typespec",
+        "fallback"
+      ],
+      "fixtures": {
+        "ts": "tests/fixtures/capability_parity/inputs/0_roster/0_ts.ts",
+        "rust": "tests/fixtures/capability_parity/inputs/0_roster/1_rust.rs",
+        "go": "tests/fixtures/capability_parity/inputs/0_roster/2_go.go",
+        "kotlin": "tests/fixtures/capability_parity/inputs/0_roster/3_kotlin.kt",
+        "prolog": "tests/fixtures/capability_parity/inputs/0_roster/4_prolog.pl",
+        "python": "tests/fixtures/capability_parity/inputs/0_roster/5_python.py",
+        "markdown": "tests/fixtures/capability_parity/inputs/0_roster/6_markdown.md",
+        "gdscript": "tests/fixtures/capability_parity/inputs/0_roster/7_gdscript.gd",
+        "commonlisp": "tests/fixtures/capability_parity/inputs/0_roster/8_commonlisp.lisp",
+        "typespec": "tests/fixtures/capability_parity/inputs/0_roster/9_typespec.tsp",
+        "data": "tests/fixtures/capability_parity/inputs/0_roster/10_data.json",
+        "fallback": "tests/fixtures/capability_parity/inputs/0_roster/11_fallback.html"
+      }
+    }
+  },
+  "1_00_ts": {
+    "cli": {
+      "exit_code": 0,
+      "stdout": "{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":51},\"kind\":\"program\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":50},\"kind\":\"export_statement\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":7,\"end\":50},\"kind\":\"function_declaration\",\"name\":\"f\"}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":16,\"end\":17},\"kind\":\"identifier\",\"name\":\"f\"}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":17,\"end\":28},\"kind\":\"formal_parameters\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":18,\"end\":27},\"kind\":\"required_parameter\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":18,\"end\":19},\"kind\":\"identifier\",\"name\":\"x\"}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":19,\"end\":27},\"kind\":\"type_annotation\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":21,\"end\":27},\"kind\":\"predefined_type\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":28,\"end\":36},\"kind\":\"type_annotation\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":30,\"end\":36},\"kind\":\"predefined_type\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":37,\"end\":50},\"kind\":\"statement_block\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":39,\"end\":48},\"kind\":\"return_statement\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":46,\"end\":47},\"kind\":\"identifier\",\"name\":\"x\"}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":51},\"to\":{\"start\":0,\"end\":50}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":50},\"to\":{\"start\":7,\"end\":50}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":7,\"end\":50},\"to\":{\"start\":16,\"end\":17}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":7,\"end\":50},\"to\":{\"start\":17,\"end\":28}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":17,\"end\":28},\"to\":{\"start\":18,\"end\":27}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":18,\"end\":27},\"to\":{\"start\":18,\"end\":19}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":18,\"end\":27},\"to\":{\"start\":19,\"end\":27}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":19,\"end\":27},\"to\":{\"start\":21,\"end\":27}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":7,\"end\":50},\"to\":{\"start\":28,\"end\":36}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":28,\"end\":36},\"to\":{\"start\":30,\"end\":36}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":7,\"end\":50},\"to\":{\"start\":37,\"end\":50}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":37,\"end\":50},\"to\":{\"start\":39,\"end\":48}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":39,\"end\":48},\"to\":{\"start\":46,\"end\":47}}\n{\"record\":\"node\",\"family\":\"type\",\"span\":{\"start\":7,\"end\":50},\"kind\":\"function\",\"name\":\"f\"}\n{\"record\":\"node\",\"family\":\"call\",\"span\":{\"start\":7,\"end\":50},\"kind\":\"function\",\"name\":\"f\"}\n{\"record\":\"node\",\"family\":\"df\",\"span\":{\"start\":18,\"end\":27},\"kind\":\"param\",\"name\":\"x\",\"function\":\"f\",\"is_async\":false,\"owner_kind\":\"function\"}\n{\"record\":\"node\",\"family\":\"df\",\"span\":{\"start\":39,\"end\":48},\"kind\":\"ret\",\"name\":null,\"function\":\"f\",\"is_async\":false,\"owner_kind\":\"function\"}\n{\"record\":\"node\",\"family\":\"df\",\"span\":{\"start\":46,\"end\":47},\"kind\":\"var_read\",\"name\":\"x\",\"function\":\"f\",\"is_async\":false,\"owner_kind\":\"function\"}\n{\"record\":\"edge\",\"family\":\"df\",\"kind\":\"direct\",\"from\":{\"start\":18,\"end\":27},\"from_kind\":\"param\",\"to\":{\"start\":46,\"end\":47},\"to_kind\":\"var_read\"}\n{\"record\":\"edge\",\"family\":\"df\",\"kind\":\"direct\",\"from\":{\"start\":46,\"end\":47},\"from_kind\":\"var_read\",\"to\":{\"start\":39,\"end\":48},\"to_kind\":\"ret\"}\n{\"record\":\"param\",\"family\":\"df\",\"span\":{\"start\":18,\"end\":27},\"pos\":0}\n",
+      "stderr": ""
+    },
+    "library": {
+      "planes": {
+        "call": {
+          "declared": true,
+          "present": true
+        },
+        "cst": {
+          "declared": true,
+          "present": true
+        },
+        "data": {
+          "declared": false,
+          "present": false
+        },
+        "df": {
+          "declared": true,
+          "present": true
+        },
+        "types": {
+          "declared": true,
+          "present": true
+        }
+      },
+      "stdout": "{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":50},\"to\":{\"start\":7,\"end\":50}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":51},\"to\":{\"start\":0,\"end\":50}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":17,\"end\":28},\"to\":{\"start\":18,\"end\":27}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":18,\"end\":27},\"to\":{\"start\":18,\"end\":19}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":18,\"end\":27},\"to\":{\"start\":19,\"end\":27}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":19,\"end\":27},\"to\":{\"start\":21,\"end\":27}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":28,\"end\":36},\"to\":{\"start\":30,\"end\":36}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":37,\"end\":50},\"to\":{\"start\":39,\"end\":48}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":39,\"end\":48},\"to\":{\"start\":46,\"end\":47}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":7,\"end\":50},\"to\":{\"start\":16,\"end\":17}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":7,\"end\":50},\"to\":{\"start\":17,\"end\":28}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":7,\"end\":50},\"to\":{\"start\":28,\"end\":36}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":7,\"end\":50},\"to\":{\"start\":37,\"end\":50}}\n{\"record\":\"edge\",\"family\":\"df\",\"kind\":\"direct\",\"from\":{\"start\":18,\"end\":27},\"from_kind\":\"param\",\"to\":{\"start\":46,\"end\":47},\"to_kind\":\"var_read\"}\n{\"record\":\"edge\",\"family\":\"df\",\"kind\":\"direct\",\"from\":{\"start\":46,\"end\":47},\"from_kind\":\"var_read\",\"to\":{\"start\":39,\"end\":48},\"to_kind\":\"ret\"}\n{\"record\":\"node\",\"family\":\"call\",\"span\":{\"start\":7,\"end\":50},\"kind\":\"function\",\"name\":\"f\"}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":50},\"kind\":\"export_statement\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":51},\"kind\":\"program\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":16,\"end\":17},\"kind\":\"identifier\",\"name\":\"f\"}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":17,\"end\":28},\"kind\":\"formal_parameters\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":18,\"end\":19},\"kind\":\"identifier\",\"name\":\"x\"}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":18,\"end\":27},\"kind\":\"required_parameter\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":19,\"end\":27},\"kind\":\"type_annotation\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":21,\"end\":27},\"kind\":\"predefined_type\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":28,\"end\":36},\"kind\":\"type_annotation\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":30,\"end\":36},\"kind\":\"predefined_type\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":37,\"end\":50},\"kind\":\"statement_block\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":39,\"end\":48},\"kind\":\"return_statement\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":46,\"end\":47},\"kind\":\"identifier\",\"name\":\"x\"}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":7,\"end\":50},\"kind\":\"function_declaration\",\"name\":\"f\"}\n{\"record\":\"node\",\"family\":\"df\",\"span\":{\"start\":18,\"end\":27},\"kind\":\"param\",\"name\":\"x\",\"function\":\"f\",\"is_async\":false,\"owner_kind\":\"function\"}\n{\"record\":\"node\",\"family\":\"df\",\"span\":{\"start\":39,\"end\":48},\"kind\":\"ret\",\"name\":null,\"function\":\"f\",\"is_async\":false,\"owner_kind\":\"function\"}\n{\"record\":\"node\",\"family\":\"df\",\"span\":{\"start\":46,\"end\":47},\"kind\":\"var_read\",\"name\":\"x\",\"function\":\"f\",\"is_async\":false,\"owner_kind\":\"function\"}\n{\"record\":\"node\",\"family\":\"type\",\"span\":{\"start\":7,\"end\":50},\"kind\":\"function\",\"name\":\"f\"}\n{\"record\":\"param\",\"family\":\"df\",\"span\":{\"start\":18,\"end\":27},\"pos\":0}",
+      "stderr": ""
+    },
+    "same_stream": true
+  },
+  "1_01_rust": {
+    "cli": {
+      "exit_code": 0,
+      "stdout": "{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":30},\"kind\":\"source_file\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":29},\"kind\":\"function_item\",\"name\":\"f\"}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":3},\"kind\":\"visibility_modifier\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":7,\"end\":8},\"kind\":\"identifier\",\"name\":\"f\"}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":8,\"end\":16},\"kind\":\"parameters\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":9,\"end\":15},\"kind\":\"parameter\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":9,\"end\":10},\"kind\":\"identifier\",\"name\":\"x\"}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":12,\"end\":15},\"kind\":\"primitive_type\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":20,\"end\":23},\"kind\":\"primitive_type\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":24,\"end\":29},\"kind\":\"block\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":26,\"end\":27},\"kind\":\"identifier\",\"name\":\"x\"}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":30},\"to\":{\"start\":0,\"end\":29}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":29},\"to\":{\"start\":0,\"end\":3}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":29},\"to\":{\"start\":7,\"end\":8}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":29},\"to\":{\"start\":8,\"end\":16}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":8,\"end\":16},\"to\":{\"start\":9,\"end\":15}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":9,\"end\":15},\"to\":{\"start\":9,\"end\":10}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":9,\"end\":15},\"to\":{\"start\":12,\"end\":15}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":29},\"to\":{\"start\":20,\"end\":23}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":29},\"to\":{\"start\":24,\"end\":29}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":24,\"end\":29},\"to\":{\"start\":26,\"end\":27}}\n{\"record\":\"node\",\"family\":\"type\",\"span\":{\"start\":7,\"end\":8},\"kind\":\"function\",\"name\":\"f\"}\n{\"record\":\"node\",\"family\":\"call\",\"span\":{\"start\":7,\"end\":29},\"kind\":\"function\",\"name\":\"f\"}\n{\"record\":\"node\",\"family\":\"df\",\"span\":{\"start\":9,\"end\":10},\"kind\":\"param\",\"name\":\"x\",\"function\":\"f\"}\n{\"record\":\"node\",\"family\":\"df\",\"span\":{\"start\":26,\"end\":27},\"kind\":\"var_read\",\"name\":\"x\",\"function\":\"f\"}\n{\"record\":\"node\",\"family\":\"df\",\"span\":{\"start\":26,\"end\":27},\"kind\":\"ret\",\"name\":null,\"function\":\"f\"}\n{\"record\":\"edge\",\"family\":\"df\",\"kind\":\"direct\",\"from\":{\"start\":9,\"end\":10},\"from_kind\":\"param\",\"to\":{\"start\":26,\"end\":27},\"to_kind\":\"var_read\"}\n{\"record\":\"edge\",\"family\":\"df\",\"kind\":\"direct\",\"from\":{\"start\":26,\"end\":27},\"from_kind\":\"var_read\",\"to\":{\"start\":26,\"end\":27},\"to_kind\":\"ret\"}\n{\"record\":\"param\",\"family\":\"df\",\"span\":{\"start\":9,\"end\":10},\"pos\":0}\n",
+      "stderr": ""
+    },
+    "library": {
+      "planes": {
+        "call": {
+          "declared": true,
+          "present": true
+        },
+        "cst": {
+          "declared": true,
+          "present": true
+        },
+        "data": {
+          "declared": false,
+          "present": false
+        },
+        "df": {
+          "declared": true,
+          "present": true
+        },
+        "types": {
+          "declared": true,
+          "present": true
+        }
+      },
+      "stdout": "{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":29},\"to\":{\"start\":0,\"end\":3}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":29},\"to\":{\"start\":20,\"end\":23}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":29},\"to\":{\"start\":24,\"end\":29}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":29},\"to\":{\"start\":7,\"end\":8}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":29},\"to\":{\"start\":8,\"end\":16}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":30},\"to\":{\"start\":0,\"end\":29}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":24,\"end\":29},\"to\":{\"start\":26,\"end\":27}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":8,\"end\":16},\"to\":{\"start\":9,\"end\":15}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":9,\"end\":15},\"to\":{\"start\":12,\"end\":15}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":9,\"end\":15},\"to\":{\"start\":9,\"end\":10}}\n{\"record\":\"edge\",\"family\":\"df\",\"kind\":\"direct\",\"from\":{\"start\":26,\"end\":27},\"from_kind\":\"var_read\",\"to\":{\"start\":26,\"end\":27},\"to_kind\":\"ret\"}\n{\"record\":\"edge\",\"family\":\"df\",\"kind\":\"direct\",\"from\":{\"start\":9,\"end\":10},\"from_kind\":\"param\",\"to\":{\"start\":26,\"end\":27},\"to_kind\":\"var_read\"}\n{\"record\":\"node\",\"family\":\"call\",\"span\":{\"start\":7,\"end\":29},\"kind\":\"function\",\"name\":\"f\"}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":29},\"kind\":\"function_item\",\"name\":\"f\"}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":30},\"kind\":\"source_file\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":3},\"kind\":\"visibility_modifier\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":12,\"end\":15},\"kind\":\"primitive_type\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":20,\"end\":23},\"kind\":\"primitive_type\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":24,\"end\":29},\"kind\":\"block\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":26,\"end\":27},\"kind\":\"identifier\",\"name\":\"x\"}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":7,\"end\":8},\"kind\":\"identifier\",\"name\":\"f\"}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":8,\"end\":16},\"kind\":\"parameters\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":9,\"end\":10},\"kind\":\"identifier\",\"name\":\"x\"}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":9,\"end\":15},\"kind\":\"parameter\",\"name\":null}\n{\"record\":\"node\",\"family\":\"df\",\"span\":{\"start\":26,\"end\":27},\"kind\":\"ret\",\"name\":null,\"function\":\"f\"}\n{\"record\":\"node\",\"family\":\"df\",\"span\":{\"start\":26,\"end\":27},\"kind\":\"var_read\",\"name\":\"x\",\"function\":\"f\"}\n{\"record\":\"node\",\"family\":\"df\",\"span\":{\"start\":9,\"end\":10},\"kind\":\"param\",\"name\":\"x\",\"function\":\"f\"}\n{\"record\":\"node\",\"family\":\"type\",\"span\":{\"start\":7,\"end\":8},\"kind\":\"function\",\"name\":\"f\"}\n{\"record\":\"param\",\"family\":\"df\",\"span\":{\"start\":9,\"end\":10},\"pos\":0}",
+      "stderr": ""
+    },
+    "same_stream": true
+  },
+  "1_02_go": {
+    "cli": {
+      "exit_code": 0,
+      "stdout": "{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":22},\"kind\":\"source_file\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":9},\"kind\":\"package_clause\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":8,\"end\":9},\"kind\":\"package_identifier\",\"name\":\"p\"}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":10,\"end\":21},\"kind\":\"function_declaration\",\"name\":\"f\"}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":15,\"end\":16},\"kind\":\"identifier\",\"name\":\"f\"}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":16,\"end\":18},\"kind\":\"parameter_list\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":19,\"end\":21},\"kind\":\"block\",\"name\":null}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":22},\"to\":{\"start\":0,\"end\":9}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":9},\"to\":{\"start\":8,\"end\":9}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":22},\"to\":{\"start\":10,\"end\":21}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":10,\"end\":21},\"to\":{\"start\":15,\"end\":16}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":10,\"end\":21},\"to\":{\"start\":16,\"end\":18}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":10,\"end\":21},\"to\":{\"start\":19,\"end\":21}}\n{\"record\":\"node\",\"family\":\"type\",\"span\":{\"start\":10,\"end\":21},\"kind\":\"function\",\"name\":\"f\"}\n{\"record\":\"node\",\"family\":\"call\",\"span\":{\"start\":10,\"end\":21},\"kind\":\"function\",\"name\":\"f\"}\n",
+      "stderr": ""
+    },
+    "library": {
+      "planes": {
+        "call": {
+          "declared": true,
+          "present": true
+        },
+        "cst": {
+          "declared": true,
+          "present": true
+        },
+        "data": {
+          "declared": false,
+          "present": false
+        },
+        "df": {
+          "declared": true,
+          "present": true
+        },
+        "types": {
+          "declared": true,
+          "present": true
+        }
+      },
+      "stdout": "{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":22},\"to\":{\"start\":0,\"end\":9}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":22},\"to\":{\"start\":10,\"end\":21}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":9},\"to\":{\"start\":8,\"end\":9}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":10,\"end\":21},\"to\":{\"start\":15,\"end\":16}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":10,\"end\":21},\"to\":{\"start\":16,\"end\":18}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":10,\"end\":21},\"to\":{\"start\":19,\"end\":21}}\n{\"record\":\"node\",\"family\":\"call\",\"span\":{\"start\":10,\"end\":21},\"kind\":\"function\",\"name\":\"f\"}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":22},\"kind\":\"source_file\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":9},\"kind\":\"package_clause\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":10,\"end\":21},\"kind\":\"function_declaration\",\"name\":\"f\"}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":15,\"end\":16},\"kind\":\"identifier\",\"name\":\"f\"}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":16,\"end\":18},\"kind\":\"parameter_list\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":19,\"end\":21},\"kind\":\"block\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":8,\"end\":9},\"kind\":\"package_identifier\",\"name\":\"p\"}\n{\"record\":\"node\",\"family\":\"type\",\"span\":{\"start\":10,\"end\":21},\"kind\":\"function\",\"name\":\"f\"}",
+      "stderr": ""
+    },
+    "same_stream": true
+  },
+  "1_03_kotlin": {
+    "cli": {
+      "exit_code": 0,
+      "stdout": "{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":23},\"kind\":\"source_file\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":22},\"kind\":\"function_declaration\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":4,\"end\":5},\"kind\":\"simple_identifier\",\"name\":\"f\"}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":5,\"end\":13},\"kind\":\"function_value_parameters\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":6,\"end\":12},\"kind\":\"parameter\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":6,\"end\":7},\"kind\":\"simple_identifier\",\"name\":\"x\"}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":9,\"end\":12},\"kind\":\"user_type\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":9,\"end\":12},\"kind\":\"type_identifier\",\"name\":\"Int\"}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":15,\"end\":18},\"kind\":\"user_type\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":15,\"end\":18},\"kind\":\"type_identifier\",\"name\":\"Int\"}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":19,\"end\":22},\"kind\":\"function_body\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":21,\"end\":22},\"kind\":\"simple_identifier\",\"name\":\"x\"}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":23},\"to\":{\"start\":0,\"end\":22}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":22},\"to\":{\"start\":4,\"end\":5}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":22},\"to\":{\"start\":5,\"end\":13}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":5,\"end\":13},\"to\":{\"start\":6,\"end\":12}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":6,\"end\":12},\"to\":{\"start\":6,\"end\":7}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":6,\"end\":12},\"to\":{\"start\":9,\"end\":12}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":9,\"end\":12},\"to\":{\"start\":9,\"end\":12}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":22},\"to\":{\"start\":15,\"end\":18}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":15,\"end\":18},\"to\":{\"start\":15,\"end\":18}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":22},\"to\":{\"start\":19,\"end\":22}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":19,\"end\":22},\"to\":{\"start\":21,\"end\":22}}\n{\"record\":\"node\",\"family\":\"type\",\"span\":{\"start\":0,\"end\":22},\"kind\":\"function\",\"name\":\"f\"}\n{\"record\":\"node\",\"family\":\"call\",\"span\":{\"start\":0,\"end\":22},\"kind\":\"function\",\"name\":\"f\"}\n{\"record\":\"node\",\"family\":\"df\",\"span\":{\"start\":6,\"end\":7},\"kind\":\"param\",\"name\":\"x\"}\n{\"record\":\"node\",\"family\":\"df\",\"span\":{\"start\":21,\"end\":22},\"kind\":\"var_read\",\"name\":\"x\"}\n{\"record\":\"node\",\"family\":\"df\",\"span\":{\"start\":19,\"end\":22},\"kind\":\"ret\",\"name\":null}\n{\"record\":\"edge\",\"family\":\"df\",\"kind\":\"direct\",\"from\":{\"start\":6,\"end\":7},\"from_kind\":\"param\",\"to\":{\"start\":21,\"end\":22},\"to_kind\":\"var_read\"}\n{\"record\":\"edge\",\"family\":\"df\",\"kind\":\"direct\",\"from\":{\"start\":21,\"end\":22},\"from_kind\":\"var_read\",\"to\":{\"start\":19,\"end\":22},\"to_kind\":\"ret\"}\n{\"record\":\"param\",\"family\":\"df\",\"span\":{\"start\":6,\"end\":7},\"pos\":0}\n",
+      "stderr": ""
+    },
+    "library": {
+      "planes": {
+        "call": {
+          "declared": true,
+          "present": true
+        },
+        "cst": {
+          "declared": true,
+          "present": true
+        },
+        "data": {
+          "declared": false,
+          "present": false
+        },
+        "df": {
+          "declared": true,
+          "present": true
+        },
+        "types": {
+          "declared": true,
+          "present": true
+        }
+      },
+      "stdout": "{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":22},\"to\":{\"start\":15,\"end\":18}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":22},\"to\":{\"start\":19,\"end\":22}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":22},\"to\":{\"start\":4,\"end\":5}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":22},\"to\":{\"start\":5,\"end\":13}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":23},\"to\":{\"start\":0,\"end\":22}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":15,\"end\":18},\"to\":{\"start\":15,\"end\":18}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":19,\"end\":22},\"to\":{\"start\":21,\"end\":22}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":5,\"end\":13},\"to\":{\"start\":6,\"end\":12}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":6,\"end\":12},\"to\":{\"start\":6,\"end\":7}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":6,\"end\":12},\"to\":{\"start\":9,\"end\":12}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":9,\"end\":12},\"to\":{\"start\":9,\"end\":12}}\n{\"record\":\"edge\",\"family\":\"df\",\"kind\":\"direct\",\"from\":{\"start\":21,\"end\":22},\"from_kind\":\"var_read\",\"to\":{\"start\":19,\"end\":22},\"to_kind\":\"ret\"}\n{\"record\":\"edge\",\"family\":\"df\",\"kind\":\"direct\",\"from\":{\"start\":6,\"end\":7},\"from_kind\":\"param\",\"to\":{\"start\":21,\"end\":22},\"to_kind\":\"var_read\"}\n{\"record\":\"node\",\"family\":\"call\",\"span\":{\"start\":0,\"end\":22},\"kind\":\"function\",\"name\":\"f\"}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":22},\"kind\":\"function_declaration\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":23},\"kind\":\"source_file\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":15,\"end\":18},\"kind\":\"type_identifier\",\"name\":\"Int\"}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":15,\"end\":18},\"kind\":\"user_type\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":19,\"end\":22},\"kind\":\"function_body\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":21,\"end\":22},\"kind\":\"simple_identifier\",\"name\":\"x\"}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":4,\"end\":5},\"kind\":\"simple_identifier\",\"name\":\"f\"}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":5,\"end\":13},\"kind\":\"function_value_parameters\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":6,\"end\":12},\"kind\":\"parameter\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":6,\"end\":7},\"kind\":\"simple_identifier\",\"name\":\"x\"}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":9,\"end\":12},\"kind\":\"type_identifier\",\"name\":\"Int\"}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":9,\"end\":12},\"kind\":\"user_type\",\"name\":null}\n{\"record\":\"node\",\"family\":\"df\",\"span\":{\"start\":19,\"end\":22},\"kind\":\"ret\",\"name\":null}\n{\"record\":\"node\",\"family\":\"df\",\"span\":{\"start\":21,\"end\":22},\"kind\":\"var_read\",\"name\":\"x\"}\n{\"record\":\"node\",\"family\":\"df\",\"span\":{\"start\":6,\"end\":7},\"kind\":\"param\",\"name\":\"x\"}\n{\"record\":\"node\",\"family\":\"type\",\"span\":{\"start\":0,\"end\":22},\"kind\":\"function\",\"name\":\"f\"}\n{\"record\":\"param\",\"family\":\"df\",\"span\":{\"start\":6,\"end\":7},\"pos\":0}",
+      "stderr": ""
+    },
+    "same_stream": true
+  },
+  "1_04_prolog": {
+    "cli": {
+      "exit_code": 0,
+      "stdout": "{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":3},\"kind\":\"source_file\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":2},\"kind\":\"clause\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":1},\"kind\":\"atom\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":1},\"kind\":\"unquoted_atom\",\"name\":null}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":3},\"to\":{\"start\":0,\"end\":2}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":2},\"to\":{\"start\":0,\"end\":1}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":1},\"to\":{\"start\":0,\"end\":1}}\n{\"record\":\"node\",\"family\":\"type\",\"span\":{\"start\":0,\"end\":2},\"kind\":\"function\",\"name\":\"f/0\"}\n{\"record\":\"node\",\"family\":\"call\",\"span\":{\"start\":0,\"end\":2},\"kind\":\"function\",\"name\":\"f/0\"}\n",
+      "stderr": ""
+    },
+    "library": {
+      "planes": {
+        "call": {
+          "declared": true,
+          "present": true
+        },
+        "cst": {
+          "declared": true,
+          "present": true
+        },
+        "data": {
+          "declared": false,
+          "present": false
+        },
+        "df": {
+          "declared": true,
+          "present": true
+        },
+        "types": {
+          "declared": true,
+          "present": true
+        }
+      },
+      "stdout": "{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":1},\"to\":{\"start\":0,\"end\":1}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":2},\"to\":{\"start\":0,\"end\":1}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":3},\"to\":{\"start\":0,\"end\":2}}\n{\"record\":\"node\",\"family\":\"call\",\"span\":{\"start\":0,\"end\":2},\"kind\":\"function\",\"name\":\"f/0\"}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":1},\"kind\":\"atom\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":1},\"kind\":\"unquoted_atom\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":2},\"kind\":\"clause\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":3},\"kind\":\"source_file\",\"name\":null}\n{\"record\":\"node\",\"family\":\"type\",\"span\":{\"start\":0,\"end\":2},\"kind\":\"function\",\"name\":\"f/0\"}",
+      "stderr": ""
+    },
+    "same_stream": true
+  },
+  "1_05_python": {
+    "cli": {
+      "exit_code": 0,
+      "stdout": "{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":35},\"kind\":\"module\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":34},\"kind\":\"function_definition\",\"name\":\"f\"}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":4,\"end\":5},\"kind\":\"identifier\",\"name\":\"f\"}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":5,\"end\":13},\"kind\":\"parameters\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":6,\"end\":12},\"kind\":\"typed_parameter\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":6,\"end\":7},\"kind\":\"identifier\",\"name\":\"x\"}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":9,\"end\":12},\"kind\":\"type\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":9,\"end\":12},\"kind\":\"identifier\",\"name\":\"int\"}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":17,\"end\":20},\"kind\":\"type\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":17,\"end\":20},\"kind\":\"identifier\",\"name\":\"int\"}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":26,\"end\":34},\"kind\":\"block\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":26,\"end\":34},\"kind\":\"return_statement\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":33,\"end\":34},\"kind\":\"identifier\",\"name\":\"x\"}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":35},\"to\":{\"start\":0,\"end\":34}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":34},\"to\":{\"start\":4,\"end\":5}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":34},\"to\":{\"start\":5,\"end\":13}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":5,\"end\":13},\"to\":{\"start\":6,\"end\":12}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":6,\"end\":12},\"to\":{\"start\":6,\"end\":7}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":6,\"end\":12},\"to\":{\"start\":9,\"end\":12}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":9,\"end\":12},\"to\":{\"start\":9,\"end\":12}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":34},\"to\":{\"start\":17,\"end\":20}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":17,\"end\":20},\"to\":{\"start\":17,\"end\":20}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":34},\"to\":{\"start\":26,\"end\":34}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":26,\"end\":34},\"to\":{\"start\":26,\"end\":34}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":26,\"end\":34},\"to\":{\"start\":33,\"end\":34}}\n{\"record\":\"node\",\"family\":\"type\",\"span\":{\"start\":0,\"end\":35},\"kind\":\"module\",\"name\":\"<module>\"}\n{\"record\":\"node\",\"family\":\"type\",\"span\":{\"start\":0,\"end\":34},\"kind\":\"function\",\"name\":\"f\"}\n{\"record\":\"node\",\"family\":\"call\",\"span\":{\"start\":0,\"end\":34},\"kind\":\"function\",\"name\":\"f\"}\n{\"record\":\"node\",\"family\":\"df\",\"span\":{\"start\":6,\"end\":12},\"kind\":\"param\",\"name\":\"x\"}\n{\"record\":\"node\",\"family\":\"df\",\"span\":{\"start\":26,\"end\":34},\"kind\":\"ret\",\"name\":null}\n{\"record\":\"node\",\"family\":\"df\",\"span\":{\"start\":33,\"end\":34},\"kind\":\"var_read\",\"name\":\"x\"}\n{\"record\":\"edge\",\"family\":\"df\",\"kind\":\"direct\",\"from\":{\"start\":6,\"end\":12},\"from_kind\":\"param\",\"to\":{\"start\":33,\"end\":34},\"to_kind\":\"var_read\"}\n{\"record\":\"edge\",\"family\":\"df\",\"kind\":\"direct\",\"from\":{\"start\":33,\"end\":34},\"from_kind\":\"var_read\",\"to\":{\"start\":26,\"end\":34},\"to_kind\":\"ret\"}\n{\"record\":\"param\",\"family\":\"df\",\"span\":{\"start\":6,\"end\":12},\"pos\":0}\n",
+      "stderr": ""
+    },
+    "library": {
+      "planes": {
+        "call": {
+          "declared": true,
+          "present": true
+        },
+        "cst": {
+          "declared": true,
+          "present": true
+        },
+        "data": {
+          "declared": false,
+          "present": false
+        },
+        "df": {
+          "declared": true,
+          "present": true
+        },
+        "types": {
+          "declared": true,
+          "present": true
+        }
+      },
+      "stdout": "{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":34},\"to\":{\"start\":17,\"end\":20}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":34},\"to\":{\"start\":26,\"end\":34}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":34},\"to\":{\"start\":4,\"end\":5}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":34},\"to\":{\"start\":5,\"end\":13}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":35},\"to\":{\"start\":0,\"end\":34}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":17,\"end\":20},\"to\":{\"start\":17,\"end\":20}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":26,\"end\":34},\"to\":{\"start\":26,\"end\":34}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":26,\"end\":34},\"to\":{\"start\":33,\"end\":34}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":5,\"end\":13},\"to\":{\"start\":6,\"end\":12}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":6,\"end\":12},\"to\":{\"start\":6,\"end\":7}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":6,\"end\":12},\"to\":{\"start\":9,\"end\":12}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":9,\"end\":12},\"to\":{\"start\":9,\"end\":12}}\n{\"record\":\"edge\",\"family\":\"df\",\"kind\":\"direct\",\"from\":{\"start\":33,\"end\":34},\"from_kind\":\"var_read\",\"to\":{\"start\":26,\"end\":34},\"to_kind\":\"ret\"}\n{\"record\":\"edge\",\"family\":\"df\",\"kind\":\"direct\",\"from\":{\"start\":6,\"end\":12},\"from_kind\":\"param\",\"to\":{\"start\":33,\"end\":34},\"to_kind\":\"var_read\"}\n{\"record\":\"node\",\"family\":\"call\",\"span\":{\"start\":0,\"end\":34},\"kind\":\"function\",\"name\":\"f\"}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":34},\"kind\":\"function_definition\",\"name\":\"f\"}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":35},\"kind\":\"module\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":17,\"end\":20},\"kind\":\"identifier\",\"name\":\"int\"}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":17,\"end\":20},\"kind\":\"type\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":26,\"end\":34},\"kind\":\"block\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":26,\"end\":34},\"kind\":\"return_statement\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":33,\"end\":34},\"kind\":\"identifier\",\"name\":\"x\"}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":4,\"end\":5},\"kind\":\"identifier\",\"name\":\"f\"}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":5,\"end\":13},\"kind\":\"parameters\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":6,\"end\":12},\"kind\":\"typed_parameter\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":6,\"end\":7},\"kind\":\"identifier\",\"name\":\"x\"}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":9,\"end\":12},\"kind\":\"identifier\",\"name\":\"int\"}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":9,\"end\":12},\"kind\":\"type\",\"name\":null}\n{\"record\":\"node\",\"family\":\"df\",\"span\":{\"start\":26,\"end\":34},\"kind\":\"ret\",\"name\":null}\n{\"record\":\"node\",\"family\":\"df\",\"span\":{\"start\":33,\"end\":34},\"kind\":\"var_read\",\"name\":\"x\"}\n{\"record\":\"node\",\"family\":\"df\",\"span\":{\"start\":6,\"end\":12},\"kind\":\"param\",\"name\":\"x\"}\n{\"record\":\"node\",\"family\":\"type\",\"span\":{\"start\":0,\"end\":34},\"kind\":\"function\",\"name\":\"f\"}\n{\"record\":\"node\",\"family\":\"type\",\"span\":{\"start\":0,\"end\":35},\"kind\":\"module\",\"name\":\"<module>\"}\n{\"record\":\"param\",\"family\":\"df\",\"span\":{\"start\":6,\"end\":12},\"pos\":0}",
+      "stderr": ""
+    },
+    "same_stream": true
+  },
+  "1_06_markdown": {
+    "cli": {
+      "exit_code": 0,
+      "stdout": "{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":23},\"kind\":\"document\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":23},\"kind\":\"section\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":4},\"kind\":\"atx_heading\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":1},\"kind\":\"atx_h1_marker\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":2,\"end\":3},\"kind\":\"inline\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":5,\"end\":23},\"kind\":\"paragraph\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":5,\"end\":22},\"kind\":\"inline\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":5,\"end\":22},\"kind\":\"inline_link\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":6,\"end\":10},\"kind\":\"link_text\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":12,\"end\":21},\"kind\":\"link_destination\",\"name\":null}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":23},\"to\":{\"start\":0,\"end\":23}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":23},\"to\":{\"start\":0,\"end\":4}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":4},\"to\":{\"start\":0,\"end\":1}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":4},\"to\":{\"start\":2,\"end\":3}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":23},\"to\":{\"start\":5,\"end\":23}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":5,\"end\":23},\"to\":{\"start\":5,\"end\":22}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":5,\"end\":22},\"to\":{\"start\":5,\"end\":22}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":5,\"end\":22},\"to\":{\"start\":6,\"end\":10}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":5,\"end\":22},\"to\":{\"start\":12,\"end\":21}}\n",
+      "stderr": ""
+    },
+    "library": {
+      "planes": {
+        "call": {
+          "declared": false,
+          "present": false
+        },
+        "cst": {
+          "declared": true,
+          "present": true
+        },
+        "data": {
+          "declared": false,
+          "present": false
+        },
+        "df": {
+          "declared": false,
+          "present": false
+        },
+        "types": {
+          "declared": true,
+          "present": true
+        }
+      },
+      "stdout": "{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":23},\"to\":{\"start\":0,\"end\":23}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":23},\"to\":{\"start\":0,\"end\":4}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":23},\"to\":{\"start\":5,\"end\":23}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":4},\"to\":{\"start\":0,\"end\":1}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":4},\"to\":{\"start\":2,\"end\":3}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":5,\"end\":22},\"to\":{\"start\":12,\"end\":21}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":5,\"end\":22},\"to\":{\"start\":5,\"end\":22}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":5,\"end\":22},\"to\":{\"start\":6,\"end\":10}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":5,\"end\":23},\"to\":{\"start\":5,\"end\":22}}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":1},\"kind\":\"atx_h1_marker\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":23},\"kind\":\"document\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":23},\"kind\":\"section\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":4},\"kind\":\"atx_heading\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":12,\"end\":21},\"kind\":\"link_destination\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":2,\"end\":3},\"kind\":\"inline\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":5,\"end\":22},\"kind\":\"inline\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":5,\"end\":22},\"kind\":\"inline_link\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":5,\"end\":23},\"kind\":\"paragraph\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":6,\"end\":10},\"kind\":\"link_text\",\"name\":null}",
+      "stderr": ""
+    },
+    "same_stream": true
+  },
+  "1_07_gdscript": {
+    "cli": {
+      "exit_code": 0,
+      "stdout": "{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":37},\"kind\":\"source\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":12},\"kind\":\"extends_statement\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":8,\"end\":12},\"kind\":\"type\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":8,\"end\":12},\"kind\":\"identifier\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":13,\"end\":36},\"kind\":\"function_definition\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":18,\"end\":19},\"kind\":\"name\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":19,\"end\":22},\"kind\":\"parameters\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":20,\"end\":21},\"kind\":\"identifier\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":23,\"end\":36},\"kind\":\"body\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":28,\"end\":36},\"kind\":\"return_statement\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":35,\"end\":36},\"kind\":\"identifier\",\"name\":null}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":37},\"to\":{\"start\":0,\"end\":12}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":12},\"to\":{\"start\":8,\"end\":12}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":8,\"end\":12},\"to\":{\"start\":8,\"end\":12}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":37},\"to\":{\"start\":13,\"end\":36}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":13,\"end\":36},\"to\":{\"start\":18,\"end\":19}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":13,\"end\":36},\"to\":{\"start\":19,\"end\":22}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":19,\"end\":22},\"to\":{\"start\":20,\"end\":21}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":13,\"end\":36},\"to\":{\"start\":23,\"end\":36}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":23,\"end\":36},\"to\":{\"start\":28,\"end\":36}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":28,\"end\":36},\"to\":{\"start\":35,\"end\":36}}\n",
+      "stderr": ""
+    },
+    "library": {
+      "planes": {
+        "call": {
+          "declared": false,
+          "present": false
+        },
+        "cst": {
+          "declared": true,
+          "present": true
+        },
+        "data": {
+          "declared": false,
+          "present": false
+        },
+        "df": {
+          "declared": false,
+          "present": false
+        },
+        "types": {
+          "declared": false,
+          "present": false
+        }
+      },
+      "stdout": "{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":12},\"to\":{\"start\":8,\"end\":12}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":37},\"to\":{\"start\":0,\"end\":12}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":37},\"to\":{\"start\":13,\"end\":36}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":13,\"end\":36},\"to\":{\"start\":18,\"end\":19}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":13,\"end\":36},\"to\":{\"start\":19,\"end\":22}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":13,\"end\":36},\"to\":{\"start\":23,\"end\":36}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":19,\"end\":22},\"to\":{\"start\":20,\"end\":21}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":23,\"end\":36},\"to\":{\"start\":28,\"end\":36}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":28,\"end\":36},\"to\":{\"start\":35,\"end\":36}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":8,\"end\":12},\"to\":{\"start\":8,\"end\":12}}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":12},\"kind\":\"extends_statement\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":37},\"kind\":\"source\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":13,\"end\":36},\"kind\":\"function_definition\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":18,\"end\":19},\"kind\":\"name\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":19,\"end\":22},\"kind\":\"parameters\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":20,\"end\":21},\"kind\":\"identifier\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":23,\"end\":36},\"kind\":\"body\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":28,\"end\":36},\"kind\":\"return_statement\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":35,\"end\":36},\"kind\":\"identifier\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":8,\"end\":12},\"kind\":\"identifier\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":8,\"end\":12},\"kind\":\"type\",\"name\":null}",
+      "stderr": ""
+    },
+    "same_stream": true
+  },
+  "1_08_commonlisp": {
+    "cli": {
+      "exit_code": 0,
+      "stdout": "{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":13},\"kind\":\"source\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":12},\"kind\":\"list_lit\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":1,\"end\":7},\"kind\":\"sym_lit\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":8,\"end\":9},\"kind\":\"sym_lit\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":10,\"end\":11},\"kind\":\"num_lit\",\"name\":null}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":13},\"to\":{\"start\":0,\"end\":12}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":12},\"to\":{\"start\":1,\"end\":7}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":12},\"to\":{\"start\":8,\"end\":9}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":12},\"to\":{\"start\":10,\"end\":11}}\n",
+      "stderr": ""
+    },
+    "library": {
+      "planes": {
+        "call": {
+          "declared": false,
+          "present": false
+        },
+        "cst": {
+          "declared": true,
+          "present": true
+        },
+        "data": {
+          "declared": false,
+          "present": false
+        },
+        "df": {
+          "declared": false,
+          "present": false
+        },
+        "types": {
+          "declared": false,
+          "present": false
+        }
+      },
+      "stdout": "{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":12},\"to\":{\"start\":1,\"end\":7}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":12},\"to\":{\"start\":10,\"end\":11}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":12},\"to\":{\"start\":8,\"end\":9}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":13},\"to\":{\"start\":0,\"end\":12}}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":12},\"kind\":\"list_lit\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":13},\"kind\":\"source\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":1,\"end\":7},\"kind\":\"sym_lit\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":10,\"end\":11},\"kind\":\"num_lit\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":8,\"end\":9},\"kind\":\"sym_lit\",\"name\":null}",
+      "stderr": ""
+    },
+    "same_stream": true
+  },
+  "1_09_typespec": {
+    "cli": {
+      "exit_code": 0,
+      "stdout": "{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":23},\"kind\":\"source_file\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":22},\"kind\":\"model_statement\",\"name\":\"F\"}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":6,\"end\":7},\"kind\":\"identifier\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":6,\"end\":7},\"kind\":\"plain_identifier\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":8,\"end\":22},\"kind\":\"model_expression\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":10,\"end\":20},\"kind\":\"model_body\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":10,\"end\":19},\"kind\":\"model_property\",\"name\":\"x\"}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":10,\"end\":11},\"kind\":\"identifier\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":10,\"end\":11},\"kind\":\"plain_identifier\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":13,\"end\":19},\"kind\":\"reference_expression\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":13,\"end\":19},\"kind\":\"identifier_or_member_expression\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":13,\"end\":19},\"kind\":\"identifier\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":13,\"end\":19},\"kind\":\"builtin_type\",\"name\":null}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":23},\"to\":{\"start\":0,\"end\":22}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":22},\"to\":{\"start\":6,\"end\":7}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":6,\"end\":7},\"to\":{\"start\":6,\"end\":7}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":22},\"to\":{\"start\":8,\"end\":22}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":8,\"end\":22},\"to\":{\"start\":10,\"end\":20}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":10,\"end\":20},\"to\":{\"start\":10,\"end\":19}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":10,\"end\":19},\"to\":{\"start\":10,\"end\":11}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":10,\"end\":11},\"to\":{\"start\":10,\"end\":11}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":10,\"end\":19},\"to\":{\"start\":13,\"end\":19}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":13,\"end\":19},\"to\":{\"start\":13,\"end\":19}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":13,\"end\":19},\"to\":{\"start\":13,\"end\":19}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":13,\"end\":19},\"to\":{\"start\":13,\"end\":19}}\n",
+      "stderr": ""
+    },
+    "library": {
+      "planes": {
+        "call": {
+          "declared": false,
+          "present": false
+        },
+        "cst": {
+          "declared": true,
+          "present": true
+        },
+        "data": {
+          "declared": false,
+          "present": false
+        },
+        "df": {
+          "declared": false,
+          "present": false
+        },
+        "types": {
+          "declared": false,
+          "present": false
+        }
+      },
+      "stdout": "{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":22},\"to\":{\"start\":6,\"end\":7}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":22},\"to\":{\"start\":8,\"end\":22}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":23},\"to\":{\"start\":0,\"end\":22}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":10,\"end\":11},\"to\":{\"start\":10,\"end\":11}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":10,\"end\":19},\"to\":{\"start\":10,\"end\":11}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":10,\"end\":19},\"to\":{\"start\":13,\"end\":19}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":10,\"end\":20},\"to\":{\"start\":10,\"end\":19}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":13,\"end\":19},\"to\":{\"start\":13,\"end\":19}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":13,\"end\":19},\"to\":{\"start\":13,\"end\":19}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":13,\"end\":19},\"to\":{\"start\":13,\"end\":19}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":6,\"end\":7},\"to\":{\"start\":6,\"end\":7}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":8,\"end\":22},\"to\":{\"start\":10,\"end\":20}}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":22},\"kind\":\"model_statement\",\"name\":\"F\"}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":23},\"kind\":\"source_file\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":10,\"end\":11},\"kind\":\"identifier\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":10,\"end\":11},\"kind\":\"plain_identifier\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":10,\"end\":19},\"kind\":\"model_property\",\"name\":\"x\"}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":10,\"end\":20},\"kind\":\"model_body\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":13,\"end\":19},\"kind\":\"builtin_type\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":13,\"end\":19},\"kind\":\"identifier\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":13,\"end\":19},\"kind\":\"identifier_or_member_expression\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":13,\"end\":19},\"kind\":\"reference_expression\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":6,\"end\":7},\"kind\":\"identifier\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":6,\"end\":7},\"kind\":\"plain_identifier\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":8,\"end\":22},\"kind\":\"model_expression\",\"name\":null}",
+      "stderr": ""
+    },
+    "same_stream": true
+  },
+  "1_10_data": {
+    "cli": {
+      "exit_code": 0,
+      "stdout": "{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":8},\"kind\":\"document\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":7},\"kind\":\"object\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":1,\"end\":6},\"kind\":\"pair\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":1,\"end\":4},\"kind\":\"string\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":2,\"end\":3},\"kind\":\"string_content\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":5,\"end\":6},\"kind\":\"number\",\"name\":null}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":8},\"to\":{\"start\":0,\"end\":7}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":7},\"to\":{\"start\":1,\"end\":6}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":1,\"end\":6},\"to\":{\"start\":1,\"end\":4}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":1,\"end\":4},\"to\":{\"start\":2,\"end\":3}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":1,\"end\":6},\"to\":{\"start\":5,\"end\":6}}\n{\"record\":\"data_doc\",\"family\":\"data\",\"ordinal\":0,\"span\":{\"start\":0,\"end\":7},\"format\":\"json\",\"doc\":{\"x\":1}}\n{\"record\":\"data_value\",\"family\":\"data\",\"ordinal\":0,\"path\":\"\",\"kind\":\"object\",\"text\":null,\"span\":{\"start\":0,\"end\":7}}\n{\"record\":\"data_value\",\"family\":\"data\",\"ordinal\":0,\"path\":\"x\",\"kind\":\"number\",\"text\":\"1\",\"span\":{\"start\":5,\"end\":6}}\n",
+      "stderr": ""
+    },
+    "library": {
+      "planes": {
+        "call": {
+          "declared": false,
+          "present": false
+        },
+        "cst": {
+          "declared": true,
+          "present": true
+        },
+        "data": {
+          "declared": true,
+          "present": true
+        },
+        "df": {
+          "declared": false,
+          "present": false
+        },
+        "types": {
+          "declared": false,
+          "present": false
+        }
+      },
+      "stdout": "{\"record\":\"data_doc\",\"family\":\"data\",\"ordinal\":0,\"span\":{\"start\":0,\"end\":7},\"format\":\"json\",\"doc\":{\"x\":1}}\n{\"record\":\"data_value\",\"family\":\"data\",\"ordinal\":0,\"path\":\"\",\"kind\":\"object\",\"text\":null,\"span\":{\"start\":0,\"end\":7}}\n{\"record\":\"data_value\",\"family\":\"data\",\"ordinal\":0,\"path\":\"x\",\"kind\":\"number\",\"text\":\"1\",\"span\":{\"start\":5,\"end\":6}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":7},\"to\":{\"start\":1,\"end\":6}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":8},\"to\":{\"start\":0,\"end\":7}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":1,\"end\":4},\"to\":{\"start\":2,\"end\":3}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":1,\"end\":6},\"to\":{\"start\":1,\"end\":4}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":1,\"end\":6},\"to\":{\"start\":5,\"end\":6}}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":7},\"kind\":\"object\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":8},\"kind\":\"document\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":1,\"end\":4},\"kind\":\"string\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":1,\"end\":6},\"kind\":\"pair\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":2,\"end\":3},\"kind\":\"string_content\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":5,\"end\":6},\"kind\":\"number\",\"name\":null}",
+      "stderr": ""
+    },
+    "same_stream": true
+  },
+  "1_11_fallback": {
+    "cli": {
+      "exit_code": 0,
+      "stdout": "{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":9},\"kind\":\"document\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":8},\"kind\":\"element\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":3},\"kind\":\"start_tag\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":1,\"end\":2},\"kind\":\"tag_name\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":3,\"end\":4},\"kind\":\"text\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":4,\"end\":8},\"kind\":\"end_tag\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":6,\"end\":7},\"kind\":\"tag_name\",\"name\":null}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":9},\"to\":{\"start\":0,\"end\":8}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":8},\"to\":{\"start\":0,\"end\":3}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":3},\"to\":{\"start\":1,\"end\":2}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":8},\"to\":{\"start\":3,\"end\":4}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":8},\"to\":{\"start\":4,\"end\":8}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":4,\"end\":8},\"to\":{\"start\":6,\"end\":7}}\n",
+      "stderr": ""
+    },
+    "library": {
+      "planes": {
+        "call": {
+          "declared": true,
+          "present": true
+        },
+        "cst": {
+          "declared": true,
+          "present": true
+        },
+        "data": {
+          "declared": false,
+          "present": false
+        },
+        "df": {
+          "declared": false,
+          "present": false
+        },
+        "types": {
+          "declared": false,
+          "present": false
+        }
+      },
+      "stdout": "{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":3},\"to\":{\"start\":1,\"end\":2}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":8},\"to\":{\"start\":0,\"end\":3}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":8},\"to\":{\"start\":3,\"end\":4}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":8},\"to\":{\"start\":4,\"end\":8}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":0,\"end\":9},\"to\":{\"start\":0,\"end\":8}}\n{\"record\":\"edge\",\"family\":\"cst\",\"kind\":\"child\",\"from\":{\"start\":4,\"end\":8},\"to\":{\"start\":6,\"end\":7}}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":3},\"kind\":\"start_tag\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":8},\"kind\":\"element\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":0,\"end\":9},\"kind\":\"document\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":1,\"end\":2},\"kind\":\"tag_name\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":3,\"end\":4},\"kind\":\"text\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":4,\"end\":8},\"kind\":\"end_tag\",\"name\":null}\n{\"record\":\"node\",\"family\":\"cst\",\"span\":{\"start\":6,\"end\":7},\"kind\":\"tag_name\",\"name\":null}",
+      "stderr": ""
+    },
+    "same_stream": true
+  },
+  "2_00_Phase1Flatten": {
+    "cli": {
+      "exit_code": 0,
+      "stdout": "{\"record\":\"node\",\"family\":\"type\",\"span\":{\"start\":7,\"end\":50},\"kind\":\"function\",\"name\":\"f\"}\n{\"record\":\"node\",\"family\":\"call\",\"span\":{\"start\":7,\"end\":50},\"kind\":\"function\",\"name\":\"f\"}\n{\"record\":\"node\",\"family\":\"df\",\"span\":{\"start\":18,\"end\":27},\"kind\":\"param\",\"name\":\"x\",\"function\":\"f\",\"is_async\":false,\"owner_kind\":\"function\"}\n{\"record\":\"node\",\"family\":\"df\",\"span\":{\"start\":39,\"end\":48},\"kind\":\"ret\",\"name\":null,\"function\":\"f\",\"is_async\":false,\"owner_kind\":\"function\"}\n{\"record\":\"node\",\"family\":\"df\",\"span\":{\"start\":46,\"end\":47},\"kind\":\"var_read\",\"name\":\"x\",\"function\":\"f\",\"is_async\":false,\"owner_kind\":\"function\"}\n{\"record\":\"edge\",\"family\":\"df\",\"kind\":\"direct\",\"from\":{\"start\":18,\"end\":27},\"from_kind\":\"param\",\"to\":{\"start\":46,\"end\":47},\"to_kind\":\"var_read\"}\n{\"record\":\"edge\",\"family\":\"df\",\"kind\":\"direct\",\"from\":{\"start\":46,\"end\":47},\"from_kind\":\"var_read\",\"to\":{\"start\":39,\"end\":48},\"to_kind\":\"ret\"}\n{\"record\":\"param\",\"family\":\"df\",\"span\":{\"start\":18,\"end\":27},\"pos\":0}\n",
+      "stderr": ""
+    },
+    "reach": true
+  },
+  "2_01_Phase1FamilyMask": {
+    "cli": {
+      "exit_code": 0,
+      "stdout": "{\"record\":\"node\",\"family\":\"df\",\"span\":{\"start\":18,\"end\":27},\"kind\":\"param\",\"name\":\"x\",\"function\":\"f\",\"is_async\":false,\"owner_kind\":\"function\"}\n{\"record\":\"node\",\"family\":\"df\",\"span\":{\"start\":39,\"end\":48},\"kind\":\"ret\",\"name\":null,\"function\":\"f\",\"is_async\":false,\"owner_kind\":\"function\"}\n{\"record\":\"node\",\"family\":\"df\",\"span\":{\"start\":46,\"end\":47},\"kind\":\"var_read\",\"name\":\"x\",\"function\":\"f\",\"is_async\":false,\"owner_kind\":\"function\"}\n{\"record\":\"edge\",\"family\":\"df\",\"kind\":\"direct\",\"from\":{\"start\":18,\"end\":27},\"from_kind\":\"param\",\"to\":{\"start\":46,\"end\":47},\"to_kind\":\"var_read\"}\n{\"record\":\"edge\",\"family\":\"df\",\"kind\":\"direct\",\"from\":{\"start\":46,\"end\":47},\"from_kind\":\"var_read\",\"to\":{\"start\":39,\"end\":48},\"to_kind\":\"ret\"}\n{\"record\":\"param\",\"family\":\"df\",\"span\":{\"start\":18,\"end\":27},\"pos\":0}\n",
+      "stderr": ""
+    },
+    "reach": true
+  },
+  "2_02_ResolveCall": {
+    "cli": {
+      "exit_code": 0,
+      "stdout": "{\"record\":\"resolved_edge\",\"caller_path\":\"tests/fixtures/resolve/0_caller.ts\",\"caller_name\":\"run\",\"callee_path\":\"tests/fixtures/resolve/1_callee.ts\",\"callee_name\":\"helper\",\"caller_site_start\":33,\"caller_site_end\":39,\"callee_start\":7,\"callee_end\":40,\"kind\":\"name_resolve\",\"resolution_origin\":\"corpus_unique\"}\n{\"record\":\"call_site\",\"callee\":\"helper\",\"path\":\"tests/fixtures/resolve/0_caller.ts\",\"line\":2,\"fn\":\"run\",\"start\":33,\"end\":41}\n",
+      "stderr": ""
+    },
+    "flag_required": false,
+    "reach": true,
+    "without": {
+      "exit_code": 0,
+      "stdout": "{\"record\":\"node\",\"family\":\"type\",\"span\":{\"start\":7,\"end\":44},\"kind\":\"function\",\"name\":\"run\"}\n{\"record\":\"node\",\"family\":\"call\",\"span\":{\"start\":7,\"end\":44},\"kind\":\"function\",\"name\":\"run\"}\n{\"record\":\"site\",\"family\":\"call\",\"span\":{\"start\":33,\"end\":39},\"callee\":\"helper\",\"callee_path\":null}\n{\"record\":\"node\",\"family\":\"df\",\"span\":{\"start\":26,\"end\":42},\"kind\":\"ret\",\"name\":null,\"function\":\"run\",\"is_async\":false,\"owner_kind\":\"function\"}\n{\"record\":\"node\",\"family\":\"df\",\"span\":{\"start\":33,\"end\":41},\"kind\":\"call_res\",\"name\":null,\"function\":\"run\",\"is_async\":false,\"owner_kind\":\"function\"}\n{\"record\":\"edge\",\"family\":\"df\",\"kind\":\"direct\",\"from\":{\"start\":33,\"end\":41},\"from_kind\":\"call_res\",\"to\":{\"start\":26,\"end\":42},\"to_kind\":\"ret\"}\n",
+      "stderr": ""
+    }
+  },
+  "2_03_ResolveType": {
+    "cli": {
+      "exit_code": 0,
+      "stdout": "{\"record\":\"resolved_import\",\"src_path\":\"tests/fixtures/capability_parity/inputs/1_resolve/0_owner.ts\",\"name\":\"./1_item\",\"local\":\"\",\"target_path\":\"tests/fixtures/capability_parity/inputs/1_resolve/1_item.ts\",\"target_name\":null,\"kind\":\"module\",\"hops\":1}\n{\"record\":\"resolved_import\",\"src_path\":\"tests/fixtures/capability_parity/inputs/1_resolve/0_owner.ts\",\"name\":\"Item\",\"local\":\"Item\",\"target_path\":\"tests/fixtures/capability_parity/inputs/1_resolve/1_item.ts\",\"target_name\":\"Item\",\"kind\":\"local\",\"hops\":1}\n{\"record\":\"resolved_type_edge\",\"owner_path\":\"tests/fixtures/capability_parity/inputs/1_resolve/0_owner.ts\",\"owner_name\":\"f\",\"owner_start\":40,\"owner_end\":79,\"target_path\":\"tests/fixtures/capability_parity/inputs/1_resolve/1_item.ts\",\"target_name\":\"Item\",\"kind\":\"param\",\"resolution_origin\":\"module_plane\"}\n{\"record\":\"resolved_type_edge\",\"owner_path\":\"tests/fixtures/capability_parity/inputs/1_resolve/0_owner.ts\",\"owner_name\":\"f\",\"owner_start\":40,\"owner_end\":79,\"target_path\":\"tests/fixtures/capability_parity/inputs/1_resolve/1_item.ts\",\"target_name\":\"Item\",\"kind\":\"returns\",\"resolution_origin\":\"module_plane\"}\n",
+      "stderr": ""
+    },
+    "flag_required": false,
+    "reach": true,
+    "without": {
+      "exit_code": 0,
+      "stdout": "{\"record\":\"resolved_import\",\"src_path\":\"tests/fixtures/capability_parity/inputs/1_resolve/0_owner.ts\",\"name\":\"./1_item\",\"local\":\"\",\"target_path\":\"tests/fixtures/capability_parity/inputs/1_resolve/1_item.ts\",\"target_name\":null,\"kind\":\"module\",\"hops\":1}\n{\"record\":\"resolved_import\",\"src_path\":\"tests/fixtures/capability_parity/inputs/1_resolve/0_owner.ts\",\"name\":\"Item\",\"local\":\"Item\",\"target_path\":\"tests/fixtures/capability_parity/inputs/1_resolve/1_item.ts\",\"target_name\":\"Item\",\"kind\":\"local\",\"hops\":1}\n",
+      "stderr": ""
+    }
+  },
+  "2_04_ScipIndexLoad": {
+    "cli": {
+      "exit_code": 0,
+      "stdout": "{\"record\":\"resolved_edge\",\"caller_path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"caller_name\":\"castFar\",\"callee_path\":\"tests/fixtures/capability_parity/inputs/2_scip/epsilon.ts\",\"callee_name\":\"Far\",\"caller_site_start\":651,\"caller_site_end\":660,\"callee_start\":150,\"callee_end\":201,\"kind\":\"import_resolve\",\"resolution_origin\":\"module_plane\"}\n{\"record\":\"resolved_edge\",\"caller_path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"caller_name\":\"reach\",\"callee_path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"callee_name\":\"Near\",\"caller_site_start\":714,\"caller_site_end\":724,\"callee_start\":412,\"callee_end\":464,\"kind\":\"name_resolve\",\"resolution_origin\":\"same_file\"}\n{\"record\":\"resolved_edge\",\"caller_path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"caller_name\":\"reach\",\"callee_path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"callee_name\":\"castFar\",\"caller_site_start\":740,\"caller_site_end\":747,\"callee_start\":621,\"callee_end\":663,\"kind\":\"name_resolve\",\"resolution_origin\":\"same_file\"}\n{\"record\":\"resolved_edge\",\"caller_path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"caller_name\":\"reach\",\"callee_path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"callee_name\":\"probe\",\"caller_site_start\":760,\"caller_site_end\":770,\"callee_start\":427,\"callee_end\":462,\"kind\":\"name_resolve\",\"resolution_origin\":\"receiver\"}\n{\"record\":\"resolved_edge\",\"caller_path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"caller_name\":\"reach\",\"callee_path\":\"tests/fixtures/capability_parity/inputs/2_scip/epsilon.ts\",\"callee_name\":\"probe\",\"caller_site_start\":775,\"caller_site_end\":784,\"callee_start\":164,\"callee_end\":199,\"kind\":\"scip_override\",\"resolution_origin\":\"scip\"}\n{\"record\":\"resolved_edge\",\"caller_path\":\"tests/fixtures/capability_parity/inputs/2_scip/gamma.ts\",\"caller_name\":\"use\",\"callee_path\":\"tests/fixtures/capability_parity/inputs/2_scip/alpha.ts\",\"callee_name\":\"helper\",\"caller_site_start\":300,\"caller_site_end\":306,\"callee_start\":232,\"callee_end\":273,\"kind\":\"import_resolve\",\"resolution_origin\":\"module_plane\"}\n{\"record\":\"resolved_import\",\"src_path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"name\":\"./epsilon\",\"local\":\"\",\"target_path\":\"tests/fixtures/capability_parity/inputs/2_scip/epsilon.ts\",\"target_name\":null,\"kind\":\"module\",\"hops\":1}\n{\"record\":\"resolved_import\",\"src_path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"name\":\"Far\",\"local\":\"Far\",\"target_path\":\"tests/fixtures/capability_parity/inputs/2_scip/epsilon.ts\",\"target_name\":\"Far\",\"kind\":\"local\",\"hops\":1}\n{\"record\":\"resolved_import\",\"src_path\":\"tests/fixtures/capability_parity/inputs/2_scip/gamma.ts\",\"name\":\"./alpha\",\"local\":\"\",\"target_path\":\"tests/fixtures/capability_parity/inputs/2_scip/alpha.ts\",\"target_name\":null,\"kind\":\"module\",\"hops\":1}\n{\"record\":\"resolved_import\",\"src_path\":\"tests/fixtures/capability_parity/inputs/2_scip/gamma.ts\",\"name\":\"helper\",\"local\":\"helper\",\"target_path\":\"tests/fixtures/capability_parity/inputs/2_scip/alpha.ts\",\"target_name\":\"helper\",\"kind\":\"local\",\"hops\":1}\n{\"record\":\"call_site\",\"callee\":\"Far\",\"path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"line\":17,\"fn\":\"castFar\",\"start\":651,\"end\":660}\n{\"record\":\"call_site\",\"callee\":\"Near\",\"path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"line\":21,\"fn\":\"reach\",\"start\":714,\"end\":724}\n{\"record\":\"call_site\",\"callee\":\"castFar\",\"path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"line\":22,\"fn\":\"reach\",\"start\":740,\"end\":749}\n{\"record\":\"call_site\",\"callee\":\"far.probe\",\"path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"line\":23,\"fn\":\"reach\",\"start\":775,\"end\":786}\n{\"record\":\"call_site\",\"callee\":\"helper\",\"path\":\"tests/fixtures/capability_parity/inputs/2_scip/gamma.ts\",\"line\":7,\"fn\":\"use\",\"start\":300,\"end\":308}\n{\"record\":\"call_site\",\"callee\":\"near.probe\",\"path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"line\":23,\"fn\":\"reach\",\"start\":760,\"end\":772}\n",
+      "stderr": ""
+    },
+    "flag_required": false,
+    "index": {
+      "index": "$work/index.scip",
+      "is_file": true
+    },
+    "reach": true,
+    "without": {
+      "exit_code": 0,
+      "stdout": "{\"record\":\"resolved_edge\",\"caller_path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"caller_name\":\"castFar\",\"callee_path\":\"tests/fixtures/capability_parity/inputs/2_scip/epsilon.ts\",\"callee_name\":\"Far\",\"caller_site_start\":651,\"caller_site_end\":660,\"callee_start\":150,\"callee_end\":201,\"kind\":\"import_resolve\",\"resolution_origin\":\"module_plane\"}\n{\"record\":\"resolved_edge\",\"caller_path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"caller_name\":\"reach\",\"callee_path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"callee_name\":\"Near\",\"caller_site_start\":714,\"caller_site_end\":724,\"callee_start\":412,\"callee_end\":464,\"kind\":\"name_resolve\",\"resolution_origin\":\"same_file\"}\n{\"record\":\"resolved_edge\",\"caller_path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"caller_name\":\"reach\",\"callee_path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"callee_name\":\"castFar\",\"caller_site_start\":740,\"caller_site_end\":747,\"callee_start\":621,\"callee_end\":663,\"kind\":\"name_resolve\",\"resolution_origin\":\"same_file\"}\n{\"record\":\"resolved_edge\",\"caller_path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"caller_name\":\"reach\",\"callee_path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"callee_name\":\"probe\",\"caller_site_start\":760,\"caller_site_end\":770,\"callee_start\":427,\"callee_end\":462,\"kind\":\"name_resolve\",\"resolution_origin\":\"receiver\"}\n{\"record\":\"resolved_edge\",\"caller_path\":\"tests/fixtures/capability_parity/inputs/2_scip/gamma.ts\",\"caller_name\":\"use\",\"callee_path\":\"tests/fixtures/capability_parity/inputs/2_scip/alpha.ts\",\"callee_name\":\"helper\",\"caller_site_start\":300,\"caller_site_end\":306,\"callee_start\":232,\"callee_end\":273,\"kind\":\"import_resolve\",\"resolution_origin\":\"module_plane\"}\n{\"record\":\"resolved_import\",\"src_path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"name\":\"./epsilon\",\"local\":\"\",\"target_path\":\"tests/fixtures/capability_parity/inputs/2_scip/epsilon.ts\",\"target_name\":null,\"kind\":\"module\",\"hops\":1}\n{\"record\":\"resolved_import\",\"src_path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"name\":\"Far\",\"local\":\"Far\",\"target_path\":\"tests/fixtures/capability_parity/inputs/2_scip/epsilon.ts\",\"target_name\":\"Far\",\"kind\":\"local\",\"hops\":1}\n{\"record\":\"resolved_import\",\"src_path\":\"tests/fixtures/capability_parity/inputs/2_scip/gamma.ts\",\"name\":\"./alpha\",\"local\":\"\",\"target_path\":\"tests/fixtures/capability_parity/inputs/2_scip/alpha.ts\",\"target_name\":null,\"kind\":\"module\",\"hops\":1}\n{\"record\":\"resolved_import\",\"src_path\":\"tests/fixtures/capability_parity/inputs/2_scip/gamma.ts\",\"name\":\"helper\",\"local\":\"helper\",\"target_path\":\"tests/fixtures/capability_parity/inputs/2_scip/alpha.ts\",\"target_name\":\"helper\",\"kind\":\"local\",\"hops\":1}\n{\"record\":\"unresolved\",\"family\":\"call\",\"path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"span\":{\"start\":775,\"end\":784},\"reason\":\"inferred\",\"detail\":\"probe\"}\n{\"record\":\"call_site\",\"callee\":\"Far\",\"path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"line\":17,\"fn\":\"castFar\",\"start\":651,\"end\":660}\n{\"record\":\"call_site\",\"callee\":\"Near\",\"path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"line\":21,\"fn\":\"reach\",\"start\":714,\"end\":724}\n{\"record\":\"call_site\",\"callee\":\"castFar\",\"path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"line\":22,\"fn\":\"reach\",\"start\":740,\"end\":749}\n{\"record\":\"call_site\",\"callee\":\"far.probe\",\"path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"line\":23,\"fn\":\"reach\",\"start\":775,\"end\":786}\n{\"record\":\"call_site\",\"callee\":\"helper\",\"path\":\"tests/fixtures/capability_parity/inputs/2_scip/gamma.ts\",\"line\":7,\"fn\":\"use\",\"start\":300,\"end\":308}\n{\"record\":\"call_site\",\"callee\":\"near.probe\",\"path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"line\":23,\"fn\":\"reach\",\"start\":760,\"end\":772}\n",
+      "stderr": ""
+    }
+  },
+  "2_05_ScipIndexBuild": {
+    "cli": {
+      "exit_code": 0,
+      "stdout": "{\"record\":\"resolved_edge\",\"caller_path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"caller_name\":\"castFar\",\"callee_path\":\"tests/fixtures/capability_parity/inputs/2_scip/epsilon.ts\",\"callee_name\":\"Far\",\"caller_site_start\":651,\"caller_site_end\":660,\"callee_start\":150,\"callee_end\":201,\"kind\":\"import_resolve\",\"resolution_origin\":\"module_plane\"}\n{\"record\":\"resolved_edge\",\"caller_path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"caller_name\":\"reach\",\"callee_path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"callee_name\":\"Near\",\"caller_site_start\":714,\"caller_site_end\":724,\"callee_start\":412,\"callee_end\":464,\"kind\":\"name_resolve\",\"resolution_origin\":\"same_file\"}\n{\"record\":\"resolved_edge\",\"caller_path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"caller_name\":\"reach\",\"callee_path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"callee_name\":\"castFar\",\"caller_site_start\":740,\"caller_site_end\":747,\"callee_start\":621,\"callee_end\":663,\"kind\":\"name_resolve\",\"resolution_origin\":\"same_file\"}\n{\"record\":\"resolved_edge\",\"caller_path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"caller_name\":\"reach\",\"callee_path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"callee_name\":\"probe\",\"caller_site_start\":760,\"caller_site_end\":770,\"callee_start\":427,\"callee_end\":462,\"kind\":\"name_resolve\",\"resolution_origin\":\"receiver\"}\n{\"record\":\"resolved_edge\",\"caller_path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"caller_name\":\"reach\",\"callee_path\":\"tests/fixtures/capability_parity/inputs/2_scip/epsilon.ts\",\"callee_name\":\"probe\",\"caller_site_start\":775,\"caller_site_end\":784,\"callee_start\":164,\"callee_end\":199,\"kind\":\"scip_override\",\"resolution_origin\":\"scip\"}\n{\"record\":\"resolved_edge\",\"caller_path\":\"tests/fixtures/capability_parity/inputs/2_scip/gamma.ts\",\"caller_name\":\"use\",\"callee_path\":\"tests/fixtures/capability_parity/inputs/2_scip/alpha.ts\",\"callee_name\":\"helper\",\"caller_site_start\":300,\"caller_site_end\":306,\"callee_start\":232,\"callee_end\":273,\"kind\":\"import_resolve\",\"resolution_origin\":\"module_plane\"}\n{\"record\":\"resolved_import\",\"src_path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"name\":\"./epsilon\",\"local\":\"\",\"target_path\":\"tests/fixtures/capability_parity/inputs/2_scip/epsilon.ts\",\"target_name\":null,\"kind\":\"module\",\"hops\":1}\n{\"record\":\"resolved_import\",\"src_path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"name\":\"Far\",\"local\":\"Far\",\"target_path\":\"tests/fixtures/capability_parity/inputs/2_scip/epsilon.ts\",\"target_name\":\"Far\",\"kind\":\"local\",\"hops\":1}\n{\"record\":\"resolved_import\",\"src_path\":\"tests/fixtures/capability_parity/inputs/2_scip/gamma.ts\",\"name\":\"./alpha\",\"local\":\"\",\"target_path\":\"tests/fixtures/capability_parity/inputs/2_scip/alpha.ts\",\"target_name\":null,\"kind\":\"module\",\"hops\":1}\n{\"record\":\"resolved_import\",\"src_path\":\"tests/fixtures/capability_parity/inputs/2_scip/gamma.ts\",\"name\":\"helper\",\"local\":\"helper\",\"target_path\":\"tests/fixtures/capability_parity/inputs/2_scip/alpha.ts\",\"target_name\":\"helper\",\"kind\":\"local\",\"hops\":1}\n{\"record\":\"call_site\",\"callee\":\"Far\",\"path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"line\":17,\"fn\":\"castFar\",\"start\":651,\"end\":660}\n{\"record\":\"call_site\",\"callee\":\"Near\",\"path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"line\":21,\"fn\":\"reach\",\"start\":714,\"end\":724}\n{\"record\":\"call_site\",\"callee\":\"castFar\",\"path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"line\":22,\"fn\":\"reach\",\"start\":740,\"end\":749}\n{\"record\":\"call_site\",\"callee\":\"far.probe\",\"path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"line\":23,\"fn\":\"reach\",\"start\":775,\"end\":786}\n{\"record\":\"call_site\",\"callee\":\"helper\",\"path\":\"tests/fixtures/capability_parity/inputs/2_scip/gamma.ts\",\"line\":7,\"fn\":\"use\",\"start\":300,\"end\":308}\n{\"record\":\"call_site\",\"callee\":\"near.probe\",\"path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"line\":23,\"fn\":\"reach\",\"start\":760,\"end\":772}\n",
+      "stderr": ""
+    },
+    "flag_required": false,
+    "reach": true,
+    "without": {
+      "exit_code": 0,
+      "stdout": "{\"record\":\"resolved_edge\",\"caller_path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"caller_name\":\"castFar\",\"callee_path\":\"tests/fixtures/capability_parity/inputs/2_scip/epsilon.ts\",\"callee_name\":\"Far\",\"caller_site_start\":651,\"caller_site_end\":660,\"callee_start\":150,\"callee_end\":201,\"kind\":\"import_resolve\",\"resolution_origin\":\"module_plane\"}\n{\"record\":\"resolved_edge\",\"caller_path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"caller_name\":\"reach\",\"callee_path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"callee_name\":\"Near\",\"caller_site_start\":714,\"caller_site_end\":724,\"callee_start\":412,\"callee_end\":464,\"kind\":\"name_resolve\",\"resolution_origin\":\"same_file\"}\n{\"record\":\"resolved_edge\",\"caller_path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"caller_name\":\"reach\",\"callee_path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"callee_name\":\"castFar\",\"caller_site_start\":740,\"caller_site_end\":747,\"callee_start\":621,\"callee_end\":663,\"kind\":\"name_resolve\",\"resolution_origin\":\"same_file\"}\n{\"record\":\"resolved_edge\",\"caller_path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"caller_name\":\"reach\",\"callee_path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"callee_name\":\"probe\",\"caller_site_start\":760,\"caller_site_end\":770,\"callee_start\":427,\"callee_end\":462,\"kind\":\"name_resolve\",\"resolution_origin\":\"receiver\"}\n{\"record\":\"resolved_edge\",\"caller_path\":\"tests/fixtures/capability_parity/inputs/2_scip/gamma.ts\",\"caller_name\":\"use\",\"callee_path\":\"tests/fixtures/capability_parity/inputs/2_scip/alpha.ts\",\"callee_name\":\"helper\",\"caller_site_start\":300,\"caller_site_end\":306,\"callee_start\":232,\"callee_end\":273,\"kind\":\"import_resolve\",\"resolution_origin\":\"module_plane\"}\n{\"record\":\"resolved_import\",\"src_path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"name\":\"./epsilon\",\"local\":\"\",\"target_path\":\"tests/fixtures/capability_parity/inputs/2_scip/epsilon.ts\",\"target_name\":null,\"kind\":\"module\",\"hops\":1}\n{\"record\":\"resolved_import\",\"src_path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"name\":\"Far\",\"local\":\"Far\",\"target_path\":\"tests/fixtures/capability_parity/inputs/2_scip/epsilon.ts\",\"target_name\":\"Far\",\"kind\":\"local\",\"hops\":1}\n{\"record\":\"resolved_import\",\"src_path\":\"tests/fixtures/capability_parity/inputs/2_scip/gamma.ts\",\"name\":\"./alpha\",\"local\":\"\",\"target_path\":\"tests/fixtures/capability_parity/inputs/2_scip/alpha.ts\",\"target_name\":null,\"kind\":\"module\",\"hops\":1}\n{\"record\":\"resolved_import\",\"src_path\":\"tests/fixtures/capability_parity/inputs/2_scip/gamma.ts\",\"name\":\"helper\",\"local\":\"helper\",\"target_path\":\"tests/fixtures/capability_parity/inputs/2_scip/alpha.ts\",\"target_name\":\"helper\",\"kind\":\"local\",\"hops\":1}\n{\"record\":\"unresolved\",\"family\":\"call\",\"path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"span\":{\"start\":775,\"end\":784},\"reason\":\"inferred\",\"detail\":\"probe\"}\n{\"record\":\"call_site\",\"callee\":\"Far\",\"path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"line\":17,\"fn\":\"castFar\",\"start\":651,\"end\":660}\n{\"record\":\"call_site\",\"callee\":\"Near\",\"path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"line\":21,\"fn\":\"reach\",\"start\":714,\"end\":724}\n{\"record\":\"call_site\",\"callee\":\"castFar\",\"path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"line\":22,\"fn\":\"reach\",\"start\":740,\"end\":749}\n{\"record\":\"call_site\",\"callee\":\"far.probe\",\"path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"line\":23,\"fn\":\"reach\",\"start\":775,\"end\":786}\n{\"record\":\"call_site\",\"callee\":\"helper\",\"path\":\"tests/fixtures/capability_parity/inputs/2_scip/gamma.ts\",\"line\":7,\"fn\":\"use\",\"start\":300,\"end\":308}\n{\"record\":\"call_site\",\"callee\":\"near.probe\",\"path\":\"tests/fixtures/capability_parity/inputs/2_scip/delta.ts\",\"line\":23,\"fn\":\"reach\",\"start\":760,\"end\":772}\n",
+      "stderr": ""
+    }
+  },
+  "2_06_WireSchema": {
+    "cli": {
+      "exit_code": 0,
+      "stdout": "sprefa-extract JSONL contract: one fact per line, each a JSON object tagged by `record`. All spans are half-open byte offsets [start, end) into the file. Records join across families by matching spans.\n\nRECORD SHAPES\n  record=node   family=<cst|type|call|df|cfg>  span={start,end}   kind=<slug>   name=<string|null>  function=<string, df only>\n  record=edge   family=<cst|df|cfg>        kind=<slug>        from={start,end}  to={start,end}\n  record=sig    family=type                owner={start,end}  owner_start=<u32>  owner_end=<u32>  slot=<param|ret>  pos=<u32>  ty=<name>\n  record=param  family=df                  span={start,end}   pos=<u32>\n  record=arg    family=df                  call={start,end}   pos=<i64>  arg={start,end}\n  record=df_field  family=df               owner={start,end}  name=<string>  value={start,end}\n  record=df_lit    family=df               node={start,end}   kind=<lit|template|concat>  text=<string>\n  record=df_loop   family=df               span={start,end}   var=<string|null>  collection=<string|null>\n  record=df_nest   family=df               call={start,end}   loop={start,end}   depth=<u32>  collection=<string|null>\n  record=df_allocates  family=df           owner={start,end}\n  record=site   family=call                span={start,end}   callee=<name>  callee_path=<string|null>\n  record=method_owner  family=call         owner={start,end}  self_type=<string|null>  trait=<string|null>\n  record=macro_site  family=call            span={start,end}   macro_name=<string>  source=<mbe|scip>\n  record=reference  family=call            span={start,end}   functor=<name/arity>  position=<goal|head_arg|term_arg>\n  record=const  family=type                owner={start,end}  field=<string|null>  text=<string>  kind=<lit|template>\n  record=doc    family=type                owner={start,end}  parent=<string|null>  text=<string>\n  record=doc_tag  family=type              owner={start,end}  tag=<string>  arg=<string|null>  text=<string>\n  record=doc_node  family=type             span={start,end}   kind=<heading|code_block|link|image>  name=<string>  parent=<string|null>  target=<string, link/image>  title=<string, link/image with a title>  body={start,end, code_block with content}\n  record=data_doc  family=data            ordinal=<u32>  span={start,end}  format=<json|jsonl|yaml|toml>  doc=<json value>\n  record=data_value  family=data          ordinal=<u32>  path=<dotted>  kind=<object|array|string|number|boolean|null>  text=<string|null>  span={start,end}\n  record=specifier  family=call            span={start,end}   name=<string>  kind=<slug>  module=<string|null>  imported=<string|null>\n  record=unresolved  family=call           path=<string, only under --resolve>  span={start,end}   reason=<slug>  detail=<string>\n  record=capture  query=<id>  capture=<name>  text=<string>  start=<u32>  end=<u32>  match_start=<u32>  match_end=<u32>\n  record=resolved_edge  caller_path=<string>  caller_name=<string|null>  callee_path=<string>  callee_name=<string|null>  caller_site_start=<u32>  caller_site_end=<u32>  kind=<slug>  resolution_origin=<slug>\n  record=resolved_type_edge  owner_path=<string>  owner_name=<string|null>  owner_start=<u32>  owner_end=<u32>  target_path=<string>  target_name=<string|null>  kind=<slug>  resolution_origin=<slug>\n  record=resolved_import  src_path=<string>  name=<string>  local=<string>  target_path=<string>  target_name=<string|null>  kind=<slug>  hops=<u32>\n  record=flow_edge  family=flow  kind=<slug>  from_blob=<hex>  from={start,end}  to_blob=<hex>  to={start,end}\n  record=file_edge  src_path=<string>  dst_path=<string>  kind=<slug>  symbols=<u32>\n  record=file_unresolved  src_path=<string>  module=<string>  reason=<slug>\n  record=package_edge  src_manifest=<string>  dst_manifest=<string>  kind=<slug>\n  record=file  path=<string>  digest=<hex>  bytes=<u32>  lines=<u32>\n  record=protocol  version=<u32>\n  record=run       run=<u32> mode=syntax|semantic tool=<slug> version=<string> scope=[<digest>...]\n  record=fact      fact=<u32> relation=<ns.name> args=[<arg>...]\n  record=witness   fact=<u32> run=<u32> method=<slug>\n  record=coverage  run=<u32> relation=<ns.name> coverage=partial|complete\n  record=diagnostic run=<u32> relation=<ns.name> detail=<string>\n  record=size_skip  path=<string>  bytes=<u64>  limit=<u64>  reason=<over_max_bytes>\n  record=scip_metadata  version=<i32>  tool_name=<string>  tool_version=<string>  tool_arguments=[<string>]  project_root=<string>  text_document_encoding=<i32>\n  record=scip_document  path=<string>  language=<string>  position_encoding=<i32>  text=<string|null>\n  record=scip_occurrence  path=<string>  symbol=<string>  start=<u32>  end=<u32>  roles=<i32>  definition=<bool>  import=<bool>  write_access=<bool>  read_access=<bool>  generated=<bool>  test=<bool>  forward_definition=<bool>  syntax_kind=<i32>  enclosing_start=<u32|null>  enclosing_end=<u32|null>  text=<string|null>\n  record=scip_occurrence_doc  path=<string>  start=<u32>  end=<u32>  pos=<u32>  text=<string>\n  record=scip_diagnostic  path=<string>  start=<u32>  end=<u32>  severity=<i32>  code=<string>  message=<string>  source=<string>  tags=[<i32>]\n  record=scip_symbol  path=<string|null>  symbol=<string>  display_name=<string>  kind=<i32>  enclosing_symbol=<string>\n  record=scip_relationship  symbol=<string>  related_symbol=<string>  is_reference=<bool>  is_implementation=<bool>  is_type_definition=<bool>  is_definition=<bool>\n  record=scip_documentation  symbol=<string>  pos=<u32>  text=<string>\n  record=scip_signature  symbol=<string>  language=<string>  text=<string>\n  record=scip_signature_occurrence  symbol=<string>  ref_symbol=<string>  start=<u32>  end=<u32>  roles=<i32>\n  record=scip_index  reused=<bool>  tool_name=<string>  tool_version=<string>  documents=<u32>  index_mtime_unix_ms=<u64|null>  staleness=<stale|uncertain|no_newer_sources>\n  record=scip_skip  lang=<string>  bin=<string>  reason=<not_installed|timed_out|failed>  detail=<string>\n  record=scip_def  symbol=<string>  file=<string>  repo=<string>\n  record=scip_name  symbol=<string>  name=<string>\n  record=scip_ref  file=<string>  symbol=<string>  def_file=<string>  repo=<string>\n  record=scip_external_ref  file=<string>  symbol=<string>  origin=<string>  repo=<string>\n  record=scip_edge  src=<string>  dst=<string>  repo=<string>\n  record=scip_fn_edge  caller=<string>  callee=<string>\n  record=scip_callee_type  sym=<string>  type=<string>\n  record=scip_local  fn=<string>  name=<string>\n  record=scip_impl  impl=<string>  iface=<string>\n\nFIELDS\n  family       the graph plane: cst (concrete syntax tree), type (declarations),\n               call (callables + call sites), df (intra-procedural value flow),\n               flow (inter-procedural value flow, derived),\n               cfg (intra-procedural control flow, derived from cst).\n  span         a node location; half-open bytes.\n  kind         the node/edge slug from the per-family vocabulary below.\n  name         the declared identifier, when the node carries one (else null).\n  owner        the span of the owning declaration (sig/const joins to its callable).\n  owner_start  flat start byte of the sig owner span; retained alongside owner for text-host joins.\n  owner_end    flat end byte of the sig owner span; retained alongside owner for text-host joins.\n  slot         param or ret.\n  pos          parameter index (0 for a return slot).\n  ty           the referenced type's bare name, UNRESOLVED in phase 1.\n  callee       the callee's trailing name as written (the resolution key).\n  callee_path  the full qualified path when >1 segment (filled by resolution; else null).\n  functor      a Prolog term-occurrence: the interned `name/arity` key at a span.\n  position     where a Prolog term-occurrence sits: goal (executed as a body\n               goal), head_arg (inside a clause head's arguments), term_arg\n               (inside another term's arguments, data).\n  self_type    the impl self type a method def belongs to (null for a trait's\n               own items).\n  trait        the trait a method def implements or is declared in (null for an\n               inherent impl).\n  field        dotted path into an object const, or an enum member (else null).\n  text         the resolved string value of a const.\n  query        caller-supplied identity for one batched pattern.\n  capture      one requested single-node metavariable.\n  start/end    capture's half-open byte span in pattern mode.\n  match_start/match_end  whole pattern match's half-open byte span.\n  caller_site_start  start byte of the call site that produced a resolved edge.\n  caller_site_end    end byte of the call site that produced a resolved edge.\n  owner_path   file holding the declaration that makes a resolved type reference.\n  target_path  file holding the declaration a resolved type reference names.\n  digest       the file's content key, the same one resolved edges are keyed on.\n  from_blob/to_blob  the content keys (hex) of the two files a flow edge\n               crosses; `from`/`to` are byte spans into those files.\n  bytes        the file's length in bytes.\n  lines        the file's line count as an editor shows it: an unterminated last\n               line still counts, an empty file is 0.\n  module       a specifier's source module as written, null when the language\n               puts the module in `name` (path-only forms).\n  imported     the name the SOURCE module spells for a binding, when the local\n               name renames it (`import {inner as local}`, a default import's\n               `default`); null when the two agree or when the module path's\n               trailing segment already spells it (rust, go, kotlin,\n               prolog). v5's module_binding imported column.\n  reason       why a runtime-computed edge marker fired (see its vocabulary).\n  detail       the computed expression's source text, exactly the text at `span`.\n  symbol       a SCIP symbol string; `local `-prefixed symbols are document-scoped.\n  roles        the raw scip.proto SymbolRole bitfield, kept whole.\n  definition / import / write_access / read_access / generated / test /\n  forward_definition  the seven SymbolRole bits, one column each.\n  syntax_kind  raw scip.proto SyntaxKind ordinal (0 = unspecified).\n  enclosing_start/enclosing_end  the nearest enclosing AST node's byte span,\n               null when the indexer emitted none.\n  text         on scip_occurrence only, the source slice at the occurrence's\n               byte span (lossy-utf8), carried only under --occurrence-text and\n               absent (not null) when the flag is off or the span is past EOF.\n  display_name the symbol's name as scip records it.\n  enclosing_symbol  the owner of a local symbol; empty for global symbols.\n  related_symbol  the other end of a scip.proto Relationship.\n  ref_symbol   a symbol referenced inside a signature's text; the start/end on\n               that record are offsets into the SIGNATURE TEXT, not a document.\n  severity/tags  raw scip.proto Severity and DiagnosticTag ordinals.\n  src_path/dst_path  the two ends of a file dependency edge.\n  symbols      how many distinct symbols cross one file edge of that kind.\n  src_manifest/dst_manifest  the two ends of a package edge: project-relative\n               manifest paths, never package names, so a package edge joins a\n               file edge on the same key shape.\n\nKIND VOCABULARIES (the `kind` field)\n  type node   struct enum trait class interface alias function method const\n  call node   function method lambda\n  df node     param let_bind var_read var_write lit call_res new member ret\n              borrow binop unop loop if match block closure try break expr\n              cond logic concat template\n  cst node    the grammar node type as named by tree-sitter (open set)\n  cst edge    child\n  df edge     direct\n  df lit kind  lit (cooked literal) | template | concat (raw source slice)\n  flow edge   arg_to_param | ret_to_call_res | lambda_elem | lambda_ret\n  cfg node    entry exit stmt branch loop jump ret\n  cfg edge    next arm jump exit\n  const kind  lit (cooked literal) | template (raw source slice, holes intact)\n  sig slot    param | ret\n  unresolved reason  dynamic-import | computed-member-call | spread-call-args\n                    (phase 1) | no_corpus_def | ambiguous | builtin | inferred |\n                    external | fanout_cap (interface dispatch with more than\n                    64 implementers: the spec edge stays, detail carries the\n                    count) (--resolve, one row per call site or import spec\n                    the resolve arm dropped)\n  specifier kind    named | default | namespace | side_effect | reexport |\n                    include | reexport_module | dynamic_import | require\n  file_edge kind    the specifier kind that bound the crossing, or `unknown`\n                    under --scip-deps: an index records resolved occurrences,\n                    never the import statement that bound the name, so the form\n                    is not in it to read.\n  file_unresolved reason  the deps.rs Policy slug that stopped the specifier:\n                    node_modules_boundary | absolute_path | relative_unresolved\n  package_edge kind  Cargo.toml: normal | dev | build. package.json:\n                    normal | dev | peer. go.mod: require | replace.\n  resolved_edge kind       name_resolve | scip_override | value_ref |\n                    import_resolve (the callee is an import binding, bound\n                    through the language's own module plane)\n  resolved_import kind     local (the target module declares the name) |\n                    indirect (>=1 `export { x } from` hop) | star (>=1\n                    `export *` hop) | namespace (a module object, not one\n                    declaration) | default (the module's default export) |\n                    module (no binding: the file a specifier names, one row\n                    per specifier, hops=1).\n                    Precedence when several apply: namespace, star, indirect,\n                    default, local.\n  resolved_type_edge kind  field | impl | variant | generic | uses | doc_ref |\n                    implements (one type satisfies one interface/trait) |\n                    overrides (one CALLABLE satisfies another). The last two\n                    come only from a SCIP index's `is_implementation`\n                    relationships, carry resolution_origin=scip, and are the\n                    one type edge whose target may sit OUTSIDE the supplied\n                    paths: an index is a whole-project artifact, so binding\n                    the target to the chunk would make the row unspellable\n                    from any chunking of the corpus.\n  resolution_origin        WHICH resolver leg answered, on resolved_edge and\n                    resolved_type_edge alike: same_file | corpus_unique |\n                    module_plane | checker | alias_chain | param | receiver |\n                    self_type | iface_impl | decorator | subscript |\n                    return_call | scip | unresolved. `kind` says what the edge\n                    means; this says who produced it.\n  doc_node kind            heading | code_block | link | image\n                    `name` is the heading title, the fence info language (empty\n                    for an indented block or a bare fence), the link text or\n                    the image description. Reference links resolve through the\n                    document's `[label]: url` definitions; an undefined label\n                    mints no row. Autolinks carry the bracketed text as both\n                    name and target.\n\nCONTROL FLOW (--kinds cfg)\n  Intra-procedural only, and DERIVED from the cst family rather than projected\n  by a language front-end: `--kinds cfg` turns the cst mask on and emits cfg\n  node and edge records beside it. Every callable gets an entry and an exit\n  node, both carrying the callable's own span, so the `kind` field is what\n  separates them. A `next` edge whose destination starts before its source is a\n  loop back edge. Jump targets outside a loop (goto, labelled break) are NOT\n  resolved, so those nodes have no outgoing edge. Languages with kind_role rows:\n  rust, go, ts, kotlin; any other language emits no cfg rows at all.\n  Post-dominance and the CDG edge color are NOT built.\n\nPHASE-1 LIMITS (default mode)\n  No name resolution: type edges, caller->callee links, and cross-file joins are\n  NOT emitted. `site` records carry the callee name as written; `sig` records\n  carry the referenced type's bare name.\n\nSCIP RAW MODE (ryi scip --raw)\n  Streams a loaded SCIP index as raw rows, EVERY field the protobuf serializes:\n  scip_metadata, scip_document, scip_occurrence, scip_occurrence_doc,\n  scip_diagnostic, scip_symbol, scip_relationship, scip_documentation,\n  scip_signature, scip_signature_occurrence. Deliberately UNJOINED. A definition\n  is an occurrence with definition true, a reference is one without, a local is\n  a `local `-prefixed symbol, and an implements edge is a scip_relationship with\n  is_implementation. Those filters and joins belong above this binary.\n\n  The one join a RESOLVE does read is `is_implementation`: under\n  `--resolve --arms type` with `--root` and an index, every pair whose\n  implementing symbol is DEFINED in a supplied file becomes a resolved_type_edge\n  of kind implements or overrides, and every non-callable pair also becomes a\n  `tsi.conforms(Implementor, Interface, scip)` fact under `--witness`. Nothing\n  else in the index reaches the resolve's type plane, and occurrences alone\n  never carry the interface-to-implementor hop.\n\n  The one thing not passed through is the scip.proto Symbol / Package /\n  Descriptor message family, which is never serialized into an index: those\n  messages describe the grammar of the symbol STRING, which is emitted verbatim.\n\n  --records KINDS narrows the stream. Full passthrough over v6/tsv2 (204\n  indexed documents) is 177,967 rows and 59.4MB, of which scip_occurrence alone\n  is 123,655 rows and 48.5MB.\n\nDEPENDENCY EDGES (--scip-deps and --deps)\n  Both fold to the SAME file_edge record, so the module graph is one relation\n  regardless of which resolver filled it. The edge key is (src, dst, kind): one\n  pair carries one row per import form, and `symbols` counts the distinct names\n  of that form.\n  --scip-deps folds a SCIP index: the indexer already resolved every reference,\n  so the graph falls out of the index with no module resolver in the crate.\n  Graded against madge over v6/tsv2: recall 0.992, precision 0.988.\n  --deps also emits file_unresolved for every specifier that resolved to\n  nothing, carrying the policy that stopped it, so a package boundary, an\n  absolute path and a broken relative path stay three answers.\n  --deps resolves import and export-from specifiers syntactically instead, with\n  no indexer subprocess. Best effort; graded against the same oracle on the same\n  corpus at recall 1.000 and precision 1.000, which measures agreement with\n  another syntactic scanner and NOT correctness: the 9 edges --scip-deps has and\n  madge lacks are inferred type references with no import statement, and no\n  syntactic resolver can see them.\n\nMODULE PLANE (--resolve)\n  Module resolution is the LANGUAGE'S OWN algorithm, run once per file set as\n  its own plane, and every resolve arm binds an imported name through it.\n  Name-matching a callee across files is the fallback for names with NO import\n  binding, never the first leg.\n  ts/js runs ECMA-262 16.2.1.6.3 ResolveExport over `oxc_parser`'s ModuleRecord,\n  with `oxc_resolver` turning each specifier into a corpus file: local exports,\n  `export { x } from` re-exports (renaming included), `export *` barrels to any\n  depth, `export * as ns`, default exports, `import * as ns` member calls, and\n  the TS forms `import x = require(...)` and `export =`. A re-export cycle\n  terminates on the spec's own resolveSet.\n  It emits one resolved_import row per import binding per file, and the\n  call edges it binds carry kind=import_resolve.\n  Two `export *` arms offering DIFFERENT bindings for one name is the spec's\n  AMBIGUOUS outcome: no edge, and an `unresolved` row with reason=ambiguous.\n  rust asks rust-analyzer's Names module maps for written paths, use bindings,\n  re-exports, globs, visibility, inline modules and target-specific module places.\n  Syntax facts live in `src/read/lang/0_rust_module_facts.rs`; the corpus adapter\n  joins engine coordinates to supplied declarations. Associated paths use indexed\n  impl and trait lookup on declared type heads. Dot method calls abstain needs_types\n  unless Types or SCIP supplies the receiver-dependent answer. Workspace crates\n  load without sysroot or dependency sources; outside paths abstain. go runs its own directory-scoped plane (`src/lang/go_modules.rs`):\n  each import spec resolves to the target directory's REAL package name (its\n  `package` clause, never the import path's last segment), kind=local, or\n  kind=namespace for a dot import; an unresolvable directory emits an\n  unresolved row reason=external instead. A `pkg.Name` call or type reference\n  binds through the plane at kind=import_resolve, exported names only (Go's\n  own capitalization rule); a bare name may still bind through a dot import\n  after same-file/corpus-unique matching declines, so a local declaration\n  always shadows it. Interface and receiver dispatch (PR #554) are unchanged.\n\nPACKAGE EDGES (--package-deps)\n  Reads the supplied manifests and emits package_edge rows for the dependency\n  pairs that stay inside the corpus: a dependency is an edge only when another\n  SUPPLIED manifest declares that name. One arm per manifest kind (Cargo.toml,\n  package.json, go.mod); a path that is not a manifest is skipped, and an\n  unparseable manifest contributes no name and no edges rather than an error.\n  It is v5's crate_edge generalized: that relation was Cargo-only and keyed on\n  crate names.\n\nFILE FACT (--file-fact)\n  Prepends one `file` row to the normal stream, carrying the content digest,\n  byte count and line count. It rides the same read as extraction.\n\nTSI ENVELOPE (--witness)\n  Off by default, and with it off the stream is byte-identical to what it has\n  always been: no `fact` key appears on any row.\n  On, the stream opens with `protocol` then `run` (mode=syntax, tool=extract,\n  version = this binary's, scope = the digest of the file read). Every row the\n  per-file flatten mints then carries a `fact` ordinal, one `witness` row per\n  numbered row follows with method=parse, and one `coverage` row per family\n  present closes the stream at coverage=partial. A parse enumerates no relation\n  exhaustively, so a syntax run never claims complete and emits no diagnostic.\n  Coverage relations are named `extract.<family>`: extract.cst, extract.type,\n  extract.call, extract.df, extract.data.\n  The type family additionally emits `record=fact` TSI rows from the parse, one\n  `coverage partial` row per relation it touched at least once. ts emits\n  tsi.type, tsi.origin, tsi.product, tsi.sum, tsi.edge, tsi.parameter,\n  tsi.called, tsi.argument, tsi.input, tsi.output, tsi.callable, tsi.conforms,\n  ts.interface, ts.optional, ts.readonly. rust emits the same tsi.* set plus\n  rust.trait and rust.impl, and no ts.* row. go, kotlin and python emit none.\n  A target is the id of a type text AS WRITTEN, never a resolved type, and its\n  `tsi.origin` is that text's first occurrence; a written name is one id per\n  file, while a generic parameter and a member callable take one id each per\n  declaration. NOT emitted by a parse: tsi.denotes, tsi.has_type,\n  tsi.primitive, tsi.subtype, tsi.assignable, tsi.equivalent, ts.mapped,\n  ts.conditional, rust.assoc, rust.lifetime, rust.ownership, a `tsi.called`\n  for anything but a written `Name<Args>`, and any variance at all: a parse\n  reads none, so `tsi.parameter` carries the atom `unspecified`.\n  Ids are file-local, so a stream over several files renumbers through\n  `ryi ingest` before its ids mean one thing.\n  NOT numbered yet: `unresolved` and `macro_site`.\n\n  --witness ALSO covers --resolve, where the stream carries TWO tiers rather\n  than one. Run 0 is mode=syntax tool=extract; a checker tier that LOADED takes\n  the next run id, mode=semantic, tool=tsc or tool=rust-analyzer, version empty\n  (the tier reports none of its own). `resolved_edge` and `resolved_type_edge`\n  carry the `fact` ordinal; every leg that named the target is one `witness` row\n  on that ordinal, with method = that leg's resolution_origin, filed under the\n  semantic run for method=checker and under run 0 for every other leg. Two\n  witnesses on one fact IS the checker and a syntax leg agreeing; legs that name\n  different defs are two facts, each with its own witness and its own\n  resolution_origin. Coverage is `extract.call` and `extract.type`, partial, on\n  run 0; a semantic run claims none, because the checker answers per site\n  instead of enumerating a relation.\n  --witness conflicts with the single-purpose modes (--deps, --package-deps,\n  --scip-deps, --bench, --file-fact) and with\n  --kinds cfg: their rows come from other flattens, and the protocol row must\n  be the first row of a witnessed stream with every later row numbered.\n\nSIZE CEILING (--max-bytes)\n  A single input over the ceiling is NOT parsed. It emits one size_skip row\n  naming the path, the byte count and the ceiling, and exits 0. The default is\n  16777216; --max-bytes N sets it, --max-bytes 0 removes it. The decision is\n  made on the file size before any parse, so it covers the normal family\n  stream and --bench alike, and --file-fact still prepends its\n  identity row (a digest over bytes already read, not the cost being bounded).\n  A whole-project mode (--resolve, --deps, --scip-*) takes directories and sets\n  and is not covered.\n  The point is that a silent timeout is a defect and a named skip is a fact.\n  A caller that gets rc=124 and an empty stream cannot tell it from a file with\n  no facts, and learns neither which file nor how big. The ceiling is measured:\n  16777216 skips exactly one file in a 77,472-file rust corpus (a 29,328,358 B\n  machine-generated parser table that costs 12.55 s and 3.0 GB, all of it parse\n  time), no ts/js corpus file, and no fixture in this crate.\n\nTHE TWO TIERS (ryi fast | ryi slow)\n  Both take the same inputs and write the same tables; the grade between the\n  tiers is SQL over two databases (tests/170_ratchet_sites_rust.rs).\n  `ryi fast INPUTS` runs this crate's own front-ends plus name-match resolution\n  over the supplied files, emitting resolved_edge, resolved_type_edge and\n  resolved_import. No indexer, no type checker, no index is ever read. It is\n  wrong wherever a name is ambiguous corpus-wide.\n  `ryi slow INPUTS` is the SCIP oracle written as those tables. The index is\n  --scip-index, else the root's (an existing index wins; else every indexer the\n  root's markers name runs once under a wall budget). For each phase-1 call site,\n  every reference occurrence ending at the site's end whose symbol is a callable,\n  a type or a local becomes one row: resolved_edge (resolution_origin scip) when\n  its definition is in an input, else unresolved with reason local or external;\n  a site with no such occurrence is unresolved no_occurrence. Specifier spans\n  give resolved_import (local and module rows). resolved_type_edge comes from\n  each phase-1 type-edge candidate's type reference, plus is_implementation\n  relationships; every occurrence gives occurrence/symbol rows. The\n  checkers compiled into the build add rows of origin checker; --no-checker\n  skips them. A root that cannot be indexed emits scip_skip rows and exits 0.\n\nRAW INDEX ROWS (ryi scip)\n  `ryi scip ROOT` ensures the root's SCIP index the same way and streams v5's\n  scip_* relation shapes: scip_def, scip_name, scip_ref, scip_external_ref,\n  scip_edge, scip_fn_edge, scip_callee_type, scip_local, scip_impl, behind one\n  scip_index header row.\n  index_mtime_unix_ms is the index file mtime in milliseconds since Unix epoch.\n  staleness=stale means a readable indexed document has a later mtime than the\n  index; uncertain means the index mtime or an indexed document was unreadable;\n  no_newer_sources means every indexed document was readable and no later mtime\n  was observed. Mtime evidence is not proof that index contents match source contents.\n  v5's scip_occurrence and scip_binding are NOT in that set. scip_occurrence is\n  already a record tag on this wire (the byte-span passthrough row under\n  ryi scip --raw) with different fields. Both are one consumer join off\n  ryi scip --raw --records scip_occurrence, which carries the spans and every\n  role bit; scip_binding's source-slice need is answered by that row's optional\n  `text` field under --occurrence-text (issue extract-scip-vocab-occurrence-binding).\n\nPROJECT MODE (--resolve)\n  `--resolve PATH...` runs phase 2 over the supplied files as one project.\n  `--arms call` (the default) emits `resolved_edge`; `--arms type` emits\n  `resolved_type_edge`; `--arms call,type` emits both. Adding\n  `--root DIR` with `--scip-index FILE` or `--scip-build` puts a SCIP\n  index in the resolve context, which lets the call arm emit `scip_override`\n  rows where the indexer disagrees with the name match.\n\nREVERSE DOOR (ryi ingest)\n  `ryi ingest FILE...` reads foreign JSONL, validates every `record=fact` row\n  against the relation registry below, checks that every `{\"id\"}` it names is\n  declared by a tsi.type, tsi.edge or tsi.called row, renumbers ids and fact\n  ordinals into canonical order, adds one method=foreign witness per fact, and\n  prints the stream back sorted behind one protocol row. A stop names the line.\n  ingest(ingest(x)) == ingest(x).\n\nTSI RELATION REGISTRY\n  relation=tsi.type args=[id]\n  relation=tsi.symbol args=[id]\n  relation=tsi.denotes args=[id,id]\n  relation=tsi.scip_symbol args=[id,text]\n  relation=tsi.value args=[id,id]\n  relation=tsi.value_argument args=[id,int,id]\n  relation=tsi.has_type args=[span,id]\n  relation=tsi.origin args=[id,atom,span]\n  relation=tsi.name args=[id,text]\n  relation=tsi.product args=[id]\n  relation=tsi.sum args=[id]\n  relation=tsi.callable args=[id]\n  relation=tsi.primitive args=[id,atom]\n  relation=tsi.edge args=[id,id,text,id,int]\n  relation=tsi.parameter args=[id,id,int,atom]\n  relation=tsi.called args=[id,id,id]\n  relation=tsi.argument args=[id,int,id]\n  relation=tsi.input args=[id,int,id]\n  relation=tsi.output args=[id,int,id]\n  relation=tsi.subtype args=[id,id,atom]\n  relation=tsi.assignable args=[id,id,atom]\n  relation=tsi.conforms args=[id,id,atom]\n  relation=tsi.equivalent args=[id,id,atom]\n  relation=ts.interface args=[id]\n  relation=ts.conditional args=[id,id,id,id,id]\n  relation=ts.mapped args=[id,id,id,id]\n  relation=ts.readonly args=[id]\n  relation=ts.optional args=[id]\n  relation=rust.trait args=[id]\n  relation=rust.impl args=[id,id,id]\n  relation=rust.lifetime args=[id,atom]\n  relation=rust.ownership args=[id,atom]\n  relation=rust.assoc args=[id,text,id]\n  relation=go.interface args=[id]\n  relation=go.type_set args=[id,id]\n  relation=go.embedding args=[id,id]\n\n",
+      "stderr": ""
+    },
+    "reach": true
+  },
+  "2_07_ScipFacts": {
+    "cli": {
+      "exit_code": 0,
+      "stdout": "{\"record\":\"scip_document\",\"path\":\"animal.ts\",\"language\":\"\",\"position_encoding\":0,\"text\":null}\n{\"record\":\"scip_documentation\",\"symbol\":\"scip-typescript npm . . `animal.ts`/\",\"pos\":0,\"text\":\"```ts\\nmodule \\\"animal.ts\\\"\\n```\"}\n{\"record\":\"scip_documentation\",\"symbol\":\"scip-typescript npm . . `animal.ts`/Animal#\",\"pos\":0,\"text\":\"```ts\\ninterface Animal\\n```\"}\n{\"record\":\"scip_documentation\",\"symbol\":\"scip-typescript npm . . `animal.ts`/Animal#sound().\",\"pos\":0,\"text\":\"```ts\\n(method) sound() => string\\n```\"}\n{\"record\":\"scip_documentation\",\"symbol\":\"scip-typescript npm . . `animal.ts`/Dog#\",\"pos\":0,\"text\":\"```ts\\nclass Dog\\n```\"}\n{\"record\":\"scip_documentation\",\"symbol\":\"scip-typescript npm . . `animal.ts`/Dog#sound().\",\"pos\":0,\"text\":\"```ts\\n(method) sound(): string\\n```\"}\n{\"record\":\"scip_metadata\",\"version\":0,\"tool_name\":\"scip-typescript\",\"tool_version\":\"0.4.0\",\"tool_arguments\":[],\"project_root\":\"file:///Users/chrishafley/projects/hafley-rs/.boop-worktrees/chore/test-shrink/crates/sprefa-extract/tests/fixtures/scip_rel\",\"text_document_encoding\":1}\n{\"record\":\"scip_occurrence\",\"path\":\"animal.ts\",\"symbol\":\"scip-typescript npm . . `animal.ts`/\",\"start\":0,\"end\":0,\"roles\":1,\"definition\":true,\"import\":false,\"write_access\":false,\"read_access\":false,\"generated\":false,\"test\":false,\"forward_definition\":false,\"syntax_kind\":0,\"enclosing_start\":0,\"enclosing_end\":137}\n{\"record\":\"scip_occurrence\",\"path\":\"animal.ts\",\"symbol\":\"scip-typescript npm . . `animal.ts`/Animal#\",\"start\":17,\"end\":23,\"roles\":1,\"definition\":true,\"import\":false,\"write_access\":false,\"read_access\":false,\"generated\":false,\"test\":false,\"forward_definition\":false,\"syntax_kind\":0,\"enclosing_start\":0,\"enclosing_end\":46}\n{\"record\":\"scip_occurrence\",\"path\":\"animal.ts\",\"symbol\":\"scip-typescript npm . . `animal.ts`/Animal#\",\"start\":76,\"end\":82,\"roles\":0,\"definition\":false,\"import\":false,\"write_access\":false,\"read_access\":false,\"generated\":false,\"test\":false,\"forward_definition\":false,\"syntax_kind\":0,\"enclosing_start\":null,\"enclosing_end\":null}\n{\"record\":\"scip_occurrence\",\"path\":\"animal.ts\",\"symbol\":\"scip-typescript npm . . `animal.ts`/Animal#sound().\",\"start\":28,\"end\":33,\"roles\":1,\"definition\":true,\"import\":false,\"write_access\":false,\"read_access\":false,\"generated\":false,\"test\":false,\"forward_definition\":false,\"syntax_kind\":0,\"enclosing_start\":null,\"enclosing_end\":null}\n{\"record\":\"scip_occurrence\",\"path\":\"animal.ts\",\"symbol\":\"scip-typescript npm . . `animal.ts`/Dog#\",\"start\":61,\"end\":64,\"roles\":1,\"definition\":true,\"import\":false,\"write_access\":false,\"read_access\":false,\"generated\":false,\"test\":false,\"forward_definition\":false,\"syntax_kind\":0,\"enclosing_start\":48,\"enclosing_end\":136}\n{\"record\":\"scip_occurrence\",\"path\":\"animal.ts\",\"symbol\":\"scip-typescript npm . . `animal.ts`/Dog#sound().\",\"start\":94,\"end\":99,\"roles\":1,\"definition\":true,\"import\":false,\"write_access\":false,\"read_access\":false,\"generated\":false,\"test\":false,\"forward_definition\":false,\"syntax_kind\":0,\"enclosing_start\":87,\"enclosing_end\":134}\n{\"record\":\"scip_relationship\",\"symbol\":\"scip-typescript npm . . `animal.ts`/Dog#\",\"related_symbol\":\"scip-typescript npm . . `animal.ts`/Animal#\",\"is_reference\":false,\"is_implementation\":true,\"is_type_definition\":false,\"is_definition\":false}\n{\"record\":\"scip_relationship\",\"symbol\":\"scip-typescript npm . . `animal.ts`/Dog#sound().\",\"related_symbol\":\"scip-typescript npm . . `animal.ts`/Animal#sound().\",\"is_reference\":true,\"is_implementation\":true,\"is_type_definition\":false,\"is_definition\":false}\n{\"record\":\"scip_symbol\",\"path\":\"animal.ts\",\"symbol\":\"scip-typescript npm . . `animal.ts`/\",\"display_name\":\"\",\"kind\":0,\"enclosing_symbol\":\"\"}\n{\"record\":\"scip_symbol\",\"path\":\"animal.ts\",\"symbol\":\"scip-typescript npm . . `animal.ts`/Animal#\",\"display_name\":\"\",\"kind\":0,\"enclosing_symbol\":\"\"}\n{\"record\":\"scip_symbol\",\"path\":\"animal.ts\",\"symbol\":\"scip-typescript npm . . `animal.ts`/Animal#sound().\",\"display_name\":\"\",\"kind\":0,\"enclosing_symbol\":\"\"}\n{\"record\":\"scip_symbol\",\"path\":\"animal.ts\",\"symbol\":\"scip-typescript npm . . `animal.ts`/Dog#\",\"display_name\":\"\",\"kind\":0,\"enclosing_symbol\":\"\"}\n{\"record\":\"scip_symbol\",\"path\":\"animal.ts\",\"symbol\":\"scip-typescript npm . . `animal.ts`/Dog#sound().\",\"display_name\":\"\",\"kind\":0,\"enclosing_symbol\":\"\"}\n",
+      "stderr": ""
+    },
+    "flag_required": false,
+    "reach": true,
+    "without": {
+      "exit_code": 0,
+      "stdout": "{\"record\":\"node\",\"family\":\"type\",\"span\":{\"start\":7,\"end\":46},\"kind\":\"interface\",\"name\":\"Animal\"}\n{\"record\":\"node\",\"family\":\"type\",\"span\":{\"start\":55,\"end\":136},\"kind\":\"class\",\"name\":\"Dog\"}\n{\"record\":\"node\",\"family\":\"type\",\"span\":{\"start\":87,\"end\":134},\"kind\":\"method\",\"name\":\"sound\"}\n{\"record\":\"node\",\"family\":\"call\",\"span\":{\"start\":28,\"end\":44},\"kind\":\"method\",\"name\":\"sound\"}\n{\"record\":\"node\",\"family\":\"call\",\"span\":{\"start\":87,\"end\":134},\"kind\":\"method\",\"name\":\"sound\"}\n{\"record\":\"node\",\"family\":\"df\",\"span\":{\"start\":116,\"end\":130},\"kind\":\"ret\",\"name\":null,\"function\":\"Dog.sound\",\"is_async\":false,\"owner_kind\":\"class_method\"}\n{\"record\":\"node\",\"family\":\"df\",\"span\":{\"start\":123,\"end\":129},\"kind\":\"lit\",\"name\":null,\"function\":\"Dog.sound\",\"is_async\":false,\"owner_kind\":\"class_method\"}\n{\"record\":\"edge\",\"family\":\"df\",\"kind\":\"direct\",\"from\":{\"start\":123,\"end\":129},\"from_kind\":\"lit\",\"to\":{\"start\":116,\"end\":130},\"to_kind\":\"ret\"}\n{\"record\":\"df_lit\",\"family\":\"df\",\"node\":{\"start\":123,\"end\":129},\"kind\":\"lit\",\"text\":\"woof\"}\n",
+      "stderr": ""
+    }
+  },
+  "2_08_SlowProject": {
+    "cli": {
+      "exit_code": 0,
+      "stdout": "{\"record\":\"occurrence\",\"symbol\":\"local 0\",\"path\":\"tests/fixtures/call_ladder/src/_6_local.rs\",\"start\":49,\"end\":53,\"role\":\"def\",\"exported\":false,\"decl_start\":48,\"decl_end\":53}\n{\"record\":\"occurrence\",\"symbol\":\"rust-analyzer cargo call_ladder 0.0.0 _6_local/\",\"path\":\"tests/fixtures/call_ladder/src/_6_local.rs\",\"start\":0,\"end\":128,\"role\":\"def\",\"exported\":false,\"decl_start\":0,\"decl_end\":128}\n{\"record\":\"occurrence\",\"symbol\":\"rust-analyzer cargo call_ladder 0.0.0 _6_local/Probe#\",\"path\":\"tests/fixtures/call_ladder/src/_6_local.rs\",\"start\":11,\"end\":16,\"role\":\"def\",\"exported\":false,\"decl_start\":0,\"decl_end\":17}\n{\"record\":\"occurrence\",\"symbol\":\"rust-analyzer cargo call_ladder 0.0.0 _6_local/Probe#\",\"path\":\"tests/fixtures/call_ladder/src/_6_local.rs\",\"start\":113,\"end\":118,\"role\":\"ref\",\"exported\":false,\"decl_start\":0,\"decl_end\":17}\n{\"record\":\"occurrence\",\"symbol\":\"rust-analyzer cargo call_ladder 0.0.0 _6_local/Probe#\",\"path\":\"tests/fixtures/call_ladder/src/_6_local.rs\",\"start\":24,\"end\":29,\"role\":\"ref\",\"exported\":false,\"decl_start\":0,\"decl_end\":17}\n{\"record\":\"occurrence\",\"symbol\":\"rust-analyzer cargo call_ladder 0.0.0 _6_local/impl#[Probe]rows().\",\"path\":\"tests/fixtures/call_ladder/src/_6_local.rs\",\"start\":119,\"end\":123,\"role\":\"ref\",\"exported\":false,\"decl_start\":36,\"decl_end\":69}\n{\"record\":\"occurrence\",\"symbol\":\"rust-analyzer cargo call_ladder 0.0.0 _6_local/impl#[Probe]rows().\",\"path\":\"tests/fixtures/call_ladder/src/_6_local.rs\",\"start\":43,\"end\":47,\"role\":\"def\",\"exported\":false,\"decl_start\":36,\"decl_end\":69}\n{\"record\":\"occurrence\",\"symbol\":\"rust-analyzer cargo call_ladder 0.0.0 _6_local/local_probe_six().\",\"path\":\"tests/fixtures/call_ladder/src/_6_local.rs\",\"start\":80,\"end\":95,\"role\":\"def\",\"exported\":false,\"decl_start\":73,\"decl_end\":127}\n{\"record\":\"resolved_edge\",\"caller_path\":\"tests/fixtures/call_ladder/src/_6_local.rs\",\"caller_name\":\"local_probe_six\",\"callee_path\":\"tests/fixtures/call_ladder/src/_6_local.rs\",\"callee_name\":\"rows\",\"caller_site_start\":119,\"caller_site_end\":123,\"callee_start\":43,\"callee_end\":47,\"kind\":\"call\",\"resolution_origin\":\"scip\"}\n{\"record\":\"resolved_type_edge\",\"owner_path\":\"tests/fixtures/call_ladder/src/_6_local.rs\",\"owner_name\":\"Probe\",\"owner_start\":11,\"owner_end\":16,\"target_path\":\"tests/fixtures/call_ladder/src/_6_local.rs\",\"target_name\":\"Probe\",\"kind\":\"uses\",\"resolution_origin\":\"scip\"}\n{\"record\":\"symbol\",\"symbol\":\"local 0\",\"path\":\"tests/fixtures/call_ladder/src/_6_local.rs\",\"kind\":\"local\"}\n{\"record\":\"symbol\",\"symbol\":\"rust-analyzer cargo call_ladder 0.0.0 _6_local/\",\"path\":\"tests/fixtures/call_ladder/src/_6_local.rs\",\"kind\":\"module\"}\n{\"record\":\"symbol\",\"symbol\":\"rust-analyzer cargo call_ladder 0.0.0 _6_local/Probe#\",\"path\":\"tests/fixtures/call_ladder/src/_6_local.rs\",\"kind\":\"type\"}\n{\"record\":\"symbol\",\"symbol\":\"rust-analyzer cargo call_ladder 0.0.0 _6_local/impl#[Probe]rows().\",\"path\":\"tests/fixtures/call_ladder/src/_6_local.rs\",\"kind\":\"function\"}\n{\"record\":\"symbol\",\"symbol\":\"rust-analyzer cargo call_ladder 0.0.0 _6_local/local_probe_six().\",\"path\":\"tests/fixtures/call_ladder/src/_6_local.rs\",\"kind\":\"function\"}\n",
+      "stderr": ""
+    },
+    "flag_required": false,
+    "reach": true,
+    "without": {
+      "exit_code": 0,
+      "stdout": "{\"record\":\"free_name\",\"path\":\"tests/fixtures/call_ladder/src/_6_local.rs\",\"owner_start\":19,\"owner_end\":71,\"name\":\"Probe\",\"start\":24,\"end\":29}\n{\"record\":\"free_name\",\"path\":\"tests/fixtures/call_ladder/src/_6_local.rs\",\"owner_start\":73,\"owner_end\":127,\"name\":\"Probe\",\"start\":113,\"end\":118}\n{\"record\":\"local\",\"fn\":\"rows\",\"name\":\"rows\",\"path\":\"tests/fixtures/call_ladder/src/_6_local.rs\",\"start\":43,\"end\":47}\n{\"record\":\"occurrence\",\"symbol\":\"scm . . `tests/fixtures/call_ladder/src/_6_local.rs`/Probe().\",\"path\":\"tests/fixtures/call_ladder/src/_6_local.rs\",\"start\":11,\"end\":16,\"role\":\"def\",\"exported\":true,\"decl_start\":0,\"decl_end\":17}\n{\"record\":\"occurrence\",\"symbol\":\"scm . . `tests/fixtures/call_ladder/src/_6_local.rs`/local_probe_six().\",\"path\":\"tests/fixtures/call_ladder/src/_6_local.rs\",\"start\":80,\"end\":95,\"role\":\"def\",\"exported\":true,\"decl_start\":73,\"decl_end\":127}\n{\"record\":\"occurrence\",\"symbol\":\"scm . . `tests/fixtures/call_ladder/src/_6_local.rs`/rows().\",\"path\":\"tests/fixtures/call_ladder/src/_6_local.rs\",\"start\":43,\"end\":47,\"role\":\"def\",\"exported\":false,\"decl_start\":36,\"decl_end\":69}\n{\"record\":\"resolved_type_edge\",\"owner_path\":\"tests/fixtures/call_ladder/src/_6_local.rs\",\"owner_name\":\"Probe\",\"owner_start\":11,\"owner_end\":16,\"target_path\":\"tests/fixtures/call_ladder/src/_6_local.rs\",\"target_name\":\"Probe\",\"kind\":\"uses\",\"resolution_origin\":\"module_plane\"}\n{\"record\":\"symbol\",\"symbol\":\"scm . . `tests/fixtures/call_ladder/src/_6_local.rs`/Probe().\",\"path\":\"tests/fixtures/call_ladder/src/_6_local.rs\",\"kind\":\"type\"}\n{\"record\":\"symbol\",\"symbol\":\"scm . . `tests/fixtures/call_ladder/src/_6_local.rs`/local_probe_six().\",\"path\":\"tests/fixtures/call_ladder/src/_6_local.rs\",\"kind\":\"function\"}\n{\"record\":\"symbol\",\"symbol\":\"scm . . `tests/fixtures/call_ladder/src/_6_local.rs`/rows().\",\"path\":\"tests/fixtures/call_ladder/src/_6_local.rs\",\"kind\":\"function\"}\n{\"record\":\"unresolved\",\"family\":\"call\",\"path\":\"tests/fixtures/call_ladder/src/_6_local.rs\",\"span\":{\"start\":119,\"end\":123},\"reason\":\"needs_types\",\"detail\":\"rows\"}\n",
+      "stderr": ""
+    }
+  },
+  "2_09_FileFact": {
+    "cli": {
+      "exit_code": 0,
+      "stdout": "{\"record\":\"file\",\"path\":\"tests/fixtures/capability_parity/inputs/0_roster/0_ts.ts\",\"digest\":\"blake3:cebabff5ca009a57f095bb55b39fc659f7b9c1ec94be4e72346c7fb45f0caf1f\",\"bytes\":51,\"lines\":1}\n{\"record\":\"node\",\"family\":\"type\",\"span\":{\"start\":7,\"end\":50},\"kind\":\"function\",\"name\":\"f\"}\n{\"record\":\"node\",\"family\":\"call\",\"span\":{\"start\":7,\"end\":50},\"kind\":\"function\",\"name\":\"f\"}\n{\"record\":\"node\",\"family\":\"df\",\"span\":{\"start\":18,\"end\":27},\"kind\":\"param\",\"name\":\"x\",\"function\":\"f\",\"is_async\":false,\"owner_kind\":\"function\"}\n{\"record\":\"node\",\"family\":\"df\",\"span\":{\"start\":39,\"end\":48},\"kind\":\"ret\",\"name\":null,\"function\":\"f\",\"is_async\":false,\"owner_kind\":\"function\"}\n{\"record\":\"node\",\"family\":\"df\",\"span\":{\"start\":46,\"end\":47},\"kind\":\"var_read\",\"name\":\"x\",\"function\":\"f\",\"is_async\":false,\"owner_kind\":\"function\"}\n{\"record\":\"edge\",\"family\":\"df\",\"kind\":\"direct\",\"from\":{\"start\":18,\"end\":27},\"from_kind\":\"param\",\"to\":{\"start\":46,\"end\":47},\"to_kind\":\"var_read\"}\n{\"record\":\"edge\",\"family\":\"df\",\"kind\":\"direct\",\"from\":{\"start\":46,\"end\":47},\"from_kind\":\"var_read\",\"to\":{\"start\":39,\"end\":48},\"to_kind\":\"ret\"}\n{\"record\":\"param\",\"family\":\"df\",\"span\":{\"start\":18,\"end\":27},\"pos\":0}\n",
+      "stderr": ""
+    },
+    "flag_required": false,
+    "reach": true,
+    "without": {
+      "exit_code": 0,
+      "stdout": "{\"record\":\"node\",\"family\":\"type\",\"span\":{\"start\":7,\"end\":50},\"kind\":\"function\",\"name\":\"f\"}\n{\"record\":\"node\",\"family\":\"call\",\"span\":{\"start\":7,\"end\":50},\"kind\":\"function\",\"name\":\"f\"}\n{\"record\":\"node\",\"family\":\"df\",\"span\":{\"start\":18,\"end\":27},\"kind\":\"param\",\"name\":\"x\",\"function\":\"f\",\"is_async\":false,\"owner_kind\":\"function\"}\n{\"record\":\"node\",\"family\":\"df\",\"span\":{\"start\":39,\"end\":48},\"kind\":\"ret\",\"name\":null,\"function\":\"f\",\"is_async\":false,\"owner_kind\":\"function\"}\n{\"record\":\"node\",\"family\":\"df\",\"span\":{\"start\":46,\"end\":47},\"kind\":\"var_read\",\"name\":\"x\",\"function\":\"f\",\"is_async\":false,\"owner_kind\":\"function\"}\n{\"record\":\"edge\",\"family\":\"df\",\"kind\":\"direct\",\"from\":{\"start\":18,\"end\":27},\"from_kind\":\"param\",\"to\":{\"start\":46,\"end\":47},\"to_kind\":\"var_read\"}\n{\"record\":\"edge\",\"family\":\"df\",\"kind\":\"direct\",\"from\":{\"start\":46,\"end\":47},\"from_kind\":\"var_read\",\"to\":{\"start\":39,\"end\":48},\"to_kind\":\"ret\"}\n{\"record\":\"param\",\"family\":\"df\",\"span\":{\"start\":18,\"end\":27},\"pos\":0}\n",
+      "stderr": ""
+    }
+  },
+  "2_10_ScipFileEdges": {
+    "cli": {
+      "exit_code": 0,
+      "stdout": "{\"record\":\"file_edge\",\"src_path\":\"delta.ts\",\"dst_path\":\"epsilon.ts\",\"kind\":\"unknown\",\"symbols\":3}\n{\"record\":\"file_edge\",\"src_path\":\"gamma.ts\",\"dst_path\":\"alpha.ts\",\"kind\":\"unknown\",\"symbols\":2}\n",
+      "stderr": ""
+    },
+    "flag_required": false,
+    "reach": true,
+    "without": {
+      "exit_code": 0,
+      "stdout": "{\"record\":\"node\",\"family\":\"type\",\"span\":{\"start\":266,\"end\":311},\"kind\":\"function\",\"name\":\"use\"}\n{\"record\":\"node\",\"family\":\"call\",\"span\":{\"start\":266,\"end\":311},\"kind\":\"function\",\"name\":\"use\"}\n{\"record\":\"site\",\"family\":\"call\",\"span\":{\"start\":300,\"end\":306},\"callee\":\"helper\",\"callee_path\":null}\n{\"record\":\"specifier\",\"family\":\"call\",\"span\":{\"start\":233,\"end\":239},\"name\":\"helper\",\"kind\":\"named\",\"module\":\"./alpha\",\"imported\":null}\n{\"record\":\"node\",\"family\":\"df\",\"span\":{\"start\":293,\"end\":309},\"kind\":\"ret\",\"name\":null,\"function\":\"use\",\"is_async\":false,\"owner_kind\":\"function\"}\n{\"record\":\"node\",\"family\":\"df\",\"span\":{\"start\":300,\"end\":308},\"kind\":\"call_res\",\"name\":null,\"function\":\"use\",\"is_async\":false,\"owner_kind\":\"function\"}\n{\"record\":\"edge\",\"family\":\"df\",\"kind\":\"direct\",\"from\":{\"start\":300,\"end\":308},\"from_kind\":\"call_res\",\"to\":{\"start\":293,\"end\":309},\"to_kind\":\"ret\"}\n",
+      "stderr": ""
+    }
+  },
+  "2_11_DietFileEdges": {
+    "cli": {
+      "exit_code": 0,
+      "stdout": "{\"record\":\"file_edge\",\"src_path\":\"0_app.ts\",\"dst_path\":\"1_lib.ts\",\"kind\":\"named\",\"symbols\":1}\n{\"record\":\"file_unresolved\",\"src_path\":\"0_app.ts\",\"module\":\"missing\",\"reason\":\"node_modules_boundary\"}\n",
+      "stderr": ""
+    },
+    "flag_required": false,
+    "reach": true,
+    "without": {
+      "exit_code": 0,
+      "stdout": "{\"record\":\"node\",\"family\":\"call\",\"span\":{\"start\":0,\"end\":64},\"kind\":\"module\",\"name\":\"<module>\"}\n{\"record\":\"site\",\"family\":\"call\",\"span\":{\"start\":58,\"end\":59},\"callee\":\"f\",\"callee_path\":null}\n{\"record\":\"specifier\",\"family\":\"call\",\"span\":{\"start\":9,\"end\":10},\"name\":\"f\",\"kind\":\"named\",\"module\":\"./1_lib\",\"imported\":null}\n{\"record\":\"specifier\",\"family\":\"call\",\"span\":{\"start\":38,\"end\":39},\"name\":\"x\",\"kind\":\"named\",\"module\":\"missing\",\"imported\":null}\n{\"record\":\"node\",\"family\":\"df\",\"span\":{\"start\":60,\"end\":61},\"kind\":\"lit\",\"name\":null,\"function\":\"<top>\",\"is_async\":false,\"owner_kind\":\"top_level\"}\n{\"record\":\"node\",\"family\":\"df\",\"span\":{\"start\":58,\"end\":62},\"kind\":\"call_res\",\"name\":null,\"function\":\"<top>\",\"is_async\":false,\"owner_kind\":\"top_level\"}\n{\"record\":\"edge\",\"family\":\"df\",\"kind\":\"direct\",\"from\":{\"start\":60,\"end\":61},\"from_kind\":\"lit\",\"to\":{\"start\":58,\"end\":62},\"to_kind\":\"call_res\"}\n{\"record\":\"arg\",\"family\":\"df\",\"call\":{\"start\":58,\"end\":62},\"pos\":0,\"arg\":{\"start\":60,\"end\":61}}\n",
+      "stderr": ""
+    }
+  },
+  "2_12_DietFileUnresolved": {
+    "cli": {
+      "exit_code": 0,
+      "stdout": "{\"record\":\"file_unresolved\",\"src_path\":\"0_app.ts\",\"module\":\"./1_lib\",\"reason\":\"relative_unresolved\"}\n{\"record\":\"file_unresolved\",\"src_path\":\"0_app.ts\",\"module\":\"missing\",\"reason\":\"node_modules_boundary\"}\n",
+      "stderr": ""
+    },
+    "flag_required": false,
+    "reach": true,
+    "without": {
+      "exit_code": 0,
+      "stdout": "{\"record\":\"node\",\"family\":\"call\",\"span\":{\"start\":0,\"end\":64},\"kind\":\"module\",\"name\":\"<module>\"}\n{\"record\":\"site\",\"family\":\"call\",\"span\":{\"start\":58,\"end\":59},\"callee\":\"f\",\"callee_path\":null}\n{\"record\":\"specifier\",\"family\":\"call\",\"span\":{\"start\":9,\"end\":10},\"name\":\"f\",\"kind\":\"named\",\"module\":\"./1_lib\",\"imported\":null}\n{\"record\":\"specifier\",\"family\":\"call\",\"span\":{\"start\":38,\"end\":39},\"name\":\"x\",\"kind\":\"named\",\"module\":\"missing\",\"imported\":null}\n{\"record\":\"node\",\"family\":\"df\",\"span\":{\"start\":60,\"end\":61},\"kind\":\"lit\",\"name\":null,\"function\":\"<top>\",\"is_async\":false,\"owner_kind\":\"top_level\"}\n{\"record\":\"node\",\"family\":\"df\",\"span\":{\"start\":58,\"end\":62},\"kind\":\"call_res\",\"name\":null,\"function\":\"<top>\",\"is_async\":false,\"owner_kind\":\"top_level\"}\n{\"record\":\"edge\",\"family\":\"df\",\"kind\":\"direct\",\"from\":{\"start\":60,\"end\":61},\"from_kind\":\"lit\",\"to\":{\"start\":58,\"end\":62},\"to_kind\":\"call_res\"}\n{\"record\":\"arg\",\"family\":\"df\",\"call\":{\"start\":58,\"end\":62},\"pos\":0,\"arg\":{\"start\":60,\"end\":61}}\n",
+      "stderr": ""
+    }
+  },
+  "2_13_PackageEdges": {
+    "cli": {
+      "exit_code": 0,
+      "stdout": "{\"record\":\"package_edge\",\"src_manifest\":\"crates/alpha/Cargo.toml\",\"dst_manifest\":\"crates/beta/Cargo.toml\",\"kind\":\"normal\"}\n",
+      "stderr": ""
+    },
+    "flag_required": false,
+    "reach": true,
+    "without": {
+      "exit_code": 0,
+      "stdout": "{\"record\":\"file_unresolved\",\"src_path\":\"app.ts\",\"module\":\"./gone.ts\",\"reason\":\"relative_unresolved\"}\n{\"record\":\"file_unresolved\",\"src_path\":\"app.ts\",\"module\":\"./lib/bare\",\"reason\":\"relative_unresolved\"}\n{\"record\":\"file_unresolved\",\"src_path\":\"app.ts\",\"module\":\"./lib/helper.js\",\"reason\":\"relative_unresolved\"}\n{\"record\":\"file_unresolved\",\"src_path\":\"app.ts\",\"module\":\"./lib/util.ts\",\"reason\":\"relative_unresolved\"}\n{\"record\":\"file_unresolved\",\"src_path\":\"app.ts\",\"module\":\"./side.ts\",\"reason\":\"relative_unresolved\"}\n{\"record\":\"file_unresolved\",\"src_path\":\"app.ts\",\"module\":\"./widget\",\"reason\":\"relative_unresolved\"}\n{\"record\":\"file_unresolved\",\"src_path\":\"app.ts\",\"module\":\"/lib/util.ts\",\"reason\":\"absolute_path\"}\n{\"record\":\"file_unresolved\",\"src_path\":\"app.ts\",\"module\":\"@app/mapped\",\"reason\":\"node_modules_boundary\"}\n{\"record\":\"file_unresolved\",\"src_path\":\"app.ts\",\"module\":\"rxjs\",\"reason\":\"node_modules_boundary\"}\n",
+      "stderr": ""
+    }
+  },
+  "2_14_FlattenProjectType": {
+    "library_only": {
+      "reason": "the span-and-blob project-edge shape predates the flat-fields rule for host decoding. The CLI carries the same edges as record=resolved_type_edge with paths and names, which a line-oriented consumer can decode without a span join; flatten_project_type stays for golden_parity's normalize."
+    }
+  }
+}

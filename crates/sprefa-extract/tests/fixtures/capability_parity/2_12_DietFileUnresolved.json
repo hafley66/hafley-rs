@@ -1,0 +1,60 @@
+{
+  "steps": [
+    {
+      "action": "run",
+      "name": "cli",
+      "arguments": [
+        "--deps",
+        "--root",
+        "tests/fixtures/capability_parity/inputs/3_deps",
+        "tests/fixtures/capability_parity/inputs/3_deps/0_app.ts"
+      ],
+      "expect_exit_code": 0,
+      "raw_stdout": true,
+      "stdout_redactions": [
+        {
+          "pattern": ",\"(?:index_mtime_unix_ms|staleness|reused)\":(?:[0-9]+|\"(?:[^\"\\\\]|\\\\.)*\"|true|false)",
+          "replacement": ""
+        }
+      ]
+    },
+    {
+      "action": "claim",
+      "name": "reach",
+      "kind": "line_matches",
+      "cell": "cli",
+      "texts": [
+        "\"record\":\"file_unresolved\""
+      ]
+    },
+    {
+      "action": "run",
+      "name": "without",
+      "arguments": [
+        "tests/fixtures/capability_parity/inputs/3_deps/0_app.ts"
+      ],
+      "expect_exit_code": 0,
+      "raw_stdout": true,
+      "stdout_redactions": [
+        {
+          "pattern": ",\"(?:index_mtime_unix_ms|staleness|reused)\":(?:[0-9]+|\"(?:[^\"\\\\]|\\\\.)*\"|true|false)",
+          "replacement": ""
+        }
+      ]
+    },
+    {
+      "action": "claim",
+      "name": "flag_required",
+      "kind": "no_line_matches",
+      "cell": "without",
+      "texts": [
+        "\"record\":\"file_unresolved\""
+      ]
+    }
+  ],
+  "unasserted_index_fields": [
+    "index_mtime_unix_ms",
+    "staleness",
+    "reused"
+  ]
+}

@@ -1,0 +1,1 @@
+model F { x: string; }

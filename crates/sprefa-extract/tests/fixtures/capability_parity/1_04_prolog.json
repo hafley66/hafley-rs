@@ -1,0 +1,31 @@
+{
+  "steps": [
+    {
+      "action": "api",
+      "name": "library",
+      "api": "dispatch",
+      "path": "tests/fixtures/capability_parity/inputs/0_roster/4_prolog.pl",
+      "source": "prolog",
+      "raw_stdout": true
+    },
+    {
+      "action": "run",
+      "name": "cli",
+      "arguments": [
+        "--kinds",
+        "cst,type,call,df,data",
+        "tests/fixtures/capability_parity/inputs/0_roster/4_prolog.pl"
+      ],
+      "expect_exit_code": 0,
+      "raw_stdout": true
+    },
+    {
+      "action": "claim",
+      "name": "same_stream",
+      "kind": "cells_equal",
+      "left": "library.stdout",
+      "right": "cli.stdout",
+      "sort_lines": true
+    }
+  ]
+}

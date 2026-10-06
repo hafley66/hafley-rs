@@ -1,0 +1,63 @@
+{
+  "steps": [
+    {
+      "action": "run",
+      "name": "cli",
+      "arguments": [
+        "--resolve",
+        "--arms",
+        "type",
+        "tests/fixtures/capability_parity/inputs/1_resolve/0_owner.ts",
+        "tests/fixtures/capability_parity/inputs/1_resolve/1_item.ts"
+      ],
+      "expect_exit_code": 0,
+      "raw_stdout": true,
+      "stdout_redactions": [
+        {
+          "pattern": ",\"(?:index_mtime_unix_ms|staleness|reused)\":(?:[0-9]+|\"(?:[^\"\\\\]|\\\\.)*\"|true|false)",
+          "replacement": ""
+        }
+      ]
+    },
+    {
+      "action": "claim",
+      "name": "reach",
+      "kind": "line_matches",
+      "cell": "cli",
+      "texts": [
+        "\"record\":\"resolved_type_edge\""
+      ]
+    },
+    {
+      "action": "run",
+      "name": "without",
+      "arguments": [
+        "--resolve",
+        "tests/fixtures/capability_parity/inputs/1_resolve/0_owner.ts",
+        "tests/fixtures/capability_parity/inputs/1_resolve/1_item.ts"
+      ],
+      "expect_exit_code": 0,
+      "raw_stdout": true,
+      "stdout_redactions": [
+        {
+          "pattern": ",\"(?:index_mtime_unix_ms|staleness|reused)\":(?:[0-9]+|\"(?:[^\"\\\\]|\\\\.)*\"|true|false)",
+          "replacement": ""
+        }
+      ]
+    },
+    {
+      "action": "claim",
+      "name": "flag_required",
+      "kind": "no_line_matches",
+      "cell": "without",
+      "texts": [
+        "\"record\":\"resolved_type_edge\""
+      ]
+    }
+  ],
+  "unasserted_index_fields": [
+    "index_mtime_unix_ms",
+    "staleness",
+    "reused"
+  ]
+}

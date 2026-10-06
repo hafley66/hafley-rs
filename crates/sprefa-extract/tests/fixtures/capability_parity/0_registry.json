@@ -1,0 +1,51 @@
+{
+  "steps": [
+    {
+      "action": "api",
+      "name": "registries",
+      "api": "registry"
+    },
+    {
+      "action": "api",
+      "name": "source_roster",
+      "api": "roster",
+      "fixtures": {
+        "ts": "tests/fixtures/capability_parity/inputs/0_roster/0_ts.ts",
+        "rust": "tests/fixtures/capability_parity/inputs/0_roster/1_rust.rs",
+        "go": "tests/fixtures/capability_parity/inputs/0_roster/2_go.go",
+        "kotlin": "tests/fixtures/capability_parity/inputs/0_roster/3_kotlin.kt",
+        "prolog": "tests/fixtures/capability_parity/inputs/0_roster/4_prolog.pl",
+        "python": "tests/fixtures/capability_parity/inputs/0_roster/5_python.py",
+        "markdown": "tests/fixtures/capability_parity/inputs/0_roster/6_markdown.md",
+        "gdscript": "tests/fixtures/capability_parity/inputs/0_roster/7_gdscript.gd",
+        "commonlisp": "tests/fixtures/capability_parity/inputs/0_roster/8_commonlisp.lisp",
+        "typespec": "tests/fixtures/capability_parity/inputs/0_roster/9_typespec.tsp",
+        "data": "tests/fixtures/capability_parity/inputs/0_roster/10_data.json",
+        "fallback": "tests/fixtures/capability_parity/inputs/0_roster/11_fallback.html"
+      }
+    },
+    {
+      "action": "api",
+      "name": "declared",
+      "api": "declared_capabilities"
+    },
+    {
+      "action": "run",
+      "name": "matrix",
+      "arguments": [
+        "capabilities"
+      ],
+      "expect_exit_code": 0,
+      "raw_stdout": true
+    },
+    {
+      "action": "run",
+      "name": "help",
+      "arguments": [
+        "--help"
+      ],
+      "expect_exit_code": 0,
+      "raw_stdout": true
+    }
+  ]
+}
