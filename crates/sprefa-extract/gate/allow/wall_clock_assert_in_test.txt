@@ -8,7 +8,7 @@ crates/boop/tests/sync_convoy.rs	item::<file-scope>	2
 crates/hafley-observe/tests/oh_testkit.rs	item::<file-scope>	2
 crates/sprefa-extract/tests/118_python_call_grind.rs	item::<file-scope>	2
 crates/sprefa-extract/tests/182_client_daemon.rs	item::<file-scope>	2
-crates/sprefa-extract/tests/186_quality_gate.rs	item::<file-scope>	1
+crates/sprefa-extract/tests/186_quality_gate.rs	item::<file-scope>	2
 crates/sprefa-extract/tests/29_data_family.rs	item::<file-scope>	1
 crates/sprefa-extract/tests/34_prolog_corpus_throughput.rs	item::<file-scope>	1
 crates/sprefa-extract/tests/45_emit_throughput.rs	item::<file-scope>	1

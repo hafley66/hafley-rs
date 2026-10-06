@@ -49,6 +49,37 @@ fn run(rust: &str, query: &str, extra: &[&str]) -> String {
     String::from_utf8(output.stdout).unwrap().replace(&source.display().to_string(), "fixture.rs")
 }
 
+/// Rust's if_expression and TS's call_expression can occupy exactly their
+/// expression_statement parent's span. An ancestor must still be a distinct node.
+#[test]
+fn equal_span_nodes_have_distinct_ancestor_identities() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut actual = Vec::new();
+    for (extension, source, kind) in [
+        ("rs", "fn f(){if true {fn shared(){}}}", "if_expression"),
+        ("ts", "function f(){g()}", "call_expression"),
+    ] {
+        let file = dir.path().join(format!("fixture.{extension}"));
+        let scm = dir.path().join("query.scm");
+        std::fs::write(&file, source).unwrap();
+        std::fs::write(&scm, format!(
+            "(({kind}) @child (#has-ancestor? @child ((expression_statement) @parent) rows: each) (#not-has-ancestor? @child {kind}))"
+        )).unwrap();
+        let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
+            .args(["query", "--timeout", "10", "--scmpp"])
+            .arg(&scm)
+            .arg(&file)
+            .env("DL_TRAIL", "0")
+            .output().unwrap();
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+        actual.push(String::from_utf8(output.stdout).unwrap()
+            .replace(&format!("{}/", dir.path().display()), ""));
+    }
+    assert_eq!(actual.join(""), r#"{"path":"fixture.rs","child__start":7,"child__end":30,"child__text":"if true {fn shared(){}}","parent__start":7,"parent__end":30,"parent__text":"if true {fn shared(){}}"}
+{"path":"fixture.ts","child__start":13,"child__end":16,"child__text":"g()","parent__start":13,"parent__end":16,"parent__text":"g()"}
+"#);
+}
+
 /// One line per row: every `NAME__text` column as `NAME=text`, whitespace collapsed.
 fn rows(query: &str) -> String {
     run(RUST, query, &[])

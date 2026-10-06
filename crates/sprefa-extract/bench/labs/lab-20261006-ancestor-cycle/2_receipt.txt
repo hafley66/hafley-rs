@@ -1,0 +1,42 @@
+Ancestor-cycle regression, base 30722bd8 (origin/main), 2026-10-06
+
+The scm++ compiler already keys captures by (file, preorder index), joining
+pre/last ranges without recursion since ea5d5ea1. The recursive span walk in
+gate/free_fn_name_in_three_files.sql was the remaining UNION ALL implementation.
+It now uses UNION: the visited key is the entire finite ancestor tuple, including
+the candidate function span, path, ancestor span, and ancestor kind.
+The helper move in 30722bd8 is unchanged.
+
+Fail-first command, sprefa-extract workspace:
+  cargo test --features cli --test all equal_span -- --nocapture
+Result before the SQL change: 1 passed, 1 failed, 1044 filtered out.
+  t_194_scmpp_rows::equal_span_nodes_have_distinct_ancestor_identities: passed
+  t_186_quality_gate::sqlite_rule_terminates_on_equal_span_ancestors: failed
+  quality gate ancestor walk exceeded 10s on equal-span nodes
+
+The gate fixture contains a nested helper in an if expression/statement with
+equal spans, reproducing the pre-30722bd8 ancestry. Snapshot: outer and shared
+in each of three files. Impl and trait methods named shared are excluded.
+The Rust/TS scm++ snapshots show different ancestor identities at equal spans
+and verify that a node does not count as its own ancestor. CLI SQL budget: 10s.
+The gate test kills and reaps sqlite3 after an external 10s deadline.
+The timing allowlist adds this explicit termination deadline to the existing
+186_quality_gate.rs allowance.
+After the SQL change: the same equal_span command passes both tests, with
+1044 filtered out, in 0.12s. scripts/quality-gate.sh also exits 0.
+
+Stress commands:
+  python3 0_measure.py BINARY LABEL RUST_CORPUS TS_CORPUS
+Queries are imported from the 2026-10-02 lab, with one run per case and label.
+Rust: frozen copy of this worktree's crates/*.rs, 1504 files.
+TS: git archive 2145cb14b2574f4c77cae5429ff89b1cdb55ab6b packages, 1519 files.
+Both labels use identical frozen corpora; digests are in 1_results.tsv.
+Before binary: prepared cache binary, copied before the fail-first build.
+After binary: rebuilt from this checkout for the regression tests. The scm++
+compiler and store code are unchanged. No performance change is claimed.
+Concurrent builds were present during measurements. Timings are single runs.
+
+Nine cases agree on exit status, row count, and normalized row SHA-256.
+Six corpus cases complete, as does deep5_first. Deep20_first and deep5_each
+reach the 10s SQL budget in both labels. Those timeouts return no result rows;
+they establish matching timeout behavior, not full answer equivalence.

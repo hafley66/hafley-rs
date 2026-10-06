@@ -132,6 +132,54 @@ fn sqlite_rule_counts_function_names_across_three_files() {
     }
 }
 
+/// The pre-30722bd8 shape: a nested helper inside an if whose expression and
+/// statement share a span. The gate's ancestor walk must finish and count it.
+#[test]
+fn sqlite_rule_terminates_on_equal_span_ancestors() {
+    let temp = tempfile::tempdir().unwrap();
+    let mut sources = Vec::new();
+    for name in ["one.rs", "two.rs", "three.rs"] {
+        let source = temp.path().join(name);
+        std::fs::write(&source, concat!(
+            "fn outer(){if true {fn shared(){}}}",
+            "struct S; impl S{fn shared(){}} trait T{fn shared(){}}"
+        )).unwrap();
+        sources.push(source);
+    }
+    let database = temp.path().join("facts.db");
+    let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
+        .args(["fast", "--sqlite"])
+        .arg(&database)
+        .args(&sources)
+        .env("DL_TRAIL", "0")
+        .output().unwrap();
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let mut child = Command::new("sqlite3")
+        .args(["-tabs", "-noheader"])
+        .arg(&database)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn().unwrap();
+    child.stdin.take().unwrap().write_all(include_bytes!(
+        "../gate/free_fn_name_in_three_files.sql"
+    )).unwrap();
+    let started = std::time::Instant::now();
+    while child.try_wait().unwrap().is_none() {
+        if started.elapsed() >= std::time::Duration::from_secs(10) {
+            child.kill().unwrap();
+            child.wait().unwrap();
+            panic!("quality gate ancestor walk exceeded 10s on equal-span nodes");
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    let output = child.wait_with_output().unwrap();
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let rows = String::from_utf8(output.stdout).unwrap()
+        .replace(&format!("{}/", temp.path().display()), "");
+    assert_eq!(rows, "one.rs\touter\t0\none.rs\tshared\t20\nthree.rs\touter\t0\nthree.rs\tshared\t20\ntwo.rs\touter\t0\ntwo.rs\tshared\t20\n");
+}
+
 #[test]
 fn repository_quality_gate_matches_its_allowlists() {
     let script = concat!(env!("CARGO_MANIFEST_DIR"), "/scripts/quality-gate.sh");

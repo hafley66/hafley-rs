@@ -22,7 +22,9 @@ WITH RECURSIVE candidates AS MATERIALIZED (
    AND p.family = 'cst'
    AND p.span__start = e.from__start
    AND p.span__end = e.from__end
-  UNION ALL
+  -- Equal-span CST nodes can revisit the same state. Deduplicate the visited
+  -- (path, function span, ancestor span, kind) tuple to bound the walk.
+  UNION
   SELECT a.path, a.fn_start, a.fn_end, p.span__start, p.span__end, p.kind
   FROM ancestors AS a
   JOIN edge AS e
