@@ -63,6 +63,9 @@ hafley-observe = { path = "../hafley-observe", optional = true }
 libc = { version = "0.2", optional = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"], optional = true }
 # `rust-checker`: rust-analyzer's name resolution and inference.
+ra_ap_hir_ty = { version = "=0.0.352", optional = true }
+ra_ap_hir_def = { version = "=0.0.352", optional = true }
+ra-ap-rustc_type_ir = { version = "=0.166.0", optional = true }
 ra_ap_hir = { version = "0.0.352", optional = true }
 ra_ap_ide = { version = "0.0.352", optional = true }
 ra_ap_ide_db = { version = "0.0.352", optional = true }
@@ -121,6 +124,9 @@ cli = ["shared", "dep:hafley-observe", "dep:libc", "dep:tracing-subscriber"]
 rust-checker = [
     "shared", "rust",
     "dep:ra_ap_hir",
+    "dep:ra_ap_hir_ty",
+    "dep:ra_ap_hir_def",
+    "dep:ra-ap-rustc_type_ir",
     "dep:ra_ap_ide",
     "dep:ra_ap_ide_db",
     "dep:ra_ap_cfg",

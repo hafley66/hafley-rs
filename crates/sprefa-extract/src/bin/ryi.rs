@@ -69,7 +69,10 @@ mod revision;
 #[path = "ryi/0b_deadline.rs"]
 mod deadline;
 
-use cli::{Cmd, FastArgs, FileArgs, IngestArgs, Ryi, ScipArgs, SlowArgs};
+use cli::{Cmd, FileArgs, IngestArgs, Ryi, ScipArgs, SlowArgs};
+#[path = "ryi/0_fast_receivers.rs"]
+mod fast_receivers;
+use fast_receivers::file_args_from_fast;
 
 #[path = "ryi/1_inputs.rs"]
 mod inputs;
@@ -109,14 +112,6 @@ mod cleave;
 #[path = "../edit/_7a_cleave_fields.rs"]
 mod cleave_fields;
 
-fn file_args_from_fast(fast: FastArgs) -> FileArgs {
-    FileArgs {
-        inputs: fast.inputs,
-        sqlite: fast.sqlite,
-        lines: fast.lines,
-        ..FileArgs::default()
-    }
-}
 
 /// What the parsed command runs: per-file extraction (or a root-flag mode),
 /// or the syntax-only whole-project pass.
@@ -555,6 +550,7 @@ fn parse_cli() -> Ryi {
 }
 
 fn run(ryi: Ryi) -> Result<(), Box<dyn std::error::Error>> {
+    let _receivers = fast_receivers::scoped_policy(&ryi).map_err(|error| RyiExit::new(2, error))?;
     let home = std::env::var_os("HOME").map(PathBuf::from);
     if let Some(format) = ryi.file.format.as_deref() {
         if format != "jsonl" {
@@ -717,6 +713,7 @@ fn run_verb(
     mut writer: Box<dyn Write + Send>,
     cancelled: Option<Arc<AtomicBool>>,
 ) -> RyiResult<()> {
+    let _receivers = fast_receivers::scoped_policy(&ryi).map_err(|error| RyiExit::new(2, error))?;
     let home = std::env::var_os("HOME").map(PathBuf::from);
     let result: Result<(), Box<dyn std::error::Error>> = match ryi.cmd {
         None => run_file_verb(ryi.file, Tier::Files, writer),

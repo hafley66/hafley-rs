@@ -6,6 +6,9 @@ use crate::models::inputs::Inputs;
 
 #[derive(Debug, Clone, Serialize, Deserialize, clap::Args, Default)]
 pub struct FileArgs {
+  #[doc = "Resolve written receiver types in fast mode"]
+  #[arg(long, value_name = "written")]
+  pub fast_receivers: Option<String>,
   #[command(flatten)]
   #[serde(flatten)]
   pub inputs: Inputs,

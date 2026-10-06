@@ -35,6 +35,11 @@ pub use names::{
     all_module_places, dependency_places, module_places, resolve_method, resolve_path, resolve_path_at,
     resolve_prefix, scope_names, scope_names_at, Abstain, DefPlace, NamesHost,
 };
+#[path = "8i_rust_declared_types.rs"]
+mod declared_types;
+#[path = "8j_rust_written_receivers.rs"]
+mod written_receivers;
+pub use written_receivers::resolve_written_method;
 #[path = "8f_rust_checker_body_edges.rs"]
 mod body_edges;
 pub use body_edges::{BodyEdge, BodyEdges, EdgeKind, WalkNode, WalkSession};

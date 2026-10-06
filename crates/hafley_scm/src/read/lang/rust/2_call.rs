@@ -158,8 +158,7 @@ impl Resolve<CallF> for RustSource {
                 .receivers
                 .iter()
                 .any(|receiver| receiver.call_site == site.span);
-            let name_t = (!method)
-                .then(|| {
+            let name_t = (|| {
                     let from = own_path?;
                     let modules = modules?;
                     let written = site
@@ -169,22 +168,23 @@ impl Resolve<CallF> for RustSource {
                     let segments = written.split("::").map(str::to_string).collect::<Vec<_>>();
                     let (name, qualifier) = segments.split_last()?;
                     let _ = (name, qualifier);
-                    let bound = modules
-                        .binding_at(from, &segments, Some(site.span.start), FamilyTag::Call)
-                        .ok()?;
+                    let bound = if method {
+                        modules.method_binding_at(from, callee, site.span.start)
+                    } else {
+                        modules.binding_at(from, &segments, Some(site.span.start), FamilyTag::Call)
+                    }.ok()?;
                     bound.target_name?;
                     Some((
                         bound.target_blob,
                         bound.target_span,
-                        if segments.len() == 1 && bound.target_path != from && bound.kind != crate::read::lang::rust_module_facts::ResolvedImportKind::Star {
+                        if !method && segments.len() == 1 && bound.target_path != from && bound.kind != crate::read::lang::rust_module_facts::ResolvedImportKind::Star {
                             CallEdgeKind::ImportResolve
                         } else {
                             CallEdgeKind::NameResolve
                         },
                         ResolutionOrigin::ModulePlane,
                     ))
-                })
-                .flatten();
+                })();
             let callable = |blob: &ContentId, span: Span| {
                 !modules.is_some_and(|m| m.is_collapsed(blob, span) || m.is_alias(blob, span))
             };

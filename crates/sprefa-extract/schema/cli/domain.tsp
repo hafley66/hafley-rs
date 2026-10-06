@@ -33,6 +33,8 @@ model Inputs {
 }
 
 model FileArgs {
+  /** Resolve written receiver types in fast mode */
+  @valueName("written") fast_receivers?: string;
   inputs: Inputs;
   @hidden @global format?: string;
   @skip paths: path[];

@@ -369,7 +369,7 @@ fn ambiguous_glob(
 
 /// Inherent associated items come from RA's indexed impl lookup. This lowers
 /// declared type heads, without querying inference for the caller's body.
-fn associated_defs(
+pub(super) fn associated_defs(
     db: &RootDatabase,
     from: Module,
     head: PathResolution<'_>,
@@ -425,7 +425,8 @@ fn associated_defs(
         for item in &mut items {
             if let (AssocItem::Function(function), Some(trait_)) = (*item, item.container_trait(db))
             {
-                if trait_.type_or_const_param_count(db, false) == 0 {
+                if trait_.type_or_const_param_count(db, false) == 0
+                    && ra_ap_hir::GenericDef::Trait(trait_).lifetime_params(db).is_empty() {
                     if let Some(implementation) = Semantics::new(db).resolve_trait_impl_method(
                         ty.clone(),
                         trait_,

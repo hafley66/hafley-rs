@@ -6,6 +6,7 @@ Arguments:
   [PATH]...  Files, directories, or globs; - reads a path list from stdin
 
 Options:
+      --fast-receivers <written>    Resolve written receiver types in fast mode
       --pattern <GLOB>              Keep files matching GLOB under each directory input; repeatable
       --entry <FILE>                Run on the files FILE reaches over imports (universe: the PATH inputs, else FILE's project)
       --depth <N>                   Import hops from --entry

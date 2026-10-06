@@ -16,6 +16,7 @@ use crate::span::Span;
 #[derive(Default)]
 pub struct RustNamesIndex {
     pub context_failures: Vec<(String, String, String)>,
+    receivers: super::fast_receivers::FastReceivers,
     facts: HashMap<String, RustModuleFacts>,
     blobs: HashMap<String, ContentId>,
     paths: HashMap<PathBuf, String>,
@@ -64,6 +65,7 @@ impl RustNamesIndex {
             .map(|(path, _)| (path.clone(), absolute(path)))
             .collect();
         let mut index = Self {
+            receivers: super::fast_receivers::FastReceivers::current(),
             facts: files.into_iter().collect(),
             blobs: corpus.iter().cloned().collect(),
             paths: corpus
@@ -410,7 +412,6 @@ impl RustNamesIndex {
         #[cfg(feature = "rust-checker")]
         {
             let host = self.hosts.get(from).ok_or(UnresolvedReason::NoCorpusDef)?;
-            let name = path.last().ok_or(UnresolvedReason::NoCorpusDef)?;
             let destinations = super::rust_checker::resolve_path_at(
                 host,
                 &self
@@ -427,79 +428,125 @@ impl RustNamesIndex {
                 super::rust_checker::Abstain::UnresolvedPath => UnresolvedReason::NoCorpusDef,
                 super::rust_checker::Abstain::Ambiguous => UnresolvedReason::Ambiguous,
             })?;
-            let mut joined = Vec::new();
-            for def in destinations {
-                let Some(target_path) = self.paths.get(&def.file) else {
-                    continue;
-                };
-                let Some(blob) = self.blobs.get(target_path) else {
-                    continue;
-                };
-                let span = if def.module {
-                    Span::anchor(0)
-                } else {
-                    let blobs = HashMap::from([(
-                        def.file.to_str().ok_or(UnresolvedReason::NoCorpusDef)?,
-                        blob,
-                    )]);
-                    match super::answer_of(
-                        (
-                            def.file.to_str().ok_or(UnresolvedReason::NoCorpusDef)?,
-                            &def.name,
-                            def.start,
-                        ),
-                        if family == crate::read::shape::FamilyTag::Type {
-                            &[crate::read::shape::FamilyTag::Type]
-                        } else {
-                            super::CALL_FACETS
-                        },
-                        &blobs,
-                        &self.defs,
-                    ) {
-                        Some(super::CheckerAnswer::Corpus(_, span)) => span,
-                        _ => continue,
-                    }
-                };
-                joined.push(ResolvedImport {
-                    local: name.to_string(),
-                    name: if def.module {
-                        "*".into()
-                    } else {
-                        name.to_string()
-                    },
-                    target_path: target_path.clone(),
-                    target_blob: blob.clone(),
-                    target_span: span,
-                    target_name: (!def.module).then_some(def.name),
-                    kind: if def.module {
-                        ResolvedImportKind::Namespace
-                    } else if path.len() == 1
-                        && target_path != from
-                        && !self.facts.get(from).is_some_and(|facts| {
-                            facts.uses.iter().any(|binding| binding.local == path[0])
-                        })
-                    {
-                        ResolvedImportKind::Star
-                    } else {
-                        ResolvedImportKind::Local
-                    },
-                    hops: 0,
-                });
-            }
-            joined.sort_by(|a, b| {
-                (&a.target_path, a.target_span).cmp(&(&b.target_path, b.target_span))
-            });
-            joined.dedup();
-            match joined.as_slice() {
-                [one] => Ok(one.clone()),
-                [] => Err(UnresolvedReason::NoCorpusDef),
-                _ => Err(UnresolvedReason::Ambiguous),
-            }
+            self.join_destinations(from, path, family, destinations)
         }
         #[cfg(not(feature = "rust-checker"))]
         {
             let _ = (from, path, offset, family);
             Err(UnresolvedReason::NoCorpusDef)
+        }
+    }
+
+    pub fn method_binding_at(
+        &self,
+        from: &str,
+        method: &str,
+        offset: u32,
+    ) -> Result<ResolvedImport, UnresolvedReason> {
+        if self.receivers != super::fast_receivers::FastReceivers::Written {
+            return Err(UnresolvedReason::NeedsTypes);
+        }
+        #[cfg(feature = "rust-checker")]
+        {
+            let host = self.hosts.get(from).ok_or(UnresolvedReason::NeedsTypes)?;
+            let file = self
+                .source_paths
+                .get(from)
+                .cloned()
+                .unwrap_or_else(|| absolute(from));
+            let destinations =
+                super::rust_checker::resolve_written_method(host, &file, offset, method)
+                    .map_err(|_| UnresolvedReason::NeedsTypes)?;
+            self.join_destinations(
+                from,
+                &[method.to_string()],
+                crate::read::shape::FamilyTag::Call,
+                destinations,
+            )
+            .map_err(|_| UnresolvedReason::NeedsTypes)
+        }
+        #[cfg(not(feature = "rust-checker"))]
+        {
+            let _ = (from, method, offset);
+            Err(UnresolvedReason::NeedsTypes)
+        }
+    }
+
+    #[cfg(feature = "rust-checker")]
+    fn join_destinations(
+        &self,
+        from: &str,
+        path: &[String],
+        family: crate::read::shape::FamilyTag,
+        destinations: Vec<super::rust_checker::DefPlace>,
+    ) -> Result<ResolvedImport, UnresolvedReason> {
+        let name = path.last().ok_or(UnresolvedReason::NoCorpusDef)?;
+        let mut joined = Vec::new();
+        for def in destinations {
+            let Some(target_path) = self.paths.get(&def.file) else {
+                continue;
+            };
+            let Some(blob) = self.blobs.get(target_path) else {
+                continue;
+            };
+            let span = if def.module {
+                Span::anchor(0)
+            } else {
+                let blobs = HashMap::from([(
+                    def.file.to_str().ok_or(UnresolvedReason::NoCorpusDef)?,
+                    blob,
+                )]);
+                match super::answer_of(
+                    (
+                        def.file.to_str().ok_or(UnresolvedReason::NoCorpusDef)?,
+                        &def.name,
+                        def.start,
+                    ),
+                    if family == crate::read::shape::FamilyTag::Type {
+                        &[crate::read::shape::FamilyTag::Type]
+                    } else {
+                        super::CALL_FACETS
+                    },
+                    &blobs,
+                    &self.defs,
+                ) {
+                    Some(super::CheckerAnswer::Corpus(_, span)) => span,
+                    _ => continue,
+                }
+            };
+            joined.push(ResolvedImport {
+                local: name.to_string(),
+                name: if def.module {
+                    "*".into()
+                } else {
+                    name.to_string()
+                },
+                target_path: target_path.clone(),
+                target_blob: blob.clone(),
+                target_span: span,
+                target_name: (!def.module).then_some(def.name),
+                kind: if def.module {
+                    ResolvedImportKind::Namespace
+                } else if path.len() == 1
+                    && target_path != from
+                    && !self.facts.get(from).is_some_and(|facts| {
+                        facts.uses.iter().any(|binding| binding.local == path[0])
+                    })
+                {
+                    ResolvedImportKind::Star
+                } else {
+                    ResolvedImportKind::Local
+                },
+                hops: 0,
+            });
+        }
+        joined
+            .sort_by(|a, b| (&a.target_path, a.target_span).cmp(&(&b.target_path, b.target_span)));
+        joined.dedup();
+        match joined.as_slice() {
+            [one] => Ok(one.clone()),
+            [] => Err(UnresolvedReason::NoCorpusDef),
+            _ => Err(UnresolvedReason::Ambiguous),
         }
     }
 

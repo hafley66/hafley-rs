@@ -285,3 +285,6 @@ pub fn source_for(path: &str) -> Option<&'static dyn Source> {
 
 #[path = "9_rust_names_index.rs"]
 pub mod rust_names_index;
+
+#[path = "0_fast_receivers.rs"]
+pub mod fast_receivers;

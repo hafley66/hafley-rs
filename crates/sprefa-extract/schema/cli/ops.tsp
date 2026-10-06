@@ -27,6 +27,8 @@ op extract(args: FileArgs, @bodyRoot input: RawByteStream): JsonlStream<jsonValu
 
 /** Syntax-only whole-project facts (no compiler) */
 op fast(
+  /** Resolve written receiver types in fast mode */
+  @valueName("written") fast_receivers?: string,
   ...Inputs,
   @bodyRoot input: RawByteStream,
 
@@ -97,6 +99,8 @@ op scip(
 /** Ask one question of the resolved call/type graph */
 @requiredOneOf(#["callers", "uses", "from", "call_path", "type_path", "flow_path", "slice"], "arm")
 op graph(
+  /** Resolve written receiver types in fast mode */
+  @valueName("written") fast_receivers?: string,
   ...Inputs,
   @bodyRoot input: RawByteStream,
 

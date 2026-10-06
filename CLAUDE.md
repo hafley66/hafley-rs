@@ -42,7 +42,8 @@
   the default `cli` build.
 - Rust uses one rust-analyzer module-place provider for graph, rename, cleave and move.
   Names loads workspace module maps without caller-body inference; Types adds inference.
-  Method calls abstain `needs_types` in Names. No edit arm keeps its own module or `#[path]` reader.
+  Method calls default to `needs_types` in Names. `RYI_FAST_RECEIVERS=written` or
+  `--fast-receivers written` opts into RA-lowered written receiver types without body inference. No edit arm keeps its own module or `#[path]` reader.
 - Code stays tight and legible (user-set 2026-09-28). New work goes in a new small numbered file.
   Never grow a large file (over ~1000 lines) with new work; split it when you touch it.
 - hafley-observe is the single home for tracing, profiling and memory instrumentation (user-set 2026-09-29).

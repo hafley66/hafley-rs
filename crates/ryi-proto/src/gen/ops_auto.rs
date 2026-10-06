@@ -32,6 +32,9 @@ pub struct ExtractArgs {
 
 #[derive(clap::Args, Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct FastArgs {
+  #[doc = "Resolve written receiver types in fast mode"]
+  #[arg(long, value_name = "written")]
+  pub fast_receivers: Option<String>,
   #[command(flatten)]
   #[serde(flatten)]
   pub inputs: Inputs,
@@ -112,6 +115,9 @@ pub struct ScipArgs {
 #[derive(clap::Args, Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[command(group(clap::ArgGroup::new("arm").required(true).args(["callers", "uses", "from", "call_path", "type_path", "flow_path", "slice"])))]
 pub struct GraphArgs {
+  #[doc = "Resolve written receiver types in fast mode"]
+  #[arg(long, value_name = "written")]
+  pub fast_receivers: Option<String>,
   #[command(flatten)]
   #[serde(flatten)]
   pub inputs: Inputs,

@@ -7,3 +7,6 @@ impl Defs {
         self.v.push(x)
     }
 }
+
+#[path = "use.rs"]
+pub mod use_site;

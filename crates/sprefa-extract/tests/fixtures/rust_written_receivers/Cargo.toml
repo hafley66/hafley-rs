@@ -1,7 +1,5 @@
 [package]
-name = "names_untyped_receiver"
+name = "written_receiver_contracts"
 version = "0.0.0"
 edition = "2021"
-[lib]
-path = "lib.rs"
 [workspace]
