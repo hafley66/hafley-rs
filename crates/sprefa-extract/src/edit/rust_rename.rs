@@ -203,28 +203,6 @@ impl Rename for RustSource {
         if reference.role == RefRole::Definition {
             let source = cx.text(&reference.file)?;
             let parsed = hafley_scm::lang::rust::parse_rust_file(&source).ok()?;
-            fn module_at<'a>(
-                items: &'a [syn::Item],
-                span: Span,
-                chain: &mut Vec<String>,
-            ) -> Option<(&'a syn::ItemMod, Vec<String>)> {
-                for item in items {
-                    if let syn::Item::Mod(module) = item {
-                        if module.content.is_none() && syn_span(module.ident.span()) == span {
-                            return Some((module, chain.clone()));
-                        }
-                        if let Some((_, items)) = &module.content {
-                            chain.push(module.ident.to_string());
-                            let found = module_at(items, span, chain);
-                            chain.pop();
-                            if found.is_some() {
-                                return found;
-                            }
-                        }
-                    }
-                }
-                None
-            }
             if let Some((module, chain)) = module_at(&parsed.items, reference.span, &mut Vec::new())
             {
                 let texts: Vec<_> = cx
@@ -302,6 +280,29 @@ impl Rename for RustSource {
             false => Vec::new(),
         }
     }
+}
+
+fn module_at<'a>(
+    items: &'a [syn::Item],
+    span: Span,
+    chain: &mut Vec<String>,
+) -> Option<(&'a syn::ItemMod, Vec<String>)> {
+    for item in items {
+        if let syn::Item::Mod(module) = item {
+            if module.content.is_none() && syn_span(module.ident.span()) == span {
+                return Some((module, chain.clone()));
+            }
+            if let Some((_, items)) = &module.content {
+                chain.push(module.ident.to_string());
+                let found = module_at(items, span, chain);
+                chain.pop();
+                if found.is_some() {
+                    return found;
+                }
+            }
+        }
+    }
+    None
 }
 
 fn not_found(request: &RenameRequest) -> RenameStop {
