@@ -1,0 +1,3682 @@
+---
+source: tests/support/2_fixture_runner.rs
+---
+{
+  "0_witnessed": {
+    "extract": {
+      "exit_code": 0,
+      "stdout": [
+        {
+          "record": "protocol",
+          "version": 1
+        },
+        {
+          "record": "run",
+          "run": 0,
+          "mode": "syntax",
+          "tool": "ryi",
+          "version": "0.1.0",
+          "scope": [
+            "blake3:ad256ce10cfaed62643074c6f8a5c87e64468732f08d4f9a514d87d4a4d0e8a9"
+          ]
+        },
+        {
+          "record": "node",
+          "fact": 1,
+          "family": "type",
+          "span": {
+            "start": 177,
+            "end": 182
+          },
+          "kind": "struct",
+          "name": "Error"
+        },
+        {
+          "record": "node",
+          "fact": 2,
+          "family": "type",
+          "span": {
+            "start": 194,
+            "end": 198
+          },
+          "kind": "enum",
+          "name": "Step"
+        },
+        {
+          "record": "node",
+          "fact": 3,
+          "family": "type",
+          "span": {
+            "start": 289,
+            "end": 294
+          },
+          "kind": "struct",
+          "name": "Trail"
+        },
+        {
+          "record": "node",
+          "fact": 4,
+          "family": "type",
+          "span": {
+            "start": 559,
+            "end": 567
+          },
+          "kind": "method",
+          "name": "is_empty"
+        },
+        {
+          "record": "node",
+          "fact": 5,
+          "family": "type",
+          "span": {
+            "start": 633,
+            "end": 638
+          },
+          "kind": "method",
+          "name": "clear"
+        },
+        {
+          "record": "node",
+          "fact": 6,
+          "family": "type",
+          "span": {
+            "start": 672,
+            "end": 678
+          },
+          "kind": "trait",
+          "name": "Render"
+        },
+        {
+          "record": "node",
+          "fact": 7,
+          "family": "type",
+          "span": {
+            "start": 778,
+            "end": 784
+          },
+          "kind": "method",
+          "name": "render"
+        },
+        {
+          "record": "sig",
+          "fact": 8,
+          "family": "type",
+          "owner": {
+            "start": 778,
+            "end": 784
+          },
+          "owner_start": 778,
+          "owner_end": 784,
+          "slot": "param",
+          "pos": 0,
+          "ty": "Formatter"
+        },
+        {
+          "record": "sig",
+          "fact": 9,
+          "family": "type",
+          "owner": {
+            "start": 778,
+            "end": 784
+          },
+          "owner_start": 778,
+          "owner_end": 784,
+          "slot": "param",
+          "pos": 0,
+          "ty": "fmt::Formatter"
+        },
+        {
+          "record": "fact",
+          "fact": 10,
+          "relation": "tsi.type",
+          "args": [
+            {
+              "id": 0
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 11,
+          "relation": "tsi.origin",
+          "args": [
+            {
+              "id": 0
+            },
+            {
+              "atom": "rust"
+            },
+            {
+              "span": [
+                "blake3:ad256ce10cfaed62643074c6f8a5c87e64468732f08d4f9a514d87d4a4d0e8a9",
+                177,
+                182
+              ]
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 12,
+          "relation": "tsi.name",
+          "args": [
+            {
+              "id": 0
+            },
+            {
+              "text": "Error"
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 13,
+          "relation": "tsi.product",
+          "args": [
+            {
+              "id": 0
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 14,
+          "relation": "tsi.type",
+          "args": [
+            {
+              "id": 1
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 15,
+          "relation": "tsi.origin",
+          "args": [
+            {
+              "id": 1
+            },
+            {
+              "atom": "rust"
+            },
+            {
+              "span": [
+                "blake3:ad256ce10cfaed62643074c6f8a5c87e64468732f08d4f9a514d87d4a4d0e8a9",
+                194,
+                198
+              ]
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 16,
+          "relation": "tsi.name",
+          "args": [
+            {
+              "id": 1
+            },
+            {
+              "text": "Step"
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 17,
+          "relation": "tsi.sum",
+          "args": [
+            {
+              "id": 1
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 18,
+          "relation": "tsi.type",
+          "args": [
+            {
+              "id": 2
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 19,
+          "relation": "tsi.origin",
+          "args": [
+            {
+              "id": 2
+            },
+            {
+              "atom": "rust"
+            },
+            {
+              "span": [
+                "blake3:ad256ce10cfaed62643074c6f8a5c87e64468732f08d4f9a514d87d4a4d0e8a9",
+                205,
+                209
+              ]
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 20,
+          "relation": "tsi.name",
+          "args": [
+            {
+              "id": 2
+            },
+            {
+              "text": "Step::Idle"
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 21,
+          "relation": "tsi.edge",
+          "args": [
+            {
+              "id": 3
+            },
+            {
+              "id": 1
+            },
+            {
+              "text": "Idle"
+            },
+            {
+              "id": 2
+            },
+            {
+              "int": 0
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 22,
+          "relation": "tsi.type",
+          "args": [
+            {
+              "id": 4
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 23,
+          "relation": "tsi.origin",
+          "args": [
+            {
+              "id": 4
+            },
+            {
+              "atom": "rust"
+            },
+            {
+              "span": [
+                "blake3:ad256ce10cfaed62643074c6f8a5c87e64468732f08d4f9a514d87d4a4d0e8a9",
+                215,
+                220
+              ]
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 24,
+          "relation": "tsi.name",
+          "args": [
+            {
+              "id": 4
+            },
+            {
+              "text": "Step::Retry"
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 25,
+          "relation": "tsi.edge",
+          "args": [
+            {
+              "id": 5
+            },
+            {
+              "id": 1
+            },
+            {
+              "text": "Retry"
+            },
+            {
+              "id": 4
+            },
+            {
+              "int": 1
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 26,
+          "relation": "tsi.product",
+          "args": [
+            {
+              "id": 4
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 27,
+          "relation": "tsi.type",
+          "args": [
+            {
+              "id": 6
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 28,
+          "relation": "tsi.primitive",
+          "args": [
+            {
+              "id": 6
+            },
+            {
+              "atom": "u32"
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 29,
+          "relation": "tsi.name",
+          "args": [
+            {
+              "id": 6
+            },
+            {
+              "text": "u32"
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 30,
+          "relation": "tsi.edge",
+          "args": [
+            {
+              "id": 7
+            },
+            {
+              "id": 4
+            },
+            {
+              "text": "0"
+            },
+            {
+              "id": 6
+            },
+            {
+              "int": 0
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 31,
+          "relation": "tsi.type",
+          "args": [
+            {
+              "id": 8
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 32,
+          "relation": "tsi.primitive",
+          "args": [
+            {
+              "id": 8
+            },
+            {
+              "atom": "bool"
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 33,
+          "relation": "tsi.name",
+          "args": [
+            {
+              "id": 8
+            },
+            {
+              "text": "bool"
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 34,
+          "relation": "tsi.edge",
+          "args": [
+            {
+              "id": 9
+            },
+            {
+              "id": 4
+            },
+            {
+              "text": "1"
+            },
+            {
+              "id": 8
+            },
+            {
+              "int": 1
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 35,
+          "relation": "tsi.type",
+          "args": [
+            {
+              "id": 10
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 36,
+          "relation": "tsi.origin",
+          "args": [
+            {
+              "id": 10
+            },
+            {
+              "atom": "rust"
+            },
+            {
+              "span": [
+                "blake3:ad256ce10cfaed62643074c6f8a5c87e64468732f08d4f9a514d87d4a4d0e8a9",
+                237,
+                243
+              ]
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 37,
+          "relation": "tsi.name",
+          "args": [
+            {
+              "id": 10
+            },
+            {
+              "text": "Step::Failed"
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 38,
+          "relation": "tsi.edge",
+          "args": [
+            {
+              "id": 11
+            },
+            {
+              "id": 1
+            },
+            {
+              "text": "Failed"
+            },
+            {
+              "id": 10
+            },
+            {
+              "int": 2
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 39,
+          "relation": "tsi.product",
+          "args": [
+            {
+              "id": 10
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 40,
+          "relation": "tsi.type",
+          "args": [
+            {
+              "id": 12
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 41,
+          "relation": "tsi.origin",
+          "args": [
+            {
+              "id": 12
+            },
+            {
+              "atom": "rust"
+            },
+            {
+              "span": [
+                "blake3:ad256ce10cfaed62643074c6f8a5c87e64468732f08d4f9a514d87d4a4d0e8a9",
+                254,
+                260
+              ]
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 42,
+          "relation": "tsi.name",
+          "args": [
+            {
+              "id": 12
+            },
+            {
+              "text": "String"
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 43,
+          "relation": "tsi.edge",
+          "args": [
+            {
+              "id": 13
+            },
+            {
+              "id": 10
+            },
+            {
+              "text": "reason"
+            },
+            {
+              "id": 12
+            },
+            {
+              "int": 0
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 44,
+          "relation": "tsi.edge",
+          "args": [
+            {
+              "id": 14
+            },
+            {
+              "id": 10
+            },
+            {
+              "text": "code"
+            },
+            {
+              "id": 6
+            },
+            {
+              "int": 1
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 45,
+          "relation": "tsi.type",
+          "args": [
+            {
+              "id": 15
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 46,
+          "relation": "tsi.origin",
+          "args": [
+            {
+              "id": 15
+            },
+            {
+              "atom": "rust"
+            },
+            {
+              "span": [
+                "blake3:ad256ce10cfaed62643074c6f8a5c87e64468732f08d4f9a514d87d4a4d0e8a9",
+                289,
+                294
+              ]
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 47,
+          "relation": "tsi.name",
+          "args": [
+            {
+              "id": 15
+            },
+            {
+              "text": "Trail"
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 48,
+          "relation": "tsi.product",
+          "args": [
+            {
+              "id": 15
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 49,
+          "relation": "tsi.type",
+          "args": [
+            {
+              "id": 16
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 50,
+          "relation": "tsi.origin",
+          "args": [
+            {
+              "id": 16
+            },
+            {
+              "atom": "rust"
+            },
+            {
+              "span": [
+                "blake3:ad256ce10cfaed62643074c6f8a5c87e64468732f08d4f9a514d87d4a4d0e8a9",
+                295,
+                296
+              ]
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 51,
+          "relation": "tsi.name",
+          "args": [
+            {
+              "id": 16
+            },
+            {
+              "text": "T"
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 52,
+          "relation": "tsi.parameter",
+          "args": [
+            {
+              "id": 16
+            },
+            {
+              "id": 15
+            },
+            {
+              "int": 0
+            },
+            {
+              "atom": "unspecified"
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 53,
+          "relation": "tsi.type",
+          "args": [
+            {
+              "id": 17
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 54,
+          "relation": "tsi.origin",
+          "args": [
+            {
+              "id": 17
+            },
+            {
+              "atom": "rust"
+            },
+            {
+              "span": [
+                "blake3:ad256ce10cfaed62643074c6f8a5c87e64468732f08d4f9a514d87d4a4d0e8a9",
+                315,
+                318
+              ]
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 55,
+          "relation": "tsi.name",
+          "args": [
+            {
+              "id": 17
+            },
+            {
+              "text": "Vec<Option<T>>"
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 56,
+          "relation": "tsi.type",
+          "args": [
+            {
+              "id": 18
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 57,
+          "relation": "tsi.origin",
+          "args": [
+            {
+              "id": 18
+            },
+            {
+              "atom": "rust"
+            },
+            {
+              "span": [
+                "blake3:ad256ce10cfaed62643074c6f8a5c87e64468732f08d4f9a514d87d4a4d0e8a9",
+                315,
+                318
+              ]
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 58,
+          "relation": "tsi.name",
+          "args": [
+            {
+              "id": 18
+            },
+            {
+              "text": "Vec"
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 59,
+          "relation": "tsi.called",
+          "args": [
+            {
+              "id": 17
+            },
+            {
+              "id": 18
+            },
+            {
+              "id": 19
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 60,
+          "relation": "tsi.type",
+          "args": [
+            {
+              "id": 20
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 61,
+          "relation": "tsi.origin",
+          "args": [
+            {
+              "id": 20
+            },
+            {
+              "atom": "rust"
+            },
+            {
+              "span": [
+                "blake3:ad256ce10cfaed62643074c6f8a5c87e64468732f08d4f9a514d87d4a4d0e8a9",
+                319,
+                325
+              ]
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 62,
+          "relation": "tsi.name",
+          "args": [
+            {
+              "id": 20
+            },
+            {
+              "text": "Option<T>"
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 63,
+          "relation": "tsi.type",
+          "args": [
+            {
+              "id": 21
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 64,
+          "relation": "tsi.origin",
+          "args": [
+            {
+              "id": 21
+            },
+            {
+              "atom": "rust"
+            },
+            {
+              "span": [
+                "blake3:ad256ce10cfaed62643074c6f8a5c87e64468732f08d4f9a514d87d4a4d0e8a9",
+                319,
+                325
+              ]
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 65,
+          "relation": "tsi.name",
+          "args": [
+            {
+              "id": 21
+            },
+            {
+              "text": "Option"
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 66,
+          "relation": "tsi.called",
+          "args": [
+            {
+              "id": 20
+            },
+            {
+              "id": 21
+            },
+            {
+              "id": 22
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 67,
+          "relation": "tsi.argument",
+          "args": [
+            {
+              "id": 22
+            },
+            {
+              "int": 0
+            },
+            {
+              "id": 16
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 68,
+          "relation": "tsi.argument",
+          "args": [
+            {
+              "id": 19
+            },
+            {
+              "int": 0
+            },
+            {
+              "id": 20
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 69,
+          "relation": "tsi.edge",
+          "args": [
+            {
+              "id": 23
+            },
+            {
+              "id": 15
+            },
+            {
+              "text": "steps"
+            },
+            {
+              "id": 17
+            },
+            {
+              "int": 0
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 70,
+          "relation": "tsi.type",
+          "args": [
+            {
+              "id": 24
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 71,
+          "relation": "tsi.origin",
+          "args": [
+            {
+              "id": 24
+            },
+            {
+              "atom": "rust"
+            },
+            {
+              "span": [
+                "blake3:ad256ce10cfaed62643074c6f8a5c87e64468732f08d4f9a514d87d4a4d0e8a9",
+                348,
+                354
+              ]
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 72,
+          "relation": "tsi.name",
+          "args": [
+            {
+              "id": 24
+            },
+            {
+              "text": "Result<u64, Error>"
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 73,
+          "relation": "tsi.type",
+          "args": [
+            {
+              "id": 25
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 74,
+          "relation": "tsi.origin",
+          "args": [
+            {
+              "id": 25
+            },
+            {
+              "atom": "rust"
+            },
+            {
+              "span": [
+                "blake3:ad256ce10cfaed62643074c6f8a5c87e64468732f08d4f9a514d87d4a4d0e8a9",
+                348,
+                354
+              ]
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 75,
+          "relation": "tsi.name",
+          "args": [
+            {
+              "id": 25
+            },
+            {
+              "text": "Result"
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 76,
+          "relation": "tsi.called",
+          "args": [
+            {
+              "id": 24
+            },
+            {
+              "id": 25
+            },
+            {
+              "id": 26
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 77,
+          "relation": "tsi.type",
+          "args": [
+            {
+              "id": 27
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 78,
+          "relation": "tsi.primitive",
+          "args": [
+            {
+              "id": 27
+            },
+            {
+              "atom": "u64"
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 79,
+          "relation": "tsi.name",
+          "args": [
+            {
+              "id": 27
+            },
+            {
+              "text": "u64"
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 80,
+          "relation": "tsi.argument",
+          "args": [
+            {
+              "id": 26
+            },
+            {
+              "int": 0
+            },
+            {
+              "id": 27
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 81,
+          "relation": "tsi.argument",
+          "args": [
+            {
+              "id": 26
+            },
+            {
+              "int": 1
+            },
+            {
+              "id": 0
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 82,
+          "relation": "tsi.edge",
+          "args": [
+            {
+              "id": 28
+            },
+            {
+              "id": 15
+            },
+            {
+              "text": "outcome"
+            },
+            {
+              "id": 24
+            },
+            {
+              "int": 1
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 83,
+          "relation": "tsi.type",
+          "args": [
+            {
+              "id": 29
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 84,
+          "relation": "tsi.origin",
+          "args": [
+            {
+              "id": 29
+            },
+            {
+              "atom": "rust"
+            },
+            {
+              "span": [
+                "blake3:ad256ce10cfaed62643074c6f8a5c87e64468732f08d4f9a514d87d4a4d0e8a9",
+                383,
+                396
+              ]
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 85,
+          "relation": "tsi.product",
+          "args": [
+            {
+              "id": 29
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 86,
+          "relation": "tsi.edge",
+          "args": [
+            {
+              "id": 30
+            },
+            {
+              "id": 29
+            },
+            {
+              "text": "0"
+            },
+            {
+              "id": 12
+            },
+            {
+              "int": 0
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 87,
+          "relation": "tsi.edge",
+          "args": [
+            {
+              "id": 31
+            },
+            {
+              "id": 29
+            },
+            {
+              "text": "1"
+            },
+            {
+              "id": 6
+            },
+            {
+              "int": 1
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 88,
+          "relation": "tsi.edge",
+          "args": [
+            {
+              "id": 32
+            },
+            {
+              "id": 15
+            },
+            {
+              "text": "label"
+            },
+            {
+              "id": 29
+            },
+            {
+              "int": 2
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 89,
+          "relation": "tsi.type",
+          "args": [
+            {
+              "id": 33
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 90,
+          "relation": "tsi.origin",
+          "args": [
+            {
+              "id": 33
+            },
+            {
+              "atom": "rust"
+            },
+            {
+              "span": [
+                "blake3:ad256ce10cfaed62643074c6f8a5c87e64468732f08d4f9a514d87d4a4d0e8a9",
+                411,
+                414
+              ]
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 91,
+          "relation": "tsi.name",
+          "args": [
+            {
+              "id": 33
+            },
+            {
+              "text": "Box<str>"
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 92,
+          "relation": "tsi.type",
+          "args": [
+            {
+              "id": 34
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 93,
+          "relation": "tsi.origin",
+          "args": [
+            {
+              "id": 34
+            },
+            {
+              "atom": "rust"
+            },
+            {
+              "span": [
+                "blake3:ad256ce10cfaed62643074c6f8a5c87e64468732f08d4f9a514d87d4a4d0e8a9",
+                411,
+                414
+              ]
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 94,
+          "relation": "tsi.name",
+          "args": [
+            {
+              "id": 34
+            },
+            {
+              "text": "Box"
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 95,
+          "relation": "tsi.called",
+          "args": [
+            {
+              "id": 33
+            },
+            {
+              "id": 34
+            },
+            {
+              "id": 35
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 96,
+          "relation": "tsi.type",
+          "args": [
+            {
+              "id": 36
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 97,
+          "relation": "tsi.primitive",
+          "args": [
+            {
+              "id": 36
+            },
+            {
+              "atom": "str"
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 98,
+          "relation": "tsi.name",
+          "args": [
+            {
+              "id": 36
+            },
+            {
+              "text": "str"
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 99,
+          "relation": "tsi.argument",
+          "args": [
+            {
+              "id": 35
+            },
+            {
+              "int": 0
+            },
+            {
+              "id": 36
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 100,
+          "relation": "tsi.edge",
+          "args": [
+            {
+              "id": 37
+            },
+            {
+              "id": 15
+            },
+            {
+              "text": "tag"
+            },
+            {
+              "id": 33
+            },
+            {
+              "int": 3
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 101,
+          "relation": "tsi.type",
+          "args": [
+            {
+              "id": 38
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 102,
+          "relation": "tsi.origin",
+          "args": [
+            {
+              "id": 38
+            },
+            {
+              "atom": "rust"
+            },
+            {
+              "span": [
+                "blake3:ad256ce10cfaed62643074c6f8a5c87e64468732f08d4f9a514d87d4a4d0e8a9",
+                449,
+                455
+              ]
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 103,
+          "relation": "tsi.name",
+          "args": [
+            {
+              "id": 38
+            },
+            {
+              "text": "std::fmt::Result"
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 104,
+          "relation": "tsi.edge",
+          "args": [
+            {
+              "id": 39
+            },
+            {
+              "id": 15
+            },
+            {
+              "text": "rendered"
+            },
+            {
+              "id": 38
+            },
+            {
+              "int": 4
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 105,
+          "relation": "tsi.has_type",
+          "args": [
+            {
+              "span": [
+                "blake3:ad256ce10cfaed62643074c6f8a5c87e64468732f08d4f9a514d87d4a4d0e8a9",
+                470,
+                481
+              ]
+            },
+            {
+              "id": 6
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 106,
+          "relation": "tsi.type",
+          "args": [
+            {
+              "id": 40
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 107,
+          "relation": "tsi.origin",
+          "args": [
+            {
+              "id": 40
+            },
+            {
+              "atom": "rust"
+            },
+            {
+              "span": [
+                "blake3:ad256ce10cfaed62643074c6f8a5c87e64468732f08d4f9a514d87d4a4d0e8a9",
+                513,
+                516
+              ]
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 108,
+          "relation": "tsi.name",
+          "args": [
+            {
+              "id": 40
+            },
+            {
+              "text": "&str"
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 109,
+          "relation": "tsi.has_type",
+          "args": [
+            {
+              "span": [
+                "blake3:ad256ce10cfaed62643074c6f8a5c87e64468732f08d4f9a514d87d4a4d0e8a9",
+                504,
+                510
+              ]
+            },
+            {
+              "id": 40
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 110,
+          "relation": "tsi.type",
+          "args": [
+            {
+              "id": 41
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 111,
+          "relation": "tsi.origin",
+          "args": [
+            {
+              "id": 41
+            },
+            {
+              "atom": "rust"
+            },
+            {
+              "span": [
+                "blake3:ad256ce10cfaed62643074c6f8a5c87e64468732f08d4f9a514d87d4a4d0e8a9",
+                529,
+                533
+              ]
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 112,
+          "relation": "tsi.type",
+          "args": [
+            {
+              "id": 42
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 113,
+          "relation": "tsi.origin",
+          "args": [
+            {
+              "id": 42
+            },
+            {
+              "atom": "rust"
+            },
+            {
+              "span": [
+                "blake3:ad256ce10cfaed62643074c6f8a5c87e64468732f08d4f9a514d87d4a4d0e8a9",
+                534,
+                535
+              ]
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 114,
+          "relation": "tsi.name",
+          "args": [
+            {
+              "id": 42
+            },
+            {
+              "text": "T"
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 115,
+          "relation": "tsi.parameter",
+          "args": [
+            {
+              "id": 42
+            },
+            {
+              "id": 41
+            },
+            {
+              "int": 0
+            },
+            {
+              "atom": "unspecified"
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 116,
+          "relation": "tsi.type",
+          "args": [
+            {
+              "id": 43
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 117,
+          "relation": "tsi.origin",
+          "args": [
+            {
+              "id": 43
+            },
+            {
+              "atom": "rust"
+            },
+            {
+              "span": [
+                "blake3:ad256ce10cfaed62643074c6f8a5c87e64468732f08d4f9a514d87d4a4d0e8a9",
+                559,
+                567
+              ]
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 118,
+          "relation": "tsi.name",
+          "args": [
+            {
+              "id": 43
+            },
+            {
+              "text": "is_empty"
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 119,
+          "relation": "tsi.callable",
+          "args": [
+            {
+              "id": 43
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 120,
+          "relation": "tsi.output",
+          "args": [
+            {
+              "id": 43
+            },
+            {
+              "int": 0
+            },
+            {
+              "id": 8
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 121,
+          "relation": "tsi.edge",
+          "args": [
+            {
+              "id": 44
+            },
+            {
+              "id": 15
+            },
+            {
+              "text": "is_empty"
+            },
+            {
+              "id": 43
+            },
+            {
+              "int": 0
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 122,
+          "relation": "tsi.type",
+          "args": [
+            {
+              "id": 45
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 123,
+          "relation": "tsi.origin",
+          "args": [
+            {
+              "id": 45
+            },
+            {
+              "atom": "rust"
+            },
+            {
+              "span": [
+                "blake3:ad256ce10cfaed62643074c6f8a5c87e64468732f08d4f9a514d87d4a4d0e8a9",
+                633,
+                638
+              ]
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 124,
+          "relation": "tsi.name",
+          "args": [
+            {
+              "id": 45
+            },
+            {
+              "text": "clear"
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 125,
+          "relation": "tsi.callable",
+          "args": [
+            {
+              "id": 45
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 126,
+          "relation": "tsi.type",
+          "args": [
+            {
+              "id": 46
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 127,
+          "relation": "tsi.primitive",
+          "args": [
+            {
+              "id": 46
+            },
+            {
+              "atom": "unit"
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 128,
+          "relation": "tsi.name",
+          "args": [
+            {
+              "id": 46
+            },
+            {
+              "text": "()"
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 129,
+          "relation": "tsi.output",
+          "args": [
+            {
+              "id": 45
+            },
+            {
+              "int": 0
+            },
+            {
+              "id": 46
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 130,
+          "relation": "tsi.edge",
+          "args": [
+            {
+              "id": 47
+            },
+            {
+              "id": 15
+            },
+            {
+              "text": "clear"
+            },
+            {
+              "id": 45
+            },
+            {
+              "int": 1
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 131,
+          "relation": "tsi.type",
+          "args": [
+            {
+              "id": 48
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 132,
+          "relation": "tsi.origin",
+          "args": [
+            {
+              "id": 48
+            },
+            {
+              "atom": "rust"
+            },
+            {
+              "span": [
+                "blake3:ad256ce10cfaed62643074c6f8a5c87e64468732f08d4f9a514d87d4a4d0e8a9",
+                672,
+                678
+              ]
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 133,
+          "relation": "tsi.name",
+          "args": [
+            {
+              "id": 48
+            },
+            {
+              "text": "Render"
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 134,
+          "relation": "rust.trait",
+          "args": [
+            {
+              "id": 48
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 135,
+          "relation": "tsi.type",
+          "args": [
+            {
+              "id": 49
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 136,
+          "relation": "tsi.origin",
+          "args": [
+            {
+              "id": 49
+            },
+            {
+              "atom": "rust"
+            },
+            {
+              "span": [
+                "blake3:ad256ce10cfaed62643074c6f8a5c87e64468732f08d4f9a514d87d4a4d0e8a9",
+                688,
+                694
+              ]
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 137,
+          "relation": "tsi.name",
+          "args": [
+            {
+              "id": 49
+            },
+            {
+              "text": "render"
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 138,
+          "relation": "tsi.callable",
+          "args": [
+            {
+              "id": 49
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 139,
+          "relation": "tsi.type",
+          "args": [
+            {
+              "id": 50
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 140,
+          "relation": "tsi.origin",
+          "args": [
+            {
+              "id": 50
+            },
+            {
+              "atom": "rust"
+            },
+            {
+              "span": [
+                "blake3:ad256ce10cfaed62643074c6f8a5c87e64468732f08d4f9a514d87d4a4d0e8a9",
+                718,
+                727
+              ]
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 141,
+          "relation": "tsi.name",
+          "args": [
+            {
+              "id": 50
+            },
+            {
+              "text": "&mut fmt::Formatter"
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 142,
+          "relation": "tsi.input",
+          "args": [
+            {
+              "id": 49
+            },
+            {
+              "int": 0
+            },
+            {
+              "id": 50
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 143,
+          "relation": "tsi.output",
+          "args": [
+            {
+              "id": 49
+            },
+            {
+              "int": 0
+            },
+            {
+              "id": 8
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 144,
+          "relation": "tsi.edge",
+          "args": [
+            {
+              "id": 51
+            },
+            {
+              "id": 48
+            },
+            {
+              "text": "render"
+            },
+            {
+              "id": 49
+            },
+            {
+              "int": 0
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 145,
+          "relation": "tsi.type",
+          "args": [
+            {
+              "id": 52
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 146,
+          "relation": "tsi.origin",
+          "args": [
+            {
+              "id": 52
+            },
+            {
+              "atom": "rust"
+            },
+            {
+              "span": [
+                "blake3:ad256ce10cfaed62643074c6f8a5c87e64468732f08d4f9a514d87d4a4d0e8a9",
+                741,
+                745
+              ]
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 147,
+          "relation": "tsi.type",
+          "args": [
+            {
+              "id": 53
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 148,
+          "relation": "tsi.origin",
+          "args": [
+            {
+              "id": 53
+            },
+            {
+              "atom": "rust"
+            },
+            {
+              "span": [
+                "blake3:ad256ce10cfaed62643074c6f8a5c87e64468732f08d4f9a514d87d4a4d0e8a9",
+                746,
+                747
+              ]
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 149,
+          "relation": "tsi.name",
+          "args": [
+            {
+              "id": 53
+            },
+            {
+              "text": "T"
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 150,
+          "relation": "tsi.parameter",
+          "args": [
+            {
+              "id": 53
+            },
+            {
+              "id": 52
+            },
+            {
+              "int": 0
+            },
+            {
+              "atom": "unspecified"
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 151,
+          "relation": "rust.impl",
+          "args": [
+            {
+              "id": 52
+            },
+            {
+              "id": 15
+            },
+            {
+              "id": 48
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 152,
+          "relation": "tsi.conforms",
+          "args": [
+            {
+              "id": 15
+            },
+            {
+              "id": 48
+            },
+            {
+              "atom": "syntax"
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 153,
+          "relation": "tsi.type",
+          "args": [
+            {
+              "id": 54
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 154,
+          "relation": "tsi.origin",
+          "args": [
+            {
+              "id": 54
+            },
+            {
+              "atom": "rust"
+            },
+            {
+              "span": [
+                "blake3:ad256ce10cfaed62643074c6f8a5c87e64468732f08d4f9a514d87d4a4d0e8a9",
+                778,
+                784
+              ]
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 155,
+          "relation": "tsi.name",
+          "args": [
+            {
+              "id": 54
+            },
+            {
+              "text": "render"
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 156,
+          "relation": "tsi.callable",
+          "args": [
+            {
+              "id": 54
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 157,
+          "relation": "tsi.input",
+          "args": [
+            {
+              "id": 54
+            },
+            {
+              "int": 0
+            },
+            {
+              "id": 50
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 158,
+          "relation": "tsi.output",
+          "args": [
+            {
+              "id": 54
+            },
+            {
+              "int": 0
+            },
+            {
+              "id": 8
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 159,
+          "relation": "tsi.edge",
+          "args": [
+            {
+              "id": 55
+            },
+            {
+              "id": 15
+            },
+            {
+              "text": "render"
+            },
+            {
+              "id": 54
+            },
+            {
+              "int": 0
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 160,
+          "relation": "tsi.type",
+          "args": [
+            {
+              "id": 56
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 161,
+          "relation": "tsi.origin",
+          "args": [
+            {
+              "id": 56
+            },
+            {
+              "atom": "rust"
+            },
+            {
+              "span": [
+                "blake3:ad256ce10cfaed62643074c6f8a5c87e64468732f08d4f9a514d87d4a4d0e8a9",
+                583,
+                620
+              ]
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 162,
+          "relation": "tsi.name",
+          "args": [
+            {
+              "id": 56
+            },
+            {
+              "text": "{\n        self.steps.is_empty()\n    }"
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 163,
+          "relation": "tsi.product",
+          "args": [
+            {
+              "id": 56
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 164,
+          "relation": "tsi.type",
+          "args": [
+            {
+              "id": 57
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 165,
+          "relation": "tsi.origin",
+          "args": [
+            {
+              "id": 57
+            },
+            {
+              "atom": "rust"
+            },
+            {
+              "span": [
+                "blake3:ad256ce10cfaed62643074c6f8a5c87e64468732f08d4f9a514d87d4a4d0e8a9",
+                656,
+                658
+              ]
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 166,
+          "relation": "tsi.name",
+          "args": [
+            {
+              "id": 57
+            },
+            {
+              "text": "{}"
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 167,
+          "relation": "tsi.product",
+          "args": [
+            {
+              "id": 57
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 168,
+          "relation": "tsi.type",
+          "args": [
+            {
+              "id": 58
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 169,
+          "relation": "tsi.origin",
+          "args": [
+            {
+              "id": 58
+            },
+            {
+              "atom": "rust"
+            },
+            {
+              "span": [
+                "blake3:ad256ce10cfaed62643074c6f8a5c87e64468732f08d4f9a514d87d4a4d0e8a9",
+                827,
+                847
+              ]
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 170,
+          "relation": "tsi.name",
+          "args": [
+            {
+              "id": 58
+            },
+            {
+              "text": "{\n        true\n    }"
+            }
+          ]
+        },
+        {
+          "record": "fact",
+          "fact": 171,
+          "relation": "tsi.product",
+          "args": [
+            {
+              "id": 58
+            }
+          ]
+        },
+        {
+          "record": "witness",
+          "fact": 1,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 2,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 3,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 4,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 5,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 6,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 7,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 8,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 9,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 10,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 11,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 12,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 13,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 14,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 15,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 16,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 17,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 18,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 19,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 20,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 21,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 22,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 23,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 24,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 25,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 26,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 27,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 28,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 29,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 30,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 31,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 32,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 33,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 34,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 35,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 36,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 37,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 38,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 39,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 40,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 41,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 42,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 43,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 44,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 45,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 46,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 47,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 48,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 49,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 50,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 51,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 52,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 53,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 54,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 55,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 56,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 57,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 58,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 59,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 60,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 61,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 62,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 63,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 64,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 65,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 66,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 67,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 68,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 69,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 70,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 71,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 72,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 73,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 74,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 75,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 76,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 77,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 78,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 79,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 80,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 81,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 82,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 83,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 84,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 85,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 86,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 87,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 88,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 89,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 90,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 91,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 92,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 93,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 94,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 95,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 96,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 97,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 98,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 99,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 100,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 101,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 102,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 103,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 104,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 105,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 106,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 107,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 108,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 109,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 110,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 111,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 112,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 113,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 114,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 115,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 116,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 117,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 118,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 119,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 120,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 121,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 122,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 123,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 124,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 125,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 126,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 127,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 128,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 129,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 130,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 131,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 132,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 133,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 134,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 135,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 136,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 137,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 138,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 139,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 140,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 141,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 142,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 143,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 144,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 145,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 146,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 147,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 148,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 149,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 150,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 151,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 152,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 153,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 154,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 155,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 156,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 157,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 158,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 159,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 160,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 161,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 162,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 163,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 164,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 165,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 166,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 167,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 168,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 169,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 170,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "witness",
+          "fact": 171,
+          "run": 0,
+          "method": "parse"
+        },
+        {
+          "record": "coverage",
+          "run": 0,
+          "relation": "extract.type",
+          "coverage": "partial"
+        },
+        {
+          "record": "coverage",
+          "run": 0,
+          "relation": "tsi.type",
+          "coverage": "partial"
+        },
+        {
+          "record": "coverage",
+          "run": 0,
+          "relation": "tsi.origin",
+          "coverage": "partial"
+        },
+        {
+          "record": "coverage",
+          "run": 0,
+          "relation": "tsi.name",
+          "coverage": "partial"
+        },
+        {
+          "record": "coverage",
+          "run": 0,
+          "relation": "tsi.product",
+          "coverage": "partial"
+        },
+        {
+          "record": "coverage",
+          "run": 0,
+          "relation": "tsi.sum",
+          "coverage": "partial"
+        },
+        {
+          "record": "coverage",
+          "run": 0,
+          "relation": "tsi.edge",
+          "coverage": "partial"
+        },
+        {
+          "record": "coverage",
+          "run": 0,
+          "relation": "tsi.primitive",
+          "coverage": "partial"
+        },
+        {
+          "record": "coverage",
+          "run": 0,
+          "relation": "tsi.parameter",
+          "coverage": "partial"
+        },
+        {
+          "record": "coverage",
+          "run": 0,
+          "relation": "tsi.called",
+          "coverage": "partial"
+        },
+        {
+          "record": "coverage",
+          "run": 0,
+          "relation": "tsi.argument",
+          "coverage": "partial"
+        },
+        {
+          "record": "coverage",
+          "run": 0,
+          "relation": "tsi.has_type",
+          "coverage": "partial"
+        },
+        {
+          "record": "coverage",
+          "run": 0,
+          "relation": "tsi.callable",
+          "coverage": "partial"
+        },
+        {
+          "record": "coverage",
+          "run": 0,
+          "relation": "tsi.output",
+          "coverage": "partial"
+        },
+        {
+          "record": "coverage",
+          "run": 0,
+          "relation": "rust.trait",
+          "coverage": "partial"
+        },
+        {
+          "record": "coverage",
+          "run": 0,
+          "relation": "tsi.input",
+          "coverage": "partial"
+        },
+        {
+          "record": "coverage",
+          "run": 0,
+          "relation": "rust.impl",
+          "coverage": "partial"
+        },
+        {
+          "record": "coverage",
+          "run": 0,
+          "relation": "tsi.conforms",
+          "coverage": "partial"
+        }
+      ],
+      "stderr": ""
+    }
+  }
+}
