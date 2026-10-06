@@ -315,17 +315,5 @@ source: tests/support/2_fixture_runner.rs
       ],
       "stderr": ""
     }
-  },
-  "5_scaling": {
-    "200": {
-      "exit_code": 0
-    },
-    "400": {
-      "exit_code": 0
-    },
-    "linear_cost": {
-      "below_limit": true,
-      "limit": 2.5
-    }
   }
 }

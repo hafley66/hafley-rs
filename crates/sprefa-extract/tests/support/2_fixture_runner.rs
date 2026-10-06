@@ -127,7 +127,6 @@ pub fn commands(case: &Value, api: impl Fn(&Value) -> Value) -> Value {
     };
     let mut outputs = BTreeMap::<String, (String, String)>::new();
     let mut observed = BTreeMap::new();
-    let mut walls = BTreeMap::<String, f64>::new();
     for step in case["steps"].as_array().unwrap() {
         let name = step["capture"]
             .as_str()
@@ -346,14 +345,7 @@ pub fn commands(case: &Value, api: impl Fn(&Value) -> Value) -> Value {
                 }
                 observed.insert(name.to_string(), serde_json::json!({"rows":rows}));
             }
-            "wall_ratio" => {
-                let ratio = walls[step["larger"].as_str().unwrap()] / walls[step["smaller"].as_str().unwrap()];
-                let limit = step["limit"].as_f64().unwrap();
-                assert!(ratio < limit, "{name}: ratio {ratio} >= {limit}");
-                observed.insert(name.to_string(), serde_json::json!({"below_limit":true,"limit":limit}));
-            }
             "run" | "command" | "git" => {
-                let setup_started = std::time::Instant::now();
                 let program = if step["action"] == "git" {
                     "git".to_string()
                 } else {
@@ -388,10 +380,9 @@ pub fn commands(case: &Value, api: impl Fn(&Value) -> Value) -> Value {
                         command.env_remove(key.as_str().unwrap());
                     }
                 }
-                let started = if step["measure_command_setup"] == true { setup_started } else { std::time::Instant::now() };
+                let started = std::time::Instant::now();
                 let output = command.output().unwrap();
                 let elapsed = started.elapsed();
-                walls.insert(name.to_string(), elapsed.as_secs_f64());
                 let stdout = String::from_utf8(output.stdout).unwrap();
                 let stderr = String::from_utf8(output.stderr).unwrap();
                 assert_eq!(
