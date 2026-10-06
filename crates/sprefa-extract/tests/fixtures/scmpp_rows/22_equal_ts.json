@@ -1,0 +1,32 @@
+{
+  "steps": [
+    {
+      "action": "copy",
+      "source": "$fixtures/scmpp_rows/inputs/equal.ts",
+      "path": "$work/fixture.ts"
+    },
+    {
+      "action": "copy",
+      "source": "$fixtures/scmpp_rows/inputs/query_23.scm",
+      "path": "$work/query.scm"
+    },
+    {
+      "action": "run",
+      "name": "query",
+      "arguments": [
+        "query",
+        "--timeout",
+        "10",
+        "--scmpp",
+        "$work/query.scm",
+        "$work/fixture.ts"
+      ],
+      "environment": {
+        "DL_TRAIL": "0"
+      },
+      "expect_exit_code": 0,
+      "raw_stdout": true,
+      "unasserted_stderr": true
+    }
+  ]
+}

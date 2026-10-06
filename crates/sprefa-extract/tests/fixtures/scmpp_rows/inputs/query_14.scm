@@ -1,0 +1,1 @@
+((expression_statement) @s (#follows? @s (let_declaration)))

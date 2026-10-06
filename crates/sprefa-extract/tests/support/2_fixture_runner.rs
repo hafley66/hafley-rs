@@ -253,6 +253,10 @@ pub fn commands(case: &Value, api: impl Fn(&Value) -> Value) -> Value {
                     std::fs::write(path().join(filename), step["text"].as_str().unwrap().replace("{index}", &index.to_string())).unwrap();
                 }
             }
+            "chmod" => {
+                use std::os::unix::fs::PermissionsExt;
+                std::fs::set_permissions(path(), std::fs::Permissions::from_mode(step["mode"].as_u64().unwrap() as u32)).unwrap();
+            }
             "remove" => std::fs::remove_file(path()).unwrap(),
             "remove_tree" => std::fs::remove_dir_all(path()).unwrap(),
             "symlink" => {
@@ -351,8 +355,10 @@ pub fn commands(case: &Value, api: impl Fn(&Value) -> Value) -> Value {
             }
             "run" | "command" | "git" => {
                 let (output, elapsed) = crate::command_support::execute(step, &expand);
-                let stdout = String::from_utf8(output.stdout).unwrap();
-                let stderr = String::from_utf8(output.stderr).unwrap();
+                let mut stdout = String::from_utf8(output.stdout).unwrap();
+                let mut stderr = String::from_utf8(output.stderr).unwrap();
+                if step["sort_stdout"] == true { let mut lines: Vec<_> = stdout.lines().collect(); lines.sort(); stdout = lines.join("\n"); }
+                if step["trim_stderr"] == true { stderr = stderr.trim().to_string(); }
                 if step["unasserted_exit"] != true {
                 assert_eq!(
                     output.status.success(),

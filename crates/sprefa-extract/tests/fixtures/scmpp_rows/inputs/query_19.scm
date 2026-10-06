@@ -1,0 +1,1 @@
+((arguments (integer_literal)? @n) @args (#contains? @n "3"))

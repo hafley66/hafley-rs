@@ -1,0 +1,32 @@
+{
+  "label": "kind list and contains",
+  "expected_projection": "s=\"seed\"",
+  "steps": [
+    {
+      "action": "copy",
+      "source": "$fixtures/scmpp_rows/inputs/fixture.rs",
+      "path": "$work/fixture.rs"
+    },
+    {
+      "action": "copy",
+      "source": "$fixtures/scmpp_rows/inputs/query_17.scm",
+      "path": "$work/query.scm"
+    },
+    {
+      "action": "run",
+      "name": "query",
+      "arguments": [
+        "query",
+        "--scmpp",
+        "$work/query.scm",
+        "$work/fixture.rs"
+      ],
+      "environment": {
+        "DL_TRAIL": "0"
+      },
+      "expect_exit_code": 0,
+      "raw_stdout": true,
+      "unasserted_stderr": true
+    }
+  ]
+}

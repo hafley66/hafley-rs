@@ -1,0 +1,36 @@
+{
+  "steps": [
+    {
+      "action": "copy",
+      "source": "$fixtures/scmpp_rows/inputs/fixture.rs",
+      "path": "$work/unreadable.rs"
+    },
+    {
+      "action": "chmod",
+      "path": "$work/unreadable.rs",
+      "mode": 0
+    },
+    {
+      "action": "copy",
+      "source": "$fixtures/scmpp_rows/inputs/query_33.scm",
+      "path": "$work/query.scm"
+    },
+    {
+      "action": "run",
+      "name": "query",
+      "arguments": [
+        "query",
+        "--scmpp",
+        "$work/query.scm",
+        "$work/unreadable.rs"
+      ],
+      "environment": {
+        "DL_TRAIL": "0"
+      },
+      "expect_exit_code": 2,
+      "raw_stdout": true,
+      "trim_stderr": true,
+      "unasserted_stdout": true
+    }
+  ]
+}

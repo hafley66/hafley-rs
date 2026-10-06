@@ -1,0 +1,1 @@
+((call_expression) @c (#nth-child? @c 2 of _expression))

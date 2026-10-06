@@ -1,0 +1,1 @@
+((string_literal) @s (#contains? @s "ee") (#has-ancestor? @s function_item closure_expression))

@@ -1,0 +1,32 @@
+{
+  "label": "inside, stopBy pattern",
+  "expected_projection": "x=fact\nx=fact\nx=other\nx=other\nx=run\nx=other",
+  "steps": [
+    {
+      "action": "copy",
+      "source": "$fixtures/scmpp_rows/inputs/fixture.rs",
+      "path": "$work/fixture.rs"
+    },
+    {
+      "action": "copy",
+      "source": "$fixtures/scmpp_rows/inputs/query_11.scm",
+      "path": "$work/query.scm"
+    },
+    {
+      "action": "run",
+      "name": "query",
+      "arguments": [
+        "query",
+        "--scmpp",
+        "$work/query.scm",
+        "$work/fixture.rs"
+      ],
+      "environment": {
+        "DL_TRAIL": "0"
+      },
+      "expect_exit_code": 0,
+      "raw_stdout": true,
+      "unasserted_stderr": true
+    }
+  ]
+}

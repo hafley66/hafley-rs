@@ -1,0 +1,1 @@
+((if_expression) @child (#has-ancestor? @child ((expression_statement) @parent) rows: each) (#not-has-ancestor? @child if_expression))

@@ -1,0 +1,1 @@
+((block) @b (#has? @b (let_declaration) stopBy: neighbor))

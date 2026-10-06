@@ -1,0 +1,32 @@
+{
+  "label": "recursion rows: each",
+  "expected_projection": "fn=fact body={ if n == 0 { 1 } else { n * fact(n - 1) } } callee=fact\nfn=other body={ let run = || other(); run() + other() } callee=other\nfn=other body={ let run = || other(); run() + other() } callee=other",
+  "steps": [
+    {
+      "action": "copy",
+      "source": "$fixtures/scmpp_rows/inputs/fixture.rs",
+      "path": "$work/fixture.rs"
+    },
+    {
+      "action": "copy",
+      "source": "$fixtures/scmpp_rows/inputs/query_0.scm",
+      "path": "$work/query.scm"
+    },
+    {
+      "action": "run",
+      "name": "query",
+      "arguments": [
+        "query",
+        "--scmpp",
+        "$work/query.scm",
+        "$work/fixture.rs"
+      ],
+      "environment": {
+        "DL_TRAIL": "0"
+      },
+      "expect_exit_code": 0,
+      "raw_stdout": true,
+      "unasserted_stderr": true
+    }
+  ]
+}

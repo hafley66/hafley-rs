@@ -1,0 +1,1 @@
+((identifier) @x (#not-has-ancestor? @x function_item stopBy: end))

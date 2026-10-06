@@ -1,0 +1,1 @@
+((let_declaration) @l (#precedes? @l (expression_statement) stopBy: neighbor))

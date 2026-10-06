@@ -1,0 +1,32 @@
+{
+  "label": "match on an enclosing capture",
+  "expected_projection": "fn=helper f=fn helper() -> u32 { let seed = \"seed\"; let total = fact(3); other(); total + other() } c=fact\nfn=helper f=fn helper() -> u32 { let seed = \"seed\"; let total = fact(3); other(); total + other() } c=other\nfn=helper f=fn helper() -> u32 { let seed = \"seed\"; let total = fact(3); other(); total + other() } c=other",
+  "steps": [
+    {
+      "action": "copy",
+      "source": "$fixtures/scmpp_rows/inputs/fixture.rs",
+      "path": "$work/fixture.rs"
+    },
+    {
+      "action": "copy",
+      "source": "$fixtures/scmpp_rows/inputs/query_18.scm",
+      "path": "$work/query.scm"
+    },
+    {
+      "action": "run",
+      "name": "query",
+      "arguments": [
+        "query",
+        "--scmpp",
+        "$work/query.scm",
+        "$work/fixture.rs"
+      ],
+      "environment": {
+        "DL_TRAIL": "0"
+      },
+      "expect_exit_code": 0,
+      "raw_stdout": true,
+      "unasserted_stderr": true
+    }
+  ]
+}

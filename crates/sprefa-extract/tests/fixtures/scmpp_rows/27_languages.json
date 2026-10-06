@@ -1,0 +1,37 @@
+{
+  "steps": [
+    {
+      "action": "copy",
+      "source": "$fixtures/scmpp_rows/inputs/a.rs",
+      "path": "$work/a.rs"
+    },
+    {
+      "action": "copy",
+      "source": "$fixtures/scmpp_rows/inputs/b.py",
+      "path": "$work/b.py"
+    },
+    {
+      "action": "copy",
+      "source": "$fixtures/scmpp_rows/inputs/query_31.scm",
+      "path": "$work/query.scm"
+    },
+    {
+      "action": "run",
+      "name": "query",
+      "arguments": [
+        "query",
+        "--scmpp",
+        "$work/query.scm",
+        "$work/a.rs",
+        "$work/b.py"
+      ],
+      "environment": {
+        "DL_TRAIL": "0"
+      },
+      "expect_exit_code": 0,
+      "raw_stdout": true,
+      "unasserted_stderr": true,
+      "sort_stdout": true
+    }
+  ]
+}

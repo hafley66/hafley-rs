@@ -1,0 +1,1 @@
+((identifier) @x (#has-ancestor? @x (let_declaration)))

@@ -1,0 +1,265 @@
+---
+source: tests/support/2_fixture_runner.rs
+---
+{
+  "00_lowering": {
+    "query": {
+      "exit_code": 0,
+      "stdout": "{\"path\":\"$work/fixture.rs\",\"fn__start\":3,\"fn__end\":7,\"fn__text\":\"fact\",\"body__start\":23,\"body__end\":71,\"body__text\":\"{\\n    if n == 0 { 1 } else { n * fact(n - 1) }\\n}\",\"callee__start\":56,\"callee__end\":60,\"callee__text\":\"fact\"}\n{\"path\":\"$work/fixture.rs\",\"fn__start\":181,\"fn__end\":186,\"fn__text\":\"other\",\"body__start\":196,\"body__end\":245,\"body__text\":\"{\\n    let run = || other();\\n    run() + other()\\n}\",\"callee__start\":215,\"callee__end\":220,\"callee__text\":\"other\"}\n{\"path\":\"$work/fixture.rs\",\"fn__start\":181,\"fn__end\":186,\"fn__text\":\"other\",\"body__start\":196,\"body__end\":245,\"body__text\":\"{\\n    let run = || other();\\n    run() + other()\\n}\",\"callee__start\":236,\"callee__end\":241,\"callee__text\":\"other\"}\n"
+    }
+  },
+  "01_lowering": {
+    "query": {
+      "exit_code": 0,
+      "stdout": "{\"path\":\"$work/fixture.rs\",\"fn__start\":3,\"fn__end\":7,\"fn__text\":\"fact\",\"body__start\":23,\"body__end\":71,\"body__text\":\"{\\n    if n == 0 { 1 } else { n * fact(n - 1) }\\n}\"}\n{\"path\":\"$work/fixture.rs\",\"fn__start\":181,\"fn__end\":186,\"fn__text\":\"other\",\"body__start\":196,\"body__end\":245,\"body__text\":\"{\\n    let run = || other();\\n    run() + other()\\n}\"}\n"
+    }
+  },
+  "02_lowering": {
+    "query": {
+      "exit_code": 0,
+      "stdout": "{\"path\":\"$work/fixture.rs\",\"fn__start\":76,\"fn__end\":82,\"fn__text\":\"helper\",\"body__start\":92,\"body__end\":176,\"body__text\":\"{\\n    let seed = \\\"seed\\\";\\n    let total = fact(3);\\n    other();\\n    total + other()\\n}\"}\n"
+    }
+  },
+  "03_lowering": {
+    "query": {
+      "exit_code": 0,
+      "stdout": "{\"path\":\"$work/fixture.rs\",\"fn__start\":181,\"fn__end\":186,\"fn__text\":\"other\",\"body__start\":196,\"body__end\":245,\"body__text\":\"{\\n    let run = || other();\\n    run() + other()\\n}\",\"closure__start\":212,\"closure__end\":222,\"closure__text\":\"|| other()\",\"callee__start\":215,\"callee__end\":220,\"callee__text\":\"other\"}\n"
+    }
+  },
+  "04_lowering": {
+    "query": {
+      "exit_code": 0,
+      "stdout": "{\"path\":\"$work/fixture.rs\",\"callee__start\":146,\"callee__end\":151,\"callee__text\":\"other\",\"call__start\":146,\"call__end\":153,\"call__text\":\"other()\"}\n"
+    }
+  },
+  "05_lowering": {
+    "query": {
+      "exit_code": 0,
+      "stdout": "{\"path\":\"$work/fixture.rs\",\"callee__start\":133,\"callee__end\":137,\"callee__text\":\"fact\",\"call__start\":133,\"call__end\":140,\"call__text\":\"fact(3)\"}\n{\"path\":\"$work/fixture.rs\",\"callee__start\":146,\"callee__end\":151,\"callee__text\":\"other\",\"call__start\":146,\"call__end\":153,\"call__text\":\"other()\"}\n{\"path\":\"$work/fixture.rs\",\"callee__start\":167,\"callee__end\":172,\"callee__text\":\"other\",\"call__start\":167,\"call__end\":174,\"call__text\":\"other()\"}\n"
+    }
+  },
+  "06_lowering": {
+    "query": {
+      "exit_code": 0,
+      "stdout": "{\"path\":\"$work/fixture.rs\",\"x__start\":102,\"x__end\":106,\"x__text\":\"seed\"}\n{\"path\":\"$work/fixture.rs\",\"x__start\":125,\"x__end\":130,\"x__text\":\"total\"}\n{\"path\":\"$work/fixture.rs\",\"x__start\":206,\"x__end\":209,\"x__text\":\"run\"}\n"
+    }
+  },
+  "07_lowering": {
+    "query": {
+      "exit_code": 0,
+      "stdout": "{\"path\":\"$work/fixture.rs\",\"l__start\":98,\"l__end\":116,\"l__text\":\"let seed = \\\"seed\\\";\"}\n{\"path\":\"$work/fixture.rs\",\"l__start\":121,\"l__end\":141,\"l__text\":\"let total = fact(3);\"}\n{\"path\":\"$work/fixture.rs\",\"l__start\":202,\"l__end\":223,\"l__text\":\"let run = || other();\"}\n"
+    }
+  },
+  "08_lowering": {
+    "query": {
+      "exit_code": 0,
+      "stdout": "{\"path\":\"$work/fixture.rs\",\"l__start\":121,\"l__end\":141,\"l__text\":\"let total = fact(3);\"}\n{\"path\":\"$work/fixture.rs\",\"l__start\":202,\"l__end\":223,\"l__text\":\"let run = || other();\"}\n"
+    }
+  },
+  "09_lowering": {
+    "query": {
+      "exit_code": 0,
+      "stdout": "{\"path\":\"$work/fixture.rs\",\"x__start\":102,\"x__end\":106,\"x__text\":\"seed\"}\n{\"path\":\"$work/fixture.rs\",\"x__start\":125,\"x__end\":130,\"x__text\":\"total\"}\n{\"path\":\"$work/fixture.rs\",\"x__start\":133,\"x__end\":137,\"x__text\":\"fact\"}\n{\"path\":\"$work/fixture.rs\",\"x__start\":206,\"x__end\":209,\"x__text\":\"run\"}\n{\"path\":\"$work/fixture.rs\",\"x__start\":215,\"x__end\":220,\"x__text\":\"other\"}\n"
+    }
+  },
+  "10_lowering": {
+    "query": {
+      "exit_code": 0,
+      "stdout": "{\"path\":\"$work/fixture.rs\",\"x__start\":133,\"x__end\":137,\"x__text\":\"fact\"}\n{\"path\":\"$work/fixture.rs\",\"x__start\":215,\"x__end\":220,\"x__text\":\"other\"}\n"
+    }
+  },
+  "11_lowering": {
+    "query": {
+      "exit_code": 0,
+      "stdout": "{\"path\":\"$work/fixture.rs\",\"x__start\":56,\"x__end\":60,\"x__text\":\"fact\"}\n{\"path\":\"$work/fixture.rs\",\"x__start\":133,\"x__end\":137,\"x__text\":\"fact\"}\n{\"path\":\"$work/fixture.rs\",\"x__start\":146,\"x__end\":151,\"x__text\":\"other\"}\n{\"path\":\"$work/fixture.rs\",\"x__start\":167,\"x__end\":172,\"x__text\":\"other\"}\n{\"path\":\"$work/fixture.rs\",\"x__start\":228,\"x__end\":231,\"x__text\":\"run\"}\n{\"path\":\"$work/fixture.rs\",\"x__start\":236,\"x__end\":241,\"x__text\":\"other\"}\n"
+    }
+  },
+  "12_lowering": {
+    "query": {
+      "exit_code": 0,
+      "stdout": "{\"path\":\"$work/fixture.rs\",\"b__start\":92,\"b__end\":176,\"b__text\":\"{\\n    let seed = \\\"seed\\\";\\n    let total = fact(3);\\n    other();\\n    total + other()\\n}\"}\n{\"path\":\"$work/fixture.rs\",\"b__start\":196,\"b__end\":245,\"b__text\":\"{\\n    let run = || other();\\n    run() + other()\\n}\"}\n"
+    }
+  },
+  "13_lowering": {
+    "query": {
+      "exit_code": 0,
+      "stdout": "{\"path\":\"$work/fixture.rs\",\"l__start\":121,\"l__end\":141,\"l__text\":\"let total = fact(3);\"}\n"
+    }
+  },
+  "14_lowering": {
+    "query": {
+      "exit_code": 0,
+      "stdout": "{\"path\":\"$work/fixture.rs\",\"s__start\":146,\"s__end\":154,\"s__text\":\"other();\"}\n"
+    }
+  },
+  "15_lowering": {
+    "query": {
+      "exit_code": 0,
+      "stdout": "{\"path\":\"$work/fixture.rs\",\"c__start\":56,\"c__end\":67,\"c__text\":\"fact(n - 1)\"}\n{\"path\":\"$work/fixture.rs\",\"c__start\":167,\"c__end\":174,\"c__text\":\"other()\"}\n{\"path\":\"$work/fixture.rs\",\"c__start\":236,\"c__end\":243,\"c__text\":\"other()\"}\n"
+    }
+  },
+  "16_lowering": {
+    "query": {
+      "exit_code": 0,
+      "stdout": "{\"path\":\"$work/fixture.rs\",\"l__start\":121,\"l__end\":141,\"l__text\":\"let total = fact(3);\"}\n"
+    }
+  },
+  "17_lowering": {
+    "query": {
+      "exit_code": 0,
+      "stdout": "{\"path\":\"$work/fixture.rs\",\"s__start\":109,\"s__end\":115,\"s__text\":\"\\\"seed\\\"\"}\n"
+    }
+  },
+  "18_lowering": {
+    "query": {
+      "exit_code": 0,
+      "stdout": "{\"path\":\"$work/fixture.rs\",\"fn__start\":76,\"fn__end\":82,\"fn__text\":\"helper\",\"f__start\":73,\"f__end\":176,\"f__text\":\"fn helper() -> u32 {\\n    let seed = \\\"seed\\\";\\n    let total = fact(3);\\n    other();\\n    total + other()\\n}\",\"c__start\":133,\"c__end\":137,\"c__text\":\"fact\"}\n{\"path\":\"$work/fixture.rs\",\"fn__start\":76,\"fn__end\":82,\"fn__text\":\"helper\",\"f__start\":73,\"f__end\":176,\"f__text\":\"fn helper() -> u32 {\\n    let seed = \\\"seed\\\";\\n    let total = fact(3);\\n    other();\\n    total + other()\\n}\",\"c__start\":146,\"c__end\":151,\"c__text\":\"other\"}\n{\"path\":\"$work/fixture.rs\",\"fn__start\":76,\"fn__end\":82,\"fn__text\":\"helper\",\"f__start\":73,\"f__end\":176,\"f__text\":\"fn helper() -> u32 {\\n    let seed = \\\"seed\\\";\\n    let total = fact(3);\\n    other();\\n    total + other()\\n}\",\"c__start\":167,\"c__end\":172,\"c__text\":\"other\"}\n"
+    }
+  },
+  "19_lowering": {
+    "query": {
+      "exit_code": 0,
+      "stdout": "{\"path\":\"$work/fixture.rs\",\"n__start\":138,\"n__end\":139,\"n__text\":\"3\",\"args__start\":137,\"args__end\":140,\"args__text\":\"(3)\"}\n"
+    }
+  },
+  "20_lowering": {
+    "query": {
+      "exit_code": 0,
+      "stdout": "{\"path\":\"$work/fixture.rs\",\"n__start\":null,\"n__end\":null,\"n__text\":null,\"args__start\":60,\"args__end\":67,\"args__text\":\"(n - 1)\"}\n{\"path\":\"$work/fixture.rs\",\"n__start\":null,\"n__end\":null,\"n__text\":null,\"args__start\":151,\"args__end\":153,\"args__text\":\"()\"}\n{\"path\":\"$work/fixture.rs\",\"n__start\":null,\"n__end\":null,\"n__text\":null,\"args__start\":172,\"args__end\":174,\"args__text\":\"()\"}\n{\"path\":\"$work/fixture.rs\",\"n__start\":null,\"n__end\":null,\"n__text\":null,\"args__start\":220,\"args__end\":222,\"args__text\":\"()\"}\n{\"path\":\"$work/fixture.rs\",\"n__start\":null,\"n__end\":null,\"n__text\":null,\"args__start\":231,\"args__end\":233,\"args__text\":\"()\"}\n{\"path\":\"$work/fixture.rs\",\"n__start\":null,\"n__end\":null,\"n__text\":null,\"args__start\":241,\"args__end\":243,\"args__text\":\"()\"}\n"
+    }
+  },
+  "21_lowering": {
+    "query": {
+      "exit_code": 0,
+      "stdout": "{\"path\":\"$work/fixture.rs\",\"n__start\":null,\"n__end\":null,\"n__text\":null,\"args__start\":60,\"args__end\":67,\"args__text\":\"(n - 1)\"}\n{\"path\":\"$work/fixture.rs\",\"n__start\":138,\"n__end\":139,\"n__text\":\"3\",\"args__start\":137,\"args__end\":140,\"args__text\":\"(3)\"}\n{\"path\":\"$work/fixture.rs\",\"n__start\":null,\"n__end\":null,\"n__text\":null,\"args__start\":151,\"args__end\":153,\"args__text\":\"()\"}\n{\"path\":\"$work/fixture.rs\",\"n__start\":null,\"n__end\":null,\"n__text\":null,\"args__start\":172,\"args__end\":174,\"args__text\":\"()\"}\n{\"path\":\"$work/fixture.rs\",\"n__start\":null,\"n__end\":null,\"n__text\":null,\"args__start\":220,\"args__end\":222,\"args__text\":\"()\"}\n{\"path\":\"$work/fixture.rs\",\"n__start\":null,\"n__end\":null,\"n__text\":null,\"args__start\":231,\"args__end\":233,\"args__text\":\"()\"}\n{\"path\":\"$work/fixture.rs\",\"n__start\":null,\"n__end\":null,\"n__text\":null,\"args__start\":241,\"args__end\":243,\"args__text\":\"()\"}\n"
+    }
+  },
+  "22_equal_rust": {
+    "query": {
+      "exit_code": 0,
+      "stdout": "{\"path\":\"$work/fixture.rs\",\"child__start\":7,\"child__end\":30,\"child__text\":\"if true {fn shared(){}}\",\"parent__start\":7,\"parent__end\":30,\"parent__text\":\"if true {fn shared(){}}\"}\n"
+    }
+  },
+  "22_equal_ts": {
+    "query": {
+      "exit_code": 0,
+      "stdout": "{\"path\":\"$work/fixture.ts\",\"child__start\":13,\"child__end\":16,\"child__text\":\"g()\",\"parent__start\":13,\"parent__end\":16,\"parent__text\":\"g()\"}\n"
+    }
+  },
+  "23_list": {
+    "query": {
+      "exit_code": 0,
+      "stdout": "{\"path\":\"$work/fixture.rs\",\"name__start\":41,\"name__end\":47,\"name__text\":\"helper\",\"fn__start\":38,\"fn__end\":67,\"fn__text\":\"fn helper() { assert!(true) }\",\"comment__list\":[{\"comment__start\":0,\"comment__end\":6,\"comment__text\":\"// one\"},{\"comment__start\":7,\"comment__end\":13,\"comment__text\":\"// two\"},{\"comment__start\":27,\"comment__end\":37,\"comment__text\":\"// between\"}]}\n{\"path\":\"$work/fixture.rs\",\"name__start\":95,\"name__end\":99,\"name__text\":\"bare\",\"fn__start\":92,\"fn__end\":108,\"fn__text\":\"fn bare() { 1; }\",\"comment__list\":[]}\n"
+    }
+  },
+  "23_optional": {
+    "query": {
+      "exit_code": 0,
+      "stdout": "{\"path\":\"$work/fixture.rs\",\"name__start\":41,\"name__end\":47,\"name__text\":\"helper\",\"fn__start\":38,\"fn__end\":67,\"fn__text\":\"fn helper() { assert!(true) }\",\"comment__start\":0,\"comment__end\":6,\"comment__text\":\"// one\"}\n{\"path\":\"$work/fixture.rs\",\"name__start\":41,\"name__end\":47,\"name__text\":\"helper\",\"fn__start\":38,\"fn__end\":67,\"fn__text\":\"fn helper() { assert!(true) }\",\"comment__start\":7,\"comment__end\":13,\"comment__text\":\"// two\"}\n{\"path\":\"$work/fixture.rs\",\"name__start\":41,\"name__end\":47,\"name__text\":\"helper\",\"fn__start\":38,\"fn__end\":67,\"fn__text\":\"fn helper() { assert!(true) }\",\"comment__start\":27,\"comment__end\":37,\"comment__text\":\"// between\"}\n{\"path\":\"$work/fixture.rs\",\"name__start\":95,\"name__end\":99,\"name__text\":\"bare\",\"fn__start\":92,\"fn__end\":108,\"fn__text\":\"fn bare() { 1; }\",\"comment__start\":null,\"comment__end\":null,\"comment__text\":null}\n"
+    }
+  },
+  "24_store": {
+    "printed_rows": 0,
+    "query": {
+      "exit_code": 0
+    },
+    "stored_counts": {
+      "rows": [
+        [
+          {
+            "integer": 3
+          },
+          {
+            "integer": 69
+          },
+          {
+            "integer": 58
+          },
+          {
+            "integer": 126
+          },
+          {
+            "integer": 54
+          },
+          {
+            "integer": 23
+          }
+        ]
+      ]
+    }
+  },
+  "25_relation_free": {
+    "printed_rows": 0,
+    "query": {
+      "exit_code": 0
+    },
+    "stored_counts": {
+      "rows": [
+        [
+          {
+            "integer": 4
+          },
+          {
+            "integer": 0
+          },
+          {
+            "integer": 0
+          },
+          {
+            "integer": 0
+          },
+          {
+            "integer": 0
+          },
+          {
+            "integer": 8
+          }
+        ]
+      ]
+    }
+  },
+  "26_partition_0": {
+    "identifier_count": 3575,
+    "query": {
+      "exit_code": 0
+    }
+  },
+  "26_partition_1": {
+    "identifier_count": 3197,
+    "query": {
+      "exit_code": 0
+    }
+  },
+  "26_partition_2": {
+    "identifier_count": 378,
+    "query": {
+      "exit_code": 0
+    }
+  },
+  "27_languages": {
+    "query": {
+      "exit_code": 0,
+      "stdout": "{\"path\":\"$work/a.rs\",\"x__start\":25,\"x__end\":29,\"x__text\":\"fact\"}\n{\"path\":\"$work/a.rs\",\"x__start\":3,\"x__end\":7,\"x__text\":\"fact\"}\n{\"path\":\"$work/b.py\",\"x__start\":24,\"x__end\":28,\"x__text\":\"fact\"}\n{\"path\":\"$work/b.py\",\"x__start\":4,\"x__end\":8,\"x__text\":\"fact\"}"
+    }
+  },
+  "28_limits_deep": {
+    "query": {
+      "exit_code": 2,
+      "stderr": "query (rust): scm++ SQL for 31 captures, 31 levels deep, exceeds a SQLite limit: Expression tree is too large (maximum depth 1000)"
+    }
+  },
+  "28_limits_wide": {
+    "query": {
+      "exit_code": 2,
+      "stderr": "query (rust): scm++ SQL for 64 captures, 1 levels deep, exceeds a SQLite limit: at most 64 tables in a join"
+    }
+  },
+  "29_timeout": {
+    "query": {
+      "exit_code": 3,
+      "stdout": "",
+      "stderr": "query: query exceeded 1s",
+      "within_budget": true
+    }
+  }
+}

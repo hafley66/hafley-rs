@@ -1,0 +1,1 @@
+((identifier) @x (#has-parent? @x let_declaration))

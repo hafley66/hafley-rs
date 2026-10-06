@@ -1,0 +1,1 @@
+((identifier) @x (#eq? @x "fact"))
