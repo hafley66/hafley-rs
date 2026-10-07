@@ -1,0 +1,23 @@
+{
+  "steps": [
+    {
+      "action": "run",
+      "name": "modules",
+      "arguments": [
+        "--resolve",
+        "--arms",
+        "call",
+        "tests/fixtures/python_modules/main.py",
+        "tests/fixtures/python_modules/app/__init__.py",
+        "tests/fixtures/python_modules/app/core.py",
+        "tests/fixtures/python_modules/app/helpers.py",
+        "tests/fixtures/python_modules/app/sub/__init__.py",
+        "tests/fixtures/python_modules/app/sub/leaf.py",
+        "tests/fixtures/python_modules/app/sub/sibling.py"
+      ],
+      "cwd": "$manifest",
+      "expect_exit_code": 0,
+      "unasserted_stderr": true
+    }
+  ]
+}

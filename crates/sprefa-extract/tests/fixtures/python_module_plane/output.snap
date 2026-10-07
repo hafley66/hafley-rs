@@ -1,0 +1,445 @@
+---
+source: crates/sprefa-extract/tests/support/2_fixture_runner.rs
+---
+{
+  "0_modules": {
+    "modules": {
+      "exit_code": 0,
+      "stdout": [
+        {
+          "record": "resolved_edge",
+          "caller_path": "tests/fixtures/python_modules/app/core.py",
+          "caller_name": "run",
+          "callee_path": "tests/fixtures/python_modules/app/core.py",
+          "callee_name": "start",
+          "caller_site_start": 154,
+          "caller_site_end": 168,
+          "callee_start": 91,
+          "callee_end": 128,
+          "kind": "name_resolve",
+          "resolution_origin": "corpus_unique"
+        },
+        {
+          "record": "resolved_edge",
+          "caller_path": "tests/fixtures/python_modules/app/sub/leaf.py",
+          "caller_name": "leaf_fn",
+          "callee_path": "tests/fixtures/python_modules/app/core.py",
+          "callee_name": "run",
+          "caller_site_start": 214,
+          "caller_site_end": 222,
+          "callee_start": 131,
+          "callee_end": 170,
+          "kind": "name_resolve",
+          "resolution_origin": "corpus_unique"
+        },
+        {
+          "record": "resolved_edge",
+          "caller_path": "tests/fixtures/python_modules/app/sub/leaf.py",
+          "caller_name": "leaf_fn",
+          "callee_path": "tests/fixtures/python_modules/app/core.py",
+          "callee_name": "start",
+          "caller_site_start": 229,
+          "caller_site_end": 240,
+          "callee_start": 91,
+          "callee_end": 128,
+          "kind": "name_resolve",
+          "resolution_origin": "corpus_unique"
+        },
+        {
+          "record": "resolved_edge",
+          "caller_path": "tests/fixtures/python_modules/app/sub/leaf.py",
+          "caller_name": "leaf_fn",
+          "callee_path": "tests/fixtures/python_modules/app/helpers.py",
+          "callee_name": "helper",
+          "caller_site_start": 282,
+          "caller_site_end": 290,
+          "callee_start": 88,
+          "callee_end": 125,
+          "kind": "name_resolve",
+          "resolution_origin": "corpus_unique"
+        },
+        {
+          "record": "resolved_edge",
+          "caller_path": "tests/fixtures/python_modules/app/sub/leaf.py",
+          "caller_name": "leaf_fn",
+          "callee_path": "tests/fixtures/python_modules/app/sub/sibling.py",
+          "callee_name": "sib",
+          "caller_site_start": 247,
+          "caller_site_end": 258,
+          "callee_start": 81,
+          "callee_end": 108,
+          "kind": "name_resolve",
+          "resolution_origin": "corpus_unique"
+        },
+        {
+          "record": "resolved_edge",
+          "caller_path": "tests/fixtures/python_modules/app/sub/leaf.py",
+          "caller_name": "leaf_fn",
+          "callee_path": "tests/fixtures/python_modules/app/sub/sibling.py",
+          "callee_name": "sib",
+          "caller_site_start": 265,
+          "caller_site_end": 268,
+          "callee_start": 81,
+          "callee_end": 108,
+          "kind": "name_resolve",
+          "resolution_origin": "corpus_unique"
+        },
+        {
+          "record": "resolved_edge",
+          "caller_path": "tests/fixtures/python_modules/main.py",
+          "caller_name": "main",
+          "callee_path": "tests/fixtures/python_modules/app/core.py",
+          "callee_name": "run",
+          "caller_site_start": 289,
+          "caller_site_end": 292,
+          "callee_start": 131,
+          "callee_end": 170,
+          "kind": "name_resolve",
+          "resolution_origin": "corpus_unique"
+        },
+        {
+          "record": "resolved_edge",
+          "caller_path": "tests/fixtures/python_modules/main.py",
+          "caller_name": "main",
+          "callee_path": "tests/fixtures/python_modules/app/core.py",
+          "callee_name": "run",
+          "caller_site_start": 312,
+          "caller_site_end": 324,
+          "callee_start": 131,
+          "callee_end": 170,
+          "kind": "name_resolve",
+          "resolution_origin": "corpus_unique"
+        },
+        {
+          "record": "resolved_edge",
+          "caller_path": "tests/fixtures/python_modules/main.py",
+          "caller_name": "main",
+          "callee_path": "tests/fixtures/python_modules/app/helpers.py",
+          "callee_name": "helper",
+          "caller_site_start": 299,
+          "caller_site_end": 305,
+          "callee_start": 88,
+          "callee_end": 125,
+          "kind": "name_resolve",
+          "resolution_origin": "corpus_unique"
+        },
+        {
+          "record": "resolved_edge",
+          "caller_path": "tests/fixtures/python_modules/main.py",
+          "caller_name": "main",
+          "callee_path": "tests/fixtures/python_modules/app/helpers.py",
+          "callee_name": "helper",
+          "caller_site_start": 331,
+          "caller_site_end": 351,
+          "callee_start": 88,
+          "callee_end": 125,
+          "kind": "name_resolve",
+          "resolution_origin": "corpus_unique"
+        },
+        {
+          "record": "resolved_edge",
+          "caller_path": "tests/fixtures/python_modules/main.py",
+          "caller_name": "main",
+          "callee_path": "tests/fixtures/python_modules/app/sub/leaf.py",
+          "callee_name": "leaf_fn",
+          "caller_site_start": 358,
+          "caller_site_end": 370,
+          "callee_start": 188,
+          "callee_end": 292,
+          "kind": "name_resolve",
+          "resolution_origin": "corpus_unique"
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/python_modules/app/__init__.py",
+          "name": "*",
+          "local": "*",
+          "target_path": "tests/fixtures/python_modules/app/helpers.py",
+          "target_name": null,
+          "kind": "star",
+          "hops": 1
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/python_modules/app/__init__.py",
+          "name": ".core",
+          "local": "",
+          "target_path": "tests/fixtures/python_modules/app/core.py",
+          "target_name": null,
+          "kind": "module",
+          "hops": 1
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/python_modules/app/__init__.py",
+          "name": ".helpers",
+          "local": "",
+          "target_path": "tests/fixtures/python_modules/app/helpers.py",
+          "target_name": null,
+          "kind": "module",
+          "hops": 1
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/python_modules/app/__init__.py",
+          "name": "run",
+          "local": "run",
+          "target_path": "tests/fixtures/python_modules/app/core.py",
+          "target_name": "run",
+          "kind": "local",
+          "hops": 1
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/python_modules/app/sub/leaf.py",
+          "name": "*",
+          "local": "h",
+          "target_path": "tests/fixtures/python_modules/app/helpers.py",
+          "target_name": null,
+          "kind": "namespace",
+          "hops": 1
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/python_modules/app/sub/leaf.py",
+          "name": ".",
+          "local": "",
+          "target_path": "tests/fixtures/python_modules/app/sub/__init__.py",
+          "target_name": null,
+          "kind": "module",
+          "hops": 1
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/python_modules/app/sub/leaf.py",
+          "name": "..",
+          "local": "",
+          "target_path": "tests/fixtures/python_modules/app/__init__.py",
+          "target_name": null,
+          "kind": "module",
+          "hops": 1
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/python_modules/app/sub/leaf.py",
+          "name": "..core",
+          "local": "",
+          "target_path": "tests/fixtures/python_modules/app/core.py",
+          "target_name": null,
+          "kind": "module",
+          "hops": 1
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/python_modules/app/sub/leaf.py",
+          "name": ".sibling",
+          "local": "",
+          "target_path": "tests/fixtures/python_modules/app/sub/sibling.py",
+          "target_name": null,
+          "kind": "module",
+          "hops": 1
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/python_modules/app/sub/leaf.py",
+          "name": "Engine",
+          "local": "Eng",
+          "target_path": "tests/fixtures/python_modules/app/core.py",
+          "target_name": "Engine",
+          "kind": "local",
+          "hops": 1
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/python_modules/app/sub/leaf.py",
+          "name": "app.helpers",
+          "local": "",
+          "target_path": "tests/fixtures/python_modules/app/helpers.py",
+          "target_name": null,
+          "kind": "module",
+          "hops": 1
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/python_modules/app/sub/leaf.py",
+          "name": "core",
+          "local": "core",
+          "target_path": "tests/fixtures/python_modules/app/core.py",
+          "target_name": null,
+          "kind": "namespace",
+          "hops": 1
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/python_modules/app/sub/leaf.py",
+          "name": "sib",
+          "local": "sib",
+          "target_path": "tests/fixtures/python_modules/app/sub/sibling.py",
+          "target_name": "sib",
+          "kind": "local",
+          "hops": 1
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/python_modules/app/sub/leaf.py",
+          "name": "sibling",
+          "local": "sibling",
+          "target_path": "tests/fixtures/python_modules/app/sub/sibling.py",
+          "target_name": null,
+          "kind": "namespace",
+          "hops": 1
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/python_modules/main.py",
+          "name": "*",
+          "local": "*",
+          "target_path": "tests/fixtures/python_modules/app/helpers.py",
+          "target_name": null,
+          "kind": "star",
+          "hops": 1
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/python_modules/main.py",
+          "name": "*",
+          "local": "app",
+          "target_path": "tests/fixtures/python_modules/app/__init__.py",
+          "target_name": null,
+          "kind": "namespace",
+          "hops": 1
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/python_modules/main.py",
+          "name": "*",
+          "local": "app.core",
+          "target_path": "tests/fixtures/python_modules/app/core.py",
+          "target_name": null,
+          "kind": "namespace",
+          "hops": 1
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/python_modules/main.py",
+          "name": "*",
+          "local": "helpers_alias",
+          "target_path": "tests/fixtures/python_modules/app/helpers.py",
+          "target_name": null,
+          "kind": "namespace",
+          "hops": 1
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/python_modules/main.py",
+          "name": "app",
+          "local": "",
+          "target_path": "tests/fixtures/python_modules/app/__init__.py",
+          "target_name": null,
+          "kind": "module",
+          "hops": 1
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/python_modules/main.py",
+          "name": "app",
+          "local": "",
+          "target_path": "tests/fixtures/python_modules/app/__init__.py",
+          "target_name": null,
+          "kind": "module",
+          "hops": 1
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/python_modules/main.py",
+          "name": "app",
+          "local": "",
+          "target_path": "tests/fixtures/python_modules/app/__init__.py",
+          "target_name": null,
+          "kind": "module",
+          "hops": 1
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/python_modules/main.py",
+          "name": "app.core",
+          "local": "",
+          "target_path": "tests/fixtures/python_modules/app/core.py",
+          "target_name": null,
+          "kind": "module",
+          "hops": 1
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/python_modules/main.py",
+          "name": "app.core",
+          "local": "",
+          "target_path": "tests/fixtures/python_modules/app/core.py",
+          "target_name": null,
+          "kind": "module",
+          "hops": 1
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/python_modules/main.py",
+          "name": "app.helpers",
+          "local": "",
+          "target_path": "tests/fixtures/python_modules/app/helpers.py",
+          "target_name": null,
+          "kind": "module",
+          "hops": 1
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/python_modules/main.py",
+          "name": "app.helpers",
+          "local": "",
+          "target_path": "tests/fixtures/python_modules/app/helpers.py",
+          "target_name": null,
+          "kind": "module",
+          "hops": 1
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/python_modules/main.py",
+          "name": "app.sub",
+          "local": "",
+          "target_path": "tests/fixtures/python_modules/app/sub/__init__.py",
+          "target_name": null,
+          "kind": "module",
+          "hops": 1
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/python_modules/main.py",
+          "name": "helper",
+          "local": "helper",
+          "target_path": "tests/fixtures/python_modules/app/helpers.py",
+          "target_name": "helper",
+          "kind": "star",
+          "hops": 2
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/python_modules/main.py",
+          "name": "leaf",
+          "local": "leaf",
+          "target_path": "tests/fixtures/python_modules/app/sub/leaf.py",
+          "target_name": null,
+          "kind": "namespace",
+          "hops": 1
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/python_modules/main.py",
+          "name": "run",
+          "local": "run",
+          "target_path": "tests/fixtures/python_modules/app/core.py",
+          "target_name": "run",
+          "kind": "indirect",
+          "hops": 2
+        }
+      ]
+    }
+  }
+}
