@@ -23,6 +23,9 @@ crates/sprefa-extract/src/0_graph.rs	fn::slice_at	1
 crates/sprefa-extract/src/0_query.rs	fn::source_bytes	1
 crates/sprefa-extract/src/0_stratify.rs	fn::line_count	2
 crates/sprefa-extract/src/0_stratify.rs	fn::symbol_cut_lines	2
+crates/sprefa-extract/src/0b_graph_anchor.rs	fn::seed_unmatched	1
+crates/sprefa-extract/src/0b_graph_anchor.rs	fn::type_decl_start	1
+crates/sprefa-extract/src/0d_graph_flow.rs	fn::locate	1
 crates/sprefa-extract/src/3_region_writer.rs	fn::run	1
 crates/sprefa-extract/src/bin/ryi.rs	fn::extract_file	1
 crates/sprefa-extract/src/bin/ryi.rs	fn::register_line_tables	1

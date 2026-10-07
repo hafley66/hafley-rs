@@ -69,7 +69,15 @@ source: tests/support/2_fixture_runner.rs
           "depth": 1,
           "witness": [
             5
-          ]
+          ],
+          "from_file": "$work/0_local.ts",
+          "from_line": 1,
+          "from_col": 23,
+          "from_text": "children: string",
+          "to_file": "$work/0_local.ts",
+          "to_line": 1,
+          "to_col": 50,
+          "to_text": "children"
         },
         {
           "record": "graph_path",
@@ -82,7 +90,15 @@ source: tests/support/2_fixture_runner.rs
           "witness": [
             5,
             6
-          ]
+          ],
+          "from_file": "$work/0_local.ts",
+          "from_line": 1,
+          "from_col": 23,
+          "from_text": "children: string",
+          "to_file": "$work/0_local.ts",
+          "to_line": 1,
+          "to_col": 43,
+          "to_text": "return children;"
         }
       ]
     },
@@ -123,7 +139,15 @@ source: tests/support/2_fixture_runner.rs
           "depth": 1,
           "witness": [
             4
-          ]
+          ],
+          "from_file": "tests/fixtures/resolve/0_caller.ts",
+          "from_line": 2,
+          "from_col": 10,
+          "from_text": "helper()",
+          "to_file": "tests/fixtures/resolve/0_caller.ts",
+          "to_line": 2,
+          "to_col": 3,
+          "to_text": "return helper();"
         }
       ]
     },
@@ -189,7 +213,15 @@ source: tests/support/2_fixture_runner.rs
           "depth": 1,
           "witness": [
             5
-          ]
+          ],
+          "from_file": "$work/0_local.ts",
+          "from_line": 1,
+          "from_col": 23,
+          "from_text": "children: string",
+          "to_file": "$work/0_local.ts",
+          "to_line": 1,
+          "to_col": 50,
+          "to_text": "children"
         },
         {
           "record": "graph_path",
@@ -202,7 +234,15 @@ source: tests/support/2_fixture_runner.rs
           "witness": [
             5,
             6
-          ]
+          ],
+          "from_file": "$work/0_local.ts",
+          "from_line": 1,
+          "from_col": 23,
+          "from_text": "children: string",
+          "to_file": "$work/0_local.ts",
+          "to_line": 1,
+          "to_col": 43,
+          "to_text": "return children;"
         }
       ]
     },

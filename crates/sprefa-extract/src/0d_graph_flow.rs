@@ -115,13 +115,6 @@ pub(super) fn locate(
         let (digest, path) = file?;
         files.entry(digest).or_default().insert(path);
     }
-    let base = match root {
-        Some(root) => fs::canonicalize(sprefa_extract::io_path(root))
-            .map_err(|error| format!("source root: {error}")),
-        None => soopy::discover(crate::ops::request_root())
-            .map(|repository| repository.root)
-            .map_err(|error| format!("worktree root: {error}")),
-    };
     let mut sources: BTreeMap<String, Result<Source, String>> = BTreeMap::new();
     for row in rows.iter() {
         let FlatFact::GraphPath { from_path, to_path, .. } = row else { continue };
@@ -135,24 +128,16 @@ pub(super) fn locate(
                     return Err(format!("digest maps to {} loaded paths; source path is ambiguous", paths.len()));
                 }
                 let path = Path::new(paths.first().expect("a mapped digest has a path"));
-                let base = base.as_ref().map_err(Clone::clone)?;
-                let absolute = if path.is_absolute() {
-                    path.to_path_buf()
-                } else if root.is_some() {
-                    base.join(path)
-                } else {
-                    sprefa_extract::io_path(path)
+                let absolute = match root {
+                    Some(root) if !path.is_absolute() => root.join(path),
+                    _ => sprefa_extract::io_path(path),
                 };
-                let absolute = fs::canonicalize(&absolute)
-                    .map_err(|error| format!("source path: {error}"))?;
-                let relative = absolute.strip_prefix(base)
-                    .map_err(|_| "source path is outside the worktree root")?;
                 let bytes = fs::read(&absolute).map_err(|error| format!("source read: {error}"))?;
                 if sprefa_extract::content_id_of(&bytes).to_string() != *digest {
                     return Err("source content does not match loaded file digest".to_string());
                 }
                 Ok(Source {
-                    path: relative.to_str().ok_or("source path is not valid UTF-8")?.to_string(),
+                    path: path.to_str().ok_or("source path is not valid UTF-8")?.to_string(),
                     offsets: newline_offsets(&bytes),
                     bytes,
                 })

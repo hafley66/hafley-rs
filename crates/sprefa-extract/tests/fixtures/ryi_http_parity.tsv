@@ -4,8 +4,8 @@ slow    cli     371 834e48c2b5f1
 slow    router  371 834e48c2b5f1
 scip    cli     228 3cec8a59f4e0
 scip    router  228 3cec8a59f4e0
-graph   cli      14 7d486d030709
-graph   router   14 7d486d030709
+graph   cli      14 1babbc6f5eb9
+graph   router   14 1babbc6f5eb9
 cleave  cli       4 65889261c505
 cleave  router    4 65889261c505
 move    cli      15 c907b28d1ebd

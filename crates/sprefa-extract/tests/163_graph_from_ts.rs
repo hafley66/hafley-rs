@@ -77,7 +77,10 @@ fn the_tail_of_the_chain_reaches_nothing() {
 
 #[test]
 fn an_unknown_seed_reaches_nothing() {
-    assert_eq!(rows("absent", "nobodyHere").len(), 0);
+    assert_eq!(
+        rows("absent", "nobodyHere"),
+        [serde_json::json!({"record":"seed_unmatched","seed":"nobodyHere","reason":"no_declaration"})]
+    );
 }
 
 /// Two files declare `build`. Bare NAME seeds both; `PATH#NAME` seeds the
@@ -89,7 +92,10 @@ fn a_path_anchor_selects_one_of_several_same_named_seeds() {
     let reached = |name: &str| {
         rows_in("anchor", name, corpus)
             .iter()
-            .map(|row| format!("\n{} {} {}", row["path"].as_str().unwrap(), row["name"].as_str().unwrap(), row["depth"]))
+            .map(|row| match row["path"].as_str() {
+                Some(path) => format!("\n{path} {} {}", row["name"].as_str().unwrap(), row["depth"]),
+                None => format!("\n{} {}", row["record"].as_str().unwrap(), row["reason"].as_str().unwrap()),
+            })
             .collect::<String>()
     };
     assert_eq!(
@@ -114,6 +120,8 @@ build.ts#build:
 tests/fixtures/graph_ts_same_name/a/build.ts stepA 1
 tests/fixtures/graph_ts_same_name/b/build.ts stepB 1
 c/build.ts#build:
-uild.ts#build:"
+seed_unmatched no_declaration
+uild.ts#build:
+seed_unmatched no_declaration"
     );
 }

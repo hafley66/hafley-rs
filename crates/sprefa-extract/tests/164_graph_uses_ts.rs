@@ -49,8 +49,8 @@ fn a_type_used_in_two_files_answers_with_two_rows() {
         rows,
         serde_json::from_str::<Vec<Value>>(
             r#"[
-            {"record":"graph_edge","from_path":"tests/fixtures/graph_ts/widget_reader.ts","from_name":"readWidget","to_path":"tests/fixtures/graph_ts/widget.ts","to_name":"Widget","kind":"param","grade":"+","from_line":3,"to_line":null},
-            {"record":"graph_edge","from_path":"tests/fixtures/graph_ts/widget_writer.ts","from_name":"makeWidget","to_path":"tests/fixtures/graph_ts/widget.ts","to_name":"Widget","kind":"returns","grade":"+","from_line":3,"to_line":null}
+            {"record":"graph_edge","from_path":"tests/fixtures/graph_ts/widget_reader.ts","from_name":"readWidget","to_path":"tests/fixtures/graph_ts/widget.ts","to_name":"Widget","kind":"param","grade":"+","from_line":3,"to_line":2},
+            {"record":"graph_edge","from_path":"tests/fixtures/graph_ts/widget_writer.ts","from_name":"makeWidget","to_path":"tests/fixtures/graph_ts/widget.ts","to_name":"Widget","kind":"returns","grade":"+","from_line":3,"to_line":2}
             ]"#,
         )
         .unwrap()
@@ -61,8 +61,11 @@ fn a_type_used_in_two_files_answers_with_two_rows() {
 #[test]
 fn a_type_nobody_names_answers_with_nothing() {
     let (rows, stderr) = run("absent", "NoSuchType");
-    assert_eq!(rows.len(), 0);
-    assert!(stderr.contains("0 edges: 0 +, 0 ~, 0 -"), "{stderr}");
+    assert_eq!(
+        rows,
+        [serde_json::json!({"record":"seed_unmatched","seed":"NoSuchType","reason":"no_declaration"})]
+    );
+    assert!(stderr.contains("seed NoSuchType: no_declaration"), "{stderr}");
 }
 
 #[test]

@@ -163,7 +163,7 @@ source: tests/support/2_fixture_runner.rs
     "rename": {
       "exit_code": 8,
       "stdout": "",
-      "stderr": "src/twins.rs: rust-analyzer Names refused the rename: outside_workspace\n"
+      "stderr": "src/twins.rs: rust-analyzer Names refused the rename: not_in_module_tree\n"
     }
   },
   "10_list_rows_read_earlier_edits_chained_list": {

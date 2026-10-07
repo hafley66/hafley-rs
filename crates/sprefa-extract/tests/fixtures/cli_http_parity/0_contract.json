@@ -226,8 +226,8 @@
       },
       "reset_state": null,
       "expect_table": [
-        "graph   cli      14 7d486d030709",
-        "graph   router   14 7d486d030709"
+        "graph   cli      14 1babbc6f5eb9",
+        "graph   router   14 1babbc6f5eb9"
       ]
     },
     {

@@ -98,55 +98,6 @@ pub fn jsonl() -> Vec<u8> {
     output
 }
 
-pub fn help_table() -> String {
-    let mut output = String::from(
-        "LANGUAGE     PLANES                 RESOLVE  REHOME                 RENAME  CHECKER         SCIP\n",
-    );
-    for row in rows() {
-        let language = row["language"].as_str().unwrap_or("");
-        let planes = row["planes"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .filter_map(Value::as_str)
-            .collect::<Vec<_>>()
-            .join(",");
-        let resolve = format!(
-            "{}{}",
-            row["resolve"]["call"]
-                .as_bool()
-                .unwrap_or(false)
-                .then_some("call")
-                .unwrap_or(""),
-            row["resolve"]["types"]
-                .as_bool()
-                .unwrap_or(false)
-                .then_some("+types")
-                .unwrap_or("")
-        );
-        let rehome = if row["rehome"].is_null() {
-            String::new()
-        } else {
-            ["manifests", "shim", "text_spellings", "plan_check"]
-                .into_iter()
-                .filter(|key| row["rehome"][key].as_bool() == Some(true))
-                .collect::<Vec<_>>()
-                .join(",")
-        };
-        let checker = row["checker"].as_str().unwrap_or("-");
-        let scip = row["scip_indexer"].as_str().unwrap_or("-");
-        let rename = if row["rename"].as_bool().unwrap_or(false) {
-            "yes"
-        } else {
-            "no"
-        };
-        output.push_str(&format!(
-            "{language:<12} {planes:<22} {resolve:<8} {rehome:<22} {rename:<7} {checker:<15} {scip}\n"
-        ));
-    }
-    output
-}
-
 pub fn write_to(mut writer: impl Write) -> std::io::Result<()> {
     writer.write_all(&jsonl())
 }

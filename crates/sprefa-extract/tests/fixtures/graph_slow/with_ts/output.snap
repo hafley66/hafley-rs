@@ -46,12 +46,12 @@ source: crates/sprefa-extract/tests/support/2_fixture_runner.rs
           "line": 1
         }
       ],
-      "stderr": "demand walk: 2 bodies inferred, 1 call, 0 method, 0 passed, 0 trait_impl, 0 extern edges\n1 edges: 1 +, 0 ~, 0 -\n"
+      "stderr": "demand walk: 2 bodies inferred, 1 call, 0 method, 0 passed, 0 trait_impl, 0 extern edges\n1 nodes: 1 +, 0 ~, 0 -\n"
     },
     "unowned": {
       "exit_code": 0,
       "stdout": [],
-      "stderr": "ryi slow: tier.rust-analyzer declined src/shim.rs: owns no module in the loaded crate graph (cfg-gated, or outside every crate root)\ndemand walk: 0 bodies inferred, 0 call, 0 method, 0 passed, 0 trait_impl, 0 extern edges\n0 edges: 0 +, 0 ~, 0 -\n"
+      "stderr": "ryi slow: tier.rust-analyzer declined src/shim.rs: owns no module in the loaded crate graph (cfg-gated, or outside every crate root)\ndemand walk: 0 bodies inferred, 0 call, 0 method, 0 passed, 0 trait_impl, 0 extern edges\n0 nodes: 0 +, 0 ~, 0 -\n"
     }
   },
   "04_targeted_parity": {

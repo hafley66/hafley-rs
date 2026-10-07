@@ -73,8 +73,8 @@ fn shared_names_provider_routes_graph_and_edits() {
                 .join("\n"),
             "method" => format!("needs_types: {}", stderr.contains("needs_types")),
             "orphan" => format!(
-                "outside_workspace: {}",
-                stderr.contains("outside_workspace")
+                "not_in_module_tree: {}",
+                stderr.contains("not_in_module_tree")
             ),
             _ => unreachable!(),
         };
@@ -133,7 +133,7 @@ impl Item { pub fn method(&self) {} }
 
 
 orphan: false
-outside_workspace: true
+not_in_module_tree: true
 
 method: false
 needs_types: true

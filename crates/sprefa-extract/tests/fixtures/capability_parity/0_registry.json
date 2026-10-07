@@ -37,24 +37,6 @@
       ],
       "expect_exit_code": 0,
       "raw_stdout": true
-    },
-    {
-      "action": "run",
-      "name": "help",
-      "arguments": [
-        "--help"
-      ],
-      "expect_exit_code": 0,
-      "raw_stdout": true,
-      "unasserted_stdout": true,
-      "unasserted_stderr": true
-    },
-    {
-      "action": "claim",
-      "name": "help_contains_matrix",
-      "kind": "contains",
-      "cell": "help",
-      "text": "LANGUAGE     PLANES                 RESOLVE  REHOME                 RENAME  CHECKER         SCIP\nrust         cst,types,call,df      call+types manifests,plan_check   yes     rust-analyzer   rust\ngo           cst,types,call,df      call+types                        no      go-types        go\nkotlin       cst,types,call,df      call+types                        yes     -               kotlin/java\nmarkdown     cst,types              +types                          no      -               -\nprolog       cst,types,call,df      call                            yes     -               -\npython       cst,types,call,df      call+types                        no      -               python\ndata         cst,data                                               no      -               -\nts           cst,types,call,df      call+types manifests,text_spellings,plan_check yes     tsgo            typescript\ngdscript     cst                                                    no      -               -\ncommonlisp   cst                                                    no      -               -\ntypespec     cst                                                    no      -               -\nfallback     cst,call               call                            no      -               -\ncpp                                                                 no      -               cpp\n"
     }
   ]
 }

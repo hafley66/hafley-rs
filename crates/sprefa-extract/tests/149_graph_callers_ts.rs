@@ -60,7 +60,7 @@ fn path_anchor_forms_agree_across_arms() {
             .output()
             .expect("graph binary runs");
         assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
-        String::from_utf8(output.stdout).unwrap().lines().count()
+        String::from_utf8(output.stdout).unwrap().lines().filter(|line| !line.contains("\"seed_unmatched\"")).count()
     };
     let forms = |file: &str, name: &str| {
         let path = format!("{fixture}/{file}");

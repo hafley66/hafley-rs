@@ -42,7 +42,7 @@
       "name": "claim_0",
       "cell": "rename.stderr",
       "kind": "contains",
-      "text": "src/twins.rs: rust-analyzer Names refused the rename: outside_workspace"
+      "text": "src/twins.rs: rust-analyzer Names refused the rename: not_in_module_tree"
     },
     {
       "action": "tree_matches",
@@ -55,7 +55,7 @@
     {
       "cell": "stderr",
       "kind": "contains",
-      "value": "src/twins.rs: rust-analyzer Names refused the rename: outside_workspace",
+      "value": "src/twins.rs: rust-analyzer Names refused the rename: not_in_module_tree",
       "claim": "the stop names the twin row exactly"
     },
     {

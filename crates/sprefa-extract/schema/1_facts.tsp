@@ -73,6 +73,7 @@ model ResolvedEdge {
   kind: string; resolution_origin: string;
 }
 model GraphNode { ...ExportRow; record: "graph_node"; path: string; name: string | null; depth: uint32; grade: string; line: uint32 | null; }
+model SeedUnmatched { ...ExportRow; record: "seed_unmatched"; seed: string; reason: string; }
 model GraphEdge { ...ExportRow; record: "graph_edge"; from_path: string; from_name: string | null; to_path: string; to_name: string | null; kind: string; grade: string; from_line: uint32 | null; to_line: uint32 | null; }
 model ExternalCrateDecline { ...ExportRow; record: "external_crate_decline"; from_path: string; from_name: string | null; type_name: string; crate_name: string; reason: string; kind: string; }
 model GraphDecline { ...ExportRow; record: "graph_decline"; from_path: string; from_name: string | null; type_name: string; crate_name: string; reason: string; kind: string; }

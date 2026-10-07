@@ -271,6 +271,7 @@ source: tests/support/2_fixture_runner.rs
         "flow_edge",
         "resolved_edge",
         "graph_node",
+        "seed_unmatched",
         "graph_edge",
         "external_crate_decline",
         "graph_decline",
@@ -528,6 +529,10 @@ source: tests/support/2_fixture_runner.rs
           "name",
           "path"
         ],
+        "seed_unmatched": [
+          "reason",
+          "seed"
+        ],
         "graph_edge": [
           "from_line",
           "from_name",
@@ -556,11 +561,21 @@ source: tests/support/2_fixture_runner.rs
         ],
         "graph_path": [
           "depth",
+          "from_col",
+          "from_file",
+          "from_line",
           "from_name",
           "from_path",
+          "from_reason",
+          "from_text",
           "plane",
+          "to_col",
+          "to_file",
+          "to_line",
           "to_name",
           "to_path",
+          "to_reason",
+          "to_text",
           "witness"
         ],
         "graph_path_change": [
@@ -858,6 +873,7 @@ source: tests/support/2_fixture_runner.rs
         "flow_edge",
         "resolved_edge",
         "graph_node",
+        "seed_unmatched",
         "graph_edge",
         "external_crate_decline",
         "graph_decline",
@@ -978,7 +994,7 @@ source: tests/support/2_fixture_runner.rs
         "[40,4,14,4,14,4,4,14,14]",
         "[41,4,14,4,4,4,4]",
         "[42,4,14,4,4,4,4]",
-        "[43,4,4,14,4,14,1,5]",
+        "[43,4,4,14,4,14,1,5,14,14,14,14,14,14,14,14,14,14]",
         "[44,4,4,4,4,14,4,14,1]",
         "[45,4,14,14,14,1]",
         "[46,1,4,14,1,1,4,14,4,4]",
@@ -2658,6 +2674,7 @@ source: tests/support/2_fixture_runner.rs
           "[0,1,2,3,4,5,6,7,8,9,10,11]"
         ],
         "graph_node": [],
+        "seed_unmatched": [],
         "graph_edge": [],
         "external_crate_decline": [],
         "graph_decline": [],
@@ -2767,6 +2784,7 @@ source: tests/support/2_fixture_runner.rs
           "[0,1,2,3,4,5,6,7,8,9,10,11]"
         ],
         "graph_node": [],
+        "seed_unmatched": [],
         "graph_edge": [],
         "external_crate_decline": [],
         "graph_decline": [],
@@ -4219,6 +4237,16 @@ source: tests/support/2_fixture_runner.rs
           "secondary_indexes": 0
         },
         "graph_node": {
+          "primary_key": [
+            [
+              "_row",
+              "INTEGER",
+              1
+            ]
+          ],
+          "secondary_indexes": 0
+        },
+        "seed_unmatched": {
           "primary_key": [
             [
               "_row",

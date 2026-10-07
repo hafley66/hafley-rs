@@ -39,9 +39,9 @@ fn ok_stdout(args: &[&str]) -> String {
 
 #[test]
 fn help_states_the_resolve_sqlite_phase_contract() {
-    let help = ok_stdout(&["--help"]);
+    let help = ok_stdout(&["help", "flags"]);
     assert!(help.contains(
-        "SQLite with --resolve stores phase 1 per-file and phase 2 project rows; stdout streams phase 2 only."
+        "SQLite: --resolve stores phase 1 per-file and phase 2 project rows; stdout streams phase 2 only."
     ));
     assert!(help.contains("Every SQLite unresolved row has its path."));
 }

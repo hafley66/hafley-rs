@@ -430,6 +430,15 @@ CREATE TABLE IF NOT EXISTS "graph_node" (
     "line" INTEGER
 );
 
+CREATE TABLE IF NOT EXISTS "seed_unmatched" (
+    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
+    "_input_path" TEXT,
+    "_content_id" TEXT,
+    "record" TEXT NOT NULL,
+    "seed" TEXT NOT NULL,
+    "reason" TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS "graph_edge" (
     "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
     "_input_path" TEXT,

@@ -637,6 +637,13 @@ pub mod models {
 
     #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
     #[serde(deny_unknown_fields)]
+    pub struct SeedUnmatched {
+        pub seed: String,
+        pub reason: String,
+    }
+
+    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+    #[serde(deny_unknown_fields)]
     pub struct GraphEdge {
         pub from_path: String,
         #[serde(deserialize_with = "super::required_nullable")]
@@ -1223,6 +1230,9 @@ pub enum Fact {
     #[serde(rename = "graph_node")]
     GraphNode(models::GraphNode),
 
+    #[serde(rename = "seed_unmatched")]
+    SeedUnmatched(models::SeedUnmatched),
+
     #[serde(rename = "graph_edge")]
     GraphEdge(models::GraphEdge),
 
@@ -1425,6 +1435,8 @@ impl Fact {
 
             Self::GraphNode(row) => row.insert(conn, source),
 
+            Self::SeedUnmatched(row) => row.insert(conn, source),
+
             Self::GraphEdge(row) => row.insert(conn, source),
 
             Self::ExternalCrateDecline(row) => row.insert(conn, source),
@@ -1517,7 +1529,7 @@ impl Fact {
 
 }
 
-pub const TABLE_COUNT: usize = 75;
+pub const TABLE_COUNT: usize = 76;
 
 fn statement_capacity(conn: &rusqlite::Connection, columns: usize, prefix: &str, tuple: &str) -> Result<usize, InsertError> {
 
@@ -1628,6 +1640,8 @@ pub fn insert_all(conn: &rusqlite::Connection, source: &Source<'_>, rows: &[Fact
     let mut resolved_edge: Vec<(usize, &models::ResolvedEdge)> = Vec::new();
 
     let mut graph_node: Vec<(usize, &models::GraphNode)> = Vec::new();
+
+    let mut seed_unmatched: Vec<(usize, &models::SeedUnmatched)> = Vec::new();
 
     let mut graph_edge: Vec<(usize, &models::GraphEdge)> = Vec::new();
 
@@ -1783,6 +1797,8 @@ pub fn insert_all(conn: &rusqlite::Connection, source: &Source<'_>, rows: &[Fact
 
             Fact::GraphNode(value) => graph_node.push((index, value)),
 
+            Fact::SeedUnmatched(value) => seed_unmatched.push((index, value)),
+
             Fact::GraphEdge(value) => graph_edge.push((index, value)),
 
             Fact::ExternalCrateDecline(value) => external_crate_decline.push((index, value)),
@@ -1936,6 +1952,8 @@ pub fn insert_all(conn: &rusqlite::Connection, source: &Source<'_>, rows: &[Fact
     let resolved_edge_capacity = if resolved_edge.is_empty() { 1 } else { statement_capacity(conn, 15, "INSERT INTO \"resolved_edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"caller_path\", \"caller_name\", \"callee_path\", \"callee_name\", \"caller_site_start\", \"caller_site_end\", \"callee_start\", \"callee_end\", \"kind\", \"resolution_origin\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
 
     let graph_node_capacity = if graph_node.is_empty() { 1 } else { statement_capacity(conn, 9, "INSERT INTO \"graph_node\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"name\", \"depth\", \"grade\", \"line\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+
+    let seed_unmatched_capacity = if seed_unmatched.is_empty() { 1 } else { statement_capacity(conn, 6, "INSERT INTO \"seed_unmatched\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"seed\", \"reason\") VALUES ", "(?, ?, ?, ?, ?, ?)")? };
 
     let graph_edge_capacity = if graph_edge.is_empty() { 1 } else { statement_capacity(conn, 12, "INSERT INTO \"graph_edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"from_path\", \"from_name\", \"to_path\", \"to_name\", \"kind\", \"grade\", \"from_line\", \"to_line\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
 
@@ -2368,6 +2386,17 @@ pub fn insert_all(conn: &rusqlite::Connection, source: &Source<'_>, rows: &[Fact
 
     for chunk in graph_node.chunks(graph_node_capacity) {
         let sql = multi_row_sql("INSERT INTO \"graph_node\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"name\", \"depth\", \"grade\", \"line\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let mut statement = conn.prepare_cached(&sql)?;
+        let mut parameter = 1;
+        for (index, row) in chunk {
+            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            parameter = row.bind(&mut statement, parameter, &row_source)?;
+        }
+        inserted += statement.raw_execute()?;
+    }
+
+    for chunk in seed_unmatched.chunks(seed_unmatched_capacity) {
+        let sql = multi_row_sql("INSERT INTO \"seed_unmatched\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"seed\", \"reason\") VALUES ", "(?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
@@ -3906,6 +3935,30 @@ impl models::GraphNode {
     #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"graph_node\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"name\", \"depth\", \"grade\", \"line\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+        self.bind(&mut statement, 1, source)?;
+        Ok(statement.raw_execute()?)
+    }
+}
+
+impl models::SeedUnmatched {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+        statement.raw_bind_parameter(parameter, source.row)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, source.input_path)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, source.content_id)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, "seed_unmatched")?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.seed.as_str())?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.reason.as_str())?;
+        parameter += 1;
+        Ok(parameter)
+    }
+    #[cfg(test)]
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"seed_unmatched\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"seed\", \"reason\") VALUES (?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }

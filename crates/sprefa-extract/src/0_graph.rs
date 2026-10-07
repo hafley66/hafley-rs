@@ -157,14 +157,17 @@ struct Lines {
 }
 
 impl Lines {
+    fn source(&self, path: &str) -> PathBuf {
+        match &self.source_root {
+            Some(root) if !Path::new(path).is_absolute() => root.join(path),
+            _ => sprefa_extract::io_path(Path::new(path)),
+        }
+    }
+
     fn line(&mut self, path: &str, byte: Option<u32>) -> Option<u32> {
         let byte = byte?;
         if !self.tables.contains_key(path) {
-            let source_path = Path::new(path);
-            let source = match &self.source_root {
-                Some(root) if !source_path.is_absolute() => root.join(source_path),
-                _ => sprefa_extract::io_path(source_path),
-            };
+            let source = self.source(path);
             let content = match fs::read(&source) {
                 Ok(bytes) => Some(bytes),
                 Err(error) => {
@@ -594,6 +597,17 @@ impl Arm<'_> {
                     None => (None, *anchor),
                 };
                 let mut rows = edges(connection, USES_SQL, name, lines)?;
+                // Type edges store no target offset: the target file's single
+                // declaration of that name supplies it, else the line stays null.
+                let mut starts: HashMap<(String, String), Option<u32>> = HashMap::new();
+                for row in &mut rows {
+                    if let FlatFact::GraphEdge { to_path, to_name: Some(to_name), to_line: to_line @ None, .. } = row {
+                        let start = *starts
+                            .entry((to_path.clone(), to_name.clone()))
+                            .or_insert_with(|| anchor::type_decl_start(&lines.source(to_path), to_name));
+                        *to_line = lines.line(to_path, start);
+                    }
+                }
                 if let Some(path) = path {
                     rows.retain(|row| {
                         matches!(row, FlatFact::GraphEdge { to_path, .. }

@@ -3653,6 +3653,67 @@
     ]
   },
   {
+    "record": "seed_unmatched",
+    "table": "seed_unmatched",
+    "columns": [
+      {
+        "name": "_row",
+        "path": [
+          "_row"
+        ],
+        "kind": "int64",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "_input_path",
+        "path": [
+          "_input_path"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": true
+      },
+      {
+        "name": "_content_id",
+        "path": [
+          "_content_id"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": true
+      },
+      {
+        "name": "record",
+        "path": [
+          "record"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false,
+        "literal": "seed_unmatched"
+      },
+      {
+        "name": "seed",
+        "path": [
+          "seed"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "reason",
+        "path": [
+          "reason"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false
+      }
+    ]
+  },
+  {
     "record": "graph_edge",
     "table": "graph_edge",
     "columns": [

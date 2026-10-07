@@ -10,5 +10,5 @@ fn server_exposes_direct_cli_mode() {
         .output()
         .expect("server cli help");
     assert!(direct.status.success());
-    assert!(String::from_utf8_lossy(&direct.stdout).contains("Usage: ryii fast"));
+    assert!(String::from_utf8_lossy(&direct.stdout).contains("Usage: ryi fast"));
 }

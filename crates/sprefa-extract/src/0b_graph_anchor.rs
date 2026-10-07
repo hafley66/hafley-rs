@@ -54,6 +54,21 @@ pub(super) fn seed_unmatched(
     }))
 }
 
+/// The start of the one type declaration named NAME in FILE; none or several give None.
+pub(super) fn type_decl_start(file: &Path, name: &str) -> Option<u32> {
+    let content = std::fs::read(file).ok()?;
+    let mask = sprefa_extract::FamilyMask { types: true, ..sprefa_extract::FamilyMask::NONE };
+    let output = sprefa_extract::dispatch::dispatch_uncached(&file.to_string_lossy(), &content, mask)?;
+    let mut starts = output
+        .types
+        .iter()
+        .flat_map(|bundle| &bundle.nodes)
+        .filter(|node| node.name.is_some_and(|id| output.strings.lookup(id) == name))
+        .map(|node| node.span.start);
+    let start = starts.next()?;
+    starts.all(|other| other == start).then_some(start)
+}
+
 /// An absolute PATH names one file: equal after resolving both. A relative PATH
 /// keeps facts whose path ends with it by whole components; `./` steps drop first.
 pub(super) fn anchor_path_matches(anchor: &Path, fact: &str) -> bool {
