@@ -339,7 +339,7 @@ pub(crate) fn run_broadcast(
             detail: None,
         };
         append_message(&dir, &message)?;
-        crate::cli::mail::record_control_edge(&message)?;
+        crate::cli::mail::record_control_edge(&dir, &message)?;
         if !ready {
             dead += 1;
             let why = "interrupt not confirmed idle";

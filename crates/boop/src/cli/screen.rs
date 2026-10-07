@@ -8,7 +8,7 @@ use boop::bus;
 use boop::tmux;
 use boop_harness::pane::{self, Options};
 
-use crate::cli::db::open_store;
+use crate::cli::db::open_store_in;
 use crate::cli::{line, mail_dir};
 use crate::QueryFormat;
 
@@ -37,7 +37,7 @@ pub(crate) fn run_lane_squares(
         tmux::mux(),
         socket,
         target,
-        &open_store()?,
+        &open_store_in(&dir)?,
         session,
         &Options::default(),
     )?;

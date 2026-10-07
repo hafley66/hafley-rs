@@ -8,7 +8,7 @@
 //! command path, option *names* and counts, and the outcome. Positional bodies,
 //! flag values, paths and tokens are never read, so there is nothing to scrub.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use boop::{BuildInfo, BUILD_INFO};
 use boop_store::{Store, TraceEvent};
@@ -223,19 +223,29 @@ pub fn finish_with(path: &Path, invocation: &Invocation, elapsed_ms: u64, outcom
     persist_with(path, invocation, elapsed_ms, outcome, "finish")
 }
 
-/// Persist to the default store. Returns false when unavailable.
-pub fn finish(invocation: &Invocation, elapsed_ms: u64, outcome: &str) -> bool {
-    let Ok(path) = Store::default_path() else {
-        return false;
-    };
-    finish_with(&path, invocation, elapsed_ms, outcome)
+/// The `--mail-dir` the terminal subcommand carries, if any.
+pub fn mail_dir(matches: &ArgMatches) -> Option<PathBuf> {
+    let mut current = matches;
+    let mut dir = None;
+    loop {
+        if let Ok(value) = current.try_get_one::<PathBuf>("mail_dir") {
+            dir = value.cloned().or(dir);
+        }
+        let Some((_, sub)) = current.subcommand() else {
+            break;
+        };
+        current = sub;
+    }
+    dir
 }
 
-pub fn start(invocation: &Invocation) -> bool {
-    let Ok(path) = Store::default_path() else {
-        return false;
-    };
-    start_with(&path, invocation)
+/// The store the invocation's rows land in: the store of the mail dir the
+/// command addresses, else the default store.
+pub fn store_path(mail_dir: Option<&Path>) -> Option<PathBuf> {
+    match mail_dir {
+        Some(dir) => boop_store::bus::db_path(dir).ok(),
+        None => Store::default_path().ok(),
+    }
 }
 
 #[cfg(test)]

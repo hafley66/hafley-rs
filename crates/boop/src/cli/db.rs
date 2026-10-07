@@ -622,7 +622,7 @@ pub(crate) fn sync_all_budgeted(
 ) -> Result<()> {
     let started = std::time::Instant::now();
     let mut phases = SyncPhases::new(budget);
-    let db_path = ident::Store::default_path()?;
+    let db_path = bus::db_path(&mail_dir(mail_dir_arg)?)?;
     let Some(_flight) = claim_sync(&sync_lock_path(&db_path), contention)? else {
         phases.defer();
         return Ok(());
@@ -1398,6 +1398,11 @@ pub(crate) fn open_store() -> Result<ident::Store> {
     ident::Store::open(ident::Store::default_path()?)
 }
 
+/// The store `dir` addresses, for callers that hold a mail dir.
+pub(crate) fn open_store_in(dir: &Path) -> Result<ident::Store> {
+    ident::Store::open(bus::db_path(dir)?)
+}
+
 /// `boop db "<sql>": run raw SQL read-only against the store. The open is
 /// SQLITE_OPEN_READONLY by flag, so a write is refused by SQLite itself.
 pub(crate) fn run_passthrough(sql: &str, format: QueryFormat) -> Result<()> {
@@ -1486,8 +1491,7 @@ pub(crate) fn run_agent_summary(
     format: AgentSummaryFormat,
     mail_dir_arg: Option<&Path>,
 ) -> Result<()> {
-    let store = open_ro_store()?;
-    let _ = mail_dir_arg;
+    let store = ident::Store::open_readonly(bus::db_path(&mail_dir(mail_dir_arg)?)?)?;
     let summary = boop::agent_summary_stored(&store)?;
     match format {
         AgentSummaryFormat::Json => line(&serde_json::to_string(&summary)?),
@@ -1612,8 +1616,7 @@ pub(crate) fn run_agent_sessions(
     history_since_ts: Option<u64>,
     mail_dir_arg: Option<&Path>,
 ) -> Result<()> {
-    let store = open_ro_store()?;
-    let _ = mail_dir_arg;
+    let store = ident::Store::open_readonly(bus::db_path(&mail_dir(mail_dir_arg)?)?)?;
     let graph = boop::load_agent_session_graph_stored(
         &store,
         agent_session_graph_query(cwd, include_history, tmux, history_since_ts),
@@ -1744,6 +1747,11 @@ pub(crate) fn emit_json_rows(rows: &[ident::Row], format: QueryFormat) {
 
 pub(crate) fn open_ro_store() -> Result<ident::Store> {
     ident::Store::open_readonly(ident::Store::default_path()?)
+}
+
+/// Read-only twin of `open_store_in`.
+pub(crate) fn open_ro_store_in(dir: &Path) -> Result<ident::Store> {
+    ident::Store::open_readonly(bus::db_path(dir)?)
 }
 
 /// `db usage`: the totals report, a thin alias over `Store::usage_totals`.

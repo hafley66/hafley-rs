@@ -79,21 +79,21 @@ pub fn resolve_click(
             pane_col: 0,
             pane_row: 0,
         });
-    let store = Store::default_path()
-        .ok()
+    let mail_dir = boop_store::bus::default_mail_dir().ok();
+    let store = mail_dir
+        .as_deref()
+        .and_then(|dir| boop_store::bus::db_path(dir).ok())
         .and_then(|path| Store::open_readonly(path).ok());
-    let bound = boop_store::bus::default_mail_dir()
+    let bound = mail_dir.as_deref().and_then(|mail_dir| {
+        crate::live::session_in_pane_on_socket(
+            &crate::Registry::discover(),
+            &pane.pane,
+            socket,
+            mail_dir,
+        )
         .ok()
-        .and_then(|mail_dir| {
-            crate::live::session_in_pane_on_socket(
-                &crate::Registry::discover(),
-                &pane.pane,
-                socket,
-                &mail_dir,
-            )
-            .ok()
-            .flatten()
-        });
+        .flatten()
+    });
     let sessions = click_sessions(&pane, sessions, bound, store.as_ref());
     let touched = store
         .as_ref()

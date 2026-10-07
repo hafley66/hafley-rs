@@ -449,9 +449,19 @@ fn main() -> Result<()> {
                 None,
                 started_ms,
             );
-            let _ = invoke::start(&invocation);
+            let store = invoke::store_path(None);
+            if let Some(store) = &store {
+                let _ = invoke::start_with(store, &invocation);
+            }
             let _ = error.print();
-            invoke::finish(&invocation, now_ms().saturating_sub(started_ms), outcome);
+            if let Some(store) = &store {
+                invoke::finish_with(
+                    store,
+                    &invocation,
+                    now_ms().saturating_sub(started_ms),
+                    outcome,
+                );
+            }
             std::process::exit(error.exit_code());
         }
     };
@@ -464,11 +474,16 @@ fn main() -> Result<()> {
     );
     invocation.harness = harness;
     invocation.lane = lane;
-    let _ = invoke::start(&invocation);
+    let store = invoke::store_path(invoke::mail_dir(&matches).as_deref());
+    if let Some(store) = &store {
+        let _ = invoke::start_with(store, &invocation);
+    }
     let cli = Cli::from_arg_matches(&matches)?;
     let result = run_cli(cli);
     let outcome = if result.is_ok() { "ok" } else { "error" };
-    invoke::finish(&invocation, now_ms().saturating_sub(started_ms), outcome);
+    if let Some(store) = &store {
+        invoke::finish_with(store, &invocation, now_ms().saturating_sub(started_ms), outcome);
+    }
     hafley_observe::shutdown();
     result
 }
@@ -534,7 +549,7 @@ fn run_cli(cli: Cli) -> Result<()> {
                 mail_dir,
             } => match lane_arg.as_deref().or(lane.as_deref()).filter(|_| !json) {
                 Some(lane) => run_lane_debug(lane, &since, mail_dir.as_deref()),
-                None => run_debug(&since, lane.as_deref(), json),
+                None => run_debug(&since, lane.as_deref(), json, mail_dir.as_deref()),
             },
             #[cfg(feature = "agent-read")]
             SubCmd::Agent { cmd } => run_public_agent_command(cmd),
@@ -831,7 +846,7 @@ fn drain_all_held_mail_best_effort(registry: &Registry) {
     let Ok(dir) = cli::mail_dir(None) else {
         return;
     };
-    let Ok(store) = boop::Store::default_path().and_then(boop::Store::open) else {
+    let Ok(store) = boop::bus::db_path(&dir).and_then(boop::Store::open) else {
         return;
     };
     let pushed = boop::mail::drain_all_held_mail(&dir, registry, &store);

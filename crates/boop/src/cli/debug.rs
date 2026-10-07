@@ -7,7 +7,7 @@ use boop::harness::HarnessId;
 use boop::registry::Registry;
 use boop::{config, lane};
 
-use crate::cli::db::open_ro_store;
+use crate::cli::db::open_ro_store_in;
 use crate::cli::{line, now_ms};
 use crate::{ConfigCmd, PresetsFormat};
 
@@ -44,7 +44,7 @@ pub(crate) fn run_lane_debug(lane: &str, since: &str, mail_dir_arg: Option<&Path
                 route.parent.as_deref().unwrap_or("-"),
                 route.tmux.as_deref().unwrap_or("-"),
             ));
-            match last_turn_ms(route.session_id.as_deref()) {
+            match last_turn_ms(&dir, route.session_id.as_deref()) {
                 Some(at_ms) => line(&format!(
                     "last turn {at_ms} ({}s idle)",
                     now_ms().saturating_sub(at_ms) / 1000
@@ -91,18 +91,18 @@ pub(crate) fn run_lane_debug(lane: &str, since: &str, mail_dir_arg: Option<&Path
     match route.and_then(|route| route.session_id.as_deref()) {
         None => line("none"),
         Some(session) => {
-            print_tail(session, "assistant", 3);
-            print_tail(session, "tool", 3);
+            print_tail(&dir, session, "assistant", 3);
+            print_tail(&dir, session, "tool", 3);
         }
     }
 
     line(&format!("\n== 5 alerts {lane} =="));
-    run_debug(since, Some(lane), false)
+    run_debug(since, Some(lane), false, Some(&dir))
 }
 
 /// The last `count` turns of one role, oldest first, or `none`.
-fn print_tail(session: &str, role: &str, count: usize) {
-    let rows = open_ro_store()
+fn print_tail(dir: &Path, session: &str, role: &str, count: usize) {
+    let rows = open_ro_store_in(dir)
         .and_then(|store| {
             store.query_turns(&boop::ident::TurnQuery {
                 session: Some(session.to_owned()),
@@ -125,9 +125,9 @@ fn print_tail(session: &str, role: &str, count: usize) {
 }
 
 /// The newest `agent_turn` timestamp for one session.
-fn last_turn_ms(session: Option<&str>) -> Option<u64> {
+fn last_turn_ms(dir: &Path, session: Option<&str>) -> Option<u64> {
     let session = session?;
-    let rows = open_ro_store()
+    let rows = open_ro_store_in(dir)
         .and_then(|store| {
             store.query_turns(&boop::ident::TurnQuery {
                 session: Some(session.to_owned()),
@@ -152,12 +152,18 @@ fn git(tree: &str, args: &[&str]) -> String {
 }
 
 /// `boop debug`: the WARN/ERROR window, trail plus store.
-pub(crate) fn run_debug(since: &str, lane: Option<&str>, json: bool) -> Result<()> {
+pub(crate) fn run_debug(
+    since: &str,
+    lane: Option<&str>,
+    json: bool,
+    mail_dir_arg: Option<&Path>,
+) -> Result<()> {
+    let dir = crate::cli::mail_dir(mail_dir_arg)?;
     let window = boop::debug::parse_window(since)?;
     let since_ms = now_ms().saturating_sub(window.as_millis() as u64);
     let root = boop::trail::lanes_root()?;
     let mut alerts = boop::debug::trail_alerts(&root, since_ms, lane);
-    match open_ro_store().and_then(|store| boop::debug::store_alerts(&store, since_ms, lane)) {
+    match open_ro_store_in(&dir).and_then(|store| boop::debug::store_alerts(&store, since_ms, lane)) {
         Ok(rows) => alerts.extend(rows),
         Err(error) => warn!(error = %error, "trace error events unreadable"),
     }

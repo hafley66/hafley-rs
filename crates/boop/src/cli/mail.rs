@@ -201,7 +201,7 @@ pub(crate) fn run_send(registry: &Registry, send: Outbound<'_>) -> Result<()> {
 
 fn persist_message(dir: &Path, mailbox: &str, message: &bus::Message) -> Result<()> {
     append_message_to(dir, mailbox, message)?;
-    record_control_edge(message)
+    record_control_edge(dir, message)
 }
 
 fn new_message(
@@ -703,7 +703,7 @@ fn fan_out_to_children(
         .body
         .context("a body is required to mail the caller's children")?;
     let children = lane::children_of(&caller, routes);
-    let spawned = spawned_children(Some(caller_session(&caller, route)), routes);
+    let spawned = spawned_children(dir, Some(caller_session(&caller, route)), routes);
     if children.is_empty() && spawned.is_empty() {
         println!("no child of {caller} is registered");
         return Ok(());
@@ -742,7 +742,7 @@ fn fan_out_to_children(
             detail: None,
         };
         append_message(dir, &message)?;
-        record_control_edge(&message)?;
+        record_control_edge(dir, &message)?;
         let landing = boop::mail::deliver_hail_budgeted(
             registry,
             &store,
@@ -799,11 +799,15 @@ const NATIVE_CHILD_REASON: &str = "native subagent: no pane, no route, nothing d
 /// Children the store's `spawned` edges name under the caller's session, minus
 /// the ones a registry route already carries. A store that will not open costs
 /// the store-derived half of the list and nothing else.
-fn spawned_children(session: Option<&str>, routes: &BTreeMap<String, Route>) -> Vec<String> {
+fn spawned_children(
+    dir: &Path,
+    session: Option<&str>,
+    routes: &BTreeMap<String, Route>,
+) -> Vec<String> {
     let Some(session) = session else {
         return Vec::new();
     };
-    let rows = boop::Store::default_path()
+    let rows = bus::db_path(dir)
         .and_then(boop::Store::open)
         .and_then(|store| store.edge_rows(Some(session)));
     let rows = match rows {
@@ -991,14 +995,14 @@ pub(crate) fn child_reach(
     }
 }
 
-pub(crate) fn record_control_edge(message: &boop::bus::Message) -> Result<()> {
+pub(crate) fn record_control_edge(dir: &Path, message: &boop::bus::Message) -> Result<()> {
     if !matches!(
         message.kind.as_str(),
         "hail" | "result" | "retry" | "resume" | "cancel"
     ) {
         return Ok(());
     }
-    let store = boop::Store::open(boop::Store::default_path()?)?;
+    let store = boop::Store::open(bus::db_path(dir)?)?;
     let timestamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|duration| duration.as_millis() as u64)
@@ -1061,7 +1065,7 @@ pub(crate) fn run_inbox_drain(
     );
     line(&hook.payload(&inbox::batch_text(
         &rows,
-        &boop::supervise::mood_template(&name),
+        &boop::supervise::mood_template(&dir, &name),
     )));
     Ok(())
 }
