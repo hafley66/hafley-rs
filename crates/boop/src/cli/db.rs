@@ -1398,6 +1398,11 @@ pub(crate) fn open_store() -> Result<ident::Store> {
     ident::Store::open(ident::Store::default_path()?)
 }
 
+/// The store `dir` addresses, for callers that hold a mail dir.
+pub(crate) fn open_store_in(dir: &Path) -> Result<ident::Store> {
+    ident::Store::open(bus::db_path(dir)?)
+}
+
 /// `boop db "<sql>": run raw SQL read-only against the store. The open is
 /// SQLITE_OPEN_READONLY by flag, so a write is refused by SQLite itself.
 pub(crate) fn run_passthrough(sql: &str, format: QueryFormat) -> Result<()> {
@@ -1742,6 +1747,11 @@ pub(crate) fn emit_json_rows(rows: &[ident::Row], format: QueryFormat) {
 
 pub(crate) fn open_ro_store() -> Result<ident::Store> {
     ident::Store::open_readonly(ident::Store::default_path()?)
+}
+
+/// Read-only twin of `open_store_in`.
+pub(crate) fn open_ro_store_in(dir: &Path) -> Result<ident::Store> {
+    ident::Store::open_readonly(bus::db_path(dir)?)
 }
 
 /// `db usage`: the totals report, a thin alias over `Store::usage_totals`.

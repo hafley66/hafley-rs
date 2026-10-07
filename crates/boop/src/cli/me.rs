@@ -10,7 +10,7 @@ use boop::registry::Registry;
 use boop::{bus, identity, tmux};
 
 #[cfg(feature = "agent-read")]
-use crate::cli::db::open_store;
+use crate::cli::db::{open_store, open_store_in};
 use crate::cli::job::waiting_as;
 use crate::cli::mail_dir;
 #[cfg(feature = "agent-read")]
@@ -167,7 +167,7 @@ pub(crate) fn run_me_favorite(index: i64, note: Option<&str>) -> Result<()> {
     let identity = identity::resolve_as(None);
     let session = identity.conversation(&routes)?.to_owned();
 
-    let store = open_store()?;
+    let store = open_store_in(&dir)?;
     let rows = store.turn_rows(&ident::TurnQuery {
         session: Some(session.clone()),
         role: Some("assistant".to_owned()),
@@ -241,7 +241,7 @@ pub(crate) fn run_me_remind(count: u64) -> Result<()> {
         .as_deref()
         .with_context(|| format!("caller route {caller} has no bound native conversation"))?
         .to_owned();
-    let store = open_store()?;
+    let store = open_store_in(&dir)?;
     let rows = store.turn_rows_recent(
         &ident::TurnQuery {
             session: Some(session.clone()),

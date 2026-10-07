@@ -449,7 +449,7 @@ fn main() -> Result<()> {
                 None,
                 started_ms,
             );
-            let store = invoke::store_path(invoke::mail_dir_from_argv(&argv).as_deref());
+            let store = invoke::store_path(None);
             if let Some(store) = &store {
                 let _ = invoke::start_with(store, &invocation);
             }
@@ -549,7 +549,7 @@ fn run_cli(cli: Cli) -> Result<()> {
                 mail_dir,
             } => match lane_arg.as_deref().or(lane.as_deref()).filter(|_| !json) {
                 Some(lane) => run_lane_debug(lane, &since, mail_dir.as_deref()),
-                None => run_debug(&since, lane.as_deref(), json),
+                None => run_debug(&since, lane.as_deref(), json, mail_dir.as_deref()),
             },
             #[cfg(feature = "agent-read")]
             SubCmd::Agent { cmd } => run_public_agent_command(cmd),

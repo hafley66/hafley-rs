@@ -239,17 +239,6 @@ pub fn mail_dir(matches: &ArgMatches) -> Option<PathBuf> {
     dir
 }
 
-/// The `--mail-dir` in raw argv, for parse errors that never produced matches.
-pub fn mail_dir_from_argv(argv: &[String]) -> Option<PathBuf> {
-    argv.iter().enumerate().find_map(|(index, arg)| {
-        if arg == "--mail-dir" {
-            argv.get(index + 1).map(PathBuf::from)
-        } else {
-            arg.strip_prefix("--mail-dir=").map(PathBuf::from)
-        }
-    })
-}
-
 /// The store the invocation's rows land in: the store of the mail dir the
 /// command addresses, else the default store.
 pub fn store_path(mail_dir: Option<&Path>) -> Option<PathBuf> {
