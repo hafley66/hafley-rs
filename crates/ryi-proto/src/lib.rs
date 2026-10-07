@@ -38,3 +38,6 @@ mod tests {
         assert_eq!(decoded.args.inputs.paths, cli.file.inputs.paths);
     }
 }
+
+#[path = "0_build_identity.rs"]
+pub mod build_identity;

@@ -1,0 +1,59 @@
+---
+source: tests/217_build_identity.rs
+expression: output
+---
+loose ryi
+ryi: stale build aaaa (2026-09-27T00:00:00Z) from <root>; main is bbbb. Rebuild: cargo install --path '<root>/crates/ryi' --bin ryi --force
+loose ryii
+ryii: stale build aaaa (2026-09-27T00:00:00Z) from <root>; main is bbbb. Rebuild: cargo install --path '<root>/crates/sprefa-extract' --features cli,ts-checker --bin ryii --force
+ryi 0.1.0
+git hash: aaaa
+build date: 2026-09-27T00:00:00Z
+repo root: <root>
+stale verdict: stale (main bbbb)
+packed ryi
+ryi: stale build aaaa (2026-09-27T00:00:00Z) from <root>; main is bbbb. Rebuild: cargo install --path '<root>/crates/ryi' --bin ryi --force
+packed ryii
+ryii: stale build aaaa (2026-09-27T00:00:00Z) from <root>; main is bbbb. Rebuild: cargo install --path '<root>/crates/sprefa-extract' --features cli,ts-checker --bin ryii --force
+ryi 0.1.0
+git hash: aaaa
+build date: 2026-09-27T00:00:00Z
+repo root: <root>
+stale verdict: stale (main bbbb)
+worktree ryi
+ryi: stale build aaaa (2026-09-27T00:00:00Z) from <root>; main is bbbb. Rebuild: cargo install --path '<root>/crates/ryi' --bin ryi --force
+worktree ryii
+ryii: stale build aaaa (2026-09-27T00:00:00Z) from <root>; main is bbbb. Rebuild: cargo install --path '<root>/crates/sprefa-extract' --features cli,ts-checker --bin ryii --force
+ryi 0.1.0
+git hash: aaaa
+build date: 2026-09-27T00:00:00Z
+repo root: <root>
+stale verdict: stale (main bbbb)
+current ryi
+current ryii
+ryi 0.1.0
+git hash: aaaa
+build date: 2026-09-27T00:00:00Z
+repo root: <root>
+stale verdict: current
+unreadable ryi
+unreadable ryii
+ryi 0.1.0
+git hash: aaaa
+build date: 2026-09-27T00:00:00Z
+repo root: <root>
+stale verdict: unknown (main unreadable)
+missing ryi
+missing ryii
+ryi 0.1.0
+git hash: aaaa
+build date: 2026-09-27T00:00:00Z
+repo root: <root>
+stale verdict: unknown (main unreadable)
+unset ryi
+unset ryii
+ryi 0.1.0
+git hash: aaaa
+build date: 2026-09-27T00:00:00Z
+repo root: <root>
+stale verdict: stale (main bbbb)
