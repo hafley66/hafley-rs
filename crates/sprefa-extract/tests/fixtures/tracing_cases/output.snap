@@ -184,8 +184,8 @@ source: tests/support/2_fixture_runner.rs
     },
     "trail": {
       "runs": [
-        "/Users/chrishafley/.cache/boop/lanes/chore-test-shrink-glm/target/debug/ryii schema",
-        "/Users/chrishafley/.cache/boop/lanes/chore-test-shrink-glm/target/debug/ryii cleave"
+        "<ryii> schema",
+        "<ryii> cleave"
       ],
       "count": 2
     }

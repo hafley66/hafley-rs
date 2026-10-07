@@ -83,6 +83,16 @@ pub fn snapshot(directory: &str, output: BTreeMap<String, Value>) {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures")
         .join(directory);
+    // Machine paths never enter a snapshot: the fixture root becomes
+    // `<fixture>` and the extract binary `<ryii>`, so a frozen table reads
+    // identically in every checkout.
+    let output = replace_strings(
+        &serde_json::to_value(output).expect("the tables are JSON"),
+        &[
+            (env!("CARGO_MANIFEST_DIR"), "<fixture>"),
+            (env!("CARGO_BIN_EXE_ryii"), "<ryii>"),
+        ],
+    );
     insta::with_settings!({snapshot_path=>root,prepend_module_to_snapshot=>false,omit_expression=>true}, {
         insta::assert_json_snapshot!("output",output);
     });

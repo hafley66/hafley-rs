@@ -7,55 +7,55 @@ source: tests/support/2_fixture_runner.rs
       [
         "ctorCase",
         "bar",
-        "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/chore/test-shrink-glm/crates/sprefa-extract/tests/fixtures/ts_binding_legs/lib.ts",
+        "<fixture>/tests/fixtures/ts_binding_legs/lib.ts",
         "receiver"
       ],
       [
         "ctorCase",
         "makeFoo",
-        "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/chore/test-shrink-glm/crates/sprefa-extract/tests/fixtures/ts_binding_legs/lib.ts",
+        "<fixture>/tests/fixtures/ts_binding_legs/lib.ts",
         "same_file"
       ],
       [
         "ifaceCase",
         "project",
-        "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/chore/test-shrink-glm/crates/sprefa-extract/tests/fixtures/ts_binding_legs/lib.ts",
+        "<fixture>/tests/fixtures/ts_binding_legs/lib.ts",
         "receiver"
       ],
       [
         "makeFoo",
         "Foo",
-        "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/chore/test-shrink-glm/crates/sprefa-extract/tests/fixtures/ts_binding_legs/lib.ts",
+        "<fixture>/tests/fixtures/ts_binding_legs/lib.ts",
         "same_file"
       ],
       [
         "run",
         "m",
-        "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/chore/test-shrink-glm/crates/sprefa-extract/tests/fixtures/ts_binding_legs/lib.ts",
+        "<fixture>/tests/fixtures/ts_binding_legs/lib.ts",
         "receiver"
       ],
       [
         "crossFileCtor",
         "bar",
-        "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/chore/test-shrink-glm/crates/sprefa-extract/tests/fixtures/ts_binding_legs/lib.ts",
+        "<fixture>/tests/fixtures/ts_binding_legs/lib.ts",
         "receiver"
       ],
       [
         "crossFileCtor",
         "makeFoo",
-        "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/chore/test-shrink-glm/crates/sprefa-extract/tests/fixtures/ts_binding_legs/lib.ts",
+        "<fixture>/tests/fixtures/ts_binding_legs/lib.ts",
         "module_plane"
       ],
       [
         "crossFileGeneric",
         "ifaceCase",
-        "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/chore/test-shrink-glm/crates/sprefa-extract/tests/fixtures/ts_binding_legs/lib.ts",
+        "<fixture>/tests/fixtures/ts_binding_legs/lib.ts",
         "module_plane"
       ],
       [
         "crossFileGeneric",
         "Impl",
-        "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/chore/test-shrink-glm/crates/sprefa-extract/tests/fixtures/ts_binding_legs/use.ts",
+        "<fixture>/tests/fixtures/ts_binding_legs/use.ts",
         "same_file"
       ]
     ],
@@ -63,13 +63,13 @@ source: tests/support/2_fixture_runner.rs
       [
         "constCase",
         "project",
-        "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/chore/test-shrink-glm/crates/sprefa-extract/tests/fixtures/ts_binding_legs/shadow.ts",
+        "<fixture>/tests/fixtures/ts_binding_legs/shadow.ts",
         "same_file"
       ],
       [
         "selfInitCase",
         "project",
-        "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/chore/test-shrink-glm/crates/sprefa-extract/tests/fixtures/ts_binding_legs/free.ts",
+        "<fixture>/tests/fixtures/ts_binding_legs/free.ts",
         "corpus_unique"
       ]
     ],
