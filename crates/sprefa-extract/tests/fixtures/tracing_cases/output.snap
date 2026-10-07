@@ -1,0 +1,193 @@
+---
+source: tests/support/2_fixture_runner.rs
+---
+{
+  "0_trace": {
+    "info_default": {
+      "stdout_nonempty": true,
+      "stderr_has_info_narration": true
+    },
+    "json_format": {
+      "service": [
+        "sprefa-extract",
+        "0.1.0",
+        "json"
+      ],
+      "event_count": 10
+    },
+    "summary_layer_rows": [
+      [
+        "rust",
+        "cache"
+      ],
+      [
+        "rust",
+        "call"
+      ],
+      [
+        "rust",
+        "cst"
+      ],
+      [
+        "rust",
+        "df"
+      ],
+      [
+        "rust",
+        "extract_file"
+      ],
+      [
+        "rust",
+        "parse"
+      ],
+      [
+        "rust",
+        "type"
+      ]
+    ],
+    "sorted_summary_rows": [
+      [
+        "rust",
+        "cache"
+      ],
+      [
+        "rust",
+        "call"
+      ],
+      [
+        "rust",
+        "cst"
+      ],
+      [
+        "rust",
+        "df"
+      ],
+      [
+        "rust",
+        "extract_file"
+      ],
+      [
+        "rust",
+        "parse"
+      ],
+      [
+        "rust",
+        "type"
+      ]
+    ],
+    "pinned_phase_rows": [
+      [
+        "go/sample.go",
+        "go/hash=1",
+        "go/parse=2",
+        "-/flatten=1"
+      ],
+      [
+        "go/docs.go",
+        "go/hash=1",
+        "go/parse=2",
+        "-/flatten=1"
+      ],
+      [
+        "go/edges.go",
+        "go/hash=1",
+        "go/parse=2",
+        "-/flatten=1"
+      ],
+      [
+        "ts/sample.ts",
+        "ts/hash=1",
+        "ts/parse=2",
+        "-/flatten=1"
+      ],
+      [
+        "ts/docs.ts",
+        "ts/hash=1",
+        "ts/parse=2",
+        "-/flatten=1"
+      ],
+      [
+        "ts/consts.ts",
+        "ts/hash=1",
+        "ts/parse=2",
+        "-/flatten=1"
+      ],
+      [
+        "rust/sample.rs",
+        "rust/hash=1",
+        "rust/parse=1",
+        "rust/query=1",
+        "-/flatten=1"
+      ],
+      [
+        "rust/docs.rs",
+        "rust/hash=1",
+        "rust/parse=1",
+        "rust/query=1",
+        "-/flatten=1"
+      ],
+      [
+        "rust/lib.rs",
+        "rust/hash=1",
+        "rust/parse=1",
+        "rust/query=1",
+        "-/flatten=1"
+      ],
+      [
+        [
+          "go_residual/callers.go"
+        ],
+        "go/chain=10"
+      ]
+    ],
+    "ran_phase_rows": [
+      [
+        "rust",
+        "hash",
+        1,
+        1,
+        0
+      ],
+      [
+        "rust",
+        "parse",
+        1,
+        1,
+        0
+      ],
+      [
+        "rust",
+        "family",
+        4,
+        4,
+        251
+      ],
+      [
+        "rust",
+        "tsi_syntax",
+        1,
+        1,
+        96
+      ],
+      [
+        "-",
+        "write",
+        1,
+        1,
+        270
+      ]
+    ],
+    "bench": {
+      "stdout_lines": 0,
+      "summary_table": true,
+      "no_serial_line": true
+    },
+    "trail": {
+      "runs": [
+        "/Users/chrishafley/.cache/boop/lanes/chore-test-shrink-glm/target/debug/ryii schema",
+        "/Users/chrishafley/.cache/boop/lanes/chore-test-shrink-glm/target/debug/ryii cleave"
+      ],
+      "count": 2
+    }
+  }
+}

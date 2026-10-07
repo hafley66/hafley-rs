@@ -1,0 +1,3 @@
+{
+  "scenarios": ["info default", "json format", "summary layer", "flag", "micros sort", "pinned phases", "phases that ran", "bench", "sqlite trail"]
+}

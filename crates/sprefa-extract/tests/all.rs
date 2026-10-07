@@ -654,3 +654,6 @@ mod prolog_metacall_support;
 
 #[path = "support/25_ts_binding_legs.rs"]
 mod ts_binding_legs_support;
+
+#[path = "support/26_tracing.rs"]
+mod tracing_support;
