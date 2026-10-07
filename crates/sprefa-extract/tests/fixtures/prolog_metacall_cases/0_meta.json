@@ -1,0 +1,47 @@
+{
+  "tests": [
+    "all_four_meta_slots_reach_double/2_in_clause_order",
+    "split_def_use_pair_mints_go/1_to_double/2_edges",
+    "file_level_meta_predicate_drives_closure_slots_and_setof_unwraps",
+    "setof_templates_are_data_and_partition_include_foldl_close_over_p"
+  ],
+  "steps": [
+    {"action": "command", "arguments": ["--kinds", "call", "$fixtures/prolog/corpus_1_meta_closures.pl"], "capture": "fixture_kinds", "unasserted_stderr": true},
+    {"action": "claim", "name": "double_sites", "kind": "count_substring", "cell": "fixture_kinds.stdout", "text": "\"callee\":\"double/2\"", "expect": 4},
+    {"action": "claim", "name": "double_ref_1", "kind": "json_scalar", "cell": "fixture_kinds.stdout", "line": 16, "pointer": "position", "expect": "closure"},
+    {"action": "claim", "name": "double_ref_2", "kind": "json_scalar", "cell": "fixture_kinds.stdout", "line": 18, "pointer": "position", "expect": "closure"},
+    {"action": "claim", "name": "double_ref_3", "kind": "json_scalar", "cell": "fixture_kinds.stdout", "line": 21, "pointer": "position", "expect": "goal"},
+    {"action": "claim", "name": "double_ref_4", "kind": "json_scalar", "cell": "fixture_kinds.stdout", "line": 23, "pointer": "position", "expect": "goal"},
+    {"action": "claim", "name": "member_goal", "kind": "json_scalar", "cell": "fixture_kinds.stdout", "line": 20, "pointer": "position", "expect": "goal"},
+    {"action": "claim", "name": "maplist_goal", "kind": "json_scalar", "cell": "fixture_kinds.stdout", "line": 15, "pointer": "position", "expect": "goal"},
+
+    {"action": "command", "arguments": ["--resolve", "$fixtures/prolog/corpus_2_meta_def.pl", "$fixtures/prolog/corpus_2_meta_use.pl"], "capture": "resolve_edges", "unasserted_stderr": true},
+    {"action": "claim", "name": "go_to_double_edges", "kind": "count_substring", "cell": "resolve_edges.stdout", "text": "\"record\":\"resolved_edge\"", "expect": 4},
+
+    {"action": "command", "arguments": ["--kinds", "call", "$fixtures/prolog/corpus_3_meta_directive.pl"], "capture": "directive_kinds", "unasserted_stderr": true},
+    {"action": "claim", "name": "double2_site", "kind": "count_substring", "cell": "directive_kinds.stdout", "text": "\"callee\":\"double2/2\"", "expect": 1},
+    {"action": "claim", "name": "double2_closure_ref", "kind": "json_scalar", "cell": "directive_kinds.stdout", "line": 18, "pointer": "position", "expect": "closure"},
+    {"action": "claim", "name": "setof_unwraps_goal", "kind": "json_scalar", "cell": "directive_kinds.stdout", "line": 21, "pointer": "position", "expect": "goal"},
+
+    {"action": "command", "arguments": ["--kinds", "call", "$fixtures/prolog/corpus_4_meta_specs.pl"], "capture": "specs_kinds", "unasserted_stderr": true},
+    {"action": "claim", "name": "q_ref_count", "kind": "count_substring", "cell": "specs_kinds.stdout", "text": "\"functor\":\"q/1\"", "expect": 4},
+    {"action": "claim", "name": "q_ref_1", "kind": "json_scalar", "cell": "specs_kinds.stdout", "line": 35, "pointer": "position", "expect": "goal"},
+    {"action": "claim", "name": "q_ref_2", "kind": "json_scalar", "cell": "specs_kinds.stdout", "line": 40, "pointer": "position", "expect": "goal"},
+    {"action": "claim", "name": "q_ref_3", "kind": "json_scalar", "cell": "specs_kinds.stdout", "line": 42, "pointer": "position", "expect": "goal"},
+    {"action": "claim", "name": "q_ref_4", "kind": "json_scalar", "cell": "specs_kinds.stdout", "line": 45, "pointer": "position", "expect": "goal"},
+    {"action": "claim", "name": "p1_template_count", "kind": "count_substring", "cell": "specs_kinds.stdout", "text": "\"functor\":\"p/1\"", "expect": 2},
+    {"action": "claim", "name": "p1_template_1", "kind": "json_scalar", "cell": "specs_kinds.stdout", "line": 34, "pointer": "position", "expect": "term_arg"},
+    {"action": "claim", "name": "p1_template_2", "kind": "json_scalar", "cell": "specs_kinds.stdout", "line": 37, "pointer": "position", "expect": "term_arg"},
+    {"action": "claim", "name": "no_count0_site", "kind": "absent", "cell": "specs_kinds.stdout", "text": "\"callee\":\"count/0\""},
+    {"action": "claim", "name": "r_ref_count", "kind": "count_substring", "cell": "specs_kinds.stdout", "text": "\"functor\":\"r/1\"", "expect": 4},
+    {"action": "claim", "name": "r_ref_1", "kind": "json_scalar", "cell": "specs_kinds.stdout", "line": 38, "pointer": "position", "expect": "goal"},
+    {"action": "claim", "name": "r_ref_2", "kind": "json_scalar", "cell": "specs_kinds.stdout", "line": 43, "pointer": "position", "expect": "goal"},
+    {"action": "claim", "name": "r_ref_3", "kind": "json_scalar", "cell": "specs_kinds.stdout", "line": 46, "pointer": "position", "expect": "goal"},
+    {"action": "claim", "name": "r_ref_4", "kind": "json_scalar", "cell": "specs_kinds.stdout", "line": 47, "pointer": "position", "expect": "goal"},
+    {"action": "claim", "name": "p2_closure_count", "kind": "count_substring", "cell": "specs_kinds.stdout", "text": "\"functor\":\"p/2\"", "expect": 2},
+    {"action": "claim", "name": "p2_closure_1", "kind": "json_scalar", "cell": "specs_kinds.stdout", "line": 49, "pointer": "position", "expect": "closure"},
+    {"action": "claim", "name": "p2_closure_2", "kind": "json_scalar", "cell": "specs_kinds.stdout", "line": 51, "pointer": "position", "expect": "closure"},
+    {"action": "claim", "name": "p3_closure_count", "kind": "count_substring", "cell": "specs_kinds.stdout", "text": "\"functor\":\"p/3\"", "expect": 1},
+    {"action": "claim", "name": "p3_closure_1", "kind": "json_scalar", "cell": "specs_kinds.stdout", "line": 53, "pointer": "position", "expect": "closure"}
+  ]
+}
