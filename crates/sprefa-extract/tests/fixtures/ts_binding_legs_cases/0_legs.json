@@ -1,3 +1,39 @@
 {
-  "universes": ["lib.ts + use.ts (binding legs)", "free.ts + shadow.ts (shadow cases)"]
+  "tests": [
+    "binding_typed_receiver_legs_bind_declared_members",
+    "param_shadows_corpus_unique_name_inside_its_scope",
+    "callable_const_resolves_to_same_file_lexical_definition",
+    "closure_param_owns_name_inside_arrow_body_only"
+  ],
+  "steps": [
+    {"action": "command", "arguments": ["--resolve", "$fixtures/ts_binding_legs/lib.ts", "$fixtures/ts_binding_legs/use.ts"], "capture": "main_edges", "unasserted_stderr": true},
+    {"action": "claim", "name": "run_edge_count", "kind": "count_substring", "cell": "main_edges.stdout", "text": "\"caller_name\":\"run\"", "expect": 1},
+    {"action": "claim", "name": "run_callee", "kind": "json_scalar", "cell": "main_edges.stdout", "line_contains": "\"caller_name\":\"run\"", "pointer": "callee_name", "expect": "m"},
+    {"action": "claim", "name": "run_receiver", "kind": "json_scalar", "cell": "main_edges.stdout", "line_contains": "\"caller_name\":\"run\"", "pointer": "resolution_origin", "expect": "receiver"},
+    {"action": "claim", "name": "ctor_edge_count", "kind": "count_substring", "cell": "main_edges.stdout", "text": "\"caller_name\":\"ctorCase\"", "expect": 2},
+    {"action": "claim", "name": "ctor_bar_callee", "kind": "json_scalar", "cell": "main_edges.stdout", "line_contains": "\"caller_name\":\"ctorCase\"", "pointer": "callee_name", "expect": "bar"},
+    {"action": "claim", "name": "ctor_bar_receiver", "kind": "json_scalar", "cell": "main_edges.stdout", "line_contains": "\"caller_name\":\"ctorCase\"", "pointer": "resolution_origin", "expect": "receiver"},
+    {"action": "claim", "name": "iface_edge_count", "kind": "count_substring", "cell": "main_edges.stdout", "text": "\"caller_name\":\"ifaceCase\"", "expect": 1},
+    {"action": "claim", "name": "iface_receiver", "kind": "json_scalar", "cell": "main_edges.stdout", "line_contains": "\"caller_name\":\"ifaceCase\"", "pointer": "resolution_origin", "expect": "receiver"},
+    {"action": "claim", "name": "cross_ctor_edge_count", "kind": "count_substring", "cell": "main_edges.stdout", "text": "\"caller_name\":\"crossFileCtor\"", "expect": 2},
+    {"action": "claim", "name": "cross_ctor_bar_callee", "kind": "json_scalar", "cell": "main_edges.stdout", "line_contains": "\"caller_name\":\"crossFileCtor\"", "pointer": "callee_name", "expect": "bar"},
+    {"action": "claim", "name": "cross_ctor_bar_receiver", "kind": "json_scalar", "cell": "main_edges.stdout", "line_contains": "\"caller_name\":\"crossFileCtor\"", "pointer": "resolution_origin", "expect": "receiver"},
+    {"action": "claim", "name": "generic_edge_count", "kind": "count_substring", "cell": "main_edges.stdout", "text": "\"caller_name\":\"crossFileGeneric\"", "expect": 2},
+    {"action": "claim", "name": "generic_callee", "kind": "json_scalar", "cell": "main_edges.stdout", "line_contains": "\"caller_name\":\"crossFileGeneric\"", "pointer": "callee_name", "expect": "ifaceCase"},
+    {"action": "claim", "name": "generic_module_plane", "kind": "json_scalar", "cell": "main_edges.stdout", "line_contains": "\"caller_name\":\"crossFileGeneric\"", "pointer": "resolution_origin", "expect": "module_plane"},
+
+    {"action": "command", "arguments": ["--resolve", "$fixtures/ts_binding_legs/free.ts", "$fixtures/ts_binding_legs/shadow.ts"], "capture": "shadow_edges", "unasserted_stderr": true},
+    {"action": "claim", "name": "run_has_no_edges", "kind": "absent", "cell": "shadow_edges.stdout", "text": "\"caller_name\":\"run\""},
+    {"action": "claim", "name": "const_edge_count", "kind": "count_substring", "cell": "shadow_edges.stdout", "text": "\"caller_name\":\"constCase\"", "expect": 1},
+    {"action": "claim", "name": "const_callee", "kind": "json_scalar", "cell": "shadow_edges.stdout", "line_contains": "\"caller_name\":\"constCase\"", "pointer": "callee_name", "expect": "project"},
+    {"action": "claim", "name": "const_same_file", "kind": "json_scalar", "cell": "shadow_edges.stdout", "line_contains": "\"caller_name\":\"constCase\"", "pointer": "resolution_origin", "expect": "same_file"},
+    {"action": "claim", "name": "const_shadow_path", "kind": "json_contains", "cell": "shadow_edges.stdout", "line_contains": "\"caller_name\":\"constCase\"", "pointer": "callee_path", "text": "shadow.ts", "expect": true},
+    {"action": "claim", "name": "selfinit_edge_count", "kind": "count_substring", "cell": "shadow_edges.stdout", "text": "\"caller_name\":\"selfInitCase\"", "expect": 1},
+    {"action": "claim", "name": "selfinit_free_path", "kind": "json_contains", "cell": "shadow_edges.stdout", "line_contains": "\"caller_name\":\"selfInitCase\"", "pointer": "callee_path", "text": "free.ts", "expect": true},
+    {"action": "claim", "name": "selfinit_corpus_unique", "kind": "json_scalar", "cell": "shadow_edges.stdout", "line_contains": "\"caller_name\":\"selfInitCase\"", "pointer": "resolution_origin", "expect": "corpus_unique"},
+    {"action": "claim", "name": "closure_has_no_edges", "kind": "absent", "cell": "shadow_edges.stdout", "text": "\"caller_name\":\"closureCase\""},
+    {"action": "claim", "name": "drop_count", "kind": "count_substring", "cell": "shadow_edges.stdout", "text": "\"reason\":\"inferred\"", "expect": 2},
+    {"action": "claim", "name": "first_drop_detail", "kind": "json_scalar", "cell": "shadow_edges.stdout", "line_contains": "\"record\":\"unresolved\"", "pointer": "detail", "expect": "project"},
+    {"action": "claim", "name": "first_drop_span", "kind": "json_scalar", "cell": "shadow_edges.stdout", "line_contains": "\"record\":\"unresolved\"", "pointer": "span/start", "expect": 227}
+  ]
 }

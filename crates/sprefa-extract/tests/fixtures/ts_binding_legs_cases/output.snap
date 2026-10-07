@@ -3,87 +3,362 @@ source: tests/support/2_fixture_runner.rs
 ---
 {
   "0_legs": {
-    "main_edges": [
-      [
-        "ctorCase",
-        "bar",
-        "<fixture>/tests/fixtures/ts_binding_legs/lib.ts",
-        "receiver"
-      ],
-      [
-        "ctorCase",
-        "makeFoo",
-        "<fixture>/tests/fixtures/ts_binding_legs/lib.ts",
-        "same_file"
-      ],
-      [
-        "ifaceCase",
-        "project",
-        "<fixture>/tests/fixtures/ts_binding_legs/lib.ts",
-        "receiver"
-      ],
-      [
-        "makeFoo",
-        "Foo",
-        "<fixture>/tests/fixtures/ts_binding_legs/lib.ts",
-        "same_file"
-      ],
-      [
-        "run",
-        "m",
-        "<fixture>/tests/fixtures/ts_binding_legs/lib.ts",
-        "receiver"
-      ],
-      [
-        "crossFileCtor",
-        "bar",
-        "<fixture>/tests/fixtures/ts_binding_legs/lib.ts",
-        "receiver"
-      ],
-      [
-        "crossFileCtor",
-        "makeFoo",
-        "<fixture>/tests/fixtures/ts_binding_legs/lib.ts",
-        "module_plane"
-      ],
-      [
-        "crossFileGeneric",
-        "ifaceCase",
-        "<fixture>/tests/fixtures/ts_binding_legs/lib.ts",
-        "module_plane"
-      ],
-      [
-        "crossFileGeneric",
-        "Impl",
-        "<fixture>/tests/fixtures/ts_binding_legs/use.ts",
-        "same_file"
+    "closure_has_no_edges": true,
+    "const_callee": "project",
+    "const_edge_count": 1,
+    "const_same_file": "same_file",
+    "const_shadow_path": true,
+    "cross_ctor_bar_callee": "bar",
+    "cross_ctor_bar_receiver": "receiver",
+    "cross_ctor_edge_count": 2,
+    "ctor_bar_callee": "bar",
+    "ctor_bar_receiver": "receiver",
+    "ctor_edge_count": 2,
+    "drop_count": 2,
+    "first_drop_detail": "project",
+    "first_drop_span": 227,
+    "generic_callee": "ifaceCase",
+    "generic_edge_count": 2,
+    "generic_module_plane": "module_plane",
+    "iface_edge_count": 1,
+    "iface_receiver": "receiver",
+    "main_edges": {
+      "exit_code": 0,
+      "stdout": [
+        {
+          "record": "resolved_edge",
+          "caller_path": "<fixture>/tests/fixtures/ts_binding_legs/lib.ts",
+          "caller_name": "ctorCase",
+          "callee_path": "<fixture>/tests/fixtures/ts_binding_legs/lib.ts",
+          "callee_name": "bar",
+          "caller_site_start": 274,
+          "caller_site_end": 279,
+          "callee_start": 134,
+          "callee_end": 148,
+          "kind": "name_resolve",
+          "resolution_origin": "receiver"
+        },
+        {
+          "record": "resolved_edge",
+          "caller_path": "<fixture>/tests/fixtures/ts_binding_legs/lib.ts",
+          "caller_name": "ctorCase",
+          "callee_path": "<fixture>/tests/fixtures/ts_binding_legs/lib.ts",
+          "callee_name": "makeFoo",
+          "caller_site_start": 259,
+          "caller_site_end": 266,
+          "callee_start": 159,
+          "callee_end": 208,
+          "kind": "name_resolve",
+          "resolution_origin": "same_file"
+        },
+        {
+          "record": "resolved_edge",
+          "caller_path": "<fixture>/tests/fixtures/ts_binding_legs/lib.ts",
+          "caller_name": "ifaceCase",
+          "callee_path": "<fixture>/tests/fixtures/ts_binding_legs/lib.ts",
+          "callee_name": "project",
+          "caller_site_start": 394,
+          "caller_site_end": 403,
+          "callee_start": 314,
+          "callee_end": 330,
+          "kind": "name_resolve",
+          "resolution_origin": "receiver"
+        },
+        {
+          "record": "resolved_edge",
+          "caller_path": "<fixture>/tests/fixtures/ts_binding_legs/lib.ts",
+          "caller_name": "makeFoo",
+          "callee_path": "<fixture>/tests/fixtures/ts_binding_legs/lib.ts",
+          "callee_name": "Foo",
+          "caller_site_start": 196,
+          "caller_site_end": 205,
+          "callee_start": 118,
+          "callee_end": 150,
+          "kind": "name_resolve",
+          "resolution_origin": "same_file"
+        },
+        {
+          "record": "resolved_edge",
+          "caller_path": "<fixture>/tests/fixtures/ts_binding_legs/lib.ts",
+          "caller_name": "run",
+          "callee_path": "<fixture>/tests/fixtures/ts_binding_legs/lib.ts",
+          "callee_name": "m",
+          "caller_site_start": 90,
+          "caller_site_end": 98,
+          "callee_start": 21,
+          "callee_end": 33,
+          "kind": "name_resolve",
+          "resolution_origin": "receiver"
+        },
+        {
+          "record": "resolved_edge",
+          "caller_path": "<fixture>/tests/fixtures/ts_binding_legs/use.ts",
+          "caller_name": "crossFileCtor",
+          "callee_path": "<fixture>/tests/fixtures/ts_binding_legs/lib.ts",
+          "callee_name": "bar",
+          "caller_site_start": 149,
+          "caller_site_end": 154,
+          "callee_start": 134,
+          "callee_end": 148,
+          "kind": "name_resolve",
+          "resolution_origin": "receiver"
+        },
+        {
+          "record": "resolved_edge",
+          "caller_path": "<fixture>/tests/fixtures/ts_binding_legs/use.ts",
+          "caller_name": "crossFileCtor",
+          "callee_path": "<fixture>/tests/fixtures/ts_binding_legs/lib.ts",
+          "callee_name": "makeFoo",
+          "caller_site_start": 134,
+          "caller_site_end": 141,
+          "callee_start": 159,
+          "callee_end": 208,
+          "kind": "import_resolve",
+          "resolution_origin": "module_plane"
+        },
+        {
+          "record": "resolved_edge",
+          "caller_path": "<fixture>/tests/fixtures/ts_binding_legs/use.ts",
+          "caller_name": "crossFileGeneric",
+          "callee_path": "<fixture>/tests/fixtures/ts_binding_legs/lib.ts",
+          "callee_name": "ifaceCase",
+          "caller_site_start": 201,
+          "caller_site_end": 210,
+          "callee_start": 341,
+          "callee_end": 408,
+          "kind": "import_resolve",
+          "resolution_origin": "module_plane"
+        },
+        {
+          "record": "resolved_edge",
+          "caller_path": "<fixture>/tests/fixtures/ts_binding_legs/use.ts",
+          "caller_name": "crossFileGeneric",
+          "callee_path": "<fixture>/tests/fixtures/ts_binding_legs/use.ts",
+          "callee_name": "Impl",
+          "caller_site_start": 217,
+          "caller_site_end": 227,
+          "callee_start": 48,
+          "callee_end": 85,
+          "kind": "name_resolve",
+          "resolution_origin": "same_file"
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "<fixture>/tests/fixtures/ts_binding_legs/use.ts",
+          "name": "./lib.js",
+          "local": "",
+          "target_path": "<fixture>/tests/fixtures/ts_binding_legs/lib.ts",
+          "target_name": null,
+          "kind": "module",
+          "hops": 1
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "<fixture>/tests/fixtures/ts_binding_legs/use.ts",
+          "name": "ifaceCase",
+          "local": "ifaceCase",
+          "target_path": "<fixture>/tests/fixtures/ts_binding_legs/lib.ts",
+          "target_name": "ifaceCase",
+          "kind": "local",
+          "hops": 1
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "<fixture>/tests/fixtures/ts_binding_legs/use.ts",
+          "name": "makeFoo",
+          "local": "makeFoo",
+          "target_path": "<fixture>/tests/fixtures/ts_binding_legs/lib.ts",
+          "target_name": "makeFoo",
+          "kind": "local",
+          "hops": 1
+        },
+        {
+          "record": "call_site",
+          "callee": "Foo",
+          "path": "<fixture>/tests/fixtures/ts_binding_legs/lib.ts",
+          "line": 17,
+          "fn": "makeFoo",
+          "start": 196,
+          "end": 205
+        },
+        {
+          "record": "call_site",
+          "callee": "Impl",
+          "path": "<fixture>/tests/fixtures/ts_binding_legs/use.ts",
+          "line": 13,
+          "fn": "crossFileGeneric",
+          "start": 217,
+          "end": 227
+        },
+        {
+          "record": "call_site",
+          "callee": "ifaceCase",
+          "path": "<fixture>/tests/fixtures/ts_binding_legs/use.ts",
+          "line": 13,
+          "fn": "crossFileGeneric",
+          "start": 201,
+          "end": 228
+        },
+        {
+          "record": "call_site",
+          "callee": "makeFoo",
+          "path": "<fixture>/tests/fixtures/ts_binding_legs/lib.ts",
+          "line": 21,
+          "fn": "ctorCase",
+          "start": 259,
+          "end": 268
+        },
+        {
+          "record": "call_site",
+          "callee": "makeFoo",
+          "path": "<fixture>/tests/fixtures/ts_binding_legs/use.ts",
+          "line": 8,
+          "fn": "crossFileCtor",
+          "start": 134,
+          "end": 143
+        },
+        {
+          "record": "call_site",
+          "callee": "p.project",
+          "path": "<fixture>/tests/fixtures/ts_binding_legs/lib.ts",
+          "line": 30,
+          "fn": "ifaceCase",
+          "start": 394,
+          "end": 405
+        },
+        {
+          "record": "call_site",
+          "callee": "this.f.m",
+          "path": "<fixture>/tests/fixtures/ts_binding_legs/lib.ts",
+          "line": 8,
+          "fn": "run",
+          "start": 90,
+          "end": 100
+        },
+        {
+          "record": "call_site",
+          "callee": "x.bar",
+          "path": "<fixture>/tests/fixtures/ts_binding_legs/lib.ts",
+          "line": 22,
+          "fn": "ctorCase",
+          "start": 274,
+          "end": 281
+        },
+        {
+          "record": "call_site",
+          "callee": "x.bar",
+          "path": "<fixture>/tests/fixtures/ts_binding_legs/use.ts",
+          "line": 9,
+          "fn": "crossFileCtor",
+          "start": 149,
+          "end": 156
+        }
       ]
-    ],
-    "shadow_edges": [
-      [
-        "constCase",
-        "project",
-        "<fixture>/tests/fixtures/ts_binding_legs/shadow.ts",
-        "same_file"
-      ],
-      [
-        "selfInitCase",
-        "project",
-        "<fixture>/tests/fixtures/ts_binding_legs/free.ts",
-        "corpus_unique"
+    },
+    "run_callee": "m",
+    "run_edge_count": 1,
+    "run_has_no_edges": true,
+    "run_receiver": "receiver",
+    "selfinit_corpus_unique": "corpus_unique",
+    "selfinit_edge_count": 1,
+    "selfinit_free_path": true,
+    "shadow_edges": {
+      "exit_code": 0,
+      "stdout": [
+        {
+          "record": "resolved_edge",
+          "caller_path": "<fixture>/tests/fixtures/ts_binding_legs/shadow.ts",
+          "caller_name": "constCase",
+          "callee_path": "<fixture>/tests/fixtures/ts_binding_legs/shadow.ts",
+          "callee_name": "project",
+          "caller_site_start": 129,
+          "caller_site_end": 136,
+          "callee_start": 99,
+          "callee_end": 123,
+          "kind": "name_resolve",
+          "resolution_origin": "same_file"
+        },
+        {
+          "record": "resolved_edge",
+          "caller_path": "<fixture>/tests/fixtures/ts_binding_legs/shadow.ts",
+          "caller_name": "selfInitCase",
+          "callee_path": "<fixture>/tests/fixtures/ts_binding_legs/free.ts",
+          "callee_name": "project",
+          "caller_site_start": 294,
+          "caller_site_end": 301,
+          "callee_start": 7,
+          "callee_end": 34,
+          "kind": "name_resolve",
+          "resolution_origin": "corpus_unique"
+        },
+        {
+          "record": "unresolved",
+          "family": "call",
+          "path": "<fixture>/tests/fixtures/ts_binding_legs/shadow.ts",
+          "span": {
+            "start": 227,
+            "end": 234
+          },
+          "reason": "inferred",
+          "detail": "project"
+        },
+        {
+          "record": "unresolved",
+          "family": "call",
+          "path": "<fixture>/tests/fixtures/ts_binding_legs/shadow.ts",
+          "span": {
+            "start": 46,
+            "end": 53
+          },
+          "reason": "inferred",
+          "detail": "project"
+        },
+        {
+          "record": "call_site",
+          "callee": "items.forEach",
+          "path": "<fixture>/tests/fixtures/ts_binding_legs/shadow.ts",
+          "line": 11,
+          "fn": "closureCase",
+          "start": 202,
+          "end": 237
+        },
+        {
+          "record": "call_site",
+          "callee": "project",
+          "path": "<fixture>/tests/fixtures/ts_binding_legs/shadow.ts",
+          "line": 11,
+          "fn": "<anonymous>",
+          "start": 227,
+          "end": 236
+        },
+        {
+          "record": "call_site",
+          "callee": "project",
+          "path": "<fixture>/tests/fixtures/ts_binding_legs/shadow.ts",
+          "line": 15,
+          "fn": "selfInitCase",
+          "start": 294,
+          "end": 303
+        },
+        {
+          "record": "call_site",
+          "callee": "project",
+          "path": "<fixture>/tests/fixtures/ts_binding_legs/shadow.ts",
+          "line": 2,
+          "fn": "run",
+          "start": 46,
+          "end": 55
+        },
+        {
+          "record": "call_site",
+          "callee": "project",
+          "path": "<fixture>/tests/fixtures/ts_binding_legs/shadow.ts",
+          "line": 7,
+          "fn": "constCase",
+          "start": 129,
+          "end": 138
+        }
       ]
-    ],
-    "shadow_drops": [
-      [
-        "project",
-        "inferred",
-        227
-      ],
-      [
-        "project",
-        "inferred",
-        46
-      ]
-    ]
+    }
   }
 }
