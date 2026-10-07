@@ -1,0 +1,64 @@
+{
+ "test": "fast_stops_when_the_destination_declares_the_name",
+ "steps": [
+  {
+   "action": "copy_tree",
+   "source": "$fixtures/cleave_ts_oracle/diagnostic",
+   "target": "$work/repo",
+   "fresh": true
+  },
+  {
+   "action": "directory",
+   "path": "$work/state"
+  },
+  {
+   "action": "git",
+   "args": [
+    "init",
+    "-q",
+    "."
+   ],
+   "cwd": "$work/repo"
+  },
+  {
+   "action": "command",
+   "program": "$ryii",
+   "arguments": [
+    "cleave",
+    "source.ts#value",
+    "dest.ts",
+    "--commit",
+    "--root",
+    "$work/repo",
+    "--state",
+    "$work/state"
+   ],
+   "cwd": "$work/repo",
+   "environment": {
+    "RUST_LOG": "error"
+   },
+   "success": false,
+   "capture": "fast_refused",
+   "raw_stdout": true,
+   "stdout_redactions": [
+    {
+     "pattern": "(?m)^(stage )[0-9a-f]{64}( committed| dry run, tree untouched)$",
+     "replacement": "${1}$$STAGE${2}"
+    }
+   ]
+  },
+  {
+   "action": "claim",
+   "kind": "contains",
+   "cell": "fast_refused.stderr",
+   "text": "dest.ts already declares value",
+   "name": "destination_collision_named"
+  },
+  {
+   "action": "file_equals",
+   "path": "$work/repo/dest.ts",
+   "text": "export const value = 2;\n",
+   "name": "dest_untouched"
+  }
+ ]
+}

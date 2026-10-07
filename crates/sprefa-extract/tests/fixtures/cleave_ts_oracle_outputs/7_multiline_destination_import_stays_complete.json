@@ -1,0 +1,78 @@
+{
+ "test": "multiline_destination_import_stays_complete",
+ "steps": [
+  {
+   "action": "copy_tree",
+   "source": "$fixtures/cleave_ts_oracle/corrupt",
+   "target": "$work/repo",
+   "fresh": true
+  },
+  {
+   "action": "directory",
+   "path": "$work/state"
+  },
+  {
+   "action": "git",
+   "args": [
+    "init",
+    "-q",
+    "."
+   ],
+   "cwd": "$work/repo"
+  },
+  {
+   "action": "command",
+   "program": "$ryii",
+   "arguments": [
+    "cleave",
+    "source.ts#ExtractionResult",
+    "dest.ts",
+    "--commit",
+    "--root",
+    "$work/repo",
+    "--state",
+    "$work/state"
+   ],
+   "cwd": "$work/repo",
+   "environment": {
+    "RUST_LOG": "error"
+   },
+   "expect_exit_code": 0,
+   "capture": "corrupt",
+   "raw_stdout": true,
+   "unasserted_stderr": true,
+   "stdout_redactions": [
+    {
+     "pattern": "(?m)^(stage )[0-9a-f]{64}( committed| dry run, tree untouched)$",
+     "replacement": "${1}$$STAGE${2}"
+    }
+   ]
+  },
+  {
+   "action": "read_tree",
+   "path": "$work/repo/dest.ts",
+   "capture": "dest"
+  },
+  {
+   "action": "claim",
+   "kind": "contains",
+   "cell": "dest",
+   "text": "} from './types';",
+   "name": "multiline_import_complete"
+  },
+  {
+   "action": "claim",
+   "kind": "contains",
+   "cell": "dest",
+   "text": "import type { Thing } from",
+   "name": "thing_type_imported"
+  },
+  {
+   "action": "claim",
+   "kind": "absent",
+   "cell": "dest",
+   "text": "import type { Thing } from \"./types\";\n} from",
+   "name": "no_dangling_import_open"
+  }
+ ]
+}

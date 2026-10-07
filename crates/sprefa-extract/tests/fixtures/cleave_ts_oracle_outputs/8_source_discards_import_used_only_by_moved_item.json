@@ -1,0 +1,76 @@
+{
+ "test": "source_discards_import_used_only_by_moved_item",
+ "steps": [
+  {
+   "action": "copy_tree",
+   "source": "$fixtures/cleave_ts_oracle/unused",
+   "target": "$work/repo",
+   "fresh": true
+  },
+  {
+   "action": "directory",
+   "path": "$work/state"
+  },
+  {
+   "action": "git",
+   "args": [
+    "init",
+    "-q",
+    "."
+   ],
+   "cwd": "$work/repo"
+  },
+  {
+   "action": "command",
+   "program": "$ryii",
+   "arguments": [
+    "cleave",
+    "source.ts#work",
+    "dest.ts",
+    "--commit",
+    "--root",
+    "$work/repo",
+    "--state",
+    "$work/state"
+   ],
+   "cwd": "$work/repo",
+   "environment": {
+    "RUST_LOG": "error"
+   },
+   "expect_exit_code": 0,
+   "capture": "unused",
+   "raw_stdout": true,
+   "unasserted_stderr": true,
+   "stdout_redactions": [
+    {
+     "pattern": "(?m)^(stage )[0-9a-f]{64}( committed| dry run, tree untouched)$",
+     "replacement": "${1}$$STAGE${2}"
+    }
+   ]
+  },
+  {
+   "action": "read_tree",
+   "path": "$work/repo/source.ts",
+   "capture": "source"
+  },
+  {
+   "action": "read_tree",
+   "path": "$work/repo/dest.ts",
+   "capture": "dest"
+  },
+  {
+   "action": "claim",
+   "kind": "absent",
+   "cell": "source",
+   "text": "import { magic }",
+   "name": "source_discards_magic_import"
+  },
+  {
+   "action": "claim",
+   "kind": "contains",
+   "cell": "dest",
+   "text": "import { magic }",
+   "name": "dest_gains_magic_import"
+  }
+ ]
+}

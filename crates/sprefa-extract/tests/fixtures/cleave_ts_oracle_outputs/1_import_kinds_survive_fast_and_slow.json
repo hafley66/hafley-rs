@@ -1,0 +1,155 @@
+{
+ "tests": [
+  "slow_preserves_default_namespace_and_type_imports",
+  "destination_keeps_default_namespace_alias_and_type_imports"
+ ],
+ "steps": [
+  {
+   "action": "copy_tree",
+   "source": "$fixtures/cleave_ts_oracle/import_kind",
+   "target": "$work/repo",
+   "fresh": true
+  },
+  {
+   "action": "directory",
+   "path": "$work/state"
+  },
+  {
+   "action": "git",
+   "args": [
+    "init",
+    "-q",
+    "."
+   ],
+   "cwd": "$work/repo"
+  },
+  {
+   "action": "command",
+   "program": "$ryii",
+   "arguments": [
+    "cleave",
+    "source.ts#inspect",
+    "dest.ts",
+    "--slow",
+    "--commit",
+    "--root",
+    "$work/repo",
+    "--state",
+    "$work/state"
+   ],
+   "cwd": "$work/repo",
+   "environment": {
+    "RUST_LOG": "error"
+   },
+   "expect_exit_code": 0,
+   "capture": "slow_inspect",
+   "raw_stdout": true,
+   "unasserted_stderr": true,
+   "stdout_redactions": [
+    {
+     "pattern": "(?m)^(stage )[0-9a-f]{64}( committed| dry run, tree untouched)$",
+     "replacement": "${1}$$STAGE${2}"
+    }
+   ]
+  },
+  {
+   "action": "read_tree",
+   "path": "$work/repo/dest.ts",
+   "capture": "slow_dest"
+  },
+  {
+   "action": "claim",
+   "kind": "contains",
+   "cell": "slow_dest",
+   "text": "import fs from 'node:fs';",
+   "name": "slow_default_import_kept"
+  },
+  {
+   "action": "claim",
+   "kind": "contains",
+   "cell": "slow_dest",
+   "text": "import * as path from 'node:path';",
+   "name": "slow_namespace_import_kept"
+  },
+  {
+   "action": "claim",
+   "kind": "contains",
+   "cell": "slow_dest",
+   "text": "import type { Node as TreeNode } from 'tree';",
+   "name": "slow_type_import_kept"
+  },
+  {
+   "action": "copy_tree",
+   "source": "$fixtures/cleave_ts_oracle/import_kind",
+   "target": "$work/repo",
+   "fresh": true
+  },
+  {
+   "action": "directory",
+   "path": "$work/state"
+  },
+  {
+   "action": "git",
+   "args": [
+    "init",
+    "-q",
+    "."
+   ],
+   "cwd": "$work/repo"
+  },
+  {
+   "action": "command",
+   "program": "$ryii",
+   "arguments": [
+    "cleave",
+    "source.ts#inspect",
+    "dest.ts",
+    "--commit",
+    "--root",
+    "$work/repo",
+    "--state",
+    "$work/state"
+   ],
+   "cwd": "$work/repo",
+   "environment": {
+    "RUST_LOG": "error"
+   },
+   "expect_exit_code": 0,
+   "capture": "fast_inspect",
+   "raw_stdout": true,
+   "unasserted_stderr": true,
+   "stdout_redactions": [
+    {
+     "pattern": "(?m)^(stage )[0-9a-f]{64}( committed| dry run, tree untouched)$",
+     "replacement": "${1}$$STAGE${2}"
+    }
+   ]
+  },
+  {
+   "action": "read_tree",
+   "path": "$work/repo/dest.ts",
+   "capture": "fast_dest"
+  },
+  {
+   "action": "claim",
+   "kind": "contains",
+   "cell": "fast_dest",
+   "text": "import fs from 'node:fs';",
+   "name": "fast_default_import_kept"
+  },
+  {
+   "action": "claim",
+   "kind": "contains",
+   "cell": "fast_dest",
+   "text": "import * as path from 'node:path';",
+   "name": "fast_namespace_import_kept"
+  },
+  {
+   "action": "claim",
+   "kind": "contains",
+   "cell": "fast_dest",
+   "text": "import type { Node as TreeNode } from 'tree';",
+   "name": "fast_type_import_kept"
+  }
+ ]
+}

@@ -1,0 +1,77 @@
+{
+ "test": "overloads_move_and_export_together_and_reexports_are_not_imports",
+ "steps": [
+  {
+   "action": "copy_tree",
+   "source": "$fixtures/cleave_ts_oracle/overload",
+   "target": "$work/repo",
+   "fresh": true
+  },
+  {
+   "action": "directory",
+   "path": "$work/state"
+  },
+  {
+   "action": "git",
+   "args": [
+    "init",
+    "-q",
+    "."
+   ],
+   "cwd": "$work/repo"
+  },
+  {
+   "action": "command",
+   "program": "$ryii",
+   "arguments": [
+    "cleave",
+    "source.ts#wrap",
+    "dest.ts",
+    "--commit",
+    "--root",
+    "$work/repo",
+    "--state",
+    "$work/state"
+   ],
+   "cwd": "$work/repo",
+   "environment": {
+    "RUST_LOG": "error"
+   },
+   "expect_exit_code": 0,
+   "capture": "overload",
+   "raw_stdout": true,
+   "unasserted_stderr": true,
+   "stdout_redactions": [
+    {
+     "pattern": "(?m)^(stage )[0-9a-f]{64}( committed| dry run, tree untouched)$",
+     "replacement": "${1}$$STAGE${2}"
+    }
+   ]
+  },
+  {
+   "action": "file_equals",
+   "path": "$work/repo/dest.ts",
+   "text": "import { Code, code } from \"./lib\";\nexport const marker = 1;\n\nexport function wrap(value: string): Code;\nexport function wrap(value: Code): Code;\nexport function wrap(value: string | Code): Code {\n  return typeof value === \"string\" ? code(value) : value;\n}\n",
+   "name": "dest_exact"
+  },
+  {
+   "action": "file_equals",
+   "path": "$work/repo/source.ts",
+   "text": "import { Code } from \"./lib\";\nimport { wrap } from \"./dest\";\nexport { Code } from \"./lib\";\n\nexport function twice(text: string): Code {\n  return wrap(wrap(text));\n}\n",
+   "name": "source_exact"
+  },
+  {
+   "action": "command",
+   "program": "$manifest/ts7/node_modules/typescript/bin/tsc",
+   "arguments": [
+    "-p",
+    "tsconfig.json"
+   ],
+   "cwd": "$work/repo",
+   "expect_exit_code": 0,
+   "capture": "tsc",
+   "unasserted_stdout": true,
+   "unasserted_stderr": true
+  }
+ ]
+}

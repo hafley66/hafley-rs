@@ -1,0 +1,211 @@
+{
+ "tests": [
+  "slow_type_alias_uses_lsp_items_and_diagnostics",
+  "interface_declaration_moves_with_type_imports",
+  "type_alias_is_a_moveable_declaration"
+ ],
+ "steps": [
+  {
+   "action": "copy_tree",
+   "source": "$fixtures/cleave_ts_oracle/declaration",
+   "target": "$work/repo",
+   "fresh": true
+  },
+  {
+   "action": "directory",
+   "path": "$work/state"
+  },
+  {
+   "action": "git",
+   "args": [
+    "init",
+    "-q",
+    "."
+   ],
+   "cwd": "$work/repo"
+  },
+  {
+   "action": "command",
+   "program": "$ryii",
+   "arguments": [
+    "cleave",
+    "source.ts#Alias",
+    "alias.ts",
+    "--slow",
+    "--commit",
+    "--root",
+    "$work/repo",
+    "--state",
+    "$work/state"
+   ],
+   "cwd": "$work/repo",
+   "environment": {
+    "RUST_LOG": "error"
+   },
+   "expect_exit_code": 0,
+   "capture": "slow_alias",
+   "raw_stdout": true,
+   "unasserted_stderr": true,
+   "stdout_redactions": [
+    {
+     "pattern": "(?m)^(stage )[0-9a-f]{64}( committed| dry run, tree untouched)$",
+     "replacement": "${1}$$STAGE${2}"
+    }
+   ]
+  },
+  {
+   "action": "read_tree",
+   "path": "$work/repo/alias.ts",
+   "capture": "slow_alias_dest"
+  },
+  {
+   "action": "claim",
+   "kind": "contains",
+   "cell": "slow_alias_dest",
+   "text": "export type Alias",
+   "name": "slow_alias_type_alias_moved"
+  },
+  {
+   "action": "copy_tree",
+   "source": "$fixtures/cleave_ts_oracle/declaration",
+   "target": "$work/repo",
+   "fresh": true
+  },
+  {
+   "action": "directory",
+   "path": "$work/state"
+  },
+  {
+   "action": "git",
+   "args": [
+    "init",
+    "-q",
+    "."
+   ],
+   "cwd": "$work/repo"
+  },
+  {
+   "action": "command",
+   "program": "$ryii",
+   "arguments": [
+    "cleave",
+    "source.ts#Shape",
+    "shape.ts",
+    "--commit",
+    "--root",
+    "$work/repo",
+    "--state",
+    "$work/state"
+   ],
+   "cwd": "$work/repo",
+   "environment": {
+    "RUST_LOG": "error"
+   },
+   "expect_exit_code": 0,
+   "capture": "shape",
+   "raw_stdout": true,
+   "unasserted_stderr": true,
+   "stdout_redactions": [
+    {
+     "pattern": "(?m)^(stage )[0-9a-f]{64}( committed| dry run, tree untouched)$",
+     "replacement": "${1}$$STAGE${2}"
+    }
+   ]
+  },
+  {
+   "action": "read_tree",
+   "path": "$work/repo/shape.ts",
+   "capture": "shape_dest"
+  },
+  {
+   "action": "read_tree",
+   "path": "$work/repo/source.ts",
+   "capture": "shape_source"
+  },
+  {
+   "action": "read_tree",
+   "path": "$work/repo/caller.ts",
+   "capture": "shape_caller"
+  },
+  {
+   "action": "claim",
+   "kind": "contains",
+   "cell": "shape_dest",
+   "text": "export interface Shape",
+   "name": "shape_interface_moved"
+  },
+  {
+   "action": "claim",
+   "kind": "contains",
+   "cell": "shape_source",
+   "text": "import type { Shape } from",
+   "name": "shape_source_imports_type"
+  },
+  {
+   "action": "claim",
+   "kind": "contains",
+   "cell": "shape_caller",
+   "text": "import type { Shape } from",
+   "name": "shape_caller_imports_type"
+  },
+  {
+   "action": "copy_tree",
+   "source": "$fixtures/cleave_ts_oracle/declaration",
+   "target": "$work/repo",
+   "fresh": true
+  },
+  {
+   "action": "directory",
+   "path": "$work/state"
+  },
+  {
+   "action": "git",
+   "args": [
+    "init",
+    "-q",
+    "."
+   ],
+   "cwd": "$work/repo"
+  },
+  {
+   "action": "command",
+   "program": "$ryii",
+   "arguments": [
+    "cleave",
+    "source.ts#Alias",
+    "alias.ts",
+    "--commit",
+    "--root",
+    "$work/repo",
+    "--state",
+    "$work/state"
+   ],
+   "cwd": "$work/repo",
+   "environment": {
+    "RUST_LOG": "error"
+   },
+   "expect_exit_code": 0,
+   "capture": "fast_alias",
+   "raw_stdout": true,
+   "unasserted_stderr": true,
+   "stdout_redactions": [
+    {
+     "pattern": "(?m)^(stage )[0-9a-f]{64}( committed| dry run, tree untouched)$",
+     "replacement": "${1}$$STAGE${2}"
+    }
+   ]
+  },
+  {
+   "action": "read_tree",
+   "path": "$work/repo/alias.ts",
+   "capture": "fast_alias_dest"
+  },
+  {
+   "action": "claim",
+   "kind": "contains",
+   "cell": "fast_alias_dest",
+   "text": "export type Alias",
+   "name": "fast_alias_type_alias_moved"
+  }
+ ]
+}

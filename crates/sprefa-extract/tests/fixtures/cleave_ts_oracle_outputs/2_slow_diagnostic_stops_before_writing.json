@@ -1,0 +1,71 @@
+{
+ "test": "slow_diagnostic_stops_before_writing",
+ "steps": [
+  {
+   "action": "copy_tree",
+   "source": "$fixtures/cleave_ts_oracle/diagnostic",
+   "target": "$work/repo",
+   "fresh": true
+  },
+  {
+   "action": "directory",
+   "path": "$work/state"
+  },
+  {
+   "action": "git",
+   "args": [
+    "init",
+    "-q",
+    "."
+   ],
+   "cwd": "$work/repo"
+  },
+  {
+   "action": "command",
+   "program": "$ryii",
+   "arguments": [
+    "cleave",
+    "source.ts#value",
+    "dest.ts",
+    "--slow",
+    "--commit",
+    "--root",
+    "$work/repo",
+    "--state",
+    "$work/state"
+   ],
+   "cwd": "$work/repo",
+   "environment": {
+    "RUST_LOG": "error"
+   },
+   "success": false,
+   "capture": "slow_refused",
+   "raw_stdout": true,
+   "stdout_redactions": [
+    {
+     "pattern": "(?m)^(stage )[0-9a-f]{64}( committed| dry run, tree untouched)$",
+     "replacement": "${1}$$STAGE${2}"
+    }
+   ]
+  },
+  {
+   "action": "claim",
+   "kind": "contains",
+   "cell": "slow_refused.stderr",
+   "text": "cleave --slow diagnostic",
+   "name": "slow_diagnostic_named"
+  },
+  {
+   "action": "file_equals",
+   "path": "$work/repo/source.ts",
+   "text": "export function value(): number { return 1; }\n",
+   "name": "slow_source_untouched"
+  },
+  {
+   "action": "file_equals",
+   "path": "$work/repo/dest.ts",
+   "text": "export const value = 2;\n",
+   "name": "slow_dest_untouched"
+  }
+ ]
+}

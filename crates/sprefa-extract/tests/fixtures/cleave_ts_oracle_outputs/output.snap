@@ -1,0 +1,127 @@
+---
+source: tests/support/2_fixture_runner.rs
+---
+{
+  "0_declaration_moves_type_shapes": {
+    "fast_alias": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan source.ts#Alias -> alias.ts\ndrag fixpoint 1 passes\nreplace source.ts -> source.ts  update source.ts (99 bytes)\n    --- original\n    +++ modified\n    @@ -1,3 +1,2 @@\n     export interface Shape { n: number }\n    -export type Alias = { n: number };\n     export function area(shape: Shape): number { return shape.n }\nstage $STAGE committed\ncreate  - -> alias.ts  create alias.ts (35 bytes)\n    --- original\n    +++ modified\n    @@ -0,0 +1 @@\n    +export type Alias = { n: number };\nstage $STAGE committed\n"
+    },
+    "fast_alias_dest": "export type Alias = { n: number };\n",
+    "fast_alias_type_alias_moved": true,
+    "shape": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan source.ts#Shape -> shape.ts\ndrag fixpoint 1 passes\ncaller caller.ts\nreplace caller.ts -> caller.ts  update caller.ts (77 bytes)\n    --- original\n    +++ modified\n    @@ -1,2 +1,2 @@\n    -import type { Shape } from './source';\n    +import type { Shape } from './shape';\n     export const sample: Shape = { n: 3 };\nreplace source.ts -> source.ts  update source.ts (135 bytes)\n    --- original\n    +++ modified\n    @@ -1,3 +1,3 @@\n    -export interface Shape { n: number }\n    +import type { Shape } from \"./shape\";\n     export type Alias = { n: number };\n     export function area(shape: Shape): number { return shape.n }\nstage $STAGE committed\ncreate  - -> shape.ts  create shape.ts (37 bytes)\n    --- original\n    +++ modified\n    @@ -0,0 +1 @@\n    +export interface Shape { n: number }\nstage $STAGE committed\n"
+    },
+    "shape_caller": "import type { Shape } from './shape';\nexport const sample: Shape = { n: 3 };\n",
+    "shape_caller_imports_type": true,
+    "shape_dest": "export interface Shape { n: number }\n",
+    "shape_interface_moved": true,
+    "shape_source": "import type { Shape } from \"./shape\";\nexport type Alias = { n: number };\nexport function area(shape: Shape): number { return shape.n }\n",
+    "shape_source_imports_type": true,
+    "slow_alias": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan source.ts#Alias -> alias.ts\ndrag fixpoint 1 passes\nreplace source.ts -> source.ts  update source.ts (99 bytes)\n    --- original\n    +++ modified\n    @@ -1,3 +1,2 @@\n     export interface Shape { n: number }\n    -export type Alias = { n: number };\n     export function area(shape: Shape): number { return shape.n }\nstage $STAGE committed\ncreate  - -> alias.ts  create alias.ts (35 bytes)\n    --- original\n    +++ modified\n    @@ -0,0 +1 @@\n    +export type Alias = { n: number };\nstage $STAGE committed\n"
+    },
+    "slow_alias_dest": "export type Alias = { n: number };\n",
+    "slow_alias_type_alias_moved": true
+  },
+  "1_import_kinds_survive_fast_and_slow": {
+    "fast_default_import_kept": true,
+    "fast_dest": "import fs from 'node:fs';\nimport * as path from 'node:path';\nimport type { Node as TreeNode } from 'tree';\n\nexport function inspect(node: TreeNode): string {\n  return fs.readFileSync(path.join(node.name, 'x'), 'utf8');\n}\n",
+    "fast_inspect": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan source.ts#inspect -> dest.ts\ntravel fs from node:fs as node:fs (package)\ntravel path from node:path as node:path (package)\ntravel TreeNode from tree as tree (package)\norphan fs from node:fs\norphan path from node:path\norphan TreeNode from tree\ndrag fixpoint 1 passes\nreplace source.ts -> source.ts  update source.ts (0 bytes)\n    --- original\n    +++ modified\n    @@ -1,6 +0,0 @@\n    -import fs from 'node:fs';\n    -import * as path from 'node:path';\n    -import type { Node as TreeNode } from 'tree';\n    -export function inspect(node: TreeNode): string {\n    -  return fs.readFileSync(path.join(node.name, 'x'), 'utf8');\n    -}\nstage $STAGE committed\ncreate  - -> dest.ts  create dest.ts (221 bytes)\n    --- original\n    +++ modified\n    @@ -0,0 +1,7 @@\n    +import fs from 'node:fs';\n    +import * as path from 'node:path';\n    +import type { Node as TreeNode } from 'tree';\n    +\n    +export function inspect(node: TreeNode): string {\n    +  return fs.readFileSync(path.join(node.name, 'x'), 'utf8');\n    +}\nstage $STAGE committed\n"
+    },
+    "fast_namespace_import_kept": true,
+    "fast_type_import_kept": true,
+    "slow_default_import_kept": true,
+    "slow_dest": "import fs from 'node:fs';\nimport * as path from 'node:path';\nimport type { Node as TreeNode } from 'tree';\n\nexport function inspect(node: TreeNode): string {\n  return fs.readFileSync(path.join(node.name, 'x'), 'utf8');\n}\n",
+    "slow_inspect": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan source.ts#inspect -> dest.ts\ntravel fs from node:fs as node:fs (package)\ntravel path from node:path as node:path (package)\ntravel TreeNode from tree as tree (package)\norphan fs from node:fs\norphan path from node:path\norphan TreeNode from tree\ndrag fixpoint 1 passes\nreplace source.ts -> source.ts  update source.ts (0 bytes)\n    --- original\n    +++ modified\n    @@ -1,6 +0,0 @@\n    -import fs from 'node:fs';\n    -import * as path from 'node:path';\n    -import type { Node as TreeNode } from 'tree';\n    -export function inspect(node: TreeNode): string {\n    -  return fs.readFileSync(path.join(node.name, 'x'), 'utf8');\n    -}\nstage $STAGE committed\ncreate  - -> dest.ts  create dest.ts (221 bytes)\n    --- original\n    +++ modified\n    @@ -0,0 +1,7 @@\n    +import fs from 'node:fs';\n    +import * as path from 'node:path';\n    +import type { Node as TreeNode } from 'tree';\n    +\n    +export function inspect(node: TreeNode): string {\n    +  return fs.readFileSync(path.join(node.name, 'x'), 'utf8');\n    +}\nstage $STAGE committed\n"
+    },
+    "slow_namespace_import_kept": true,
+    "slow_type_import_kept": true
+  },
+  "2_slow_diagnostic_stops_before_writing": {
+    "slow_dest_untouched": {
+      "stored_text": "export const value = 2;\n"
+    },
+    "slow_diagnostic_named": true,
+    "slow_refused": {
+      "exit_code": 2,
+      "stdout": "root $work/repo\nplan source.ts#value -> dest.ts\ndrag fixpoint 1 passes\n",
+      "stderr": "cleave --slow diagnostic in dest.ts: 2300: Duplicate identifier 'value'.\n"
+    },
+    "slow_source_untouched": {
+      "stored_text": "export function value(): number { return 1; }\n"
+    }
+  },
+  "3_fast_stops_when_destination_declares_the_name": {
+    "dest_untouched": {
+      "stored_text": "export const value = 2;\n"
+    },
+    "destination_collision_named": true,
+    "fast_refused": {
+      "exit_code": 2,
+      "stdout": "",
+      "stderr": "dest.ts already declares value; moving source.ts#value there would declare it twice\n"
+    }
+  },
+  "4_overloads_move_and_export_together": {
+    "dest_exact": {
+      "stored_text": "import { Code, code } from \"./lib\";\nexport const marker = 1;\n\nexport function wrap(value: string): Code;\nexport function wrap(value: Code): Code;\nexport function wrap(value: string | Code): Code {\n  return typeof value === \"string\" ? code(value) : value;\n}\n"
+    },
+    "overload": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan source.ts#wrap -> dest.ts\ntravel Code from ./lib as ./lib (relative)\ntravel code from ./lib as ./lib (relative)\norphan code from ./lib\ndrag fixpoint 1 passes\nreplace dest.ts -> dest.ts  update dest.ts (257 bytes)\n    --- original\n    +++ modified\n    @@ -1 +1,8 @@\n    +import { Code, code } from \"./lib\";\n     export const marker = 1;\n    +\n    +export function wrap(value: string): Code;\n    +export function wrap(value: Code): Code;\n    +export function wrap(value: string | Code): Code {\n    +  return typeof value === \"string\" ? code(value) : value;\n    +}\nreplace source.ts -> source.ts  update source.ts (165 bytes)\n    --- original\n    +++ modified\n    @@ -1,12 +1,7 @@\n    -import { Code, code } from \"./lib\";\n    +import { Code } from \"./lib\";\n    +import { wrap } from \"./dest\";\n     export { Code } from \"./lib\";\n    \n    -function wrap(value: string): Code;\n    -function wrap(value: Code): Code;\n    -function wrap(value: string | Code): Code {\n    -  return typeof value === \"string\" ? code(value) : value;\n    -}\n    -\n     export function twice(text: string): Code {\n       return wrap(wrap(text));\n     }\nstage $STAGE committed\n"
+    },
+    "source_exact": {
+      "stored_text": "import { Code } from \"./lib\";\nimport { wrap } from \"./dest\";\nexport { Code } from \"./lib\";\n\nexport function twice(text: string): Code {\n  return wrap(wrap(text));\n}\n"
+    },
+    "tsc": {
+      "exit_code": 0,
+      "stdout": []
+    }
+  },
+  "5_source_use_exports_the_moved_function": {
+    "dest": "export function value(): number { return 3 }\n",
+    "dest_exports_value": true,
+    "export_value": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan source.ts#value -> dest.ts\ndrag fixpoint 1 passes\nreplace source.ts -> source.ts  update source.ts (62 bytes)\n    --- original\n    +++ modified\n    @@ -1,2 +1,2 @@\n    -function value(): number { return 3 }\n    +import { value } from \"./dest\";\n     export const total = value();\nstage $STAGE committed\ncreate  - -> dest.ts  create dest.ts (45 bytes)\n    --- original\n    +++ modified\n    @@ -0,0 +1 @@\n    +export function value(): number { return 3 }\nstage $STAGE committed\n"
+    },
+    "source": "import { value } from \"./dest\";\nexport const total = value();\n",
+    "source_imports_value": true
+  },
+  "6_source_dependencies_imported_into_destination": {
+    "dependency_type_imported": true,
+    "deps": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan source.ts#run -> dest.ts\ndrag Dependency exported pass 1\ndrag helper exported pass 1\ndrag fixpoint 1 passes\nreplace source.ts -> source.ts  update source.ts (147 bytes)\n    --- original\n    +++ modified\n    @@ -1,4 +1,3 @@\n    -type Dependency = { n: number };\n    -function helper(value: Dependency): number { return value.n }\n    -export function run(value: Dependency): number { return helper(value) }\n    +export type Dependency = { n: number };\n    +export function helper(value: Dependency): number { return value.n }\n     export const kept = helper({ n: 2 });\nstage $STAGE committed\ncreate  - -> dest.ts  create dest.ts (152 bytes)\n    --- original\n    +++ modified\n    @@ -0,0 +1,4 @@\n    +import { helper } from \"./source\";\n    +import type { Dependency } from \"./source\";\n    +\n    +export function run(value: Dependency): number { return helper(value) }\nstage $STAGE committed\n"
+    },
+    "dest": "import { helper } from \"./source\";\nimport type { Dependency } from \"./source\";\n\nexport function run(value: Dependency): number { return helper(value) }\n",
+    "helper_imported": true
+  },
+  "7_multiline_destination_import_stays_complete": {
+    "corrupt": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan source.ts#ExtractionResult -> dest.ts\ntravel Thing from ./types as ./types (relative)\norphan Thing from ./types\ndrag fixpoint 1 passes\nreplace dest.ts -> dest.ts  update dest.ts (180 bytes)\n    --- original\n    +++ modified\n    @@ -2,7 +2,10 @@\n       Node,\n       Edge,\n     } from './types';\n    +import type { Thing } from './types';\n     export type {\n       Node,\n       Edge,\n     } from './types';\n    +\n    +export interface ExtractionResult { node: Thing }\nreplace source.ts -> source.ts  update source.ts (0 bytes)\n    --- original\n    +++ modified\n    @@ -1,2 +0,0 @@\n    -import type { Thing } from './types';\n    -export interface ExtractionResult { node: Thing }\nstage $STAGE committed\n"
+    },
+    "dest": "import {\n  Node,\n  Edge,\n} from './types';\nimport type { Thing } from './types';\nexport type {\n  Node,\n  Edge,\n} from './types';\n\nexport interface ExtractionResult { node: Thing }\n",
+    "multiline_import_complete": true,
+    "no_dangling_import_open": true,
+    "thing_type_imported": true
+  },
+  "8_source_discards_import_used_only_by_moved_item": {
+    "dest": "import { magic } from './helper';\n\nexport function work(): number { return magic() }\n",
+    "dest_gains_magic_import": true,
+    "source": "",
+    "source_discards_magic_import": true,
+    "unused": {
+      "exit_code": 0,
+      "stdout": "root $work/repo\nplan source.ts#work -> dest.ts\ntravel magic from ./helper as ./helper (relative)\norphan magic from ./helper\ndrag fixpoint 1 passes\nreplace source.ts -> source.ts  update source.ts (0 bytes)\n    --- original\n    +++ modified\n    @@ -1,2 +0,0 @@\n    -import { magic } from './helper';\n    -export function work(): number { return magic() }\nstage $STAGE committed\ncreate  - -> dest.ts  create dest.ts (85 bytes)\n    --- original\n    +++ modified\n    @@ -0,0 +1,3 @@\n    +import { magic } from './helper';\n    +\n    +export function work(): number { return magic() }\nstage $STAGE committed\n"
+    }
+  }
+}
