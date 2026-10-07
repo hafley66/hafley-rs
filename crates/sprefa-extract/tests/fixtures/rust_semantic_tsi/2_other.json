@@ -1,0 +1,32 @@
+{
+  "steps": [
+    {
+      "action": "run",
+      "name": "walk",
+      "cwd": "$manifest",
+      "arguments": [
+        "--witness",
+        "--resolve",
+        "--arms",
+        "type",
+        "--root",
+        "tests/fixtures/tsi/rust_probe",
+        "--rust-checker",
+        "tests/fixtures/tsi/rust_probe/src/other.rs"
+      ],
+      "expect_exit_code": 0,
+      "raw_stdout": true,
+      "unasserted_stdout": true,
+      "unasserted_stderr": true,
+      "stdout_to": "$work/stream.jsonl"
+    },
+    {
+      "action": "api",
+      "name": "implementations",
+      "path": "$work/stream.jsonl",
+      "files": [
+        "tests/fixtures/tsi/rust_probe/src/other.rs"
+      ]
+    }
+  ]
+}

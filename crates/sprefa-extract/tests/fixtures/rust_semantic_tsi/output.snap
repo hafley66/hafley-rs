@@ -1,5 +1,5 @@
 ---
-source: tests/support/2_fixture_runner.rs
+source: crates/sprefa-extract/tests/support/2_fixture_runner.rs
 ---
 {
   "0_witnessed": {
@@ -21,6 +21,40 @@ source: tests/support/2_fixture_runner.rs
     "extract": {
       "exit_code": 0,
       "stdout": "{\"record\":\"external_crate_decline\",\"from_path\":\"tests/fixtures/tsi/rust_probe/src/lib.rs\",\"from_name\":\"View\",\"type_name\":\"Rc\",\"crate_name\":\"std\",\"reason\":\"external_crate\",\"kind\":\"field\"}\n{\"record\":\"resolved_type_edge\",\"owner_path\":\"tests/fixtures/tsi/rust_probe/src/lib.rs\",\"owner_name\":\"User\",\"owner_start\":331,\"owner_end\":335,\"target_path\":\"tests/fixtures/tsi/rust_probe/src/lib.rs\",\"target_name\":\"Mapper\",\"kind\":\"impl\",\"resolution_origin\":\"checker\"}\n{\"record\":\"resolved_type_edge\",\"owner_path\":\"tests/fixtures/tsi/rust_probe/src/lib.rs\",\"owner_name\":\"User\",\"owner_start\":331,\"owner_end\":335,\"target_path\":\"tests/fixtures/tsi/rust_probe/src/lib.rs\",\"target_name\":\"User\",\"kind\":\"uses\",\"resolution_origin\":\"checker\"}\n{\"record\":\"resolved_type_edge\",\"owner_path\":\"tests/fixtures/tsi/rust_probe/src/lib.rs\",\"owner_name\":\"View\",\"owner_start\":538,\"owner_end\":542,\"target_path\":\"tests/fixtures/tsi/rust_probe/src/lib.rs\",\"target_name\":\"User\",\"kind\":\"field\",\"resolution_origin\":\"checker\"}\n{\"record\":\"resolved_type_edge\",\"owner_path\":\"tests/fixtures/tsi/rust_probe/src/lib.rs\",\"owner_name\":\"View\",\"owner_start\":538,\"owner_end\":542,\"target_path\":\"tests/fixtures/tsi/rust_probe/src/lib.rs\",\"target_name\":\"View\",\"kind\":\"field\",\"resolution_origin\":\"checker\"}\n{\"record\":\"resolved_type_edge\",\"owner_path\":\"tests/fixtures/tsi/rust_probe/src/lib.rs\",\"owner_name\":\"map\",\"owner_start\":277,\"owner_end\":280,\"target_path\":\"tests/fixtures/tsi/rust_probe/src/lib.rs\",\"target_name\":\"Output\",\"kind\":\"returns\",\"resolution_origin\":\"checker\"}\n{\"record\":\"resolved_type_edge\",\"owner_path\":\"tests/fixtures/tsi/rust_probe/src/lib.rs\",\"owner_name\":\"map\",\"owner_start\":455,\"owner_end\":458,\"target_path\":\"tests/fixtures/tsi/rust_probe/src/lib.rs\",\"target_name\":\"Output\",\"kind\":\"returns\",\"resolution_origin\":\"checker\"}\n"
+    }
+  },
+  "2_other": {
+    "implementations": [
+      [
+        "Other",
+        null
+      ],
+      [
+        "Other",
+        "Elsewhere"
+      ]
+    ],
+    "walk": {
+      "exit_code": 0
+    }
+  },
+  "3_both": {
+    "implementations": [
+      [
+        "Other",
+        null
+      ],
+      [
+        "Other",
+        "Elsewhere"
+      ],
+      [
+        "User",
+        "Mapper"
+      ]
+    ],
+    "walk": {
+      "exit_code": 0
     }
   }
 }

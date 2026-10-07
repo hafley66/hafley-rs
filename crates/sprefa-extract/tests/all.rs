@@ -617,3 +617,7 @@ mod scip_facts_support;
 
 #[path = "../bench/6_wall_contracts.rs"]
 mod wall_bench;
+
+#[cfg(feature = "rust-checker")]
+#[path = "support/15_rust_walk.rs"]
+mod rust_walk_support;
