@@ -1,0 +1,25 @@
+{
+  "tests": [
+    "every_written_application_states_its_call",
+    "a_tuple_is_an_anonymous_product",
+    "a_literal_is_an_anonymous_product_with_labels",
+    "a_function_type_is_an_anonymous_callable",
+    "a_typed_binding_has_a_type",
+    "keywords_are_primitives_without_origin",
+    "every_named_id_spells_its_text"
+  ],
+  "steps": [
+    {
+      "action": "run",
+      "name": "extract",
+      "cwd": "$manifest",
+      "arguments": [
+        "--witness",
+        "--kinds",
+        "type",
+        "tests/fixtures/tsi/probe_graph.ts"
+      ],
+      "expect_exit_code": 0
+    }
+  ]
+}
