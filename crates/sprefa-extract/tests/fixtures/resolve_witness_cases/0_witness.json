@@ -1,0 +1,3 @@
+{
+  "universes": ["resolve/0_caller.ts + 1_callee.ts (syntax)", "tsi/agree*.ts (checker)", "tsi/disagree*.ts (shadow)"]
+}

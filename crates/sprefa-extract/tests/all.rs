@@ -657,3 +657,6 @@ mod ts_binding_legs_support;
 
 #[path = "support/26_tracing.rs"]
 mod tracing_support;
+
+#[path = "support/27_resolve_witness.rs"]
+mod resolve_witness_support;
