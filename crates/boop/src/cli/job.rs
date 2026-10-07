@@ -555,10 +555,9 @@ pub(crate) fn record_lane_purpose(
     parent: Option<&str>,
     goal: Option<&str>,
     brief: &Path,
+    dir: &Path,
 ) -> Option<i64> {
-    let store = boop::Store::default_path()
-        .and_then(boop::Store::open)
-        .ok()?;
+    let store = bus::db_path(dir).and_then(boop::Store::open).ok()?;
     let spawn = boop::ident::LaneSpawn {
         lane: lane.to_owned(),
         trace: Some(trace.to_owned()),
@@ -586,8 +585,8 @@ pub(crate) fn record_lane_purpose(
 /// Set the child's mood at spawn. No `agent_session` row exists yet: the
 /// transcript sync writes that later, so the attribute is keyed on the lane
 /// name's `dict_session` id, which is the same id `agent_lane` records.
-pub(crate) fn record_lane_mood(lane: &str, mood: &str) -> Result<()> {
-    let store = boop::Store::open(boop::Store::default_path()?)?;
+pub(crate) fn record_lane_mood(dir: &Path, lane: &str, mood: &str) -> Result<()> {
+    let store = boop::Store::open(bus::db_path(dir)?)?;
     store.set_session_mood(lane, mood, boop::channel::now_ms())
 }
 
@@ -674,7 +673,7 @@ pub(crate) fn run_wait(
         },
     };
     let idle = id.and_then(|id| {
-        report_delivery(id);
+        report_delivery(&dir, id);
         watch_turn_end(&dir, id, timeout_secs)
     });
     wait_and_exit(&dir, watch, timeout_secs, as_name, mail_dir_arg, idle)
@@ -688,9 +687,7 @@ pub(crate) fn watch_turn_end(
     message_id: &str,
     timeout_secs: u64,
 ) -> Option<std::sync::mpsc::Receiver<String>> {
-    let store = boop::Store::default_path()
-        .and_then(boop::Store::open)
-        .ok()?;
+    let store = bus::db_path(dir).and_then(boop::Store::open).ok()?;
     let rows = store.delivery_rows(message_id).ok()?;
     let routes = bus::read_routes(dir).ok()?;
     let registry = std::sync::Arc::new(Registry::discover());
@@ -733,8 +730,8 @@ pub(crate) fn watch_turn_end(
 /// The delivery history of the message being waited on: one line per recorded
 /// transition, oldest first. An unreadable store costs the lines and nothing
 /// else, because the wait itself reads the mailbox.
-fn report_delivery(message_id: &str) {
-    let rows = boop::Store::default_path()
+fn report_delivery(dir: &Path, message_id: &str) {
+    let rows = bus::db_path(dir)
         .and_then(boop::Store::open)
         .and_then(|store| store.delivery_rows(message_id));
     let Ok(rows) = rows else {
@@ -801,11 +798,15 @@ pub(crate) fn refuse_a_shared_stamp(routes: &BTreeMap<String, Route>, name: &str
 /// and hands back only what nothing else took. A `Reply` watch is unfiltered:
 /// its row is the answer to a question this caller asked, and the caller is
 /// the one taking delivery.
-fn drop_rows_already_delivered(watch: &Watch, arrivals: Vec<bus::Message>) -> Vec<bus::Message> {
+fn drop_rows_already_delivered(
+    dir: &Path,
+    watch: &Watch,
+    arrivals: Vec<bus::Message>,
+) -> Vec<bus::Message> {
     if !matches!(watch, Watch::Inbox { .. }) {
         return arrivals;
     }
-    let Ok(store) = boop::Store::default_path().and_then(boop::Store::open) else {
+    let Ok(store) = bus::db_path(dir).and_then(boop::Store::open) else {
         return arrivals;
     };
     arrivals
@@ -839,7 +840,7 @@ pub(crate) fn wait_and_exit(
     info!(watching = watch.what(), timeout_secs, "mail wait starting");
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(timeout_secs);
     loop {
-        let arrivals = drop_rows_already_delivered(&watch, watch.arrivals(&all_messages(dir)?));
+        let arrivals = drop_rows_already_delivered(dir, &watch, watch.arrivals(&all_messages(dir)?));
         if !arrivals.is_empty() {
             info!(
                 watching = watch.what(),
@@ -1292,7 +1293,8 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
     // A mood name is checked before anything spawns: a typo must not reach a
     // pane that then mails its coordinator in the default shape.
     if let Some(mood) = args.mood.as_deref() {
-        boop::Store::open(boop::Store::default_path()?)?.check_mood_name(mood)?;
+        let dir = mail_dir(args.mail_dir_override.as_deref())?;
+        boop::Store::open(bus::db_path(&dir)?)?.check_mood_name(mood)?;
     }
     // The row that spawns: the one named, else the harness's default preset.
     // An explicit --model opts out of the default-preset lookup entirely.
@@ -1526,9 +1528,10 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
         parent.parent.as_deref(),
         args.goal.as_deref(),
         &brief,
+        &hail_mail_dir,
     );
     if let Some(mood) = args.mood.as_deref() {
-        record_lane_mood(&identity.lane, mood)?;
+        record_lane_mood(&hail_mail_dir, &identity.lane, mood)?;
     }
     run_dispatch(
         registry,
@@ -3292,7 +3295,7 @@ pub(crate) fn run_lane_get(mail_dir_arg: Option<&Path>, lane: &str, touched: boo
         .and_then(|expect| serde_json::to_value(expect).ok())
         .unwrap_or(serde_json::Value::Null);
     let state = gone.unwrap_or_else(|| lane_state(&dir, lane, &live, route, &routes, &snapshot));
-    let store = boop::Store::open(boop::Store::default_path()?);
+    let store = boop::Store::open(bus::db_path(&dir)?);
     let (trace, mut sessions, usage, latest_roles, mail) = match store {
         Ok(store) => {
             let trace = store.query_recent_trace_events(Some(lane), 100)?;

@@ -622,7 +622,7 @@ pub(crate) fn sync_all_budgeted(
 ) -> Result<()> {
     let started = std::time::Instant::now();
     let mut phases = SyncPhases::new(budget);
-    let db_path = ident::Store::default_path()?;
+    let db_path = bus::db_path(&mail_dir(mail_dir_arg)?)?;
     let Some(_flight) = claim_sync(&sync_lock_path(&db_path), contention)? else {
         phases.defer();
         return Ok(());
@@ -1486,8 +1486,7 @@ pub(crate) fn run_agent_summary(
     format: AgentSummaryFormat,
     mail_dir_arg: Option<&Path>,
 ) -> Result<()> {
-    let store = open_ro_store()?;
-    let _ = mail_dir_arg;
+    let store = ident::Store::open_readonly(bus::db_path(&mail_dir(mail_dir_arg)?)?)?;
     let summary = boop::agent_summary_stored(&store)?;
     match format {
         AgentSummaryFormat::Json => line(&serde_json::to_string(&summary)?),
@@ -1612,8 +1611,7 @@ pub(crate) fn run_agent_sessions(
     history_since_ts: Option<u64>,
     mail_dir_arg: Option<&Path>,
 ) -> Result<()> {
-    let store = open_ro_store()?;
-    let _ = mail_dir_arg;
+    let store = ident::Store::open_readonly(bus::db_path(&mail_dir(mail_dir_arg)?)?)?;
     let graph = boop::load_agent_session_graph_stored(
         &store,
         agent_session_graph_query(cwd, include_history, tmux, history_since_ts),

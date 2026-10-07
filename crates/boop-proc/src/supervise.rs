@@ -636,10 +636,11 @@ pub fn render_mail(template: &str, kind: &str, id: &str, from: &str, body: &str)
         .replace("{body}", body)
 }
 
-/// The template mail addressed to `receiver` renders through. A store that
-/// cannot open leaves the default shape rather than dropping the mail.
-pub fn mood_template(receiver: &str) -> String {
-    match boop_store::Store::default_path().and_then(boop_store::Store::open) {
+/// The template mail addressed to `receiver` in mail dir `dir` renders
+/// through. A store that cannot open leaves the default shape rather than
+/// dropping the mail.
+pub fn mood_template(dir: &Path, receiver: &str) -> String {
+    match bus::db_path(dir).and_then(boop_store::Store::open) {
         Ok(store) => mood_template_in(&store, receiver),
         Err(error) => {
             warn!(receiver, error = %error, "effective mood unresolved");
@@ -1102,7 +1103,7 @@ fn supervise(
     let mail_store = bus::open_store(&lane.mail_dir).ok();
     let mood = match &mail_store {
         Some(store) => mood_template_in(store, &lane.lane),
-        None => mood_template(&lane.lane),
+        None => boop_store::ident::DEFAULT_MOOD_TEMPLATE.to_owned(),
     };
     let reported = mail_store
         .as_ref()
@@ -2908,7 +2909,7 @@ fn remember_conversation(lane: &LaneRun, channel: &dyn LaneChannel) {
         "lane conversation resolved"
     );
     record_conversation(&lane.mail_dir, &lane.lane, &lane.cwd, &id);
-    let store = match boop_store::Store::default_path().and_then(boop_store::Store::open) {
+    let store = match bus::db_path(&lane.mail_dir).and_then(boop_store::Store::open) {
         Ok(store) => store,
         Err(error) => {
             warn!(lane = lane.lane, error = %error, "open trace store failed");

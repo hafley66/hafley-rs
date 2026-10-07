@@ -38,7 +38,7 @@ impl Fixture {
         Command::new(BOOP)
             .args(args)
             .boop_test_root(self.root.join("home"))
-            .env("BOOP_DB", self.root.join("boop.db"))
+            .env("BOOP_DB", self.root.join("mail/boop.db"))
             .output()
             .unwrap()
     }
@@ -49,7 +49,7 @@ impl Fixture {
             .arg("--mail-dir")
             .arg(self.mail())
             .boop_test_root(self.root.join("home"))
-            .env("BOOP_DB", self.root.join("boop.db"))
+            .env("BOOP_DB", self.root.join("mail/boop.db"))
             .output()
             .unwrap()
     }
@@ -158,7 +158,7 @@ fn me_mood_sets_reads_and_clears_the_named_session() {
 #[test]
 fn me_favorite_follows_the_callers_bound_native_thread() {
     let fixture = Fixture::new("favorite-native-binding");
-    let store = boop::Store::open(fixture.root.join("boop.db")).unwrap();
+    let store = boop::Store::open(fixture.root.join("mail/boop.db")).unwrap();
     let session = boop::harness::SessionRef {
         harness: boop::harness::HarnessId::Claude,
         session_id: "native-thread".into(),
@@ -197,7 +197,7 @@ fn me_favorite_follows_the_callers_bound_native_thread() {
     let output = Command::new(BOOP)
         .args(["me", "favorite", "--note", "fixture"])
         .boop_test_root(&fixture.root)
-        .env("BOOP_DB", fixture.root.join("boop.db"))
+        .env("BOOP_DB", fixture.root.join("mail/boop.db"))
         .env("BOOP_MAIL_DIR", fixture.mail())
         .env("BOOP_NO_SYNC", "1")
         .env("BOOP_SESSION", "caller-route")

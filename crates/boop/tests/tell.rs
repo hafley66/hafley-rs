@@ -60,7 +60,7 @@ impl Fixture {
             .arg("--mail-dir")
             .arg(self.mail())
             .boop_test_root(self.root.join("home"))
-            .env("BOOP_DB", self.root.join("boop.db"))
+            .env("BOOP_DB", self.root.join("mail/boop.db"))
             .env("BOOP_SESSION", caller)
             .env("BOOP_LANE", caller)
             .output()
@@ -72,7 +72,7 @@ impl Fixture {
         Command::new(BOOP)
             .args(args)
             .boop_test_root(self.root.join("home"))
-            .env("BOOP_DB", self.root.join("boop.db"))
+            .env("BOOP_DB", self.root.join("mail/boop.db"))
             .output()
             .unwrap()
     }
@@ -312,7 +312,7 @@ fn beep_children_names_a_native_subagent_child_as_no_route() {
     fixture.write_registry(serde_json::json!({
         "coord-6": {"kind": "coordinator"},
     }));
-    let store = boop::Store::open(fixture.root.join("boop.db")).unwrap();
+    let store = boop::Store::open(fixture.root.join("mail/boop.db")).unwrap();
     store
         .add_edge_at("coord-6", "coord-6/agent-a1b2", "spawned", 7)
         .unwrap();
@@ -350,7 +350,7 @@ fn beep_children_as_uses_the_selected_routes_native_session_not_the_env_stamp() 
         "caller-b": {"kind": "coordinator", "sessionId": "native-b"},
         "registered-b": {"kind": "lane", "parent": "caller-b"},
     }));
-    let store = boop::Store::open(fixture.root.join("boop.db")).unwrap();
+    let store = boop::Store::open(fixture.root.join("mail/boop.db")).unwrap();
     store
         .add_edge_at("native-a", "persisted-a", "spawned", 7)
         .unwrap();
@@ -364,7 +364,7 @@ fn beep_children_as_uses_the_selected_routes_native_session_not_the_env_stamp() 
         .arg("--mail-dir")
         .arg(fixture.mail())
         .boop_test_root(fixture.root.join("home"))
-        .env("BOOP_DB", fixture.root.join("boop.db"))
+        .env("BOOP_DB", fixture.root.join("mail/boop.db"))
         .env("BOOP_SESSION", "caller-b")
         .env("BOOP_LANE", "caller-b")
         .output()

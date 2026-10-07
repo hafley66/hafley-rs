@@ -16,7 +16,7 @@ fn agent_summary_reads_while_a_wal_writer_holds_its_transaction() {
         SEQUENCE.fetch_add(1, Ordering::Relaxed)
     ));
     std::fs::create_dir_all(root.join("mail")).unwrap();
-    let db = root.join("boop.db");
+    let db = root.join("mail/boop.db");
     let writer = Store::open(db.clone()).unwrap();
     writer.begin().unwrap();
 

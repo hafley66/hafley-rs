@@ -269,7 +269,7 @@ pub(crate) fn run_me_mood(
 ) -> Result<()> {
     let dir = mail_dir(mail_dir_arg)?;
     let session = waiting_as(&dir, as_name)?;
-    let store = boop::Store::open(boop::Store::default_path()?)?;
+    let store = boop::Store::open(boop::bus::db_path(&dir)?)?;
     match (mood, clear) {
         (Some(mood), _) => {
             store.set_session_mood(&session, mood, boop::channel::now_ms())?;
