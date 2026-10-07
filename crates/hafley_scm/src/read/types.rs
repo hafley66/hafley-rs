@@ -2454,6 +2454,30 @@ impl FamilyMask {
         df: false,
         data: false,
     };
+
+    /// The one `--kinds` parser. No list means [`Self::DEFAULT`]; `cfg` is
+    /// derived from the parse tree, so it turns `cst` on.
+    pub fn parse(kinds: &[String]) -> Result<Self, String> {
+        if kinds.is_empty() {
+            return Ok(Self::DEFAULT);
+        }
+        let mut mask = Self::NONE;
+        for kind in kinds {
+            match kind.trim() {
+                "cst" | "cfg" => mask.cst = true,
+                "type" | "types" => mask.types = true,
+                "call" => mask.call = true,
+                "df" => mask.df = true,
+                "data" => mask.data = true,
+                other => {
+                    return Err(format!(
+                        "--kinds '{other}': unknown; use cst, type, call, df, data or cfg"
+                    ))
+                }
+            }
+        }
+        Ok(mask)
+    }
 }
 
 /// One file's extraction: the shared per-file interner + an Option<FamilyBundle<F>>

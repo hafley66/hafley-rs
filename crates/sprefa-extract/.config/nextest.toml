@@ -3,3 +3,14 @@
 # quality_gate) run 60-90s under full-suite load; terminate past 120s.
 [profile.default]
 slow-timeout = { period = "30s", terminate-after = 4 }
+
+# t_15 runs `cargo run --features rust-checker --example typegraph_d2`: a nested
+# build with its own feature set, so the first run after an edit recompiles the
+# rust-analyzer graph. Three at once starve the rest of the suite. One at a time.
+[test-groups.nested-cargo]
+max-threads = 1
+
+[[profile.default.overrides]]
+filter = 'test(/^t_15_typegraph_d2::/)'
+test-group = 'nested-cargo'
+slow-timeout = { period = "60s", terminate-after = 10 }

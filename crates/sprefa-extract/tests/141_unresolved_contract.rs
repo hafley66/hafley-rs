@@ -133,10 +133,8 @@ fn phase_one_rows_keep_reason_and_span() {
     assert_eq!((start, end), (73, 80));
 }
 
-/// Pins the behavior a future reader might "fix" after misreading the old
-/// `--help` text: `--resolve --sqlite` (family defaults to `call` alone)
-/// never emits `resolved_type_edge`; `fast --sqlite` (`--family diet_scip`
-/// rewrites to call+type) does.
+/// `--resolve` with no `--arms` runs `ResolveArms::DEFAULT` (call + type), the
+/// same arms `fast` resolves, so both stores carry `resolved_type_edge`.
 #[test]
 fn mode_flag_still_honored_after_the_fix() {
     let scratch = tempfile::tempdir().unwrap();
@@ -152,6 +150,6 @@ fn mode_flag_still_honored_after_the_fix() {
         .unwrap()
         .query_row("SELECT count(*) FROM resolved_type_edge", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(resolve_count, 0, "--resolve alone stays call-only");
-    assert!(fast_count > 0, "fast mode's diet_scip rewrite adds type");
+    assert!(resolve_count > 0, "--resolve alone runs the type arm");
+    assert!(fast_count > 0, "fast resolves the type arm");
 }

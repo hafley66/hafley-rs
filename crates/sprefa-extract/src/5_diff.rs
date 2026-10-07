@@ -140,33 +140,10 @@ impl Options {
             from: args.from,
             to: args.to,
             patterns,
-            arms: parse_arms(&args.arms)?,
+            arms: ResolveArms::parse(&args.arms)?,
             sqlite: args.sqlite,
         })
     }
-}
-
-fn parse_arms(families: &[String]) -> Result<ResolveArms, Box<dyn std::error::Error>> {
-    if families.is_empty() {
-        return Ok(ResolveArms {
-            call: true,
-            types: true,
-            flow: false,
-        });
-    }
-    let mut arms = ResolveArms {
-        call: false,
-        types: false,
-        flow: false,
-    };
-    for family in families {
-        match family.as_str() {
-            "call" => arms.call = true,
-            "type" | "types" => arms.types = true,
-            unknown => return Err(format!("--arms {unknown}: use call or type").into()),
-        }
-    }
-    Ok(arms)
 }
 
 /// The four change words this wire carries. `changed` is the `file` relation's

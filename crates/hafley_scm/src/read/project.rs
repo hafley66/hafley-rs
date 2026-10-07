@@ -54,7 +54,7 @@ use crate::read::types::{
 use crate::read::wire::{flatten_flow, FlatFact};
 
 /// Which phase-2 arms to run. All default off at the type level so a caller
-/// states its intent; the CLI defaults `call` on for backward compatibility.
+/// states its intent; [`ResolveArms::DEFAULT`] is the CLI's no-flag set.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub struct ResolveArms {
     /// `Resolve<CallF>`: resolved caller-to-callee edges. Implemented for
@@ -67,6 +67,28 @@ pub struct ResolveArms {
     /// A pure join, so it needs the `call` resolve to have run and emits
     /// whole-project edges rather than per-file rows.
     pub flow: bool,
+}
+
+impl ResolveArms {
+    /// The arms every verb runs when `--arms` is absent.
+    pub const DEFAULT: Self = Self { call: true, types: true, flow: false };
+
+    /// The one `--arms` parser. No list means [`Self::DEFAULT`].
+    pub fn parse(arms: &[String]) -> Result<Self, String> {
+        if arms.is_empty() {
+            return Ok(Self::DEFAULT);
+        }
+        let mut parsed = Self::default();
+        for arm in arms {
+            match arm.trim() {
+                "call" => parsed.call = true,
+                "type" | "types" => parsed.types = true,
+                "flow" => parsed.flow = true,
+                other => return Err(format!("--arms '{other}': use call, type or flow")),
+            }
+        }
+        Ok(parsed)
+    }
 }
 
 /// Where the Tier-1 SCIP index comes from, if anywhere.

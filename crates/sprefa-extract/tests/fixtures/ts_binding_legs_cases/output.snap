@@ -173,6 +173,61 @@ source: tests/support/2_fixture_runner.rs
           "hops": 1
         },
         {
+          "record": "resolved_type_edge",
+          "owner_path": "<fixture>/tests/fixtures/ts_binding_legs/lib.ts",
+          "owner_name": "S",
+          "owner_start": 44,
+          "owner_end": 109,
+          "target_path": "<fixture>/tests/fixtures/ts_binding_legs/lib.ts",
+          "target_name": "T",
+          "kind": "field",
+          "resolution_origin": "same_file"
+        },
+        {
+          "record": "resolved_type_edge",
+          "owner_path": "<fixture>/tests/fixtures/ts_binding_legs/lib.ts",
+          "owner_name": "ifaceCase",
+          "owner_start": 341,
+          "owner_end": 408,
+          "target_path": "<fixture>/tests/fixtures/ts_binding_legs/lib.ts",
+          "target_name": "P",
+          "kind": "generic",
+          "resolution_origin": "same_file"
+        },
+        {
+          "record": "resolved_type_edge",
+          "owner_path": "<fixture>/tests/fixtures/ts_binding_legs/lib.ts",
+          "owner_name": "ifaceCase",
+          "owner_start": 341,
+          "owner_end": 408,
+          "target_path": "<fixture>/tests/fixtures/ts_binding_legs/lib.ts",
+          "target_name": "Proj",
+          "kind": "generic",
+          "resolution_origin": "same_file"
+        },
+        {
+          "record": "resolved_type_edge",
+          "owner_path": "<fixture>/tests/fixtures/ts_binding_legs/lib.ts",
+          "owner_name": "makeFoo",
+          "owner_start": 159,
+          "owner_end": 208,
+          "target_path": "<fixture>/tests/fixtures/ts_binding_legs/lib.ts",
+          "target_name": "Foo",
+          "kind": "returns",
+          "resolution_origin": "same_file"
+        },
+        {
+          "record": "resolved_type_edge",
+          "owner_path": "<fixture>/tests/fixtures/ts_binding_legs/use.ts",
+          "owner_name": "crossFileGeneric",
+          "owner_start": 161,
+          "owner_end": 231,
+          "target_path": "<fixture>/tests/fixtures/ts_binding_legs/use.ts",
+          "target_name": "Impl",
+          "kind": "uses",
+          "resolution_origin": "same_file"
+        },
+        {
           "record": "call_site",
           "callee": "Foo",
           "path": "<fixture>/tests/fixtures/ts_binding_legs/lib.ts",

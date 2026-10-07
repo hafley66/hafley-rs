@@ -882,10 +882,7 @@ fn extract_file(
         output.fact(&size_skip_fact(&path_str, bytes, limit))?;
         return Ok(());
     }
-    let mask = match cli.kinds.as_deref() {
-        Some(kinds) => parse_mask(kinds)?,
-        None => FamilyMask::DEFAULT,
-    };
+    let mask = FamilyMask::parse(cli.kinds.as_deref().unwrap_or_default())?;
     let cfg = cli
         .kinds
         .as_deref()
@@ -931,16 +928,7 @@ fn stream_resolve(
     cli: &FileArgs,
     output: &mut sqlite::Output,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    // Absent `--arms`, the default is `call` alone, which keeps pre-existing
-    // --resolve output byte-identical.
-    let arms = match cli.arms.as_deref() {
-        None => ResolveArms {
-            call: true,
-            types: false,
-            flow: false,
-        },
-        Some(families) => parse_arms(families)?,
-    };
+    let arms = ResolveArms::parse(cli.arms.as_deref().unwrap_or_default())?;
     let request = ResolveRequest {
         arms,
         ..scip_request(cli)?
@@ -972,49 +960,6 @@ fn stream_resolve(
         }
     }
     Ok(())
-}
-
-/// `--arms`. An unknown name is a named stop; `parse_mask` refuses unknown
-/// names the same way.
-fn parse_arms(families: &[String]) -> Result<ResolveArms, String> {
-    let mut arms = ResolveArms::default();
-    for family in families {
-        match family.trim() {
-            "call" => arms.call = true,
-            "type" | "types" => arms.types = true,
-            "flow" => arms.flow = true,
-            other => {
-                tracing::warn!(family = other, "not a resolve arm");
-                return Err(format!("--arms '{other}': use call, type or flow"));
-            }
-        }
-    }
-    if !arms.call && !arms.types && !arms.flow {
-        return Err("--arms: use call, type or flow".to_string());
-    }
-    Ok(arms)
-}
-
-fn parse_mask(families: &[String]) -> Result<FamilyMask, String> {
-    let mut mask = FamilyMask::NONE;
-    for family in families {
-        match family.trim() {
-            "cst" => mask.cst = true,
-            "type" | "types" => mask.types = true,
-            "call" => mask.call = true,
-            "df" => mask.df = true,
-            "data" => mask.data = true,
-            // The cfg plane is derived from the cst parse, so it turns cst on.
-            "cfg" => mask.cst = true,
-            other => {
-                tracing::warn!(family = other, "not a mask family");
-                return Err(format!(
-                    "--kinds '{other}': unknown; use cst, type, call, df, data or cfg"
-                ));
-            }
-        }
-    }
-    Ok(mask)
 }
 
 fn stream(

@@ -29,6 +29,8 @@
       "name": "without",
       "arguments": [
         "--resolve",
+        "--arms",
+        "call",
         "tests/fixtures/capability_parity/inputs/1_resolve/0_owner.ts",
         "tests/fixtures/capability_parity/inputs/1_resolve/1_item.ts"
       ],

@@ -497,7 +497,7 @@ impl Options {
                 &args.root.map_or_else(crate::inputs::git_root_of_cwd, Ok)?,
             ),
             patterns,
-            mask: parse_mask(&args.kinds)?,
+            mask: FamilyMask::parse(&args.kinds)?,
             state: args.receipts,
             once: args.once,
             poll_ms: args.poll_ms,
@@ -530,20 +530,3 @@ pub(crate) fn default_patterns() -> Vec<soopy::Pattern> {
     .collect()
 }
 
-fn parse_mask(families: &[String]) -> Result<FamilyMask, Box<dyn std::error::Error>> {
-    if families.is_empty() {
-        return Ok(FamilyMask::ALL);
-    }
-    let mut mask = FamilyMask::NONE;
-    for family in families {
-        match family.as_str() {
-            "cst" => mask.cst = true,
-            "type" | "types" => mask.types = true,
-            "call" => mask.call = true,
-            "df" => mask.df = true,
-            "data" => mask.data = true,
-            other => return Err(format!("--kinds {other}: unknown").into()),
-        }
-    }
-    Ok(mask)
-}
