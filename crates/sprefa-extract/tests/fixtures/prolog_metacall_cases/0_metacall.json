@@ -1,0 +1,8 @@
+{
+  "corpora": [
+    "tests/fixtures/prolog/corpus_1_meta_closures.pl",
+    "tests/fixtures/prolog/corpus_2_meta_def.pl + corpus_2_meta_use.pl (resolve)",
+    "tests/fixtures/prolog/corpus_3_meta_directive.pl",
+    "tests/fixtures/prolog/corpus_4_meta_specs.pl"
+  ]
+}

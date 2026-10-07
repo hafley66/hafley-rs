@@ -648,3 +648,6 @@ mod diet_deps_support;
 
 #[path = "support/23_rust_mbe.rs"]
 mod rust_mbe_support;
+
+#[path = "support/24_prolog_metacall.rs"]
+mod prolog_metacall_support;
