@@ -1,0 +1,48 @@
+{
+  "tests": [
+    "plain_and_alternating_patterns_emit_flat_rows",
+    "match_predicate_filters_matches",
+    "unknown_lang_and_invalid_query_are_exit_two",
+    "digest_door_reads_the_staged_blob",
+    "bad_digest_is_exit_two_naming_the_git_door",
+    "md_md_inline_and_html_grammars_query"
+  ],
+  "steps": [
+    {"action": "command", "arguments": ["query", "--lang", "rust", "--query", "(function_item name: (identifier) @name) @item", "$fixtures/rust/sample.rs"], "capture": "plain"},
+    {"action": "command", "arguments": ["query", "--lang", "rust", "--query", "[(function_item name: (identifier) @name) @item (struct_item name: (type_identifier) @name) @item]", "$fixtures/rust/sample.rs"], "capture": "alternate"},
+    {"action": "claim", "name": "alternate_rows", "kind": "line_count", "cell": "alternate.stdout", "line_prefix": "{", "expect": 5},
+    {"action": "claim", "name": "trim_line", "kind": "json_scalar", "cell": "plain.stdout", "line_contains": "\"name\":\"trim\"", "pointer": "line", "expect": 15},
+    {"action": "claim", "name": "trim_end", "kind": "json_scalar", "cell": "plain.stdout", "line_contains": "\"name\":\"trim\"", "pointer": "end_line", "expect": 17},
+    {"action": "claim", "name": "engine_line", "kind": "json_scalar", "cell": "plain.stdout", "line_contains": "\"name\":\"make_engine\"", "pointer": "line", "expect": 19},
+    {"action": "claim", "name": "engine_end", "kind": "json_scalar", "cell": "plain.stdout", "line_contains": "\"name\":\"make_engine\"", "pointer": "end_line", "expect": 23},
+    {"action": "command", "arguments": ["query", "--lang", "ts", "--query", "((function_declaration name: (identifier) @name) @item (#match? @name \"^s\"))", "$fixtures/ts/sample.ts"], "capture": "predicate"},
+    {"action": "claim", "name": "predicate_rows", "kind": "line_count", "cell": "predicate.stdout", "line_prefix": "{", "expect": 1},
+    {"action": "claim", "name": "predicate_line", "kind": "json_scalar", "cell": "predicate.stdout", "line_contains": "\"name\":\"shift\"", "pointer": "line", "expect": 7},
+    {"action": "claim", "name": "predicate_end", "kind": "json_scalar", "cell": "predicate.stdout", "line_contains": "\"name\":\"shift\"", "pointer": "end_line", "expect": 12},
+    {"action": "claim", "name": "predicate_item", "kind": "json_contains", "cell": "predicate.stdout", "line_contains": "\"name\":\"shift\"", "pointer": "item", "text": "function shift(p: Point, d: Dir): Vec2 {", "expect": true},
+
+    {"action": "command", "arguments": ["query", "--lang", "klingon", "--query", "(identifier) @name", "$fixtures/rust/sample.rs"], "success": false, "expect_exit_code": 2, "capture": "unknown_lang"},
+    {"action": "claim", "name": "unknown_lang_stderr", "kind": "text_equals", "cell": "unknown_lang.stderr", "text": "unknown lang 'klingon'\n"},
+    {"action": "command", "arguments": ["query", "--lang", "rust", "--query", "(", "$fixtures/rust/sample.rs"], "success": false, "expect_exit_code": 2, "capture": "invalid_query"},
+    {"action": "claim", "name": "invalid_query_stderr_lines", "kind": "line_count", "cell": "invalid_query.stderr", "line_prefix": "", "expect": 1},
+
+    {"action": "directory", "path": "$work/digrepo"},
+    {"action": "git", "args": ["init", "-q"], "cwd": "$work/digrepo"},
+    {"action": "command", "program": "git", "arguments": ["hash-object", "-w", "$fixtures/rust/sample.rs"], "cwd": "$work/digrepo", "raw_stdout": true, "capture": "oid_check"},
+    {"action": "claim", "name": "oid_is_fixture_blob", "kind": "text_equals", "cell": "oid_check.stdout", "text": "2720337778786789385f705007ab46bdc9626f0e\n"},
+    {"action": "command", "arguments": ["query", "--lang", "rust", "--query", "(function_item name: (identifier) @name) @item", "--digest", "2720337778786789385f705007ab46bdc9626f0e", "$work/digrepo/sample.rs"], "cwd": "$work/digrepo", "capture": "via_digest"},
+    {"action": "command", "arguments": ["query", "--lang", "rust", "--query", "(identifier) @name", "--digest", "0000000000000000000000000000000000000000", "$fixtures/rust/sample.rs"], "success": false, "expect_exit_code": 2, "capture": "bad_digest"},
+    {"action": "compare", "name": "digest_matches_path_stream", "left": "via_digest", "right": "plain", "replace_each": {"$work/digrepo/sample.rs": "", "$manifest/tests/fixtures/rust/sample.rs": ""}},
+    {"action": "claim", "name": "bad_digest_names_door", "kind": "contains", "cell": "bad_digest.stderr", "text": "git cat-file blob"},
+
+    {"action": "write", "path": "$work/md/sample.md", "text": "# Title\n\nA paragraph.\n\n```js\ncode\n```\n"},
+    {"action": "command", "arguments": ["query", "--lang", "md", "--query", "(atx_heading) @heading", "$work/md/sample.md"], "capture": "markdown"},
+    {"action": "claim", "name": "markdown_rows", "kind": "line_count", "cell": "markdown.stdout", "line_prefix": "{", "expect": 1},
+    {"action": "write", "path": "$work/md/sample_inline.md", "text": "This is *em* and [link](url)."},
+    {"action": "command", "arguments": ["query", "--lang", "md_inline", "--query", "[(emphasis) @em (inline_link) @lnk]", "$work/md/sample_inline.md"], "capture": "markdown_inline"},
+    {"action": "claim", "name": "markdown_inline_rows", "kind": "line_count", "cell": "markdown_inline.stdout", "line_prefix": "{", "expect": 2},
+    {"action": "write", "path": "$work/md/sample.html", "text": "<div class=\"x\"><p>hi</p></div>"},
+    {"action": "command", "arguments": ["query", "--lang", "html", "--query", "(element (start_tag (tag_name) @tag))", "$work/md/sample.html"], "capture": "html"},
+    {"action": "claim", "name": "html_rows", "kind": "line_count", "cell": "html.stdout", "line_prefix": "{", "expect": 2}
+  ]
+}

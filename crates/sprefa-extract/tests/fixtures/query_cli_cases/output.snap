@@ -2,65 +2,215 @@
 source: tests/support/2_fixture_runner.rs
 ---
 {
-  "0_query": {
-    "plain_rows": 4,
-    "plain_named_rows": [
-      [
-        "trim",
-        15,
-        17
+  "0_cli": {
+    "alternate": {
+      "exit_code": 0,
+      "stdout": [
+        {
+          "end_line": 6,
+          "item": "pub struct Engine {\n    name: String,\n}",
+          "line": 4,
+          "name": "Engine",
+          "path": "<fixture>/tests/fixtures/rust/sample.rs"
+        },
+        {
+          "end_line": 17,
+          "item": "pub fn trim(value: String) -> String {\n    value\n}",
+          "line": 15,
+          "name": "trim",
+          "path": "<fixture>/tests/fixtures/rust/sample.rs"
+        },
+        {
+          "end_line": 23,
+          "item": "pub fn make_engine(name: String) -> Engine {\n    let trimmed = trim(name);\n    let engine = Engine { name: trimmed };\n    engine\n}",
+          "line": 19,
+          "name": "make_engine",
+          "path": "<fixture>/tests/fixtures/rust/sample.rs"
+        },
+        {
+          "end_line": 29,
+          "item": "pub fn mode(&self) -> Mode {\n        let picked = Mode::Fast;\n        picked\n    }",
+          "line": 26,
+          "name": "mode",
+          "path": "<fixture>/tests/fixtures/rust/sample.rs"
+        },
+        {
+          "end_line": 35,
+          "item": "pub fn apply(value: String) -> String {\n    let func = |text: String| text;\n    func(value)\n}",
+          "line": 32,
+          "name": "apply",
+          "path": "<fixture>/tests/fixtures/rust/sample.rs"
+        }
       ],
-      [
-        "make_engine",
-        19,
-        23
-      ]
-    ],
+      "stderr": ""
+    },
     "alternate_rows": 5,
-    "predicate_row": [
-      "shift",
-      7,
-      12
-    ],
+    "bad_digest": {
+      "exit_code": 2,
+      "stdout": [],
+      "stderr": "git cat-file blob 0000000000000000000000000000000000000000: git cat-file response for 0000000000000000000000000000000000000000: 0000000000000000000000000000000000000000 missing\n"
+    },
+    "bad_digest_names_door": true,
+    "digest_matches_path_stream": {
+      "equal": true
+    },
+    "engine_end": 23,
+    "engine_line": 19,
+    "html": {
+      "exit_code": 0,
+      "stdout": [
+        {
+          "end_line": 1,
+          "line": 1,
+          "path": "$work/md/sample.html",
+          "tag": "div"
+        },
+        {
+          "end_line": 1,
+          "line": 1,
+          "path": "$work/md/sample.html",
+          "tag": "p"
+        }
+      ],
+      "stderr": ""
+    },
+    "html_rows": 2,
+    "invalid_query": {
+      "exit_code": 2,
+      "stdout": [],
+      "stderr": "query (rust): scm++ syntax at byte 0: unbalanced open\n"
+    },
+    "invalid_query_stderr_lines": 1,
+    "markdown": {
+      "exit_code": 0,
+      "stdout": [
+        {
+          "end_line": 2,
+          "heading": "# Title\n",
+          "line": 1,
+          "path": "$work/md/sample.md"
+        }
+      ],
+      "stderr": ""
+    },
+    "markdown_inline": {
+      "exit_code": 0,
+      "stdout": [
+        {
+          "em": "*em*",
+          "end_line": 1,
+          "line": 1,
+          "path": "$work/md/sample_inline.md"
+        },
+        {
+          "end_line": 1,
+          "line": 1,
+          "lnk": "[link](url)",
+          "path": "$work/md/sample_inline.md"
+        }
+      ],
+      "stderr": ""
+    },
+    "markdown_inline_rows": 2,
+    "markdown_rows": 1,
+    "oid_check": {
+      "exit_code": 0,
+      "stdout": "2720337778786789385f705007ab46bdc9626f0e\n",
+      "stderr": ""
+    },
+    "oid_is_fixture_blob": "2720337778786789385f705007ab46bdc9626f0e\n",
+    "plain": {
+      "exit_code": 0,
+      "stdout": [
+        {
+          "end_line": 17,
+          "item": "pub fn trim(value: String) -> String {\n    value\n}",
+          "line": 15,
+          "name": "trim",
+          "path": "<fixture>/tests/fixtures/rust/sample.rs"
+        },
+        {
+          "end_line": 23,
+          "item": "pub fn make_engine(name: String) -> Engine {\n    let trimmed = trim(name);\n    let engine = Engine { name: trimmed };\n    engine\n}",
+          "line": 19,
+          "name": "make_engine",
+          "path": "<fixture>/tests/fixtures/rust/sample.rs"
+        },
+        {
+          "end_line": 29,
+          "item": "pub fn mode(&self) -> Mode {\n        let picked = Mode::Fast;\n        picked\n    }",
+          "line": 26,
+          "name": "mode",
+          "path": "<fixture>/tests/fixtures/rust/sample.rs"
+        },
+        {
+          "end_line": 35,
+          "item": "pub fn apply(value: String) -> String {\n    let func = |text: String| text;\n    func(value)\n}",
+          "line": 32,
+          "name": "apply",
+          "path": "<fixture>/tests/fixtures/rust/sample.rs"
+        }
+      ],
+      "stderr": ""
+    },
+    "predicate": {
+      "exit_code": 0,
+      "stdout": [
+        {
+          "end_line": 12,
+          "item": "function shift(p: Point, d: Dir): Vec2 {\n  function clamp(n: number): number {\n    return n;\n  }\n  return new Vec2(clamp(p.x), clamp(p.y));\n}",
+          "line": 7,
+          "name": "shift",
+          "path": "<fixture>/tests/fixtures/ts/sample.ts"
+        }
+      ],
+      "stderr": ""
+    },
+    "predicate_end": 12,
+    "predicate_item": true,
+    "predicate_line": 7,
+    "predicate_rows": 1,
+    "trim_end": 17,
+    "trim_line": 15,
+    "unknown_lang": {
+      "exit_code": 2,
+      "stdout": [],
+      "stderr": "unknown lang 'klingon'\n"
+    },
     "unknown_lang_stderr": "unknown lang 'klingon'\n",
-    "invalid_query_exit": 2,
-    "digest_matches_path_stream": true,
-    "bad_digest_exit": 2,
-    "markdown_rows": [
-      {
-        "end_line": 2,
-        "heading": "# Title\n",
-        "line": 1,
-        "path": "<path>"
-      }
-    ],
-    "markdown_inline_rows": [
-      {
-        "em": "*em*",
-        "end_line": 1,
-        "line": 1,
-        "path": "<path>"
-      },
-      {
-        "end_line": 1,
-        "line": 1,
-        "lnk": "[link](url)",
-        "path": "<path>"
-      }
-    ],
-    "html_rows": [
-      {
-        "end_line": 1,
-        "line": 1,
-        "path": "<path>",
-        "tag": "div"
-      },
-      {
-        "end_line": 1,
-        "line": 1,
-        "path": "<path>",
-        "tag": "p"
-      }
-    ]
+    "via_digest": {
+      "exit_code": 0,
+      "stdout": [
+        {
+          "end_line": 17,
+          "item": "pub fn trim(value: String) -> String {\n    value\n}",
+          "line": 15,
+          "name": "trim",
+          "path": "$work/digrepo/sample.rs"
+        },
+        {
+          "end_line": 23,
+          "item": "pub fn make_engine(name: String) -> Engine {\n    let trimmed = trim(name);\n    let engine = Engine { name: trimmed };\n    engine\n}",
+          "line": 19,
+          "name": "make_engine",
+          "path": "$work/digrepo/sample.rs"
+        },
+        {
+          "end_line": 29,
+          "item": "pub fn mode(&self) -> Mode {\n        let picked = Mode::Fast;\n        picked\n    }",
+          "line": 26,
+          "name": "mode",
+          "path": "$work/digrepo/sample.rs"
+        },
+        {
+          "end_line": 35,
+          "item": "pub fn apply(value: String) -> String {\n    let func = |text: String| text;\n    func(value)\n}",
+          "line": 32,
+          "name": "apply",
+          "path": "$work/digrepo/sample.rs"
+        }
+      ],
+      "stderr": ""
+    }
   }
 }
