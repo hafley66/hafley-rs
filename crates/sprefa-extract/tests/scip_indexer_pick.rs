@@ -172,5 +172,5 @@ fn a_pick_runs_only_the_named_indexer() {
         vec!["go"],
         "scip-typescript must not be started at all"
     );
-    assert!(waited.as_secs() < 10, "one budget, not two: {waited:?}");
+    crate::wall_bench::check("tests/scip_indexer_pick.rs:a_pick_runs_only_the_named_indexer", (waited.as_secs()) as f64, (10) as f64, false);
 }

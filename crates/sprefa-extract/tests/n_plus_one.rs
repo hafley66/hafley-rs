@@ -57,11 +57,7 @@ fn a_call_site_reads_the_document_once_not_once_per_occurrence() {
         hit.is_some(),
         "the site's own occurrence is in the document"
     );
-    assert!(
-        started.elapsed() < std::time::Duration::from_secs(2),
-        "quadratic timing: {:?}",
-        started.elapsed()
-    );
+    crate::wall_bench::check("tests/n_plus_one.rs:a_call_site_reads_the_document_once_not_once_per_occurrence", (started.elapsed()).as_secs_f64(), (std::time::Duration::from_secs(2)).as_secs_f64(), false);
 }
 
 // TEST: flattening a document's occurrence rows reads the bytes once for the
@@ -91,11 +87,7 @@ fn flattening_occurrences_reads_the_document_once() {
         "{} rows for {lines} occurrences",
         rows.len()
     );
-    assert!(
-        started.elapsed() < std::time::Duration::from_secs(2),
-        "quadratic timing: {:?}",
-        started.elapsed()
-    );
+    crate::wall_bench::check("tests/n_plus_one.rs:flattening_occurrences_reads_the_document_once", (started.elapsed()).as_secs_f64(), (std::time::Duration::from_secs(2)).as_secs_f64(), false);
 }
 
 // TEST: a signature's occurrence ranges convert off one table for the whole
@@ -156,9 +148,5 @@ fn signature_occurrences_read_the_signature_once() {
         false,
     );
     assert!(rows.len() >= occurrences, "{} rows", rows.len());
-    assert!(
-        started.elapsed() < std::time::Duration::from_secs(2),
-        "quadratic timing: {:?}",
-        started.elapsed()
-    );
+    crate::wall_bench::check("tests/n_plus_one.rs:signature_occurrences_read_the_signature_once", (started.elapsed()).as_secs_f64(), (std::time::Duration::from_secs(2)).as_secs_f64(), false);
 }

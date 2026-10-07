@@ -41,10 +41,7 @@ fn scip_build_honors_scip_timeout_on_the_go_arm() {
     let wall = started.elapsed();
 
     assert!(output.status.success(), "a timeout skips, it does not fail");
-    assert!(
-        wall.as_secs() < 5,
-        "the run must return near its 2s budget, not the planted 30s sleep; took {wall:?}"
-    );
+    crate::wall_bench::check("tests/56_scip_cli_kinks.rs:scip_build_honors_scip_timeout_on_the_go_arm", (wall.as_secs()) as f64, (5) as f64, false);
     let stream = String::from_utf8_lossy(&output.stdout).to_string();
     assert_eq!(
         stream,

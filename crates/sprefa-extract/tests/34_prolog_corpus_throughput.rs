@@ -98,11 +98,5 @@ fn call_family_projection_stays_under_the_debug_scaled_byte_budget() {
         total_facts > 0,
         "the corpus produced no call facts at all; the mask or the walk broke"
     );
-    assert!(
-        ns_per_byte <= NS_PER_BYTE_BUDGET,
-        "call-family projection over {} files / {total_bytes} bytes took {elapsed:?} \
-         ({ns_per_byte:.1} ns/byte), over the {NS_PER_BYTE_BUDGET} ns/byte budget: \
-         check for a returned double walk in src/lang/prolog/_0_source.rs",
-        files.len()
-    );
+    crate::wall_bench::check("tests/34_prolog_corpus_throughput.rs:call_family_projection_stays_under_the_debug_scaled_byte_budget", (ns_per_byte) as f64, (NS_PER_BYTE_BUDGET) as f64, true);
 }

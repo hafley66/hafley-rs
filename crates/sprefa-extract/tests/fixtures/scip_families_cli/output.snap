@@ -7591,7 +7591,7 @@ source: tests/support/2_fixture_runner.rs
         }
       ],
       "stderr": "",
-      "within_budget": true
+      "wall_bench_limit_seconds": 20
     }
   },
   "17_the_scip_family_takes_exactly_one_root": {

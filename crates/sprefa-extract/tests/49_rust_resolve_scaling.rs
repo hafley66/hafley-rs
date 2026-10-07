@@ -120,6 +120,7 @@ fn own_blob_probes_stay_linear_in_the_file_count() {
 }
 
 #[test]
+#[ignore = "explicit wall bench: bench/scripts/6_wall_contracts.py"]
 fn rust_resolve_wall_grows_linearly_with_file_count() {
     let dir = corpus_dir("wall");
     let bin = env!("CARGO_BIN_EXE_ryii");
@@ -129,10 +130,7 @@ fn rust_resolve_wall_grows_linearly_with_file_count() {
     let wall200 = resolve_wall(bin, &paths200);
     let wall400 = resolve_wall(bin, &paths400);
 
-    assert!(
-        wall400 / wall200 < RATIO_BUDGET,
-        "wall(400)={wall400:.3}s vs wall(200)={wall200:.3}s exceeds {RATIO_BUDGET}x"
-    );
+    crate::wall_bench::check("tests/49_rust_resolve_scaling.rs:rust_resolve_wall_grows_linearly_with_file_count", (wall400 / wall200) as f64, (RATIO_BUDGET) as f64, false);
 }
 
 /// `rust-analyzer/crates/syntax` sizes: one generated file of 2,508 defs and
@@ -144,6 +142,7 @@ const MODULE_FILES: usize = 57;
 /// took `--resolve` over the 10-second law: its site count multiplies the
 /// whole corpus index once per site.
 #[test]
+#[ignore = "explicit wall bench: bench/scripts/6_wall_contracts.py"]
 fn a_generated_node_file_resolves_under_the_ten_second_law() {
     let dir = corpus_dir("generated");
     let mut big = String::from("pub fn helper() -> u32 { 0 }\n");
@@ -160,11 +159,7 @@ fn a_generated_node_file_resolves_under_the_ten_second_law() {
     paths.push(dir.join("nodes.rs"));
 
     let wall = resolve_wall(env!("CARGO_BIN_EXE_ryii"), &paths);
-    assert!(
-        wall < 10.0,
-        "{wall:.3}s over {} files is a per-site rescan, not a resolve",
-        paths.len()
-    );
+    crate::wall_bench::check("tests/49_rust_resolve_scaling.rs:a_generated_node_file_resolves_under_the_ten_second_law", (wall) as f64, (10.0) as f64, false);
 }
 
 /// The same edge `60_rust_corpus_scope.rs` pins, re-asserted beside the perf

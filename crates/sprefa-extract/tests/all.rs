@@ -614,3 +614,6 @@ mod ingest_support;
 
 #[path = "support/14_scip_facts.rs"]
 mod scip_facts_support;
+
+#[path = "../bench/6_wall_contracts.rs"]
+mod wall_bench;

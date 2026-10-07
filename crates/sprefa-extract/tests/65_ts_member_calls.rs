@@ -259,6 +259,7 @@ fn resolve_wall(paths: &[String]) -> f64 {
 }
 
 #[test]
+#[ignore = "explicit wall bench: bench/scripts/6_wall_contracts.py"]
 fn the_receiver_table_is_one_pass_per_body() {
     let dir = std::env::temp_dir().join("sprefa-extract-65-receiver-scale");
     let _ = std::fs::remove_dir_all(&dir);
@@ -267,10 +268,7 @@ fn the_receiver_table_is_one_pass_per_body() {
     let wall200 = resolve_wall(&generated_callers(&dir.join("n200"), 200));
     let wall400 = resolve_wall(&generated_callers(&dir.join("n400"), 400));
 
-    assert!(
-        wall400 / wall200 < RATIO_BUDGET,
-        "wall(400)={wall400:.3}s vs wall(200)={wall200:.3}s exceeds {RATIO_BUDGET}x"
-    );
+    crate::wall_bench::check("tests/65_ts_member_calls.rs:the_receiver_table_is_one_pass_per_body", (wall400 / wall200) as f64, (RATIO_BUDGET) as f64, false);
 }
 
 fn generated_callers(dir: &std::path::Path, n: usize) -> Vec<String> {

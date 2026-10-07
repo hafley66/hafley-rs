@@ -36,6 +36,7 @@ fn resolve_wall(bin: &str, args: &[String]) -> f64 {
 }
 
 #[test]
+#[ignore = "explicit wall bench: bench/scripts/6_wall_contracts.py"]
 fn resolve_wall_grows_linearly_with_file_count() {
     let dir = std::env::temp_dir().join("sprefa-extract-46-resolve");
     std::fs::create_dir_all(&dir).unwrap();
@@ -47,8 +48,5 @@ fn resolve_wall_grows_linearly_with_file_count() {
     let wall200 = resolve_wall(bin, &args200);
     let wall400 = resolve_wall(bin, &args400);
 
-    assert!(
-        wall400 / wall200 < RATIO_BUDGET,
-        "wall(400)={wall400:.3}s vs wall(200)={wall200:.3}s exceeds {RATIO_BUDGET}x"
-    );
+    crate::wall_bench::check("tests/46_resolve_scaling.rs:resolve_wall_grows_linearly_with_file_count", (wall400 / wall200) as f64, (RATIO_BUDGET) as f64, false);
 }

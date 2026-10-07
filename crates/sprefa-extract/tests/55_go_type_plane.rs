@@ -278,6 +278,7 @@ fn resolve_wall(paths: &[String]) -> f64 {
 }
 
 #[test]
+#[ignore = "explicit wall bench: bench/scripts/6_wall_contracts.py"]
 fn interface_implementer_scan_is_one_pass_not_per_site() {
     let dir = std::env::temp_dir().join("sprefa-extract-55-impl-scale");
     let _ = std::fs::remove_dir_all(&dir);
@@ -286,8 +287,5 @@ fn interface_implementer_scan_is_one_pass_not_per_site() {
     let wall100 = resolve_wall(&generated_implementers_module(&dir.join("n100"), 100));
     let wall200 = resolve_wall(&generated_implementers_module(&dir.join("n200"), 200));
 
-    assert!(
-        wall200 / wall100 < RATIO_BUDGET,
-        "wall(200)={wall200:.3}s vs wall(100)={wall100:.3}s exceeds {RATIO_BUDGET}x"
-    );
+    crate::wall_bench::check("tests/55_go_type_plane.rs:interface_implementer_scan_is_one_pass_not_per_site", (wall200 / wall100) as f64, (RATIO_BUDGET) as f64, false);
 }

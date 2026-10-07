@@ -54,9 +54,9 @@ pub fn execute(step: &Value, expand: &impl Fn(&str) -> String) -> (Output, Durat
             let mut first = vec![0; count as usize];
             child.stdout.take().unwrap().read_exact(&mut first).unwrap();
         }
-        if let Some(limit) = step["hard_deadline_ms"].as_u64() {
+        if let Some(limit) = step["hard_deadline_ms"].as_u64().filter(|_| crate::wall_bench::enabled()) {
             while child.try_wait().unwrap().is_none() {
-                if started.elapsed() >= Duration::from_millis(limit) {
+                if crate::wall_bench::expired(started, Duration::from_millis(limit)) {
                     let _ = child.kill(); let _ = child.wait();
                     panic!("command still running after {limit}ms: {step}");
                 }

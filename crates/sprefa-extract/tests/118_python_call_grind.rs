@@ -203,7 +203,7 @@ fn forwarding_ring_resolves_under_the_wall() {
     let started = std::time::Instant::now();
     let pairs = edges("tests/fixtures/py_call_grind/forward_ring.py");
     let wall = started.elapsed();
-    assert!(wall.as_secs() < 10, "wall {wall:?}");
+    crate::wall_bench::check("tests/118_python_call_grind.rs:forwarding_ring_resolves_under_the_wall", (wall.as_secs()) as f64, (10) as f64, false);
     assert!(has(&pairs, "", "f0"), "{pairs:?}");
     // f0(f1): f0's callback is f1, so f0 -> f1; deeper rings stay unique too.
     assert!(has(&pairs, "f0", "f1"), "{pairs:?}");

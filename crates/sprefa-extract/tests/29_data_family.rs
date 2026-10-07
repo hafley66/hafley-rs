@@ -141,10 +141,7 @@ fn the_pokeapi_spec_answers_every_operation_id_under_the_ten_second_law() {
     let started = Instant::now();
     let facts = run(&["--kinds", "data", source]);
     let elapsed = started.elapsed();
-    assert!(
-        elapsed.as_secs() < 10,
-        "extracting the corpus spec took {elapsed:?}, over the 10-second law"
-    );
+    crate::wall_bench::check("tests/29_data_family.rs:the_pokeapi_spec_answers_every_operation_id_under_the_ten_second_law", (elapsed.as_secs()) as f64, (10) as f64, false);
     assert_eq!(
         facts
             .lines()

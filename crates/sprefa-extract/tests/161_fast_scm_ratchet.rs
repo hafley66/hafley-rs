@@ -90,11 +90,7 @@ fn scope_graph_edges(paths: &[PathBuf]) -> BTreeSet<Key> {
     for path in paths {
         let started = Instant::now();
         let file = scm_edges(std::slice::from_ref(path)).expect("the scope graph resolves");
-        assert!(
-            started.elapsed() < Duration::from_secs(10),
-            "{}: the scope-graph resolve hit the 10-second limit",
-            path.display()
-        );
+        crate::wall_bench::check("tests/161_fast_scm_ratchet.rs:scope_graph_edges", (started.elapsed()).as_secs_f64(), (Duration::from_secs(10)).as_secs_f64(), false);
         edges.extend(file.into_iter().map(|edge| {
             (
                 edge.caller_path,

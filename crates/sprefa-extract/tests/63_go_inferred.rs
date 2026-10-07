@@ -280,6 +280,7 @@ fn resolve_wall(paths: &[String]) -> f64 {
 }
 
 #[test]
+#[ignore = "explicit wall bench: bench/scripts/6_wall_contracts.py"]
 fn the_result_type_lookup_is_built_once_not_per_site() {
     let dir = std::env::temp_dir().join("sprefa-extract-63-infer-scale");
     let _ = std::fs::remove_dir_all(&dir);
@@ -288,8 +289,5 @@ fn the_result_type_lookup_is_built_once_not_per_site() {
     let wall200 = resolve_wall(&generated_callers(&dir.join("n200"), 200));
     let wall400 = resolve_wall(&generated_callers(&dir.join("n400"), 400));
 
-    assert!(
-        wall400 / wall200 < RATIO_BUDGET,
-        "wall(400)={wall400:.3}s vs wall(200)={wall200:.3}s exceeds {RATIO_BUDGET}x"
-    );
+    crate::wall_bench::check("tests/63_go_inferred.rs:the_result_type_lookup_is_built_once_not_per_site", (wall400 / wall200) as f64, (RATIO_BUDGET) as f64, false);
 }

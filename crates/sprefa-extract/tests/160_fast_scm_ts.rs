@@ -56,21 +56,16 @@ fn the_whole_module_plane_corpus_fits_inside_the_limit() {
         ]),
         "row counts over {root}"
     );
-    assert!(
-        elapsed < LIMIT,
-        "the whole-corpus run must fit inside {LIMIT:?}, took {elapsed:?}"
-    );
+    crate::wall_bench::check("tests/160_fast_scm_ts.rs:the_whole_module_plane_corpus_fits_inside_the_limit", (elapsed).as_secs_f64(), (LIMIT).as_secs_f64(), false);
 }
 
 #[test]
+#[ignore = "explicit wall bench: bench/scripts/6_wall_contracts.py"]
 fn a_single_file_costs_a_fraction_of_the_limit() {
     let (rows, elapsed) = fast(&[PathBuf::from("tests/fixtures/ts/sample.ts")], 2);
     // @eprintln-ok: the measured per-file wall time this phase reports.
     eprintln!("sample.ts: {} scm rows in {elapsed:?}", rows.len());
-    assert!(
-        elapsed < LIMIT / 10,
-        "one file must cost well under the limit, took {elapsed:?}"
-    );
+    crate::wall_bench::check("tests/160_fast_scm_ts.rs:a_single_file_costs_a_fraction_of_the_limit", (elapsed).as_secs_f64(), (LIMIT / 10).as_secs_f64(), false);
 }
 
 fn histogram(rows: &[Value]) -> BTreeMap<String, usize> {

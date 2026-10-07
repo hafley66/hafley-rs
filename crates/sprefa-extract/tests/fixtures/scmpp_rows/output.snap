@@ -259,7 +259,7 @@ source: tests/support/2_fixture_runner.rs
       "exit_code": 3,
       "stdout": "",
       "stderr": "query: query exceeded 1s",
-      "within_budget": true
+      "wall_bench_limit_seconds": 30
     }
   }
 }

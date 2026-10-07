@@ -288,6 +288,7 @@ fn resolve_wall(paths: &[String]) -> f64 {
 /// The imported leg costs one own-blob join per FILE, never one per call site;
 /// doubling the file count must not more than double the wall.
 #[test]
+#[ignore = "explicit wall bench: bench/scripts/6_wall_contracts.py"]
 fn resolve_wall_grows_linearly_over_import_qualified_files() {
     let dir = std::env::temp_dir().join("sprefa-extract-51-scale");
     let _ = std::fs::remove_dir_all(&dir);
@@ -296,8 +297,5 @@ fn resolve_wall_grows_linearly_over_import_qualified_files() {
     let wall200 = resolve_wall(&qualified_module(&dir.join("n200"), 200));
     let wall400 = resolve_wall(&qualified_module(&dir.join("n400"), 400));
 
-    assert!(
-        wall400 / wall200 < RATIO_BUDGET,
-        "wall(400)={wall400:.3}s vs wall(200)={wall200:.3}s exceeds {RATIO_BUDGET}x"
-    );
+    crate::wall_bench::check("tests/51_go_package_resolve.rs:resolve_wall_grows_linearly_over_import_qualified_files", (wall400 / wall200) as f64, (RATIO_BUDGET) as f64, false);
 }

@@ -203,8 +203,5 @@ fn corpus_wall_time_and_macro_sites_tsv() {
         budget_hits,
         wall.as_millis()
     );
-    assert!(
-        wall.as_secs() < 2,
-        "wall {wall:?} exceeds the 2s COUNT budget"
-    );
+    crate::wall_bench::check("tests/58_rust_mbe.rs:corpus_wall_time_and_macro_sites_tsv", (wall.as_secs()) as f64, (2) as f64, false);
 }

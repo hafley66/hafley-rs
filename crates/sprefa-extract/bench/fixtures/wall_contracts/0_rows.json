@@ -1,0 +1,212 @@
+[
+  {
+    "test": "t_108_rust_checker_walk_by_file::walk_time_is_priced_by_the_file",
+    "source": "tests/108_rust_checker_walk_by_file.rs",
+    "condition": "item_walk < WALK_CAP_MS",
+    "local": false
+  },
+  {
+    "test": "t_118_python_call_grind::forwarding_ring_resolves_under_the_wall",
+    "source": "tests/118_python_call_grind.rs",
+    "condition": "wall.as_secs() < 10",
+    "local": false
+  },
+  {
+    "test": "t_160_fast_scm_ts::a_single_file_costs_a_fraction_of_the_limit",
+    "source": "tests/160_fast_scm_ts.rs",
+    "condition": "elapsed < LIMIT / 10",
+    "local": false
+  },
+  {
+    "test": "t_160_fast_scm_ts::the_whole_module_plane_corpus_fits_inside_the_limit",
+    "source": "tests/160_fast_scm_ts.rs",
+    "condition": "elapsed < LIMIT",
+    "local": false
+  },
+  {
+    "test": "t_161_fast_scm_ratchet::the_scope_graph_and_the_resolve_pass_agree_over_the_same_files",
+    "source": "tests/161_fast_scm_ratchet.rs",
+    "condition": "started.elapsed() < Duration::from_secs(10)",
+    "local": false
+  },
+  {
+    "test": "t_178_cli_http_parity::whole_output",
+    "source": "tests/178_cli_http_parity.rs",
+    "condition": "watch response/frame/concurrent requests/disconnect each <=15s",
+    "local": false
+  },
+  {
+    "test": "t_194_scmpp_rows::whole_output",
+    "source": "tests/194_scmpp_rows.rs",
+    "condition": "interrupt wait <30s; command watchdog 30000ms",
+    "local": false
+  },
+  {
+    "test": "t_29_data_family::the_pokeapi_spec_answers_every_operation_id_under_the_ten_second_law",
+    "source": "tests/29_data_family.rs",
+    "condition": "elapsed.as_secs() < 10",
+    "local": false
+  },
+  {
+    "test": "t_34_prolog_corpus_throughput::call_family_projection_stays_under_the_debug_scaled_byte_budget",
+    "source": "tests/34_prolog_corpus_throughput.rs",
+    "condition": "ns_per_byte <= NS_PER_BYTE_BUDGET",
+    "local": false
+  },
+  {
+    "test": "t_45_emit_throughput::emit_throughput_350k_rows_under_budget",
+    "source": "tests/45_emit_throughput.rs",
+    "condition": "piped_elapsed.as_secs_f64() < WALL_BUDGET_SECS",
+    "local": false
+  },
+  {
+    "test": "t_46_resolve_scaling::resolve_wall_grows_linearly_with_file_count",
+    "source": "tests/46_resolve_scaling.rs",
+    "condition": "wall400 / wall200 < RATIO_BUDGET",
+    "local": false
+  },
+  {
+    "test": "t_49_rust_resolve_scaling::a_generated_node_file_resolves_under_the_ten_second_law",
+    "source": "tests/49_rust_resolve_scaling.rs",
+    "condition": "wall < 10.0",
+    "local": false
+  },
+  {
+    "test": "t_49_rust_resolve_scaling::rust_resolve_wall_grows_linearly_with_file_count",
+    "source": "tests/49_rust_resolve_scaling.rs",
+    "condition": "wall400 / wall200 < RATIO_BUDGET",
+    "local": false
+  },
+  {
+    "test": "t_50_cli_crawl_defects::whole_output",
+    "source": "tests/50_cli_crawl_defects.rs",
+    "condition": "build watchdog 15000ms",
+    "local": false
+  },
+  {
+    "test": "t_51_go_package_resolve::resolve_wall_grows_linearly_over_import_qualified_files",
+    "source": "tests/51_go_package_resolve.rs",
+    "condition": "wall400 / wall200 < RATIO_BUDGET",
+    "local": false
+  },
+  {
+    "test": "t_54_ts_module_plane::barrel_resolve_wall_grows_linearly_with_file_count",
+    "source": "tests/54_ts_module_plane.rs",
+    "condition": "wall400 / wall200 < RATIO_BUDGET",
+    "local": false
+  },
+  {
+    "test": "t_55_go_type_plane::interface_implementer_scan_is_one_pass_not_per_site",
+    "source": "tests/55_go_type_plane.rs",
+    "condition": "wall200 / wall100 < RATIO_BUDGET",
+    "local": false
+  },
+  {
+    "test": "t_56_scip_cli_kinks::scip_build_honors_scip_timeout_on_the_go_arm",
+    "source": "tests/56_scip_cli_kinks.rs",
+    "condition": "wall.as_secs() < 5",
+    "local": false
+  },
+  {
+    "test": "t_57_rust_module_plane::barrel_resolve_wall_grows_linearly_with_file_count",
+    "source": "tests/57_rust_module_plane.rs",
+    "condition": "wall400 / wall200 < RATIO_BUDGET",
+    "local": false
+  },
+  {
+    "test": "t_58_rust_mbe::corpus_wall_time_and_macro_sites_tsv",
+    "source": "tests/58_rust_mbe.rs",
+    "condition": "wall.as_secs() < 2",
+    "local": false
+  },
+  {
+    "test": "t_63_go_inferred::the_result_type_lookup_is_built_once_not_per_site",
+    "source": "tests/63_go_inferred.rs",
+    "condition": "wall400 / wall200 < RATIO_BUDGET",
+    "local": false
+  },
+  {
+    "test": "t_65_ts_member_calls::the_receiver_table_is_one_pass_per_body",
+    "source": "tests/65_ts_member_calls.rs",
+    "condition": "wall400 / wall200 < RATIO_BUDGET",
+    "local": false
+  },
+  {
+    "test": "t_8_scip_families_cli::whole_output",
+    "source": "tests/8_scip_families_cli.rs",
+    "condition": "indexer timeout wait <20s",
+    "local": false
+  },
+  {
+    "test": "t_97_ingest::whole_output",
+    "source": "tests/97_ingest.rs",
+    "condition": "cycle <10s; command watchdog 10000ms",
+    "local": false
+  },
+  {
+    "test": "t_n_plus_one::a_call_site_reads_the_document_once_not_once_per_occurrence",
+    "source": "tests/n_plus_one.rs",
+    "condition": "started.elapsed() < std::time::Duration::from_secs(2)",
+    "local": false
+  },
+  {
+    "test": "t_n_plus_one::flattening_occurrences_reads_the_document_once",
+    "source": "tests/n_plus_one.rs",
+    "condition": "started.elapsed() < std::time::Duration::from_secs(2)",
+    "local": false
+  },
+  {
+    "test": "t_n_plus_one::signature_occurrences_read_the_signature_once",
+    "source": "tests/n_plus_one.rs",
+    "condition": "started.elapsed() < std::time::Duration::from_secs(2)",
+    "local": false
+  },
+  {
+    "test": "t_ratchet_recall::ratchet_go_checker",
+    "source": "tests/ratchet_recall.rs",
+    "condition": "per call <=30000ms; ceiling <=1.15x stored wall",
+    "local": true
+  },
+  {
+    "test": "t_ratchet_recall::ratchet_go_syntax",
+    "source": "tests/ratchet_recall.rs",
+    "condition": "per call <=30000ms; ceiling <=1.15x stored wall",
+    "local": true
+  },
+  {
+    "test": "t_ratchet_recall::ratchet_rust_checker",
+    "source": "tests/ratchet_recall.rs",
+    "condition": "per call <=30000ms; ceiling <=1.15x stored wall",
+    "local": true
+  },
+  {
+    "test": "t_ratchet_recall::ratchet_rust_syntax",
+    "source": "tests/ratchet_recall.rs",
+    "condition": "per call <=30000ms; ceiling <=1.15x stored wall",
+    "local": true
+  },
+  {
+    "test": "t_ratchet_recall::ratchet_ts5_checker",
+    "source": "tests/ratchet_recall.rs",
+    "condition": "per call <=30000ms; ceiling <=1.15x stored wall",
+    "local": true
+  },
+  {
+    "test": "t_ratchet_recall::ratchet_ts5_syntax",
+    "source": "tests/ratchet_recall.rs",
+    "condition": "per call <=30000ms; ceiling <=1.15x stored wall",
+    "local": true
+  },
+  {
+    "test": "t_scip_freshness::whole_output",
+    "source": "tests/scip_freshness.rs",
+    "condition": "freshness ensure limit_seconds",
+    "local": false
+  },
+  {
+    "test": "t_scip_indexer_pick::a_pick_runs_only_the_named_indexer",
+    "source": "tests/scip_indexer_pick.rs",
+    "condition": "waited.as_secs() < 10",
+    "local": false
+  }
+]

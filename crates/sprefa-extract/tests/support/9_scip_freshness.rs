@@ -44,7 +44,7 @@ pub fn evaluate(case: &Value) -> Value {
                 let report = sprefa_extract::ensure_index_for_set(path("root"), path("cache"), IndexBudget { secs:step["budget_seconds"].as_u64().unwrap() }, set);
                 let elapsed = started.elapsed();
                 match previous { Some(value) => std::env::set_var("PATH", value), None => std::env::remove_var("PATH") }
-                if let Some(limit) = step["limit_seconds"].as_u64() { assert!(elapsed.as_secs() < limit); }
+                if let Some(limit) = step["limit_seconds"].as_u64() { crate::wall_bench::check(name, elapsed.as_secs() as f64, limit as f64, false); }
                 if let Some(expected) = step["expect_timed_out_seconds"].as_u64() { assert!(report.skips.iter().any(|skip| matches!(skip.reason, sprefa_extract::SkipReason::TimedOut { secs } if secs == expected))); }
                 if let Some(reused) = step["expect_reused"].as_bool() { assert_eq!(report.reused, reused); }
                 if step["expect_no_index"] == true { assert!(report.index.is_none()); }

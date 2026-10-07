@@ -405,12 +405,7 @@ fn walk_time_is_priced_by_the_file() {
     assert_eq!(resolve_only.rows, 0, "no envelope, no item walk");
 
     let item_walk = described.walk_ms.saturating_sub(resolve_only.walk_ms);
-    assert!(
-        item_walk < WALK_CAP_MS,
-        "item walk {item_walk} ms: witnessed {} ms, resolve-only {} ms",
-        described.walk_ms,
-        resolve_only.walk_ms
-    );
+    crate::wall_bench::check("tests/108_rust_checker_walk_by_file.rs:walk_time_is_priced_by_the_file", (item_walk) as f64, (WALK_CAP_MS) as f64, false);
     assert!(
         described.rows < ITEM_ROW_CAP,
         "{} rows for one 254-line file",

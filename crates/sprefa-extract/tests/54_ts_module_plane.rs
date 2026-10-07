@@ -394,6 +394,7 @@ fn resolve_wall(args: &[String]) -> f64 {
 /// A ResolveExport that re-walked a barrel's star list per call site instead of
 /// per binding would show up here as a quadratic, not as a wrong answer.
 #[test]
+#[ignore = "explicit wall bench: bench/scripts/6_wall_contracts.py"]
 fn barrel_resolve_wall_grows_linearly_with_file_count() {
     let dir = std::env::temp_dir().join("sprefa-extract-54-module-plane");
     std::fs::create_dir_all(&dir).expect("scratch root");
@@ -401,8 +402,5 @@ fn barrel_resolve_wall_grows_linearly_with_file_count() {
     let large = barrel_corpus(&dir, 400);
     let wall200 = resolve_wall(&small);
     let wall400 = resolve_wall(&large);
-    assert!(
-        wall400 / wall200 < RATIO_BUDGET,
-        "wall(400)={wall400:.3}s vs wall(200)={wall200:.3}s exceeds {RATIO_BUDGET}x"
-    );
+    crate::wall_bench::check("tests/54_ts_module_plane.rs:barrel_resolve_wall_grows_linearly_with_file_count", (wall400 / wall200) as f64, (RATIO_BUDGET) as f64, false);
 }

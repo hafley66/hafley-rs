@@ -42,7 +42,9 @@ pub fn run(directory: &str, case: impl Fn(&Value) -> Value) {
             command.env(key, value);
         }
     }
+    if crate::wall_bench::enabled() { command.env("SPREFA_WALL_BENCH", "1"); }
     let output = command.output().expect("isolated fixture test runs");
+    if crate::wall_bench::enabled() { for line in String::from_utf8_lossy(&output.stdout).lines().filter_map(|line| line.find("wall bench ").map(|start| &line[start..])) { println!("{line}"); } }
     assert!(
         output.status.success(),
         "{test}: isolated fixture test failed ({:?})\n{}\n{}",
@@ -396,9 +398,8 @@ pub fn commands(case: &Value, api: impl Fn(&Value) -> Value) -> Value {
                 let mut result = serde_json::json!({"exit_code":output.status.code(),"stdout":stdout,"stderr":stderr});
                 if step.get("assert_success").is_some() { result["success"] = Value::Bool(output.status.success()); }
                 if let Some(limit) = step["maximum_seconds"].as_u64() {
-                    let within_budget = elapsed.as_secs() < limit;
-                    assert!(within_budget, "{name}: exceeded {limit}s: {elapsed:?}");
-                    result["within_budget"] = Value::Bool(within_budget);
+                    crate::wall_bench::check(name, elapsed.as_secs() as f64, limit as f64, false);
+                    result["wall_bench_limit_seconds"] = serde_json::json!(limit);
                 }
                 observed.insert(name.to_string(), result);
             }

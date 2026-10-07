@@ -147,9 +147,5 @@ fn emit_throughput_350k_rows_under_budget() {
             return;
         }
     }
-    assert!(
-        piped_elapsed.as_secs_f64() < WALL_BUDGET_SECS,
-        "piped emission took {:?} for {lines} lines",
-        piped_elapsed
-    );
+    crate::wall_bench::check("tests/45_emit_throughput.rs:emit_throughput_350k_rows_under_budget", (piped_elapsed.as_secs_f64()) as f64, (WALL_BUDGET_SECS) as f64, false);
 }

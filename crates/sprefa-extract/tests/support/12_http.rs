@@ -94,16 +94,16 @@ async fn watch(socket: &Path, step: &Value) -> Value {
     tokio::spawn(async move { let _ = connection.await; });
     let message = Request::post("http://localhost/watch").header(header::CONTENT_TYPE,"application/json")
         .body(Body::from(json!({"request_root":env!("CARGO_MANIFEST_DIR"),"args":step["args"]}).to_string())).unwrap();
-    let mut response = tokio::time::timeout(Duration::from_secs(15),client.send_request(message)).await.unwrap().unwrap();
+    let mut response = crate::wall_bench::bounded(Duration::from_secs(15),client.send_request(message)).await.unwrap();
     assert_eq!(response.status(), axum::http::StatusCode::OK);
-    let first = tokio::time::timeout(Duration::from_secs(15),response.body_mut().frame()).await.unwrap().unwrap().unwrap();
+    let first = crate::wall_bench::bounded(Duration::from_secs(15),response.body_mut().frame()).await.unwrap().unwrap();
     assert!(!first.into_data().unwrap().is_empty());
     let mut observed = BTreeMap::new();
     for request_step in step["requests"].as_array().unwrap() {
-        observed.insert(request_step["name"].as_str().unwrap().to_string(),project(request_step,tokio::time::timeout(Duration::from_secs(15),request(socket,request_step)).await.unwrap()));
+        observed.insert(request_step["name"].as_str().unwrap().to_string(),project(request_step,crate::wall_bench::bounded(Duration::from_secs(15),request(socket,request_step)).await));
     }
     drop(response); drop(client);
-    observed.insert("after_disconnect".to_string(),project(&step["after"],tokio::time::timeout(Duration::from_secs(15),request(socket,&step["after"])).await.unwrap()));
+    observed.insert("after_disconnect".to_string(),project(&step["after"],crate::wall_bench::bounded(Duration::from_secs(15),request(socket,&step["after"])).await));
     json!({"watch_status":200,"first_frame_nonempty":true,"requests":observed})
 }
 fn stable(op: &str, body: &[u8], root: &Path, scratch: &Path) -> Vec<u8> {
