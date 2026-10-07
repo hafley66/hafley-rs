@@ -9,6 +9,7 @@ pub type NamesHost = RustModuleTree;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Abstain {
     OutsideWorkspace,
+    NotInModuleTree,
     NeedsTypes,
     UnresolvedPath,
     Ambiguous,
@@ -18,6 +19,7 @@ impl std::fmt::Display for Abstain {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
             Self::OutsideWorkspace => "outside_workspace",
+            Self::NotInModuleTree => "not_in_module_tree",
             Self::NeedsTypes => "needs_types",
             Self::UnresolvedPath => "unresolved_path",
             Self::Ambiguous => "ambiguous",
@@ -37,7 +39,23 @@ pub struct DefPlace {
 pub fn module_places(host: &NamesHost, file: &Path) -> Result<Vec<ModulePlace>, Abstain> {
     let places = host.places(file);
     if places.is_empty() {
-        Err(Abstain::OutsideWorkspace)
+        let workspace = host.workspace.lock().unwrap();
+        let Some((id, _)) = workspace.vfs.file_id(&vfs_path(&host_path(file))) else {
+            return Err(Abstain::OutsideWorkspace);
+        };
+        let db = workspace.host.raw_database();
+        Err(attach_db(db, || {
+            let sema = Semantics::new(db);
+            if sema
+                .file_to_module_defs(ra_ap_ide::FileId::from_raw(id.index()))
+                .next()
+                .is_none()
+            {
+                Abstain::NotInModuleTree
+            } else {
+                Abstain::OutsideWorkspace
+            }
+        }))
     } else {
         Ok(places)
     }
@@ -75,7 +93,7 @@ pub fn resolve_path_at(
             .file_to_module_defs(ra_ap_ide::FileId::from_raw(id.index()))
             .collect();
         if modules.is_empty() {
-            return Err(Abstain::OutsideWorkspace);
+            return Err(Abstain::NotInModuleTree);
         }
         let parsed = sema.parse_guess_edition(ra_ap_ide::FileId::from_raw(id.index()));
         let node = offset

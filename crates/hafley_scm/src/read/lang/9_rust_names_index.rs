@@ -428,6 +428,7 @@ impl RustNamesIndex {
             .map_err(|reason| match reason {
                 super::rust_checker::Abstain::NeedsTypes => UnresolvedReason::NeedsTypes,
                 super::rust_checker::Abstain::OutsideWorkspace => UnresolvedReason::External,
+                super::rust_checker::Abstain::NotInModuleTree => UnresolvedReason::NoCorpusDef,
                 super::rust_checker::Abstain::UnresolvedPath => UnresolvedReason::NoCorpusDef,
                 super::rust_checker::Abstain::Ambiguous => UnresolvedReason::Ambiguous,
             })?;

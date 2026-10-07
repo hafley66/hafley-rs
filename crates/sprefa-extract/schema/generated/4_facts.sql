@@ -482,7 +482,17 @@ CREATE TABLE IF NOT EXISTS "graph_path" (
     "to_path" TEXT NOT NULL,
     "to_name" TEXT,
     "depth" INTEGER NOT NULL,
-    "witness" TEXT NOT NULL
+    "witness" TEXT NOT NULL,
+    "from_file" TEXT,
+    "from_line" INTEGER,
+    "from_col" INTEGER,
+    "from_text" TEXT,
+    "from_reason" TEXT,
+    "to_file" TEXT,
+    "to_line" INTEGER,
+    "to_col" INTEGER,
+    "to_text" TEXT,
+    "to_reason" TEXT
 );
 
 CREATE TABLE IF NOT EXISTS "graph_path_change" (

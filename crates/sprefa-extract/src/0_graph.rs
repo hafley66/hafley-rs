@@ -152,6 +152,7 @@ fn load_store(
 /// `None`, so its rows keep `line: null` and it costs one probe.
 struct Lines {
     root: Option<PathBuf>,
+    source_root: Option<PathBuf>,
     tables: HashMap<String, Option<Vec<u32>>>,
 }
 
@@ -159,11 +160,20 @@ impl Lines {
     fn line(&mut self, path: &str, byte: Option<u32>) -> Option<u32> {
         let byte = byte?;
         if !self.tables.contains_key(path) {
-            let content = fs::read(path).ok().or_else(|| {
-                self.root
-                    .as_ref()
-                    .and_then(|root| fs::read(root.join(path)).ok())
-            });
+            let source_path = Path::new(path);
+            let source = match &self.source_root {
+                Some(root) if !source_path.is_absolute() => root.join(source_path),
+                _ => sprefa_extract::io_path(source_path),
+            };
+            let content = match fs::read(&source) {
+                Ok(bytes) => Some(bytes),
+                Err(error) => {
+                    crate::ops::print_diagnostic(format_args!(
+                        "graph location declined {}: {error}", source.display()
+                    ));
+                    None
+                }
+            };
             self.tables.insert(
                 path.to_string(),
                 content.map(|bytes| newline_offsets(&bytes)),
@@ -407,6 +417,16 @@ fn paths(
             to_name: found.node.1,
             depth: found.depth,
             witness: found.witness,
+            from_file: None,
+            from_line: None,
+            from_col: None,
+            from_text: None,
+            from_reason: None,
+            to_file: None,
+            to_line: None,
+            to_col: None,
+            to_text: None,
+            to_reason: None,
         })
         .collect())
 }
@@ -439,6 +459,12 @@ fn emit_rows(
 }
 
 fn emit_summary_line(rows: &[FlatFact], arm: &Arm<'_>, compared: bool) {
+    if rows
+        .iter()
+        .any(|row| matches!(row, FlatFact::SeedUnmatched { .. }))
+    {
+        return;
+    }
     if compared {
         let added = rows
             .iter()
@@ -459,17 +485,18 @@ fn emit_summary_line(rows: &[FlatFact], arm: &Arm<'_>, compared: bool) {
         return;
     }
     let mut split = GradeSplit::default();
+    let nodes = matches!(arm, Arm::From(_));
     for row in rows {
         match row {
-            FlatFact::GraphEdge { grade, .. } | FlatFact::GraphNode { grade, .. } => {
-                split.bump(grade)
-            }
+            FlatFact::GraphEdge { grade, .. } if !nodes => split.bump(grade),
+            FlatFact::GraphNode { grade, .. } if nodes => split.bump(grade),
             _ => {}
         }
     }
     crate::ops::print_diagnostic(format_args!(
-        "{} edges: {} +, {} ~, {} -",
-        rows.len(),
+        "{} {}: {} +, {} ~, {} -",
+        split.plus + split.tilde + split.minus,
+        if nodes { "nodes" } else { "edges" },
         split.plus,
         split.tilde,
         split.minus
@@ -487,12 +514,30 @@ enum Arm<'a> {
 }
 
 impl Arm<'_> {
+    fn unmatched(
+        &self,
+        paths: &[PathBuf],
+    ) -> Result<Option<FlatFact>, Box<dyn std::error::Error>> {
+        match self {
+            Arm::Callers(seed)
+            | Arm::Uses(seed)
+            | Arm::From(seed)
+            | Arm::CallPath(seed)
+            | Arm::TypePath(seed) => anchor::seed_unmatched(paths, seed),
+            Arm::FlowPath(_, _) => Ok(None),
+        }
+    }
+
     fn name(&self) -> &str {
         match self {
-            Arm::Callers(name) | Arm::From(name) | Arm::CallPath(name) | Arm::TypePath(name) => {
+            Arm::Callers(name)
+            | Arm::Uses(name)
+            | Arm::From(name)
+            | Arm::CallPath(name)
+            | Arm::TypePath(name) => {
                 name.rsplit_once('#').map_or(*name, |(_, name)| name)
             }
-            Arm::Uses(name) | Arm::FlowPath(name, _) => name,
+            Arm::FlowPath(name, _) => name,
         }
     }
 
@@ -543,14 +588,24 @@ impl Arm<'_> {
                 })?.collect::<rusqlite::Result<Vec<_>>>()?);
                 Ok(rows)
             }
-            Arm::Uses(name) => {
+            Arm::Uses(anchor) => {
+                let (path, name) = match anchor.split_once('#') {
+                    Some((path, name)) => (Some(Path::new(path)), name),
+                    None => (None, *anchor),
+                };
                 let mut rows = edges(connection, USES_SQL, name, lines)?;
+                if let Some(path) = path {
+                    rows.retain(|row| {
+                        matches!(row, FlatFact::GraphEdge { to_path, .. }
+                            if anchor::anchor_path_matches(path, to_path))
+                    });
+                }
                 let table_exists: bool = connection.query_row(
                     "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'external_crate_decline')",
                     [],
                     |row| row.get(0),
                 )?;
-                if table_exists {
+                if table_exists && path.is_none() {
                     let mut statement = connection.prepare(EXTERNAL_USES_SQL)?;
                     let declines = statement
                         .query_map([name], |row| {
@@ -589,7 +644,9 @@ impl Arm<'_> {
                         std::mem::swap(&mut edge.src, &mut edge.dst);
                     }
                 }
-                paths(&edges, "flow", |_| flow_seed(seed, lines.root.as_deref()), deadline)
+                let mut rows = paths(&edges, "flow", |_| flow_seed(seed, lines.root.as_deref()), deadline)?;
+                flow::locate(connection, &mut rows, lines.source_root.as_deref())?;
+                Ok(rows)
             },
         }
     }
@@ -600,10 +657,12 @@ impl Arm<'_> {
         connection: &Connection,
         secs: u64,
         root: Option<PathBuf>,
+        source_root: Option<PathBuf>,
     ) -> Result<Vec<FlatFact>, Box<dyn std::error::Error>> {
         crate::deadline::within(Some(connection.get_interrupt_handle()), Some(secs), "graph", |deadline| {
             let mut lines = Lines {
                 root,
+                source_root,
                 tables: HashMap::new(),
             };
             self.ask(connection, deadline, &mut lines)
@@ -624,10 +683,14 @@ fn ask_at(
         &crate::watch::default_patterns(),
         Some(selected),
         |paths, scratch| {
+            if let Some(row) = arm.unmatched(paths)? {
+                return Ok(vec![row]);
+            }
             let database = load_store(paths, arm, cli, Some(scratch), sqlite)?;
             let rows = arm.ask_within(
                 database.connection(),
                 cli.timeout,
+                Some(scratch.to_path_buf()),
                 Some(scratch.to_path_buf()),
             )?;
             database.close()?;
@@ -698,6 +761,7 @@ pub fn run_to(
 ) -> Result<(), Box<dyn std::error::Error>> {
     for (flag, anchor) in [
         ("--callers", &cli.callers),
+        ("--uses", &cli.uses),
         ("--from", &cli.from),
         ("--call-path", &cli.call_path),
         ("--type-path", &cli.type_path),
@@ -776,17 +840,31 @@ pub fn run_to(
                     return Err("--compare requires --call-path, --type-path or --flow-path".into());
                 }
                 let (other_sha, after) = ask_at(&mut reader, other, &selected, &cli, &arm, None)?;
-                changed_paths((&sha, &before), (&other_sha, &after))
+                if before
+                    .iter()
+                    .chain(&after)
+                    .any(|row| matches!(row, FlatFact::SeedUnmatched { .. }))
+                {
+                    before
+                        .into_iter()
+                        .chain(after)
+                        .filter(|row| matches!(row, FlatFact::SeedUnmatched { .. }))
+                        .collect()
+                } else {
+                    changed_paths((&sha, &before), (&other_sha, &after))
+                }
             }
             None => before,
         }
     } else {
         let paths = crate::inputs::expand(&cli.inputs)?;
-        if let Some(anchor) = walk::rust_anchor(&arm, &cli, &paths) {
+        if let Some(row) = arm.unmatched(&paths)? {
+            vec![row]
+        } else if let Some(anchor) = walk::rust_anchor(&arm, &cli, &paths) {
             walk::walk_rows(&arm, &cli, &paths, anchor)?
         } else {
             let database = load_store(&paths, &arm, &cli, None, cli.sqlite.as_deref())?;
-            let rows = arm.ask_within(database.connection(), cli.timeout, cli.inputs.root.clone())?;
+            let rows = arm.ask_within(database.connection(), cli.timeout, cli.inputs.root.clone(), None)?;
             database.close()?;
             rows
         }

@@ -688,6 +688,26 @@ pub mod models {
         pub to_name: Option<String>,
         pub depth: u32,
         pub witness: Vec<u64>,
+        #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "super::optional_non_null")]
+        pub from_file: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "super::optional_non_null")]
+        pub from_line: Option<u32>,
+        #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "super::optional_non_null")]
+        pub from_col: Option<u32>,
+        #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "super::optional_non_null")]
+        pub from_text: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "super::optional_non_null")]
+        pub from_reason: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "super::optional_non_null")]
+        pub to_file: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "super::optional_non_null")]
+        pub to_line: Option<u32>,
+        #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "super::optional_non_null")]
+        pub to_col: Option<u32>,
+        #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "super::optional_non_null")]
+        pub to_text: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "super::optional_non_null")]
+        pub to_reason: Option<String>,
     }
 
     #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -1923,7 +1943,7 @@ pub fn insert_all(conn: &rusqlite::Connection, source: &Source<'_>, rows: &[Fact
 
     let graph_decline_capacity = if graph_decline.is_empty() { 1 } else { statement_capacity(conn, 10, "INSERT INTO \"graph_decline\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"from_path\", \"from_name\", \"type_name\", \"crate_name\", \"reason\", \"kind\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
 
-    let graph_path_capacity = if graph_path.is_empty() { 1 } else { statement_capacity(conn, 11, "INSERT INTO \"graph_path\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"plane\", \"from_path\", \"from_name\", \"to_path\", \"to_name\", \"depth\", \"witness\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let graph_path_capacity = if graph_path.is_empty() { 1 } else { statement_capacity(conn, 21, "INSERT INTO \"graph_path\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"plane\", \"from_path\", \"from_name\", \"to_path\", \"to_name\", \"depth\", \"witness\", \"from_file\", \"from_line\", \"from_col\", \"from_text\", \"from_reason\", \"to_file\", \"to_line\", \"to_col\", \"to_text\", \"to_reason\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
 
     let graph_path_change_capacity = if graph_path_change.is_empty() { 1 } else { statement_capacity(conn, 12, "INSERT INTO \"graph_path_change\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"change\", \"revision\", \"plane\", \"from_path\", \"from_name\", \"to_path\", \"to_name\", \"depth\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
 
@@ -2391,7 +2411,7 @@ pub fn insert_all(conn: &rusqlite::Connection, source: &Source<'_>, rows: &[Fact
     }
 
     for chunk in graph_path.chunks(graph_path_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"graph_path\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"plane\", \"from_path\", \"from_name\", \"to_path\", \"to_name\", \"depth\", \"witness\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"graph_path\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"plane\", \"from_path\", \"from_name\", \"to_path\", \"to_name\", \"depth\", \"witness\", \"from_file\", \"from_line\", \"from_col\", \"from_text\", \"from_reason\", \"to_file\", \"to_line\", \"to_col\", \"to_text\", \"to_reason\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
@@ -4016,11 +4036,31 @@ impl models::GraphPath {
         parameter += 1;
         statement.raw_bind_parameter(parameter, &witness_json)?;
         parameter += 1;
+        statement.raw_bind_parameter(parameter, self.from_file.as_deref())?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.from_line)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.from_col)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.from_text.as_deref())?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.from_reason.as_deref())?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.to_file.as_deref())?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.to_line)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.to_col)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.to_text.as_deref())?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.to_reason.as_deref())?;
+        parameter += 1;
         Ok(parameter)
     }
     #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"graph_path\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"plane\", \"from_path\", \"from_name\", \"to_path\", \"to_name\", \"depth\", \"witness\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+        let mut statement = conn.prepare_cached("INSERT INTO \"graph_path\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"plane\", \"from_path\", \"from_name\", \"to_path\", \"to_name\", \"depth\", \"witness\", \"from_file\", \"from_line\", \"from_col\", \"from_text\", \"from_reason\", \"to_file\", \"to_line\", \"to_col\", \"to_text\", \"to_reason\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
