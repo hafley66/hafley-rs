@@ -342,6 +342,11 @@ pub enum FlatFact {
         grade: String,
         line: Option<u32>,
     },
+    #[serde(rename = "seed_unmatched")]
+    SeedUnmatched {
+        seed: String,
+        reason: String,
+    },
     #[serde(rename = "graph_edge")]
     GraphEdge {
         from_path: String,
