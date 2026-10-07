@@ -57,6 +57,7 @@ fn with_env<T>(name: &str, value: Option<&str>, run: impl FnOnce() -> T) -> T {
 /// Run the real omp to completion from `cwd` with `extra_args`, bounded to 120s.
 fn run_omp(cwd: &Path, agent_dir: &Path, key: &str, extra_args: &[&str]) {
     use wait_timeout::ChildExt;
+    let log = agent_dir.join("omp.log");
     let mut child = std::process::Command::new("omp")
         .current_dir(cwd)
         .env("PI_CODING_AGENT_DIR", agent_dir)
@@ -65,20 +66,28 @@ fn run_omp(cwd: &Path, agent_dir: &Path, key: &str, extra_args: &[&str]) {
         .arg("--model")
         .arg("deepseek/deepseek-v4-flash-0731")
         .args(extra_args)
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
+        // omp reads piped stdin before it starts; an inherited open stdin
+        // (cargo test from a shell pipe) never reaches EOF.
+        .stdin(std::process::Stdio::null())
+        // Files, not pipes: an unread pipe blocks omp once it fills (64 KiB).
+        .stdout(std::fs::File::create(&log).expect("omp log"))
+        .stderr(std::fs::File::create(&log).expect("omp log"))
         .spawn()
         .expect("spawn omp");
+    let tail = || {
+        let text = std::fs::read_to_string(&log).unwrap_or_default();
+        text.lines().rev().take(20).collect::<Vec<_>>().into_iter().rev().collect::<Vec<_>>().join("\n")
+    };
     let timed_out = child
         .wait_timeout(std::time::Duration::from_secs(120))
         .expect("wait on omp")
         .is_none();
     if timed_out {
         let _ = child.kill();
-        panic!("omp timed out after 120s");
+        panic!("omp timed out after 120s:\n{}", tail());
     }
     let status = child.wait().expect("reap omp");
-    assert!(status.success(), "omp failed: {status}");
+    assert!(status.success(), "omp failed: {status}\n{}", tail());
 }
 
 fn count_lines(path: &Path) -> usize {
