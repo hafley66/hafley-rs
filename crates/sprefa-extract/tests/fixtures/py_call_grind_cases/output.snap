@@ -1,0 +1,209 @@
+---
+source: tests/support/2_fixture_runner.rs
+---
+{
+  "0_grind": {
+    "alias_param": [
+      {
+        "caller": "",
+        "callee": "func"
+      },
+      {
+        "caller": "",
+        "callee": "keyword_func"
+      },
+      {
+        "caller": "func",
+        "callee": "param_func"
+      },
+      {
+        "caller": "keyword_func",
+        "callee": "keyword_target"
+      },
+      {
+        "caller": "param_func",
+        "callee": "nested_func"
+      }
+    ],
+    "attributes": [
+      {
+        "caller": "",
+        "callee": "__init__"
+      },
+      {
+        "caller": "",
+        "callee": "func1"
+      },
+      {
+        "caller": "",
+        "callee": "func2"
+      },
+      {
+        "caller": "",
+        "callee": "func3"
+      },
+      {
+        "caller": "run",
+        "callee": "func3"
+      }
+    ],
+    "builtin_map": [
+      {
+        "caller": "",
+        "callee": "func"
+      },
+      {
+        "caller": "",
+        "callee": "func2"
+      },
+      {
+        "caller": "",
+        "callee": "keep"
+      }
+    ],
+    "call_result": [
+      {
+        "caller": "",
+        "callee": "dict_maker"
+      },
+      {
+        "caller": "",
+        "callee": "func"
+      },
+      {
+        "caller": "",
+        "callee": "local_alias"
+      },
+      {
+        "caller": "",
+        "callee": "other_func"
+      },
+      {
+        "caller": "",
+        "callee": "return_func"
+      }
+    ],
+    "chained_params": [
+      {
+        "caller": "",
+        "callee": "func1"
+      },
+      {
+        "caller": "",
+        "callee": "func2"
+      },
+      {
+        "caller": "func1",
+        "callee": "<lambda1>"
+      },
+      {
+        "caller": "func1",
+        "callee": "func2"
+      },
+      {
+        "caller": "func2",
+        "callee": "<lambda2>"
+      },
+      {
+        "caller": "func2",
+        "callee": "func3"
+      },
+      {
+        "caller": "func3",
+        "callee": "<lambda3>"
+      }
+    ],
+    "containers": [
+      {
+        "caller": "",
+        "callee": "by_param"
+      },
+      {
+        "caller": "",
+        "callee": "func1"
+      },
+      {
+        "caller": "",
+        "callee": "func2"
+      },
+      {
+        "caller": "",
+        "callee": "func3"
+      },
+      {
+        "caller": "",
+        "callee": "func4"
+      },
+      {
+        "caller": "by_param",
+        "callee": "func1"
+      }
+    ],
+    "forward_ring": [
+      {
+        "caller": "",
+        "callee": "f0"
+      },
+      {
+        "caller": "f0",
+        "callee": "f1"
+      },
+      {
+        "caller": "f1",
+        "callee": "f1"
+      }
+    ],
+    "keys": [
+      {
+        "caller": "",
+        "callee": "func1"
+      }
+    ],
+    "lambdas": [
+      {
+        "caller": "",
+        "callee": "<lambda1>"
+      },
+      {
+        "caller": "",
+        "callee": "func"
+      },
+      {
+        "caller": "",
+        "callee": "inline_func"
+      },
+      {
+        "caller": "",
+        "callee": "make"
+      },
+      {
+        "caller": "func",
+        "callee": "<lambda1>"
+      },
+      {
+        "caller": "inline_func",
+        "callee": "<lambda2>"
+      }
+    ],
+    "mro": [
+      {
+        "caller": "",
+        "callee": "__init__"
+      },
+      {
+        "caller": "",
+        "callee": "func"
+      }
+    ],
+    "self_return": [
+      {
+        "caller": "",
+        "callee": "f"
+      },
+      {
+        "caller": "f",
+        "callee": "f"
+      }
+    ]
+  }
+}
