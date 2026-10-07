@@ -1,0 +1,14 @@
+---
+source: tests/support/2_fixture_runner.rs
+---
+{
+  "0_matrix": {
+    "emitted_records": 17,
+    "oracle_gaps": true,
+    "parity_legs": "{\"kind\":\"emitted\",\"record\":\"node\"}\n{\"kind\":\"emitted\",\"record\":\"sig\"}\n{\"kind\":\"emitted\",\"record\":\"doc\"}\n{\"kind\":\"emitted\",\"record\":\"doc_tag\"}\n{\"kind\":\"emitted\",\"record\":\"const\"}\n{\"kind\":\"emitted\",\"record\":\"site\"}\n{\"kind\":\"emitted\",\"record\":\"edge\"}\n{\"kind\":\"emitted\",\"record\":\"param\"}\n{\"kind\":\"emitted\",\"record\":\"arg\"}\n{\"kind\":\"emitted\",\"record\":\"df_field\"}\n{\"kind\":\"emitted\",\"record\":\"df_lit\"}\n{\"kind\":\"emitted\",\"record\":\"df_loop\"}\n{\"kind\":\"emitted\",\"record\":\"df_nest\"}\n{\"kind\":\"emitted\",\"record\":\"df_allocates\"}\n{\"kind\":\"emitted\",\"record\":\"specifier\"}\n{\"kind\":\"emitted\",\"record\":\"doc_node\"}\n{\"kind\":\"emitted\",\"record\":\"unresolved\"}\n{\"kind\":\"graded\",\"name\":\"rust\"}\n{\"kind\":\"graded\",\"name\":\"go\"}\n{\"kind\":\"graded\",\"name\":\"kotlin\"}\n{\"kind\":\"waived\",\"name\":\"markdown\",\"reason\":\"v5 had no markdown front-end; doc_node/doc_ref were engine-side\"}\n{\"kind\":\"waived\",\"name\":\"prolog\",\"reason\":\"v5 had no prolog front-end at all\"}\n{\"kind\":\"graded\",\"name\":\"python\"}\n{\"kind\":\"waived\",\"name\":\"data\",\"reason\":\"v5 answered json/yaml/toml through the `json`/`jsonp` OPS, not a language\"}\n{\"kind\":\"graded\",\"name\":\"ts\"}\n{\"kind\":\"waived\",\"name\":\"gdscript\",\"reason\":\"v5 had no gdscript front-end and no Godot corpus; the grammar is the whole increment\"}\n{\"kind\":\"waived\",\"name\":\"commonlisp\",\"reason\":\"v5 had no lisp front-end at all; the cst plane is the grammar's own output\"}\n{\"kind\":\"waived\",\"name\":\"typespec\",\"reason\":\"v5 had no TypeSpec front-end; the vendored grammar's cst plane is the whole increment\"}\n{\"kind\":\"waived\",\"name\":\"fallback\",\"reason\":\"the cst-only fallback; v5's `sg` roster has no per-language oracle\"}",
+    "roster_overlap": true,
+    "roster_stale": true,
+    "roster_unclassified": true,
+    "schema_missing": 0
+  }
+}

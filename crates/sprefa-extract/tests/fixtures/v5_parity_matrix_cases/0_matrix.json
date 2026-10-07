@@ -1,0 +1,93 @@
+{
+  "tests": [
+    "every_matrix_record_tag_is_in_the_schema_text",
+    "the_per_file_planes_emit_every_mapped_record",
+    "every_roster_source_is_graded_or_waived",
+    "every_graded_lang_has_a_captured_v5_oracle"
+  ],
+  "steps": [
+    {
+      "action": "api",
+      "api": "legs",
+      "name": "parity_legs",
+      "matrix": [
+        ["type_entity", "node", true],
+        ["type_sig", "sig", true],
+        ["doc_comment", "doc", true],
+        ["doc_tag", "doc_tag", true],
+        ["const_value", "const", true],
+        ["type_edge", "resolved_type_edge", false],
+        ["call_def", "node", true],
+        ["call_site", "site", true],
+        ["call_name", "node", true],
+        ["call_edge", "resolved_edge", false],
+        ["df_node", "node", true],
+        ["df_edge", "edge", true],
+        ["df_param", "param", true],
+        ["df_arg", "arg", true],
+        ["df_field", "df_field", true],
+        ["df_lit", "df_lit", true],
+        ["loop_over", "df_loop", true],
+        ["nest", "df_nest", true],
+        ["allocates", "df_allocates", true],
+        ["module_import", "specifier", true],
+        ["module_binding", "specifier", true],
+        ["module_edge", "file_edge", false],
+        ["module_unresolved", "file_unresolved", false],
+        ["crate_edge", "package_edge", false],
+        ["scip_def", "scip_def", false],
+        ["scip_name", "scip_name", false],
+        ["scip_ref", "scip_ref", false],
+        ["scip_edge", "scip_edge", false],
+        ["scip_fn_edge", "scip_fn_edge", false],
+        ["scip_callee_type", "scip_callee_type", false],
+        ["scip_local", "scip_local", false],
+        ["scip_impl", "scip_impl", false],
+        ["scip_occurrence", "scip_occurrence", false],
+        ["scip_binding", "scip_occurrence", false],
+        ["doc_node", "doc_node", true],
+        ["doc_ref", "resolved_type_edge", false],
+        ["node", "node", true],
+        ["child", "edge", true],
+        ["unresolved", "unresolved", true],
+        ["content", "file", true],
+        ["file_lines", "file", true]
+      ],
+      "fixtures": [
+        ["tests/fixtures/rust/sample.rs", "all"],
+        ["tests/fixtures/rust/docs.rs", "all"],
+        ["tests/fixtures/rust_modules/sample.rs", "all"],
+        ["tests/fixtures/kotlin/docs.kt", "all"],
+        ["tests/fixtures/ts/sample.ts", "all"],
+        ["tests/fixtures/ts/consts.ts", "all"],
+        ["tests/fixtures/ts/lambdas.ts", "all"],
+        ["tests/fixtures/df_loops/sample.ts", "all"],
+        ["tests/fixtures/df_loops/sample.rs", "all"],
+        ["tests/fixtures/ts_unresolved/unresolved.ts", "all"],
+        ["tests/fixtures/markdown/doc_node.md", "types_only"]
+      ],
+      "graded": [
+        ["rust", "rust"],
+        ["ts", "ts"],
+        ["go", "go"],
+        ["kotlin", "kotlin"],
+        ["python", "python"]
+      ],
+      "waived": [
+        ["markdown", "v5 had no markdown front-end; doc_node/doc_ref were engine-side"],
+        ["prolog", "v5 had no prolog front-end at all"],
+        ["data", "v5 answered json/yaml/toml through the `json`/`jsonp` OPS, not a language"],
+        ["fallback", "the cst-only fallback; v5's `sg` roster has no per-language oracle"],
+        ["gdscript", "v5 had no gdscript front-end and no Godot corpus; the grammar is the whole increment"],
+        ["commonlisp", "v5 had no lisp front-end at all; the cst plane is the grammar's own output"],
+        ["typespec", "v5 had no TypeSpec front-end; the vendored grammar's cst plane is the whole increment"]
+      ]
+    },
+    {"action": "claim", "name": "schema_missing", "kind": "line_count", "cell": "parity_legs", "line_prefix": "{\"kind\":\"schema_missing\"", "expect": 0},
+    {"action": "claim", "name": "emitted_records", "kind": "line_count", "cell": "parity_legs", "line_prefix": "{\"kind\":\"emitted\"", "expect": 17},
+    {"action": "claim", "name": "roster_overlap", "kind": "absent", "cell": "parity_legs", "text": "\"kind\":\"overlap\""},
+    {"action": "claim", "name": "roster_unclassified", "kind": "absent", "cell": "parity_legs", "text": "\"kind\":\"unclassified\""},
+    {"action": "claim", "name": "roster_stale", "kind": "absent", "cell": "parity_legs", "text": "\"kind\":\"stale\""},
+    {"action": "claim", "name": "oracle_gaps", "kind": "absent", "cell": "parity_legs", "text": "\"kind\":\"oracle_gap\""}
+  ]
+}
