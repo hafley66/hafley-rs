@@ -669,5 +669,3 @@ mod ts_specifiers_support;
 
 
 
-#[path = "support/32_graph_paths.rs"]
-mod graph_paths_support;

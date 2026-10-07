@@ -3,50 +3,234 @@ source: tests/support/2_fixture_runner.rs
 ---
 {
   "0_paths": {
-    "call_paths": [
-      [
-        "chainB",
-        1,
-        1
-      ],
-      [
-        "chainC",
-        2,
-        2
-      ],
-      [
-        "chainD",
-        3,
-        3
+    "call_paths": {
+      "exit_code": 0,
+      "stdout": [
+        {
+          "record": "graph_path",
+          "plane": "call",
+          "from_path": "tests/fixtures/graph_ts/chain_a.ts",
+          "from_name": "chainA",
+          "to_path": "tests/fixtures/graph_ts/chain_b.ts",
+          "to_name": "chainB",
+          "depth": 1,
+          "witness": [
+            3
+          ]
+        },
+        {
+          "record": "graph_path",
+          "plane": "call",
+          "from_path": "tests/fixtures/graph_ts/chain_a.ts",
+          "from_name": "chainA",
+          "to_path": "tests/fixtures/graph_ts/chain_c.ts",
+          "to_name": "chainC",
+          "depth": 2,
+          "witness": [
+            3,
+            4
+          ]
+        },
+        {
+          "record": "graph_path",
+          "plane": "call",
+          "from_path": "tests/fixtures/graph_ts/chain_a.ts",
+          "from_name": "chainA",
+          "to_path": "tests/fixtures/graph_ts/chain_d.ts",
+          "to_name": "chainD",
+          "depth": 3,
+          "witness": [
+            3,
+            4,
+            5
+          ]
+        }
       ]
-    ],
-    "type_path": [
-      "type",
-      "Widget",
-      1
-    ],
-    "flow_depths": [
-      1
-    ],
-    "flow_plane_all": true,
+    },
+    "call_plane_all": true,
+    "call_row_count": 3,
+    "chainB_depth": 1,
+    "chainB_witnesses": 1,
+    "chainC_depth": 2,
+    "chainC_witnesses": 2,
+    "chainD_depth": 3,
+    "chainD_witnesses": 3,
+    "depth_one_witness": 1,
     "digest_door": {
-      "path_and_digest_streams_equal": true,
-      "param_row": [
-        22,
-        38,
-        "children"
-      ],
-      "from_path_is_digest": true,
-      "depth_one_answers": [
+      "exit_code": 0,
+      "stdout": [
+        {
+          "record": "graph_path",
+          "plane": "flow",
+          "from_path": "blake3:4bf14b7cf084e62a42560144d4528a2a07e8766fe933193414249c90d5aadd06",
+          "from_name": "22:38",
+          "to_path": "blake3:4bf14b7cf084e62a42560144d4528a2a07e8766fe933193414249c90d5aadd06",
+          "to_name": "49:57",
+          "depth": 1,
+          "witness": [
+            5
+          ]
+        },
+        {
+          "record": "graph_path",
+          "plane": "flow",
+          "from_path": "blake3:4bf14b7cf084e62a42560144d4528a2a07e8766fe933193414249c90d5aadd06",
+          "from_name": "22:38",
+          "to_path": "blake3:4bf14b7cf084e62a42560144d4528a2a07e8766fe933193414249c90d5aadd06",
+          "to_name": "42:58",
+          "depth": 2,
+          "witness": [
+            5,
+            6
+          ]
+        }
+      ]
+    },
+    "direct_edges": {
+      "rows": [
         [
-          "49:57",
-          5
+          {
+            "integer": 49
+          },
+          {
+            "integer": 57
+          },
+          {
+            "integer": 5
+          }
         ]
+      ]
+    },
+    "file_digest": {
+      "rows": [
+        [
+          {
+            "text": "blake3:4bf14b7cf084e62a42560144d4528a2a07e8766fe933193414249c90d5aadd06"
+          }
+        ]
+      ]
+    },
+    "flow_paths": {
+      "exit_code": 0,
+      "stdout": [
+        {
+          "record": "graph_path",
+          "plane": "flow",
+          "from_path": "blake3:0eb8341b0b12d08ba613e69d4151453e401554b9dfe8cbf74601709bba08156f",
+          "from_name": "33:41",
+          "to_path": "blake3:0eb8341b0b12d08ba613e69d4151453e401554b9dfe8cbf74601709bba08156f",
+          "to_name": "26:42",
+          "depth": 1,
+          "witness": [
+            4
+          ]
+        }
+      ]
+    },
+    "flow_plane": "flow",
+    "flow_reference": {
+      "exit_code": 0,
+      "stdout": [
+        {
+          "record": "flow_edge",
+          "family": "flow",
+          "kind": "ret_to_call_res",
+          "from_blob": "blake3:0eb8341b0b12d08ba613e69d4151453e401554b9dfe8cbf74601709bba08156f",
+          "from": {
+            "start": 33,
+            "end": 41
+          },
+          "to_blob": "blake3:29d135b60df6eafe312bfb23d54b16090edf97c9d673eee3a83abc2c28b0318d",
+          "to": {
+            "start": 29,
+            "end": 38
+          }
+        }
+      ]
+    },
+    "flow_row_count": 1,
+    "flow_seed_blob": "blake3:0eb8341b0b12d08ba613e69d4151453e401554b9dfe8cbf74601709bba08156f",
+    "flow_seed_end": 41,
+    "flow_seed_start": 33,
+    "flow_target": "26:42",
+    "flow_witnesses_match_depth": 1,
+    "param_row": {
+      "rows": [
+        [
+          {
+            "integer": 22
+          },
+          {
+            "integer": 38
+          },
+          {
+            "text": "children"
+          }
+        ]
+      ]
+    },
+    "param_rows_from_digest": true,
+    "param_rows_plane": true,
+    "param_rows_seed_name": true,
+    "param_rows_to_digest": true,
+    "path_and_digest_streams_equal": {
+      "equal": true
+    },
+    "path_door": {
+      "exit_code": 0,
+      "stdout": [
+        {
+          "record": "graph_path",
+          "plane": "flow",
+          "from_path": "blake3:4bf14b7cf084e62a42560144d4528a2a07e8766fe933193414249c90d5aadd06",
+          "from_name": "22:38",
+          "to_path": "blake3:4bf14b7cf084e62a42560144d4528a2a07e8766fe933193414249c90d5aadd06",
+          "to_name": "49:57",
+          "depth": 1,
+          "witness": [
+            5
+          ]
+        },
+        {
+          "record": "graph_path",
+          "plane": "flow",
+          "from_path": "blake3:4bf14b7cf084e62a42560144d4528a2a07e8766fe933193414249c90d5aadd06",
+          "from_name": "22:38",
+          "to_path": "blake3:4bf14b7cf084e62a42560144d4528a2a07e8766fe933193414249c90d5aadd06",
+          "to_name": "42:58",
+          "depth": 2,
+          "witness": [
+            5,
+            6
+          ]
+        }
       ]
     },
     "slice_statements": [
       "if (flag) {\n    allow();\n  } else {\n    deny();\n  }",
       "{\n    allow();\n  }"
-    ]
+    ],
+    "type_depth": 1,
+    "type_paths": {
+      "exit_code": 0,
+      "stdout": [
+        {
+          "record": "graph_path",
+          "plane": "type",
+          "from_path": "tests/fixtures/graph_ts/widget_reader.ts",
+          "from_name": "readWidget",
+          "to_path": "tests/fixtures/graph_ts/widget.ts",
+          "to_name": "Widget",
+          "depth": 1,
+          "witness": [
+            13
+          ]
+        }
+      ]
+    },
+    "type_plane": "type",
+    "type_row_count": 1,
+    "type_target": "Widget",
+    "type_witnesses": 1
   }
 }

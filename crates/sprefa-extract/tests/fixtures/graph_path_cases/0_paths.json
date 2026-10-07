@@ -1,3 +1,51 @@
 {
-  "fixtures": ["tests/fixtures/graph_ts (call/type/slice arms)", "tests/fixtures/resolve (flow seed)", "temp sqlite digest door"]
+  "tests": [
+    "call_paths_carry_one_witness_per_hop_on_the_call_plane",
+    "type_paths_follow_resolved_type_edges",
+    "flow_paths_follow_derived_interprocedural_edges",
+    "file_path_and_digest_seeds_agree_and_depth_one_matches_sqlite",
+    "control_slice_names_branch_and_sink_never_code_after"
+  ],
+  "steps": [
+    {"action": "command", "arguments": ["graph", "--call-path", "chainA", "tests/fixtures/graph_ts"], "capture": "call_paths", "unasserted_stderr": true},
+    {"action": "claim", "name": "call_row_count", "kind": "line_count", "cell": "call_paths.stdout", "line_prefix": "{", "expect": 3},
+    {"action": "claim", "name": "call_plane_all", "kind": "json_all", "cell": "call_paths.stdout", "pointer": "plane", "value": "call"},
+    {"action": "claim", "name": "chainB_depth", "kind": "json_scalar", "cell": "call_paths.stdout", "line_contains": "\"to_name\":\"chainB\"", "pointer": "depth", "expect": 1},
+    {"action": "claim", "name": "chainB_witnesses", "kind": "json_len", "cell": "call_paths.stdout", "line_contains": "\"to_name\":\"chainB\"", "pointer": "witness", "expect": 1},
+    {"action": "claim", "name": "chainC_depth", "kind": "json_scalar", "cell": "call_paths.stdout", "line_contains": "\"to_name\":\"chainC\"", "pointer": "depth", "expect": 2},
+    {"action": "claim", "name": "chainC_witnesses", "kind": "json_len", "cell": "call_paths.stdout", "line_contains": "\"to_name\":\"chainC\"", "pointer": "witness", "expect": 2},
+    {"action": "claim", "name": "chainD_depth", "kind": "json_scalar", "cell": "call_paths.stdout", "line_contains": "\"to_name\":\"chainD\"", "pointer": "depth", "expect": 3},
+    {"action": "claim", "name": "chainD_witnesses", "kind": "json_len", "cell": "call_paths.stdout", "line_contains": "\"to_name\":\"chainD\"", "pointer": "witness", "expect": 3},
+
+    {"action": "command", "arguments": ["graph", "--type-path", "readWidget", "tests/fixtures/graph_ts"], "capture": "type_paths", "unasserted_stderr": true},
+    {"action": "claim", "name": "type_row_count", "kind": "line_count", "cell": "type_paths.stdout", "line_prefix": "{", "expect": 1},
+    {"action": "claim", "name": "type_plane", "kind": "json_scalar", "cell": "type_paths.stdout", "line_contains": "\"record\":\"graph_path\"", "pointer": "plane", "expect": "type"},
+    {"action": "claim", "name": "type_target", "kind": "json_scalar", "cell": "type_paths.stdout", "line_contains": "\"record\":\"graph_path\"", "pointer": "to_name", "expect": "Widget"},
+    {"action": "claim", "name": "type_depth", "kind": "json_scalar", "cell": "type_paths.stdout", "line_contains": "\"record\":\"graph_path\"", "pointer": "depth", "expect": 1},
+    {"action": "claim", "name": "type_witnesses", "kind": "json_len", "cell": "type_paths.stdout", "line_contains": "\"record\":\"graph_path\"", "pointer": "witness", "expect": 1},
+
+    {"action": "command", "arguments": ["--resolve", "--arms", "flow", "tests/fixtures/resolve/0_caller.ts", "tests/fixtures/resolve/1_callee.ts"], "capture": "flow_reference", "unasserted_stderr": true},
+    {"action": "claim", "name": "flow_seed_blob", "kind": "json_scalar", "cell": "flow_reference.stdout", "line_contains": "\"record\":\"flow_edge\"", "pointer": "from_blob", "expect": "blake3:0eb8341b0b12d08ba613e69d4151453e401554b9dfe8cbf74601709bba08156f"},
+    {"action": "claim", "name": "flow_seed_start", "kind": "json_scalar", "cell": "flow_reference.stdout", "line_contains": "\"record\":\"flow_edge\"", "pointer": "from/start", "expect": 33},
+    {"action": "claim", "name": "flow_seed_end", "kind": "json_scalar", "cell": "flow_reference.stdout", "line_contains": "\"record\":\"flow_edge\"", "pointer": "from/end", "expect": 41},
+    {"action": "command", "arguments": ["graph", "--flow-path", "blake3:0eb8341b0b12d08ba613e69d4151453e401554b9dfe8cbf74601709bba08156f@33:41", "tests/fixtures/resolve/0_caller.ts", "tests/fixtures/resolve/1_callee.ts"], "capture": "flow_paths", "unasserted_stderr": true},
+    {"action": "claim", "name": "flow_row_count", "kind": "line_count", "cell": "flow_paths.stdout", "line_prefix": "{", "expect": 1},
+    {"action": "claim", "name": "flow_plane", "kind": "json_scalar", "cell": "flow_paths.stdout", "line_contains": "\"record\":\"graph_path\"", "pointer": "plane", "expect": "flow"},
+    {"action": "claim", "name": "flow_target", "kind": "json_scalar", "cell": "flow_paths.stdout", "line_contains": "\"record\":\"graph_path\"", "pointer": "to_name", "expect": "26:42"},
+    {"action": "claim", "name": "flow_witnesses_match_depth", "kind": "json_len", "cell": "flow_paths.stdout", "line_contains": "\"record\":\"graph_path\"", "pointer": "witness", "expect": 1},
+
+    {"action": "write", "path": "$work/0_local.ts", "text": "export function local(children: string) { return children; }\n"},
+    {"action": "command", "arguments": ["graph", "--flow-path", "$work/0_local.ts@22:38", "--sqlite", "$work/facts.db", "$work/0_local.ts"], "capture": "path_door", "unasserted_stderr": true},
+    {"action": "sqlite_rows", "name": "file_digest", "path": "$work/facts.db", "sql": "SELECT digest FROM file", "expect": [[{"text": "blake3:4bf14b7cf084e62a42560144d4528a2a07e8766fe933193414249c90d5aadd06"}]]},
+    {"action": "sqlite_rows", "name": "param_row", "path": "$work/facts.db", "sql": "SELECT span__start, span__end, name FROM node WHERE family = 'df' AND kind = 'param'", "expect": [[{"integer": 22}, {"integer": 38}, {"text": "children"}]]},
+    {"action": "command", "arguments": ["graph", "--flow-path", "blake3:4bf14b7cf084e62a42560144d4528a2a07e8766fe933193414249c90d5aadd06@22:38", "$work/0_local.ts"], "capture": "digest_door", "unasserted_stderr": true},
+    {"action": "compare", "name": "path_and_digest_streams_equal", "left": "path_door", "right": "digest_door"},
+    {"action": "claim", "name": "param_rows_plane", "kind": "json_all", "cell": "path_door.stdout", "pointer": "plane", "value": "flow"},
+    {"action": "sqlite_rows", "name": "direct_edges", "path": "$work/facts.db", "sql": "SELECT to__start, to__end, min(_row) FROM edge WHERE family = 'df' AND _content_id = ?1 AND from__start = 22 AND from__end = 38 GROUP BY to__start, to__end", "parameters": ["blake3:4bf14b7cf084e62a42560144d4528a2a07e8766fe933193414249c90d5aadd06"], "expect": [[{"integer": 49}, {"integer": 57}, {"integer": 5}]]},
+    {"action": "claim", "name": "param_rows_from_digest", "kind": "json_all", "cell": "path_door.stdout", "pointer": "from_path", "value": "blake3:4bf14b7cf084e62a42560144d4528a2a07e8766fe933193414249c90d5aadd06"},
+    {"action": "claim", "name": "param_rows_to_digest", "kind": "json_all", "cell": "path_door.stdout", "pointer": "to_path", "value": "blake3:4bf14b7cf084e62a42560144d4528a2a07e8766fe933193414249c90d5aadd06"},
+    {"action": "claim", "name": "param_rows_seed_name", "kind": "json_all", "cell": "path_door.stdout", "pointer": "from_name", "value": "22:38"},
+    {"action": "claim", "name": "depth_one_witness", "kind": "json_len", "cell": "path_door.stdout", "line_contains": "\"to_name\":\"49:57\"", "pointer": "witness", "expect": 1},
+    {"action": "api", "name": "slice_statements", "api": "slice_statements", "file": "tests/fixtures/graph_ts/5_slice.ts", "arg": "tests/fixtures/graph_ts/5_slice.ts"}
+  ]
 }
