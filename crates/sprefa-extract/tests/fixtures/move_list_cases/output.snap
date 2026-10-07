@@ -1,0 +1,104 @@
+---
+source: tests/support/2_fixture_runner.rs
+---
+{
+  "0_moves": {
+    "both_message": true,
+    "both_refusal": {
+      "exit_code": 2,
+      "stdout": [],
+      "stderr": "--list cannot be combined with OLD NEW\n"
+    },
+    "collide_message": true,
+    "collide_refusal": {
+      "exit_code": 2,
+      "stdout": [],
+      "stderr": "move destination already exists: $work/collide/repo/src/a.ts\n"
+    },
+    "collide_status": {
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    "collide_tree_clean": "",
+    "dry_hub_unchanged": {
+      "stored_text": "import { a } from './a';\nimport { b } from './b';\nimport { c } from './c';\n\nexport const hub = [a, b, c];\n"
+    },
+    "dry_markers": 2,
+    "dry_moves": 3,
+    "dry_plan": {
+      "exit_code": 0,
+      "stdout": "root $work/dry/repo\nplan src/a.ts -> lib/a.ts\nplan src/b.ts -> lib/b.ts\nplan src/c.ts -> lib/c.ts\nreplace src/hub.ts -> src/hub.ts  update src/hub.ts (121 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,5 @@\n    -import { a } from './a';\n    -import { b } from './b';\n    -import { c } from './c';\n    +import { a } from '../lib/a';\n    +import { b } from '../lib/b';\n    +import { c } from '../lib/c';\n    \n     export const hub = [a, b, c];\nreplace src/onlyA.ts -> src/onlyA.ts  update src/onlyA.ts (55 bytes)\n    --- original\n    +++ modified\n    @@ -1,3 +1,3 @@\n    -import { a } from './a';\n    +import { a } from '../lib/a';\n    \n     export const onlyA = a;\nstage $STAGE dry run, tree untouched\nmove    src/a.ts -> lib/a.ts  move src/a.ts -> lib/a.ts (22 bytes)\nmove    src/b.ts -> lib/b.ts  move src/b.ts -> lib/b.ts (22 bytes)\nmove    src/c.ts -> lib/c.ts  move src/c.ts -> lib/c.ts (22 bytes)\nstage $STAGE dry run, tree untouched\n",
+      "stderr": ""
+    },
+    "dry_plan_lines": 3,
+    "dry_replaces": 2,
+    "dry_status": {
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    "dry_status_empty": "",
+    "dupdest_message": true,
+    "dupdest_refusal": {
+      "exit_code": 2,
+      "stdout": [],
+      "stderr": "lib/x.ts is the destination of two moves\n"
+    },
+    "dupdest_status": {
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    "dupdest_tree_clean": "",
+    "mixed_commit": {
+      "exit_code": 0,
+      "stdout": "root $work/mixed/repo\nplan lib/b.pl -> core/b.pl\nplan src/x.ts -> src/deep/x.ts\nreplace src/user.ts -> src/user.ts  update src/user.ts (54 bytes)\n    --- original\n    +++ modified\n    @@ -1,3 +1,3 @@\n    -import { x } from './x';\n    +import { x } from './deep/x';\n    \n     export const user = x;\nstage $STAGE committed\nmove    lib/b.pl -> core/b.pl  move lib/b.pl -> core/b.pl (18 bytes)\nmove    src/x.ts -> src/deep/x.ts  move src/x.ts -> src/deep/x.ts (22 bytes)\nstage $STAGE committed\nrmdir lib\n",
+      "stderr": ""
+    },
+    "mixed_moves": 2,
+    "mixed_prolog_untouched": {
+      "stored_text": ":- module(a, [check/0]).\n:- use_module('lib/b').\n\ncheck :- true.\n"
+    },
+    "mixed_replaces": 1,
+    "mixed_user_respelled": {
+      "stored_text": "import { x } from './deep/x';\n\nexport const user = x;\n"
+    },
+    "notab_message": true,
+    "notab_refusal": {
+      "exit_code": 2,
+      "stdout": [],
+      "stderr": "$work/notab/state/moves.tsv:1: a move list row is `old<TAB>new`\n"
+    },
+    "shared_commit": {
+      "exit_code": 0,
+      "stdout": "root $work/shared/repo\nplan src/a.ts -> lib/a.ts\nplan src/b.ts -> lib/b.ts\nplan src/c.ts -> lib/c.ts\nreplace src/hub.ts -> src/hub.ts  update src/hub.ts (121 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,5 @@\n    -import { a } from './a';\n    -import { b } from './b';\n    -import { c } from './c';\n    +import { a } from '../lib/a';\n    +import { b } from '../lib/b';\n    +import { c } from '../lib/c';\n    \n     export const hub = [a, b, c];\nreplace src/onlyA.ts -> src/onlyA.ts  update src/onlyA.ts (55 bytes)\n    --- original\n    +++ modified\n    @@ -1,3 +1,3 @@\n    -import { a } from './a';\n    +import { a } from '../lib/a';\n    \n     export const onlyA = a;\nstage $STAGE committed\nmove    src/a.ts -> lib/a.ts  move src/a.ts -> lib/a.ts (22 bytes)\nmove    src/b.ts -> lib/b.ts  move src/b.ts -> lib/b.ts (22 bytes)\nmove    src/c.ts -> lib/c.ts  move src/c.ts -> lib/c.ts (22 bytes)\nstage $STAGE committed\n",
+      "stderr": ""
+    },
+    "shared_hub": {
+      "stored_text": "import { a } from '../lib/a';\nimport { b } from '../lib/b';\nimport { c } from '../lib/c';\n\nexport const hub = [a, b, c];\n"
+    },
+    "shared_lib_a": {
+      "exists": true
+    },
+    "shared_lib_b": {
+      "exists": true
+    },
+    "shared_lib_c": {
+      "exists": true
+    },
+    "shared_moves": 3,
+    "shared_onlyA": {
+      "stored_text": "import { a } from '../lib/a';\n\nexport const onlyA = a;\n"
+    },
+    "shared_replaces": 2,
+    "shared_src_a_gone": {
+      "exists": false
+    },
+    "shared_stages": 2,
+    "stale_guard": {
+      "fresh_stage_ok": true,
+      "stale_stage_refused": true
+    }
+  }
+}
