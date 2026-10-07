@@ -90,8 +90,8 @@
     "local": false
   },
   {
-    "test": "t_54_ts_module_plane::barrel_resolve_wall_grows_linearly_with_file_count",
-    "source": "tests/54_ts_module_plane.rs",
+    "test": "t_ts_module_scaling::barrel_resolve_wall_grows_linearly_with_file_count",
+    "source": "bench/7_ts_module_scaling.rs",
     "condition": "wall400 / wall200 < RATIO_BUDGET",
     "local": false
   },

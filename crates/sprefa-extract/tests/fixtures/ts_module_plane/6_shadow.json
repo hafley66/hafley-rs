@@ -1,0 +1,19 @@
+{
+  "steps": [
+    {
+      "action": "run",
+      "name": "resolve",
+      "arguments": [
+        "--resolve",
+        "--arms",
+        "call",
+        "tests/fixtures/ts5_findings/module_plane/shadow_consumer.ts",
+        "tests/fixtures/ts5_findings/module_plane/shadow_export.ts",
+        "tests/fixtures/ts5_findings/module_plane/shadow_private.ts"
+      ],
+      "cwd": "$manifest",
+      "expect_exit_code": 0,
+      "unasserted_stderr": true
+    }
+  ]
+}

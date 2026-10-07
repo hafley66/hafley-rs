@@ -1,0 +1,549 @@
+---
+source: crates/sprefa-extract/tests/support/2_fixture_runner.rs
+---
+{
+  "0_barrel": {
+    "resolve": {
+      "exit_code": 0,
+      "stdout": [
+        {
+          "record": "resolved_edge",
+          "caller_path": "tests/fixtures/ts5_findings/module_plane/barrel_consumer.ts",
+          "caller_name": "run",
+          "callee_path": "tests/fixtures/ts5_findings/module_plane/helpers.ts",
+          "callee_name": "normalize",
+          "caller_site_start": 174,
+          "caller_site_end": 183,
+          "callee_start": 81,
+          "callee_end": 149,
+          "kind": "import_resolve",
+          "resolution_origin": "module_plane"
+        },
+        {
+          "record": "resolved_edge",
+          "caller_path": "tests/fixtures/ts5_findings/module_plane/barrel_consumer.ts",
+          "caller_name": "run",
+          "callee_path": "tests/fixtures/ts5_findings/module_plane/widgets.ts",
+          "callee_name": "widen",
+          "caller_site_start": 168,
+          "caller_site_end": 173,
+          "callee_start": 150,
+          "callee_end": 213,
+          "kind": "import_resolve",
+          "resolution_origin": "module_plane"
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/ts5_findings/module_plane/barrel_consumer.ts",
+          "name": "./index.js",
+          "local": "",
+          "target_path": "tests/fixtures/ts5_findings/module_plane/index.ts",
+          "target_name": null,
+          "kind": "module",
+          "hops": 1
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/ts5_findings/module_plane/barrel_consumer.ts",
+          "name": "normalize",
+          "local": "normalize",
+          "target_path": "tests/fixtures/ts5_findings/module_plane/helpers.ts",
+          "target_name": "normalize",
+          "kind": "star",
+          "hops": 2
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/ts5_findings/module_plane/barrel_consumer.ts",
+          "name": "widen",
+          "local": "widen",
+          "target_path": "tests/fixtures/ts5_findings/module_plane/widgets.ts",
+          "target_name": "widen",
+          "kind": "star",
+          "hops": 2
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/ts5_findings/module_plane/index.ts",
+          "name": "./helpers.js",
+          "local": "",
+          "target_path": "tests/fixtures/ts5_findings/module_plane/helpers.ts",
+          "target_name": null,
+          "kind": "module",
+          "hops": 1
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/ts5_findings/module_plane/index.ts",
+          "name": "./widgets.js",
+          "local": "",
+          "target_path": "tests/fixtures/ts5_findings/module_plane/widgets.ts",
+          "target_name": null,
+          "kind": "module",
+          "hops": 1
+        },
+        {
+          "record": "unresolved",
+          "family": "call",
+          "path": "tests/fixtures/ts5_findings/module_plane/helpers.ts",
+          "span": {
+            "start": 135,
+            "end": 144
+          },
+          "reason": "inferred",
+          "detail": "trim"
+        },
+        {
+          "record": "call_site",
+          "callee": "normalize",
+          "path": "tests/fixtures/ts5_findings/module_plane/barrel_consumer.ts",
+          "line": 5,
+          "fn": "run",
+          "start": 174,
+          "end": 189
+        },
+        {
+          "record": "call_site",
+          "callee": "text.trim",
+          "path": "tests/fixtures/ts5_findings/module_plane/helpers.ts",
+          "line": 3,
+          "fn": "normalize",
+          "start": 135,
+          "end": 146
+        },
+        {
+          "record": "call_site",
+          "callee": "widen",
+          "path": "tests/fixtures/ts5_findings/module_plane/barrel_consumer.ts",
+          "line": 5,
+          "fn": "run",
+          "start": 168,
+          "end": 190
+        }
+      ]
+    }
+  },
+  "1_renamed": {
+    "resolve": {
+      "exit_code": 0,
+      "stdout": [
+        {
+          "record": "resolved_edge",
+          "caller_path": "tests/fixtures/ts5_findings/module_plane/renamed_consumer.ts",
+          "caller_name": "callIt",
+          "callee_path": "tests/fixtures/ts5_findings/module_plane/renamed_source.ts",
+          "callee_name": "inner",
+          "caller_site_start": 104,
+          "caller_site_end": 109,
+          "callee_start": 58,
+          "callee_end": 115,
+          "kind": "import_resolve",
+          "resolution_origin": "module_plane"
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/ts5_findings/module_plane/renamed_barrel.ts",
+          "name": "./renamed_source.js",
+          "local": "",
+          "target_path": "tests/fixtures/ts5_findings/module_plane/renamed_source.ts",
+          "target_name": null,
+          "kind": "module",
+          "hops": 1
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/ts5_findings/module_plane/renamed_consumer.ts",
+          "name": "./renamed_barrel.js",
+          "local": "",
+          "target_path": "tests/fixtures/ts5_findings/module_plane/renamed_barrel.ts",
+          "target_name": null,
+          "kind": "module",
+          "hops": 1
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/ts5_findings/module_plane/renamed_consumer.ts",
+          "name": "outer",
+          "local": "outer",
+          "target_path": "tests/fixtures/ts5_findings/module_plane/renamed_source.ts",
+          "target_name": "inner",
+          "kind": "indirect",
+          "hops": 2
+        },
+        {
+          "record": "call_site",
+          "callee": "outer",
+          "path": "tests/fixtures/ts5_findings/module_plane/renamed_consumer.ts",
+          "line": 4,
+          "fn": "callIt",
+          "start": 104,
+          "end": 115
+        }
+      ]
+    }
+  },
+  "2_two_hop": {
+    "resolve": {
+      "exit_code": 0,
+      "stdout": [
+        {
+          "record": "resolved_edge",
+          "caller_path": "tests/fixtures/ts5_findings/module_plane/two_hop_consumer.ts",
+          "caller_name": "reach",
+          "callee_path": "tests/fixtures/ts5_findings/module_plane/two_hop_inner.ts",
+          "callee_name": "deep",
+          "caller_site_start": 101,
+          "caller_site_end": 105,
+          "callee_start": 44,
+          "callee_end": 100,
+          "kind": "import_resolve",
+          "resolution_origin": "module_plane"
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/ts5_findings/module_plane/two_hop_consumer.ts",
+          "name": "./two_hop_outer.js",
+          "local": "",
+          "target_path": "tests/fixtures/ts5_findings/module_plane/two_hop_outer.ts",
+          "target_name": null,
+          "kind": "module",
+          "hops": 1
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/ts5_findings/module_plane/two_hop_consumer.ts",
+          "name": "deep",
+          "local": "deep",
+          "target_path": "tests/fixtures/ts5_findings/module_plane/two_hop_inner.ts",
+          "target_name": "deep",
+          "kind": "star",
+          "hops": 3
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/ts5_findings/module_plane/two_hop_middle.ts",
+          "name": "./two_hop_inner.js",
+          "local": "",
+          "target_path": "tests/fixtures/ts5_findings/module_plane/two_hop_inner.ts",
+          "target_name": null,
+          "kind": "module",
+          "hops": 1
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/ts5_findings/module_plane/two_hop_outer.ts",
+          "name": "./two_hop_middle.js",
+          "local": "",
+          "target_path": "tests/fixtures/ts5_findings/module_plane/two_hop_middle.ts",
+          "target_name": null,
+          "kind": "module",
+          "hops": 1
+        },
+        {
+          "record": "call_site",
+          "callee": "deep",
+          "path": "tests/fixtures/ts5_findings/module_plane/two_hop_consumer.ts",
+          "line": 4,
+          "fn": "reach",
+          "start": 101,
+          "end": 111
+        }
+      ]
+    }
+  },
+  "3_ambiguous": {
+    "resolve": {
+      "exit_code": 0,
+      "stdout": [
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/ts5_findings/module_plane/ambiguous_barrel.ts",
+          "name": "./ambiguous_left.js",
+          "local": "",
+          "target_path": "tests/fixtures/ts5_findings/module_plane/ambiguous_left.ts",
+          "target_name": null,
+          "kind": "module",
+          "hops": 1
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/ts5_findings/module_plane/ambiguous_barrel.ts",
+          "name": "./ambiguous_right.js",
+          "local": "",
+          "target_path": "tests/fixtures/ts5_findings/module_plane/ambiguous_right.ts",
+          "target_name": null,
+          "kind": "module",
+          "hops": 1
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/ts5_findings/module_plane/ambiguous_consumer.ts",
+          "name": "./ambiguous_barrel.js",
+          "local": "",
+          "target_path": "tests/fixtures/ts5_findings/module_plane/ambiguous_barrel.ts",
+          "target_name": null,
+          "kind": "module",
+          "hops": 1
+        },
+        {
+          "record": "unresolved",
+          "family": "call",
+          "path": "tests/fixtures/ts5_findings/module_plane/ambiguous_consumer.ts",
+          "span": {
+            "start": 106,
+            "end": 113
+          },
+          "reason": "ambiguous",
+          "detail": "collide"
+        },
+        {
+          "record": "call_site",
+          "callee": "collide",
+          "path": "tests/fixtures/ts5_findings/module_plane/ambiguous_consumer.ts",
+          "line": 4,
+          "fn": "pick",
+          "start": 106,
+          "end": 119
+        }
+      ]
+    }
+  },
+  "4_namespace": {
+    "resolve": {
+      "exit_code": 0,
+      "stdout": [
+        {
+          "record": "resolved_edge",
+          "caller_path": "tests/fixtures/ts5_findings/module_plane/namespace_consumer.ts",
+          "caller_name": "callMember",
+          "callee_path": "tests/fixtures/ts5_findings/module_plane/namespace_target.ts",
+          "callee_name": "member",
+          "caller_site_start": 111,
+          "caller_site_end": 123,
+          "callee_start": 7,
+          "callee_end": 65,
+          "kind": "import_resolve",
+          "resolution_origin": "module_plane"
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/ts5_findings/module_plane/namespace_consumer.ts",
+          "name": "*",
+          "local": "space",
+          "target_path": "tests/fixtures/ts5_findings/module_plane/namespace_target.ts",
+          "target_name": null,
+          "kind": "namespace",
+          "hops": 1
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/ts5_findings/module_plane/namespace_consumer.ts",
+          "name": "./namespace_target.js",
+          "local": "",
+          "target_path": "tests/fixtures/ts5_findings/module_plane/namespace_target.ts",
+          "target_name": null,
+          "kind": "module",
+          "hops": 1
+        },
+        {
+          "record": "call_site",
+          "callee": "space.member",
+          "path": "tests/fixtures/ts5_findings/module_plane/namespace_consumer.ts",
+          "line": 4,
+          "fn": "callMember",
+          "start": 111,
+          "end": 129
+        }
+      ]
+    }
+  },
+  "5_default": {
+    "resolve": {
+      "exit_code": 0,
+      "stdout": [
+        {
+          "record": "resolved_edge",
+          "caller_path": "tests/fixtures/ts5_findings/module_plane/default_consumer.ts",
+          "caller_name": "callDefault",
+          "callee_path": "tests/fixtures/ts5_findings/module_plane/default_target.ts",
+          "callee_name": "theDefault",
+          "caller_site_start": 114,
+          "caller_site_end": 128,
+          "callee_start": 15,
+          "callee_end": 77,
+          "kind": "import_resolve",
+          "resolution_origin": "module_plane"
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/ts5_findings/module_plane/default_consumer.ts",
+          "name": "./default_target.js",
+          "local": "",
+          "target_path": "tests/fixtures/ts5_findings/module_plane/default_target.ts",
+          "target_name": null,
+          "kind": "module",
+          "hops": 1
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/ts5_findings/module_plane/default_consumer.ts",
+          "name": "default",
+          "local": "renamedDefault",
+          "target_path": "tests/fixtures/ts5_findings/module_plane/default_target.ts",
+          "target_name": "theDefault",
+          "kind": "default",
+          "hops": 1
+        },
+        {
+          "record": "call_site",
+          "callee": "renamedDefault",
+          "path": "tests/fixtures/ts5_findings/module_plane/default_consumer.ts",
+          "line": 4,
+          "fn": "callDefault",
+          "start": 114,
+          "end": 134
+        }
+      ]
+    }
+  },
+  "6_shadow": {
+    "resolve": {
+      "exit_code": 0,
+      "stdout": [
+        {
+          "record": "resolved_edge",
+          "caller_path": "tests/fixtures/ts5_findings/module_plane/shadow_consumer.ts",
+          "caller_name": "check",
+          "callee_path": "tests/fixtures/ts5_findings/module_plane/shadow_export.ts",
+          "callee_name": "isIdentifier",
+          "caller_site_start": 110,
+          "caller_site_end": 122,
+          "callee_start": 63,
+          "callee_end": 135,
+          "kind": "import_resolve",
+          "resolution_origin": "module_plane"
+        },
+        {
+          "record": "resolved_edge",
+          "caller_path": "tests/fixtures/ts5_findings/module_plane/shadow_private.ts",
+          "caller_name": "parse",
+          "callee_path": "tests/fixtures/ts5_findings/module_plane/shadow_private.ts",
+          "callee_name": "isIdentifier",
+          "caller_site_start": 238,
+          "caller_site_end": 250,
+          "callee_start": 136,
+          "callee_end": 190,
+          "kind": "name_resolve",
+          "resolution_origin": "same_file"
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/ts5_findings/module_plane/shadow_consumer.ts",
+          "name": "./shadow_export.js",
+          "local": "",
+          "target_path": "tests/fixtures/ts5_findings/module_plane/shadow_export.ts",
+          "target_name": null,
+          "kind": "module",
+          "hops": 1
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/ts5_findings/module_plane/shadow_consumer.ts",
+          "name": "isIdentifier",
+          "local": "isIdentifier",
+          "target_path": "tests/fixtures/ts5_findings/module_plane/shadow_export.ts",
+          "target_name": "isIdentifier",
+          "kind": "local",
+          "hops": 1
+        },
+        {
+          "record": "call_site",
+          "callee": "isIdentifier",
+          "path": "tests/fixtures/ts5_findings/module_plane/shadow_consumer.ts",
+          "line": 4,
+          "fn": "check",
+          "start": 110,
+          "end": 128
+        },
+        {
+          "record": "call_site",
+          "callee": "isIdentifier",
+          "path": "tests/fixtures/ts5_findings/module_plane/shadow_private.ts",
+          "line": 8,
+          "fn": "parse",
+          "start": 238,
+          "end": 252
+        }
+      ]
+    }
+  },
+  "7_cycle": {
+    "resolve": {
+      "exit_code": 0,
+      "stdout": [
+        {
+          "record": "resolved_edge",
+          "caller_path": "tests/fixtures/ts5_findings/module_plane/cycle_consumer.ts",
+          "caller_name": "walk",
+          "callee_path": "tests/fixtures/ts5_findings/module_plane/cycle_b.ts",
+          "callee_name": "fromB",
+          "caller_site_start": 83,
+          "caller_site_end": 88,
+          "callee_start": 38,
+          "callee_end": 80,
+          "kind": "import_resolve",
+          "resolution_origin": "module_plane"
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/ts5_findings/module_plane/cycle_a.ts",
+          "name": "./cycle_b.js",
+          "local": "",
+          "target_path": "tests/fixtures/ts5_findings/module_plane/cycle_b.ts",
+          "target_name": null,
+          "kind": "module",
+          "hops": 1
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/ts5_findings/module_plane/cycle_b.ts",
+          "name": "./cycle_a.js",
+          "local": "",
+          "target_path": "tests/fixtures/ts5_findings/module_plane/cycle_a.ts",
+          "target_name": null,
+          "kind": "module",
+          "hops": 1
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/ts5_findings/module_plane/cycle_consumer.ts",
+          "name": "./cycle_a.js",
+          "local": "",
+          "target_path": "tests/fixtures/ts5_findings/module_plane/cycle_a.ts",
+          "target_name": null,
+          "kind": "module",
+          "hops": 1
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/ts5_findings/module_plane/cycle_consumer.ts",
+          "name": "fromB",
+          "local": "fromB",
+          "target_path": "tests/fixtures/ts5_findings/module_plane/cycle_b.ts",
+          "target_name": "fromB",
+          "kind": "star",
+          "hops": 2
+        },
+        {
+          "record": "call_site",
+          "callee": "fromB",
+          "path": "tests/fixtures/ts5_findings/module_plane/cycle_consumer.ts",
+          "line": 4,
+          "fn": "walk",
+          "start": 83,
+          "end": 90
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "steps": [
+    {
+      "action": "run",
+      "name": "resolve",
+      "arguments": [
+        "--resolve",
+        "--arms",
+        "call",
+        "tests/fixtures/ts5_findings/module_plane/barrel_consumer.ts",
+        "tests/fixtures/ts5_findings/module_plane/index.ts",
+        "tests/fixtures/ts5_findings/module_plane/helpers.ts",
+        "tests/fixtures/ts5_findings/module_plane/widgets.ts",
+        "tests/fixtures/ts5_findings/module_plane/other.ts"
+      ],
+      "cwd": "$manifest",
+      "expect_exit_code": 0,
+      "unasserted_stderr": true
+    }
+  ]
+}

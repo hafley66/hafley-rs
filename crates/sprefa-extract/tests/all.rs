@@ -621,3 +621,6 @@ mod wall_bench;
 #[cfg(feature = "rust-checker")]
 #[path = "support/15_rust_walk.rs"]
 mod rust_walk_support;
+
+#[path = "../bench/7_ts_module_scaling.rs"]
+mod t_ts_module_scaling;
