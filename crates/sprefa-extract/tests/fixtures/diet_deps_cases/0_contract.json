@@ -1,0 +1,3 @@
+{
+  "contract": "--deps over tests/fixtures/deps: the edge golden, the stop table, the specifier module/imported columns, the policy table, lexical parent traversal, the tsconfig degradation, and the named no-root error"
+}

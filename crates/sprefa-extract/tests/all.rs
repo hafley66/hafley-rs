@@ -642,3 +642,6 @@ mod ts_crawl_kinks_support;
 
 #[path = "support/21_rust_crawl_kinks.rs"]
 mod rust_crawl_kinks_support;
+
+#[path = "support/22_diet_deps.rs"]
+mod diet_deps_support;

@@ -1,0 +1,121 @@
+---
+source: tests/support/2_fixture_runner.rs
+---
+{
+  "0_contract": {
+    "file_edges": [
+      "{\"record\":\"file_edge\",\"src_path\":\"app.ts\",\"dst_path\":\"lib/bare.ts\",\"kind\":\"named\",\"symbols\":1}",
+      "{\"record\":\"file_edge\",\"src_path\":\"app.ts\",\"dst_path\":\"lib/bare.ts\",\"kind\":\"namespace\",\"symbols\":1}",
+      "{\"record\":\"file_edge\",\"src_path\":\"app.ts\",\"dst_path\":\"lib/helper.ts\",\"kind\":\"named\",\"symbols\":2}",
+      "{\"record\":\"file_edge\",\"src_path\":\"app.ts\",\"dst_path\":\"lib/mapped.ts\",\"kind\":\"named\",\"symbols\":1}",
+      "{\"record\":\"file_edge\",\"src_path\":\"app.ts\",\"dst_path\":\"lib/util.ts\",\"kind\":\"default\",\"symbols\":1}",
+      "{\"record\":\"file_edge\",\"src_path\":\"app.ts\",\"dst_path\":\"lib/util.ts\",\"kind\":\"named\",\"symbols\":1}",
+      "{\"record\":\"file_edge\",\"src_path\":\"app.ts\",\"dst_path\":\"lib/util.ts\",\"kind\":\"reexport\",\"symbols\":1}",
+      "{\"record\":\"file_edge\",\"src_path\":\"app.ts\",\"dst_path\":\"side.ts\",\"kind\":\"side_effect\",\"symbols\":1}",
+      "{\"record\":\"file_edge\",\"src_path\":\"app.ts\",\"dst_path\":\"widget/index.ts\",\"kind\":\"named\",\"symbols\":1}"
+    ],
+    "file_unresolved": [
+      "{\"record\":\"file_unresolved\",\"src_path\":\"app.ts\",\"module\":\"./gone.ts\",\"reason\":\"relative_unresolved\"}",
+      "{\"record\":\"file_unresolved\",\"src_path\":\"app.ts\",\"module\":\"/lib/util.ts\",\"reason\":\"absolute_path\"}",
+      "{\"record\":\"file_unresolved\",\"src_path\":\"app.ts\",\"module\":\"rxjs\",\"reason\":\"node_modules_boundary\"}"
+    ],
+    "specifier_rows": [
+      "{\"record\":\"specifier\",\"family\":\"call\",\"span\":{\"start\":9,\"end\":14},\"name\":\"exact\",\"kind\":\"named\",\"module\":\"./lib/util.ts\",\"imported\":null}",
+      "{\"record\":\"specifier\",\"family\":\"call\",\"span\":{\"start\":48,\"end\":55},\"name\":\"emitted\",\"kind\":\"named\",\"module\":\"./lib/helper.js\",\"imported\":null}",
+      "{\"record\":\"specifier\",\"family\":\"call\",\"span\":{\"start\":91,\"end\":105},\"name\":\"outer\",\"kind\":\"named\",\"module\":\"./lib/helper.js\",\"imported\":\"inner\"}",
+      "{\"record\":\"specifier\",\"family\":\"call\",\"span\":{\"start\":141,\"end\":149},\"name\":\"inferred\",\"kind\":\"named\",\"module\":\"./lib/bare\",\"imported\":null}",
+      "{\"record\":\"specifier\",\"family\":\"call\",\"span\":{\"start\":178,\"end\":193},\"name\":\"everything\",\"kind\":\"namespace\",\"module\":\"./lib/bare\",\"imported\":null}",
+      "{\"record\":\"specifier\",\"family\":\"call\",\"span\":{\"start\":222,\"end\":227},\"name\":\"boxed\",\"kind\":\"named\",\"module\":\"./widget\",\"imported\":null}",
+      "{\"record\":\"specifier\",\"family\":\"call\",\"span\":{\"start\":256,\"end\":262},\"name\":\"mapped\",\"kind\":\"named\",\"module\":\"@app/mapped\",\"imported\":null}",
+      "{\"record\":\"specifier\",\"family\":\"call\",\"span\":{\"start\":294,\"end\":296},\"name\":\"of\",\"kind\":\"named\",\"module\":\"rxjs\",\"imported\":null}",
+      "{\"record\":\"specifier\",\"family\":\"call\",\"span\":{\"start\":321,\"end\":328},\"name\":\"missing\",\"kind\":\"named\",\"module\":\"./gone.ts\",\"imported\":null}",
+      "{\"record\":\"specifier\",\"family\":\"call\",\"span\":{\"start\":358,\"end\":364},\"name\":\"rooted\",\"kind\":\"named\",\"module\":\"/lib/util.ts\",\"imported\":null}",
+      "{\"record\":\"specifier\",\"family\":\"call\",\"span\":{\"start\":395,\"end\":403},\"name\":\"defaults\",\"kind\":\"default\",\"module\":\"./lib/util.ts\",\"imported\":\"default\"}",
+      "{\"record\":\"specifier\",\"family\":\"call\",\"span\":{\"start\":433,\"end\":444},\"name\":\"./side.ts\",\"kind\":\"side_effect\",\"module\":\"./side.ts\",\"imported\":null}",
+      "{\"record\":\"specifier\",\"family\":\"call\",\"span\":{\"start\":455,\"end\":465},\"name\":\"reexported\",\"kind\":\"reexport\",\"module\":\"./lib/util.ts\",\"imported\":null}"
+    ],
+    "policy_rows": [
+      [
+        "./lib/util.ts",
+        "lib/util.ts",
+        "RelativeExact"
+      ],
+      [
+        "./lib/helper.js",
+        "lib/helper.ts",
+        "RelativeEmittedRewrite"
+      ],
+      [
+        "./lib/bare",
+        "lib/bare.ts",
+        "RelativeExtensionInferred"
+      ],
+      [
+        "./widget",
+        "widget/index.ts",
+        "RelativeIndexFile"
+      ],
+      [
+        "@app/mapped",
+        "lib/mapped.ts",
+        "TsconfigPaths"
+      ],
+      [
+        "rxjs",
+        null,
+        "NodeModulesBoundary"
+      ],
+      [
+        "node:fs",
+        null,
+        "NodeModulesBoundary"
+      ],
+      [
+        "/etc/passwd",
+        null,
+        "AbsolutePath"
+      ],
+      [
+        "./gone.ts",
+        null,
+        "RelativeUnresolved"
+      ]
+    ],
+    "parent_traversal": [
+      [
+        "a/b/c.ts",
+        "../shared.ts",
+        "a/shared.ts"
+      ],
+      [
+        "a/b/c.ts",
+        "../../top.ts",
+        "top.ts"
+      ],
+      [
+        "a/b/c.ts",
+        "../../../../top.ts",
+        "top.ts"
+      ],
+      [
+        "a/b/c.ts",
+        "./nope.ts",
+        null
+      ]
+    ],
+    "tsconfig": {
+      "base_url": "",
+      "paths": {
+        "@app/*": [
+          "lib/*"
+        ]
+      },
+      "broken_parses_to_default": true,
+      "broken_resolve": [
+        null,
+        "NodeModulesBoundary"
+      ]
+    },
+    "no_root_error": "error: the following required arguments were not provided:\n  --root <DIR>\n\nUsage: ryii --root <DIR> --deps <PATH>...\n\nFor more information, try '--help'.\n"
+  }
+}
