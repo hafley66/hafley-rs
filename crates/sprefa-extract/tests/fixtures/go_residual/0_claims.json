@@ -1,0 +1,22 @@
+{
+  "claims": [
+    { "caller": "callAlias", "callee": "BasePing", "count": 1, "file": "lib.go" },
+    { "caller": "callAliasChain", "callee": "BasePing", "count": 1, "file": "lib.go" },
+    { "caller": "callFieldHop", "callee": "BasePing", "count": 1, "file": "lib.go" },
+    { "caller": "callFieldHopTwice", "callee": "Make", "count": 1, "file": "lib.go" },
+    { "caller": "callImportRoot", "callee": "BasePing", "count": 1, "file": "lib.go" },
+    { "caller": "callRangeOverField", "callee": "BasePing", "count": 1, "file": "lib.go" },
+    { "caller": "callRangeOverChannel", "callee": "BasePing", "count": 1, "file": "lib.go" },
+    { "caller": "callRangeIndexOnly", "callee": "BasePing", "count": 0 },
+    { "caller": "callTypeSwitch", "callee": "BasePing", "count": 1, "file": "lib.go" },
+    { "caller": "callFieldRead", "callee": "BasePing", "count": 1, "file": "lib.go" },
+    { "caller": "callIndexRead", "callee": "BasePing", "count": 1, "file": "lib.go" },
+    { "caller": "callMultiValue", "callee": "BasePing", "count": 1, "file": "lib.go" },
+    { "caller": "callMultiValue", "callee": "InnerPing", "count": 1, "file": "lib.go" },
+    { "caller": "callTypeAssert", "callee": "BasePing", "count": 1, "file": "lib.go" },
+    { "caller": "callPointerConversion", "callee": "BasePing", "count": 1, "file": "lib.go" },
+    { "caller": "callOwnDirName", "callee": "NewThing", "count": 1, "file": "lib.go" },
+    { "caller": "callQualifiedFreeFunc", "callee": "IsThing", "count": 1, "file": "lib.go" },
+    { "caller": "callThroughShadowedName", "callee": "BasePing", "count": 1, "file": "lib.go" }
+  ]
+}

@@ -627,3 +627,6 @@ mod t_ts_module_scaling;
 
 #[path = "support/16_rust_call_contract.rs"]
 mod rust_call_contract_support;
+
+#[path = "support/17_go_residual.rs"]
+mod go_residual_support;

@@ -1,0 +1,139 @@
+---
+source: tests/support/2_fixture_runner.rs
+---
+{
+  "0_claims": {
+    "callAlias": [
+      {
+        "callee": "BasePing",
+        "path": "lib/lib.go",
+        "kind": "name_resolve"
+      }
+    ],
+    "callAliasChain": [
+      {
+        "callee": "BasePing",
+        "path": "lib/lib.go",
+        "kind": "name_resolve"
+      }
+    ],
+    "callFieldHop": [
+      {
+        "callee": "BasePing",
+        "path": "lib/lib.go",
+        "kind": "name_resolve"
+      }
+    ],
+    "callFieldHopTwice": [
+      {
+        "callee": "Make",
+        "path": "lib/lib.go",
+        "kind": "name_resolve"
+      }
+    ],
+    "callFieldRead": [
+      {
+        "callee": "BasePing",
+        "path": "lib/lib.go",
+        "kind": "name_resolve"
+      }
+    ],
+    "callImportRoot": [
+      {
+        "callee": "BasePing",
+        "path": "lib/lib.go",
+        "kind": "name_resolve"
+      },
+      {
+        "callee": "MakeBase",
+        "path": "lib/lib.go",
+        "kind": "import_resolve"
+      }
+    ],
+    "callIndexRead": [
+      {
+        "callee": "BasePing",
+        "path": "lib/lib.go",
+        "kind": "name_resolve"
+      }
+    ],
+    "callMultiValue": [
+      {
+        "callee": "BasePing",
+        "path": "lib/lib.go",
+        "kind": "name_resolve"
+      },
+      {
+        "callee": "InnerPing",
+        "path": "lib/lib.go",
+        "kind": "name_resolve"
+      },
+      {
+        "callee": "Pair",
+        "path": "lib/lib.go",
+        "kind": "import_resolve"
+      }
+    ],
+    "callOwnDirName": [
+      {
+        "callee": "NewThing",
+        "path": "lib/lib.go",
+        "kind": "name_resolve"
+      }
+    ],
+    "callPointerConversion": [
+      {
+        "callee": "BasePing",
+        "path": "lib/lib.go",
+        "kind": "name_resolve"
+      }
+    ],
+    "callQualifiedFreeFunc": [
+      {
+        "callee": "IsThing",
+        "path": "lib/lib.go",
+        "kind": "import_resolve"
+      }
+    ],
+    "callRangeOverChannel": [
+      {
+        "callee": "BasePing",
+        "path": "lib/lib.go",
+        "kind": "name_resolve"
+      }
+    ],
+    "callRangeOverField": [
+      {
+        "callee": "BasePing",
+        "path": "lib/lib.go",
+        "kind": "name_resolve"
+      }
+    ],
+    "callThroughShadowedName": [
+      {
+        "callee": "BasePing",
+        "path": "lib/lib.go",
+        "kind": "name_resolve"
+      },
+      {
+        "callee": "MakeBase",
+        "path": "lib/lib.go",
+        "kind": "import_resolve"
+      }
+    ],
+    "callTypeAssert": [
+      {
+        "callee": "BasePing",
+        "path": "lib/lib.go",
+        "kind": "name_resolve"
+      }
+    ],
+    "callTypeSwitch": [
+      {
+        "callee": "BasePing",
+        "path": "lib/lib.go",
+        "kind": "name_resolve"
+      }
+    ]
+  }
+}
