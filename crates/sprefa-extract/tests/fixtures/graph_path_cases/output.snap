@@ -1,0 +1,52 @@
+---
+source: tests/support/2_fixture_runner.rs
+---
+{
+  "0_paths": {
+    "call_paths": [
+      [
+        "chainB",
+        1,
+        1
+      ],
+      [
+        "chainC",
+        2,
+        2
+      ],
+      [
+        "chainD",
+        3,
+        3
+      ]
+    ],
+    "type_path": [
+      "type",
+      "Widget",
+      1
+    ],
+    "flow_depths": [
+      1
+    ],
+    "flow_plane_all": true,
+    "digest_door": {
+      "path_and_digest_streams_equal": true,
+      "param_row": [
+        22,
+        38,
+        "children"
+      ],
+      "from_path_is_digest": true,
+      "depth_one_answers": [
+        [
+          "49:57",
+          5
+        ]
+      ]
+    },
+    "slice_statements": [
+      "if (flag) {\n    allow();\n  } else {\n    deny();\n  }",
+      "{\n    allow();\n  }"
+    ]
+  }
+}

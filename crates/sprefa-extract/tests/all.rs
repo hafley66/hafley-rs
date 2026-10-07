@@ -672,3 +672,6 @@ mod stratify_support;
 
 #[path = "support/31_query_cli.rs"]
 mod query_cli_support;
+
+#[path = "support/32_graph_paths.rs"]
+mod graph_paths_support;

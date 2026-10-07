@@ -1,0 +1,3 @@
+{
+  "fixtures": ["tests/fixtures/graph_ts (call/type/slice arms)", "tests/fixtures/resolve (flow seed)", "temp sqlite digest door"]
+}
