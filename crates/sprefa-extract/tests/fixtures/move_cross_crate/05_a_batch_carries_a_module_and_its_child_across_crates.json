@@ -65,7 +65,7 @@
         "move",
         "--list",
         "$work/state/moves.tsv",
-        "--commit",
+        "--apply",
         "--root",
         "$work/repo",
         "--state",

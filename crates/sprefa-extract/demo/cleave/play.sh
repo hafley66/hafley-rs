@@ -31,7 +31,7 @@ play_step() {
   echo "== step $steps: $label"
   echo "-- ryi cleave $*"
   HAFLEY_TRACE="$play/trace-$steps.json" timeout 10 "$ryi" cleave "$@" \
-    --root "$repo" --state "$state" --commit
+    --root "$repo" --state "$state" --apply
   git add -A
   git -c user.email=cleave@demo -c user.name=cleave-demo commit -qm "cleave $steps: $label"
   git log --oneline

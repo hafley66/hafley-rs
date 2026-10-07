@@ -79,9 +79,9 @@
         "move",
         "--list",
         "$work/state/moves.tsv",
-        "--root",
+        "--roots",
         "$work/alpha",
-        "--root",
+        "--roots",
         "$work/beta",
         "--state",
         "$work/state"

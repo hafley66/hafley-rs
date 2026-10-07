@@ -50,7 +50,7 @@
         "cleave",
         "src/lib.rs#target",
         "src/config.rs",
-        "--commit",
+        "--apply",
         "--root",
         "$work/repo",
         "--state",

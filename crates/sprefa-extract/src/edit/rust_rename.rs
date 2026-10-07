@@ -148,6 +148,39 @@ impl Rename for RustSource {
                 );
             }
         }
+        // A file the module graph has no home for is never harvested; each
+        // spelling there may reach the anchor, so it abstains with the reason.
+        for (rel, reason) in &corpus.failures {
+            let Some(scan) = corpus.scans.get(rel) else { continue };
+            if !cx.text(rel).is_some_and(|text| text.contains(request.old.as_str())) {
+                continue;
+            }
+            let line_starts = cx
+                .text(rel)
+                .map(|text| build_line_starts(&text))
+                .unwrap_or_default();
+            let spans = scan
+                .paths
+                .iter()
+                .map(|path| path.span)
+                .chain(scan.opaque.iter().map(|token| token.span))
+                .chain(
+                    scan.uses
+                        .iter()
+                        .filter(|leaf| !matches!(leaf.kind, LeafKind::Glob))
+                        .map(|leaf| leaf.span),
+                )
+                .chain(scan.methods.iter().map(|(span, _, _)| *span));
+            for span in spans {
+                seats.push(SymbolSeat {
+                    file: rel.clone(),
+                    span,
+                    line: line_starts.partition_point(|start| *start <= span.start) as u32,
+                    reaches: reason.clone(),
+                    form: "file has no module home",
+                });
+            }
+        }
         let mut abstains = Vec::new();
         if typed_field_access {
             for (file, span, receiver, _) in untyped_fields {
@@ -716,12 +749,22 @@ impl Corpus {
                     }
                     _ => false,
                 };
-                if variant
-                    || self
-                        .resolve(home, &path.chain, &path.prefix)
-                        .is_some_and(|module| nameable.contains(&module))
-                {
-                    refs.push(seat(rel, path.span, path.role, &request.old));
+                match self.resolve(home, &path.chain, &path.prefix) {
+                    _ if variant => refs.push(seat(rel, path.span, path.role, &request.old)),
+                    Some(module) if nameable.contains(&module) => {
+                        refs.push(seat(rel, path.span, path.role, &request.old))
+                    }
+                    Some(_) => {}
+                    // A prefix that names no module (a type, an unloaded crate)
+                    // may still reach the anchor: abstain, never drop the use.
+                    None => seats.push(SymbolSeat {
+                        file: rel.to_string(),
+                        span: path.span,
+                        line: line_starts.partition_point(|start| *start <= path.span.start)
+                            as u32,
+                        reaches: path.prefix.join("::"),
+                        form: "path prefix unresolved",
+                    }),
                 }
                 continue;
             }
@@ -825,11 +868,19 @@ impl Corpus {
                 continue;
             };
             if !prefix.is_empty() {
-                if self
-                    .resolve(home, &token.chain, prefix)
-                    .is_some_and(|module| nameable.contains(&module))
-                {
-                    refs.push(seat(rel, token.span, RefRole::Read, &request.old));
+                match self.resolve(home, &token.chain, prefix) {
+                    Some(module) if nameable.contains(&module) => {
+                        refs.push(seat(rel, token.span, RefRole::Read, &request.old))
+                    }
+                    Some(_) => {}
+                    None => seats.push(SymbolSeat {
+                        file: rel.to_string(),
+                        span: token.span,
+                        line: line_starts.partition_point(|start| *start <= token.span.start)
+                            as u32,
+                        reaches: prefix.join("::"),
+                        form: "path prefix unresolved",
+                    }),
                 }
                 continue;
             }
@@ -1247,9 +1298,14 @@ impl Scan<'_> {
                     let Some(span) = self.exact(ident.span()) else {
                         continue;
                     };
-                    let (prefix, member) = match is_colon(trees.get(index + 1)) {
-                        true => (Some(path_prefix(&trees, index)), false),
-                        false => (None, is_dot(trees.get(index.wrapping_sub(1)))),
+                    // `a::b::old` carries the prefix `a::b`; `old::x` is a path head
+                    // (empty prefix) no local can shadow; anything else is bare.
+                    let (prefix, member) = if is_colon(trees.get(index.wrapping_sub(1))) {
+                        (Some(path_prefix(&trees, index)), false)
+                    } else if is_colon(trees.get(index + 1)) {
+                        (Some(Vec::new()), false)
+                    } else {
+                        (None, is_dot(trees.get(index.wrapping_sub(1))))
                     };
                     self.out.opaque.push(OpaqueToken {
                         span,

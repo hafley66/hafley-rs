@@ -10,7 +10,7 @@ fn cleave_list_emits_one_json_plan_line_per_row() {
         let fixture = Fixture::from_dir("dogfood_merge");
         let mut args = vec!["cleave", "--list", "merge.tsv", "--json"];
         if mode == "commit" {
-            args.push("--commit");
+            args.push("--apply");
         }
         let output = fixture.run(&fixture.root, &args);
         assert!(

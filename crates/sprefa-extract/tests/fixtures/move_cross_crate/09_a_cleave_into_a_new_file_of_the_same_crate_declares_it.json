@@ -46,7 +46,7 @@
         "cleave",
         "$work/repo/alpha/src/shapes.rs#perimeter",
         "$work/repo/alpha/src/round.rs",
-        "--commit",
+        "--apply",
         "--root",
         "$work/repo",
         "--state",

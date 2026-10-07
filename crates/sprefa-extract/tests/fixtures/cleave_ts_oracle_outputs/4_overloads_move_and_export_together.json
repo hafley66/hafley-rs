@@ -27,7 +27,7 @@
     "cleave",
     "source.ts#wrap",
     "dest.ts",
-    "--commit",
+    "--apply",
     "--root",
     "$work/repo",
     "--state",

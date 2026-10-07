@@ -4,24 +4,24 @@ expression: snapshot
 ---
 === top (exit 0) ===
 stdout:
-ryi <PATH>...                      per-file facts from files, directories or globs
-ryi capabilities                   declared languages, checkers and edit support
-ryi schema                         JSONL record contract
-ryi fast <PATH>...                 written cross-file call and type facts
-ryi slow <PATH>...                 compiler and saved SCIP evidence
-ryi scip <ROOT>                    raw SCIP facts or index records
-ryi ingest <PATH>...               validated foreign TSI rows
-ryi query --query <SCM> <PATH>...  captured syntax rows
-ryi graph <question> <PATH>...     callers, type uses, paths or slices
-ryi trail [N]                      recorded runs and their evidence
-ryi diff --from <REV> --to <REV>   fact changes between revisions
-ryi watch --root <DIR>             worktree fact deltas
-ryi stratify --from <ENTRY>        dependency-first file ranks
-ryi rename <FILE#OLD> <NEW>        bound occurrence edits, dry-run first
-ryi move <OLD> <NEW>               file move and repaired import specifiers
-ryi cleave <FILE#ITEM> <DEST>      item move with its imports and callers
-ryi region <FILE> <ID>             generated-region drift or replacement
-ryi help <verb|flags>              examples, verb flags or shared flags
+ryi <PATH>...                            per-file facts from files, directories or globs
+ryi capabilities                         declared languages, checkers and edit support
+ryi schema                               JSONL record contract
+ryi fast <PATH>...                       written cross-file call and type facts
+ryi slow <PATH>...                       compiler and saved SCIP evidence
+ryi scip <ROOT>                          raw SCIP facts or index records
+ryi ingest <PATH>...                     validated foreign TSI rows
+ryi query --query <SCM> <PATH>...        captured syntax rows
+ryi graph <question> <PATH>...           callers, type uses, paths or slices
+ryi trail [N]                            recorded runs and their evidence
+ryi diff --rev <BASE..TARGET>            fact changes between revisions
+ryi watch --root <DIR>                   worktree fact deltas
+ryi stratify --rank <ENTRY>              dependency-first file ranks
+ryi rename <FILE#OLD> <NEW> [PATH]...    bound occurrence edits, dry-run first
+ryi move <OLD> <NEW> [PATH]...           file move and repaired import specifiers
+ryi cleave <FILE#ITEM> <DEST> [PATH]...  item move with its imports and callers
+ryi region <FILE> <ID>                   generated-region drift or replacement
+ryi help <verb|flags>                    examples, verb flags or shared flags
 stderr:
 === capabilities (exit 0) ===
 stdout:
@@ -87,7 +87,7 @@ e.g. ryi graph --callers src/a.ts#slug --root . src/
   --call-path <[PATH#]NAME>  shortest call paths
   --type-path <[PATH#]NAME>  shortest type paths
 Input: --entry <FILE> --depth <N> --root <DIR>
-Flags: --fast-receivers <written> --pattern <GLOB> --flow-path <BLOB@START:END> --slice <PATH:BYTE> --sqlite <PATH> --timeout <SECS> --at <REV> --compare <REV> --scip-index <FILE>
+Flags: --fast-receivers <written> --pattern <GLOB> --flow-path <BLOB@START:END> --slice <PATH:BYTE> --sqlite <PATH> --timeout <SECS> --rev <REV|BASE..TARGET> --scip-index <FILE>
 Switches: --reverse --slow --rust-checker --ts-checker --go-checker
 stderr:
 === trail (exit 0) ===
@@ -98,11 +98,11 @@ e.g. ryi trail 1
 stderr:
 === diff (exit 0) ===
 stdout:
-Usage: ryi diff [OPTIONS] --from <REV> --to <REV>
+Usage: ryi diff [OPTIONS] --rev <REV|BASE..TARGET>
 Fact delta between two commits
-e.g. ryi diff --from HEAD~1 --to HEAD --root .
+e.g. ryi diff --rev HEAD~1..HEAD --root .
 Input: --root <DIR>
-Flags: --from <REV> --to <REV> --pattern <GLOB> --arms <ARMS> --sqlite <PATH>
+Flags: --rev <REV|BASE..TARGET> --pattern <GLOB> --arms <ARMS> --sqlite <PATH>
 stderr:
 === watch (exit 0) ===
 stdout:
@@ -117,43 +117,43 @@ stderr:
 stdout:
 Usage: ryi stratify [OPTIONS] [PATH]...
 Rank files from entrypoints and propose dependency-first numeric prefixes
-e.g. ryi stratify --from src/main.ts --root . src/
+e.g. ryi stratify --rank src/main.ts --root . src/
 Input: --entry <FILE> --depth <N> --root <DIR>
-Flags: --pattern <GLOB> --from <PATH[:NAME][=RANK]> --base-lines <N> --kind <KIND>
+Flags: --pattern <GLOB> --rank <PATH[#NAME][=RANK]> --base-lines <N> --kind <KIND>
 stderr:
 === rename (exit 0) ===
 stdout:
-Usage: ryi rename [OPTIONS] [TARGET] [NEW]
+Usage: ryi rename [OPTIONS] [TARGET] [NEW] [PATH]...
 Rename a symbol and every occurrence bound to it
 e.g. ryi rename src/a.ts#slug slugged --root .
-Input: --root <ROOT>
-Flags: --list <LIST> --state <STATE> --at <AT> --verify-scip <INDEX>
-Switches: --slow --commit --text-refs --no-scip-merge --json
+Input: --entry <FILE> --depth <N> --root <DIR>
+Flags: --list <FILE> --pattern <GLOB> --state <DIR> --offset <BYTE> --scip-index <FILE>
+Switches: --apply --text-refs --tracked --slow --no-scip-merge --json
 stderr:
 === move (exit 0) ===
 stdout:
-Usage: ryi move [OPTIONS] [OLD] [NEW]
+Usage: ryi move [OPTIONS] [OLD] [NEW] [PATH]...
 Move a file and repair every specifier that names it
 e.g. ryi move src/a.ts src/b.ts --root .
-Input: --root <ROOT>
-Flags: --list <LIST> --verify-cwd <VERIFY_CWD> --state <STATE> --verify <VERIFY>
-Switches: --commit --shim --relocate-mod --text-refs
+Input: --entry <FILE> --depth <N> --root <DIR>
+Flags: --list <FILE> --pattern <GLOB> --state <DIR> --roots <DIR> --verify-cwd <DIR> --verify <VERIFY>
+Switches: --apply --text-refs --tracked --shim --relocate-mod
 stderr:
 === cleave (exit 0) ===
 stdout:
-Usage: ryi cleave [OPTIONS] [TARGET] [DEST]
+Usage: ryi cleave [OPTIONS] [TARGET] [DEST] [PATH]...
 Move one item into another file, with its imports
 e.g. ryi cleave src/a.ts#slug src/slug.ts --root .
-Input: --root <ROOT>
-Flags: --list <LIST> --state <STATE> --verify <VERIFY>
-Switches: --drag --slow --commit --text-refs --json
+Input: --entry <FILE> --depth <N> --root <DIR>
+Flags: --list <FILE> --pattern <GLOB> --state <DIR> --verify <VERIFY>
+Switches: --apply --text-refs --tracked --drag --slow --json
 stderr:
 === region (exit 0) ===
 stdout:
 Usage: ryi region [OPTIONS] <TARGET> <ID>
 Replace a generated region between sprefa markers
 e.g. ryi region gen.rs demo --generated body.txt
-Flags: --generated <GENERATED> --state <STATE>
+Flags: --generated <GENERATED> --state <DIR>
 Switches: --apply
 stderr:
 === help (exit 0) ===

@@ -17,10 +17,10 @@ fn shared_names_provider_routes_graph_and_edits() {
                 "1_shared.rs",
                 "2_bin.rs",
             ],
-            "rename" => &["rename", "1_shared.rs#target", "changed", "--commit"],
-            "move" => &["move", "1_shared.rs", "4_shared.rs", "--commit"],
-            "orphan" => &["rename", "3_orphan.rs#lost", "changed", "--commit"],
-            "method" => &["rename", "1_shared.rs#method", "changed", "--commit"],
+            "rename" => &["rename", "1_shared.rs#target", "changed", "--apply"],
+            "move" => &["move", "1_shared.rs", "4_shared.rs", "--apply"],
+            "orphan" => &["rename", "3_orphan.rs#lost", "changed", "--apply"],
+            "method" => &["rename", "1_shared.rs#method", "changed", "--apply"],
             _ => unreachable!(),
         };
         let output = if case == "graph" {

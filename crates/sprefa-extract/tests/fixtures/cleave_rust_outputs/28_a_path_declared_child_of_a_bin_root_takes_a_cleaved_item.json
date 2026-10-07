@@ -32,7 +32,7 @@
         "cleave",
         "src/bin/tool.rs#two",
         "src/bin/tool/1_a.rs",
-        "--commit",
+        "--apply",
         "--root",
         "$work/repo",
         "--state",

@@ -14,8 +14,8 @@ pub(super) fn scoped_policy(ryi: &Ryi) -> Result<ScopedFastReceivers, String> {
 pub(super) fn file_args_from_fast(fast: FastArgs) -> FileArgs {
     FileArgs {
         inputs: fast.inputs,
-        sqlite: fast.sqlite,
-        lines: fast.lines,
+        sqlite: fast.store.sqlite,
+        lines: fast.spans.lines,
         fast_receivers: fast.fast_receivers,
         ..FileArgs::default()
     }

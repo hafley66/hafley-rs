@@ -1,4 +1,4 @@
-//! Every ladder symbol, plus rename_merge with and without the SCIP merge, renamed with `--commit`
+//! Every ladder symbol, plus rename_merge with and without the SCIP merge, renamed with `--apply`
 //! in a temp copy, then `cargo check --offline`: one row per rename, `uses scip_diff check`.
 
 #![cfg(feature = "cli")]
@@ -90,7 +90,7 @@ fn every_ladder_rename_compiles() {
         let renamed = format!("{symbol}Zz");
         let (root_arg, state_arg) = (root.to_string_lossy(), state.to_string_lossy());
         let mut args = vec![
-            "rename", &anchor, &renamed, "--root", &root_arg, "--state", &state_arg, "--commit",
+            "rename", &anchor, &renamed, "--root", &root_arg, "--state", &state_arg, "--apply",
         ];
         args.extend(flag);
         let (_, plan) = run(env!("CARGO_BIN_EXE_ryii"), &args, &root, &[]);

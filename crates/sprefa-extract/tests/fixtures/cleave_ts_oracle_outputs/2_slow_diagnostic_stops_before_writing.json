@@ -28,7 +28,7 @@
     "source.ts#value",
     "dest.ts",
     "--slow",
-    "--commit",
+    "--apply",
     "--root",
     "$work/repo",
     "--state",

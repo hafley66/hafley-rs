@@ -46,7 +46,7 @@
         "cleave",
         "src/source.rs#Packet",
         "src/dest.rs",
-        "--commit",
+        "--apply",
         "--root",
         "$work/repo",
         "--state",

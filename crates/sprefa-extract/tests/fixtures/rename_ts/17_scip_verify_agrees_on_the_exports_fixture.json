@@ -84,7 +84,7 @@
         "$work/repo",
         "--state",
         "$work/state",
-        "--verify-scip",
+        "--scip-index",
         "$work/ts.index"
       ],
       "success": true,

@@ -20,7 +20,7 @@
     {"action": "git", "args": ["add", "-A"], "cwd": "$work/shared/repo"},
     {"action": "git", "args": ["-c", "user.email=extract@move.test", "-c", "user.name=extract-move", "commit", "-qm", "fixture"], "cwd": "$work/shared/repo"},
     {"action": "write", "path": "$work/shared/state/moves.tsv", "text": "# three files leave src/ for lib/\n\nsrc/a.ts\tlib/a.ts\nsrc/b.ts\tlib/b.ts\nsrc/c.ts\tlib/c.ts\n"},
-    {"action": "command", "arguments": ["move", "--list", "$work/shared/state/moves.tsv", "--root", "$work/shared/repo", "--state", "$work/shared/state", "--commit"], "cwd": "$work/shared/repo", "raw_stdout": true, "capture": "shared_commit", "stdout_redactions": [{"pattern": "(?m)^(stage )[0-9a-f]{64}( committed| dry run, tree untouched)$", "replacement": "${1}$$STAGE${2}"}]},
+    {"action": "command", "arguments": ["move", "--list", "$work/shared/state/moves.tsv", "--root", "$work/shared/repo", "--state", "$work/shared/state", "--apply"], "cwd": "$work/shared/repo", "raw_stdout": true, "capture": "shared_commit", "stdout_redactions": [{"pattern": "(?m)^(stage )[0-9a-f]{64}( committed| dry run, tree untouched)$", "replacement": "${1}$$STAGE${2}"}]},
     {"action": "claim", "name": "shared_moves", "kind": "line_count", "cell": "shared_commit.stdout", "line_prefix": "move ", "expect": 3},
     {"action": "claim", "name": "shared_replaces", "kind": "line_count", "cell": "shared_commit.stdout", "line_prefix": "replace ", "expect": 2},
     {"action": "claim", "name": "shared_stages", "kind": "count_substring", "cell": "shared_commit.stdout", "text": "committed", "expect": 2},
@@ -59,7 +59,7 @@
     {"action": "git", "args": ["add", "-A"], "cwd": "$work/mixed/repo"},
     {"action": "git", "args": ["-c", "user.email=extract@move.test", "-c", "user.name=extract-move", "commit", "-qm", "fixture"], "cwd": "$work/mixed/repo"},
     {"action": "write", "path": "$work/mixed/state/moves.tsv", "text": "lib/b.pl\tcore/b.pl\nsrc/x.ts\tsrc/deep/x.ts\n"},
-    {"action": "command", "arguments": ["move", "--list", "$work/mixed/state/moves.tsv", "--root", "$work/mixed/repo", "--state", "$work/mixed/state", "--commit"], "cwd": "$work/mixed/repo", "raw_stdout": true, "capture": "mixed_commit", "stdout_redactions": [{"pattern": "(?m)^(stage )[0-9a-f]{64}( committed| dry run, tree untouched)$", "replacement": "${1}$$STAGE${2}"}]},
+    {"action": "command", "arguments": ["move", "--list", "$work/mixed/state/moves.tsv", "--root", "$work/mixed/repo", "--state", "$work/mixed/state", "--apply"], "cwd": "$work/mixed/repo", "raw_stdout": true, "capture": "mixed_commit", "stdout_redactions": [{"pattern": "(?m)^(stage )[0-9a-f]{64}( committed| dry run, tree untouched)$", "replacement": "${1}$$STAGE${2}"}]},
     {"action": "claim", "name": "mixed_moves", "kind": "line_count", "cell": "mixed_commit.stdout", "line_prefix": "move ", "expect": 2},
     {"action": "claim", "name": "mixed_replaces", "kind": "line_count", "cell": "mixed_commit.stdout", "line_prefix": "replace ", "expect": 1},
     {"action": "file_equals", "path": "$work/mixed/repo/a.pl", "text": ":- module(a, [check/0]).\n:- use_module('lib/b').\n\ncheck :- true.\n", "capture": "mixed_prolog_untouched"},
@@ -119,7 +119,7 @@
     {"action": "git", "args": ["-c", "user.email=extract@move.test", "-c", "user.name=extract-move", "commit", "-qm", "fixture"], "cwd": "$work/both/repo"},
     {"action": "write", "path": "$work/both/state/moves.tsv", "text": "# three files leave src/ for lib/\n\nsrc/a.ts\tlib/a.ts\nsrc/b.ts\tlib/b.ts\nsrc/c.ts\tlib/c.ts\n"},
     {"action": "command", "arguments": ["move", "$work/both/repo/src/a.ts", "$work/both/repo/lib/a.ts", "--list", "$work/both/state/moves.tsv", "--root", "$work/both/repo", "--state", "$work/both/state"], "success": false, "capture": "both_refusal"},
-    {"action": "claim", "name": "both_message", "kind": "contains", "cell": "both_refusal.stderr", "text": "--list cannot be combined with OLD NEW"},
+    {"action": "claim", "name": "both_message", "kind": "contains", "cell": "both_refusal.stderr", "text": "lib/a.ts does not exist"},
 
     {"action": "api", "name": "stale_guard", "api": "stale_replace_guard", "root": "$work/stale/repo"}
   ]

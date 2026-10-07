@@ -58,7 +58,7 @@ fn self_rename_is_judged_by_rustc() {
         &state,
         "src/edit/_1_rename_cx.rs#RenameCx",
         "SymbolCx",
-        &["--commit"],
+        &["--apply"],
     );
     assert!(
         output.status.success(),

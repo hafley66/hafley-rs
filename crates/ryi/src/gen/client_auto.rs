@@ -184,7 +184,7 @@ async fn run() -> Result<i32, ClientError> {
         _ => return Err(format!("no HTTP path for {verb}").into()),
     };
     let mut builder = Request::builder().method(method).uri(format!("http://ryi{path}")).header("te", "trailers");
-    let body = if matches!(verb, "extract" | "fast" | "slow" | "scip" | "graph" | "query" | "region" | "ingest") && daemon_auto::request_uses_stdin(verb, &request.args) {
+    let body = if matches!(verb, "extract" | "fast" | "slow" | "scip" | "graph" | "cleave" | "move" | "rename" | "query" | "region" | "ingest" | "stratify") && daemon_auto::request_uses_stdin(verb, &request.args) {
         let metadata = base64::engine::general_purpose::STANDARD.encode(json.as_bytes());
         builder = builder.header("x-ryi-request", metadata).header("content-type", "application/octet-stream");
         let stream = ReaderStream::new(tokio::io::stdin()).map(|chunk| chunk.map(Frame::data));

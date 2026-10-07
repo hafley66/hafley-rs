@@ -84,13 +84,22 @@ impl MoveCx {
         Self::from_files(root, files)
     }
 
-    /// Open a corpus, optionally including untracked files when the caller
-    /// explicitly supplied its root.
-    pub fn open_with_untracked(root: &Path, include_untracked: bool) -> Result<Self, String> {
+    /// Open the corpus: every file `.gitignore` keeps, or git-tracked files
+    /// only when `tracked`.
+    pub fn open_corpus(root: &Path, tracked: bool) -> Result<Self, String> {
         let io_root = hafley_scm::read::io_path(root);
         let root = io_root.as_path();
-        let files = walk_files_with_untracked(root, include_untracked)?;
+        let files = walk_corpus(root, tracked)?;
         Self::from_files(root, files)
+    }
+
+    /// Keep only `keep` (root-relative) among the files the plan edits. The
+    /// existence index stays whole, so moves still see every file.
+    pub fn scoped(mut self, keep: Option<&std::collections::HashSet<String>>) -> Self {
+        if let Some(keep) = keep {
+            self.files.retain(|file| keep.contains(file));
+        }
+        self
     }
 
     fn from_files(root: &Path, files: Vec<String>) -> Result<Self, String> {
@@ -256,16 +265,14 @@ impl MoveCx {
 /// The path inventory shared by every edit verb. A context calls this once
 /// when its invocation opens and keeps the resulting path order throughout.
 pub fn walk_files(root: &Path) -> Result<Vec<String>, String> {
-    walk_files_with_untracked(root, true)
+    walk_corpus(root, false)
 }
 
-pub fn walk_files_with_untracked(
-    root: &Path,
-    include_untracked: bool,
-) -> Result<Vec<String>, String> {
+/// Every file `.gitignore` keeps under `root`, or `git ls-files` when `tracked`.
+pub fn walk_corpus(root: &Path, tracked: bool) -> Result<Vec<String>, String> {
     let io_root = hafley_scm::read::io_path(root);
     let root = io_root.as_path();
-    if !include_untracked {
+    if tracked {
         let output = std::process::Command::new("git")
             .args(["-C", &root.to_string_lossy(), "ls-files", "-z"])
             .output();
@@ -287,10 +294,7 @@ pub fn walk_files_with_untracked(
     let mut files = Vec::new();
     let walk = WalkBuilder::new(root)
         .hidden(false)
-        .ignore(false)
-        .git_ignore(false)
-        .git_global(false)
-        .git_exclude(false)
+        .require_git(false)
         .filter_entry(|entry| !SKIP_DIRS.contains(&entry.file_name().to_string_lossy().as_ref()))
         .build();
     for entry in walk {

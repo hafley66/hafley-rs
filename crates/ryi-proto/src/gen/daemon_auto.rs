@@ -54,9 +54,9 @@ pub fn request_uses_stdin(verb: &str, args: &serde_json::Value) -> bool {
         "slow" => &["paths"],
         "scip" => &["paths"],
         "graph" => &["paths"],
-        "cleave" => &[],
-        "move" => &[],
-        "rename" => &[],
+        "cleave" => &["dest", "paths"],
+        "move" => &["old", "new", "paths"],
+        "rename" => &["paths"],
         "query" => &["paths"],
         "region" => &["generated"],
         "watch" => &[],
@@ -64,7 +64,7 @@ pub fn request_uses_stdin(verb: &str, args: &serde_json::Value) -> bool {
         "ingest" => &["paths"],
         "schema" => &[],
         "trail" => &[],
-        "stratify" => &[],
+        "stratify" => &["paths"],
         _ => &[],
     };
     fn has_stdin(value: &serde_json::Value, names: &[&str]) -> bool {

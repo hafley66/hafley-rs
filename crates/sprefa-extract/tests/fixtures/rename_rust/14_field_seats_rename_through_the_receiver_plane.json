@@ -16,13 +16,13 @@
         "rename",
         "src/util.rs#size",
         "width",
-        "--at",
+        "--offset",
         "28",
         "--root",
         "$work/repo",
         "--state",
         "$work/state",
-        "--commit"
+        "--apply"
       ],
       "cwd": "$work/repo",
       "expect_exit_code": 0,

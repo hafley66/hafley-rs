@@ -32,6 +32,33 @@ model Inputs {
   root?: path;
 }
 
+/** Where the fact rows go instead of stdout. */
+model Store {
+  /** Write the fact store to a new SQLite database at PATH */
+  @valueName("PATH") sqlite?: path;
+}
+
+/** Line/column beside byte spans. */
+model Spans {
+  /** Add 1-based line/col beside every span */
+  lines: boolean;
+}
+
+/** The flags every edit verb shares: plan, then --apply. */
+model Edit {
+  /** Soopy state root, outside the corpus */
+  @valueName("DIR") state?: path;
+
+  /** Write the planned edits (default: dry run) */
+  apply: boolean;
+
+  /** Report leftover old spellings in plain text */
+  text_refs: boolean;
+
+  /** Plan over git-tracked files only (default: every file .gitignore keeps) */
+  tracked: boolean;
+}
+
 model FileArgs {
   /** Resolve written receiver types in fast mode */
   @valueName("written") fast_receivers?: string;
@@ -42,7 +69,7 @@ model FileArgs {
   @valueDelimiter(",") @valueName("KINDS") kinds?: string[];
   /** Resolve arms under --resolve (call,type,flow) */
   @valueDelimiter(",") @valueName("ARMS") @requires("resolve") arms?: string[];
-  /** Write to a new SQLite database instead of stdout */
+  /** Write the fact store to a new SQLite database at PATH */
   @valueName("PATH") @conflictsWith(#["bench"]) sqlite?: path;
   /** Time extraction and print per-family counts to stderr */
   bench: boolean;

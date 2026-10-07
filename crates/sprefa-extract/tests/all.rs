@@ -668,3 +668,5 @@ mod ts_specifiers_support;
 
 #[path = "217_build_identity.rs"]
 mod t_217_build_identity;
+#[path = "218_flag_consistency.rs"]
+mod t_218_flag_consistency;

@@ -71,7 +71,7 @@
         "cleave",
         "src/util.rs#load_config",
         "src/config.rs",
-        "--commit",
+        "--apply",
         "--root",
         "$work/repo",
         "--state",

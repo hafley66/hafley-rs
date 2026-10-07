@@ -1,0 +1,5 @@
+---
+source: tests/218_flag_consistency.rs
+expression: drift
+---
+

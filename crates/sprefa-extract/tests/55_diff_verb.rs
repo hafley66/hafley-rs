@@ -75,10 +75,8 @@ impl Repo {
             "diff".to_string(),
             "--root".to_string(),
             self.root.to_string_lossy().to_string(),
-            "--from".to_string(),
-            from.to_string(),
-            "--to".to_string(),
-            to.to_string(),
+            "--rev".to_string(),
+            format!("{from}..{to}"),
         ];
         args.extend(extra.iter().map(|arg| arg.to_string()));
         Command::new(env!("CARGO_BIN_EXE_ryii"))

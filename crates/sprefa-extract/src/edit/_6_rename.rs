@@ -29,7 +29,7 @@ const ABSTAINED: i32 = 7;
 /// A failed rename run: the message and the process exit code. One code per
 /// stop, all distinct from 2 for every plan error:
 /// 2 plan error (usage, no arm, verify, claim conflict) · 3 `Ambiguous`, pass
-/// `--at` · 4 `NotFound` · 5 `Inexact` · 6 `Dynamic`. A run that emitted its
+/// `--offset` · 4 `NotFound` · 5 `Inexact` · 6 `Dynamic`. A run that emitted its
 /// plan exits 7 when abstains exist (`ABSTAINED`): the plan is complete for
 /// every site the arm typed, and each declined site is listed.
 pub struct RenameError {
@@ -63,7 +63,7 @@ fn stop_error(stop: RenameStop) -> RenameError {
 
 pub fn run(cli: RenameArgs, home: Option<&Path>) -> Result<(), RenameError> {
     let plan = Plan::build(&cli)?;
-    let state = state_root_for(cli.state.as_deref(), home, &[plan.root.as_path()]).map_err(plan_error)?;
+    let state = state_root_for(cli.edit.state.as_deref(), home, &[plan.root.as_path()]).map_err(plan_error)?;
 
     crate::outln!("root {}", plan.root.display());
     for (request, refs) in plan.cx.batch().iter().zip(&plan.refs) {
@@ -90,7 +90,7 @@ pub fn run(cli: RenameArgs, home: Option<&Path>) -> Result<(), RenameError> {
         rename_verify::report(disagreements);
     }
 
-    match cli.commit {
+    match cli.edit.apply {
         true => {
             for stage in &plan.stages {
                 let (id, previews) =
@@ -111,7 +111,7 @@ pub fn run(cli: RenameArgs, home: Option<&Path>) -> Result<(), RenameError> {
             }
         }
     }
-    if cli.text_refs {
+    if cli.edit.text_refs {
         for request in plan.cx.batch() {
             crate::move_text::report_rename(&plan.cx, request, &plan.rewritten);
         }
@@ -178,13 +178,19 @@ struct Plan {
 impl Plan {
     fn build(cli: &RenameArgs) -> Result<Self, RenameError> {
         let requested = requested_renames(cli)?;
-        let root = plan_root(cli.root.as_ref(), &requested[0].0)?;
-        let batch = validated_batch(&root, requested, cli.at)?;
-        let cx = RenameCx::open_with_untracked(&root, cli.root.is_some())
+        let root = plan_root(cli.inputs.root.as_ref(), &requested[0].0)?;
+        let batch = validated_batch(&root, requested, cli.offset)?;
+        let extra = match cli.list {
+            Some(_) => [cli.target.as_deref(), cli.new.as_deref()],
+            None => [None, None],
+        };
+        let scope = crate::inputs::edit_scope(&cli.inputs, &extra, &root).map_err(plan_error)?;
+        let cx = RenameCx::open_corpus(&root, cli.edit.tracked)
             .map_err(plan_error)?
+            .scoped(scope.as_ref())
             .with_batch(batch)
             .with_slow(cli.slow);
-        let has_index = cli.verify_scip.is_some() || root.join("index.scip").is_file();
+        let has_index = cli.scip_index.is_some() || root.join("index.scip").is_file();
         if cx.batch().len() > 1 {
             // An index describes the original tree. Once row one changes its
             // text, later rows must resolve against the overlay in either case.
@@ -220,7 +226,7 @@ impl Plan {
 
         let mut receipts = Vec::new();
         let index = cli
-            .verify_scip
+            .scip_index
             .clone()
             .or_else(|| Some(root.join("index.scip")).filter(|path| path.is_file()));
         let disagreements = match index {
@@ -507,17 +513,15 @@ fn respells_for(
 /// or from the `--list` tsv. The two forms are exclusive.
 fn requested_renames(cli: &RenameArgs) -> Result<Vec<(PathBuf, String, String)>, RenameError> {
     match (&cli.list, &cli.target, &cli.new) {
-        (Some(list), None, None) => {
-            if cli.at.is_some() {
+        // With --list, the positionals are PATH scope (`edit_scope`).
+        (Some(list), _, _) => {
+            if cli.offset.is_some() {
                 return Err(plan_error(
-                    "--at cannot be combined with --list".to_string(),
+                    "--offset cannot be combined with --list".to_string(),
                 ));
             }
             read_rename_list(list)
         }
-        (Some(_), _, _) => Err(plan_error(
-            "--list carries the renames; drop <FILE>#<OLD> and <NEW>".to_string(),
-        )),
         (None, Some(target), Some(new)) => {
             let (anchor, old) = target.rsplit_once('#').ok_or_else(|| {
                 plan_error(format!("rename target must be FILE#OLD, got {target}"))

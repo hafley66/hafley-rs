@@ -46,7 +46,7 @@
         "move",
         "$work/repo/packages/a/src/shape.ts",
         "$work/repo/packages/b/src/shape.ts",
-        "--commit",
+        "--apply",
         "--root",
         "$work/repo",
         "--state",

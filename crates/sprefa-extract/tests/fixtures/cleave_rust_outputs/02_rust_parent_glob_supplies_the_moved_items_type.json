@@ -94,7 +94,7 @@
         "cleave",
         "src/parent/inner.rs#lifted",
         "src/target.rs",
-        "--commit",
+        "--apply",
         "--root",
         "$work/repo",
         "--state",

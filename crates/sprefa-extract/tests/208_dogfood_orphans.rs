@@ -17,7 +17,7 @@ fn grouped_orphans_are_removed_together_and_an_empty_group_disappears() {
         let fixture = Fixture::from_dir(case);
         let output = fixture.run(
             &fixture.root,
-            &["cleave", "src/source.rs#lifted", "src/dest.rs", "--commit"],
+            &["cleave", "src/source.rs#lifted", "src/dest.rs", "--apply"],
         );
         assert!(
             output.status.success(),

@@ -1,7 +1,10 @@
 use std::path::PathBuf;
 
+use crate::models::edit::Edit;
 use crate::models::file_args::FileArgs;
 use crate::models::inputs::Inputs;
+use crate::models::spans::Spans;
+use crate::models::store::Store;
 
 #[derive(Debug)]
 pub struct OpError(pub String, pub i32);
@@ -38,13 +41,12 @@ pub struct FastArgs {
   #[command(flatten)]
   #[serde(flatten)]
   pub inputs: Inputs,
-  #[doc = "Write to a new SQLite database instead of stdout"]
-  #[arg(long, value_name = "PATH")]
-  pub sqlite: Option<PathBuf>,
-  #[doc = "Add 1-based line/col beside every span"]
-  #[arg(long)]
-  #[serde(default)]
-  pub lines: bool,
+  #[command(flatten)]
+  #[serde(flatten)]
+  pub store: Store,
+  #[command(flatten)]
+  #[serde(flatten)]
+  pub spans: Spans,
 }
 
 #[derive(clap::Args, Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -52,13 +54,12 @@ pub struct SlowArgs {
   #[command(flatten)]
   #[serde(flatten)]
   pub inputs: Inputs,
-  #[doc = "Write to a new SQLite database instead of stdout"]
-  #[arg(long, value_name = "PATH")]
-  pub sqlite: Option<PathBuf>,
-  #[doc = "Add 1-based line/col beside every span"]
-  #[arg(long)]
-  #[serde(default)]
-  pub lines: bool,
+  #[command(flatten)]
+  #[serde(flatten)]
+  pub store: Store,
+  #[command(flatten)]
+  #[serde(flatten)]
+  pub spans: Spans,
   #[doc = "Load this index.scip instead of finding or building one"]
   #[arg(long, value_name = "FILE")]
   pub scip_index: Option<PathBuf>,
@@ -76,13 +77,12 @@ pub struct ScipArgs {
   #[command(flatten)]
   #[serde(flatten)]
   pub inputs: Inputs,
-  #[doc = "Write to a new SQLite database instead of stdout"]
-  #[arg(long, value_name = "PATH")]
-  pub sqlite: Option<PathBuf>,
-  #[doc = "Add 1-based line/col beside every span"]
-  #[arg(long)]
-  #[serde(default)]
-  pub lines: bool,
+  #[command(flatten)]
+  #[serde(flatten)]
+  pub store: Store,
+  #[command(flatten)]
+  #[serde(flatten)]
+  pub spans: Spans,
   #[doc = "Load this index.scip instead of finding or building one"]
   #[arg(long, value_name = "FILE", conflicts_with = "indexer")]
   pub scip_index: Option<PathBuf>,
@@ -146,10 +146,10 @@ pub struct GraphArgs {
   #[doc = "Control-dependence slice at PATH:BYTE"]
   #[arg(long, value_name = "PATH:BYTE")]
   pub slice: Option<String>,
-  #[doc = "Keep the fact store in a new SQLite database at PATH"]
-  #[arg(long, value_name = "PATH")]
-  pub sqlite: Option<PathBuf>,
-  #[doc = "Walk the SCIP oracle's edges (ryi slow) instead of the syntax resolve"]
+  #[command(flatten)]
+  #[serde(flatten)]
+  pub store: Store,
+  #[doc = "Answer from the compiler-backed tier (ryi slow) instead of the syntax resolve"]
   #[arg(long, conflicts_with_all = ["rust_checker", "ts_checker", "go_checker"])]
   #[serde(default)]
   pub slow: bool,
@@ -157,12 +157,9 @@ pub struct GraphArgs {
   #[arg(long, default_value_t = 30, value_name = "SECS", value_parser = clap::value_parser!(u64).range(1..))]
   #[serde(default = "__serde_default_graph_timeout")]
   pub timeout: u64,
-  #[doc = "Query a committed revision"]
-  #[arg(long, value_name = "REV", requires = "root", conflicts_with_all = ["rust_checker", "ts_checker", "go_checker", "scip_index", "sqlite"])]
-  pub at: Option<String>,
-  #[doc = "Diff the answers against REV"]
-  #[arg(long, value_name = "REV", requires = "at", conflicts_with = "sqlite")]
-  pub compare: Option<String>,
+  #[doc = "Answer at REV, or diff the answers from BASE to TARGET"]
+  #[arg(long, value_name = "REV|BASE..TARGET", conflicts_with_all = ["rust_checker", "ts_checker", "go_checker", "scip_index", "sqlite"])]
+  pub rev: Option<String>,
   #[doc = "Load this index.scip"]
   #[arg(long, value_name = "FILE", requires = "root")]
   pub scip_index: Option<PathBuf>,
@@ -188,34 +185,26 @@ pub struct CleaveArgs {
   #[doc = "Destination file, created if missing (omit with --list)"]
   #[arg()]
   pub dest: Option<PathBuf>,
-  #[doc = "TSV of SRC#ITEM<TAB>DEST rows, applied in order as one stage"]
-  #[arg(long, conflicts_with_all = ["target", "dest"])]
+  #[doc = "TSV of SRC#ITEM<TAB>DEST rows, applied in order as one stage; positionals become PATH scope"]
+  #[arg(long, value_name = "FILE")]
   pub list: Option<PathBuf>,
-  #[doc = "Corpus root (default: git root of SRC)"]
-  #[arg(long)]
-  pub root: Option<PathBuf>,
-  #[doc = "Soopy state root, outside the corpus"]
-  #[arg(long)]
-  pub state: Option<PathBuf>,
+  #[command(flatten)]
+  #[serde(flatten)]
+  pub inputs: Inputs,
+  #[command(flatten)]
+  #[serde(flatten)]
+  pub edit: Edit,
   #[doc = "Also move private helpers only this item uses"]
   #[arg(long)]
   #[serde(default)]
   pub drag: bool,
-  #[doc = "Use rust-analyzer for Rust and the TypeScript LSP for TS"]
+  #[doc = "Plan with the compiler-backed tier: rust-analyzer for Rust, the TypeScript LSP for TS"]
   #[arg(long)]
   #[serde(default)]
   pub slow: bool,
-  #[doc = "Apply instead of dry run"]
-  #[arg(long)]
-  #[serde(default)]
-  pub commit: bool,
-  #[doc = "Command to run after --commit; failure rolls back"]
+  #[doc = "Command to run after --apply; failure rolls back"]
   #[arg(long)]
   pub verify: Option<String>,
-  #[doc = "Report leftover SRC spellings in plain text"]
-  #[arg(long)]
-  #[serde(default)]
-  pub text_refs: bool,
   #[doc = "End with one JSON line holding the plan"]
   #[arg(long)]
   #[serde(default)]
@@ -230,23 +219,22 @@ pub struct MoveArgs {
   #[doc = "Destination"]
   #[arg()]
   pub new: Option<PathBuf>,
-  #[doc = "TSV of old<TAB>new rows"]
-  #[arg(long)]
+  #[doc = "TSV of old<TAB>new rows; positionals become PATH scope"]
+  #[arg(long, value_name = "FILE")]
   pub list: Option<PathBuf>,
-  #[doc = "Corpus root; repeatable"]
-  #[arg(long)]
+  #[command(flatten)]
+  #[serde(flatten)]
+  pub inputs: Inputs,
+  #[command(flatten)]
+  #[serde(flatten)]
+  pub edit: Edit,
+  #[doc = "Plan each DIR as its own corpus in one stage; repeatable"]
+  #[arg(long, value_name = "DIR", conflicts_with = "root")]
   #[serde(default)]
-  pub root: Vec<PathBuf>,
-  #[doc = "Directory --verify runs in (default: first root)"]
-  #[arg(long)]
+  pub roots: Vec<PathBuf>,
+  #[doc = "Directory --verify runs in (default: the first root)"]
+  #[arg(long, value_name = "DIR")]
   pub verify_cwd: Option<PathBuf>,
-  #[doc = "Soopy state root, outside the corpus"]
-  #[arg(long)]
-  pub state: Option<PathBuf>,
-  #[doc = "Apply instead of dry run"]
-  #[arg(long)]
-  #[serde(default)]
-  pub commit: bool,
   #[doc = "Leave a reexport shim at OLD instead of rewriting importers"]
   #[arg(long)]
   #[serde(default)]
@@ -255,13 +243,9 @@ pub struct MoveArgs {
   #[arg(long)]
   #[serde(default)]
   pub relocate_mod: bool,
-  #[doc = "Command to run after --commit; failure rolls back"]
+  #[doc = "Command to run after --apply; failure rolls back"]
   #[arg(long)]
   pub verify: Option<String>,
-  #[doc = "Report leftover old-path spellings in plain text"]
-  #[arg(long)]
-  #[serde(default)]
-  pub text_refs: bool,
 }
 
 #[derive(clap::Args, Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -272,33 +256,25 @@ pub struct RenameArgs {
   #[doc = "New name"]
   #[arg()]
   pub new: Option<String>,
-  #[doc = "TSV of anchor<TAB>old<TAB>new rows"]
-  #[arg(long)]
+  #[doc = "TSV of anchor<TAB>old<TAB>new rows; positionals become PATH scope"]
+  #[arg(long, value_name = "FILE")]
   pub list: Option<PathBuf>,
-  #[doc = "Corpus root (default: git root of the first anchor)"]
-  #[arg(long)]
-  pub root: Option<PathBuf>,
-  #[doc = "Soopy state root, outside the corpus"]
-  #[arg(long)]
-  pub state: Option<PathBuf>,
+  #[command(flatten)]
+  #[serde(flatten)]
+  pub inputs: Inputs,
+  #[command(flatten)]
+  #[serde(flatten)]
+  pub edit: Edit,
   #[doc = "Byte offset of the declaration when OLD is declared twice"]
-  #[arg(long)]
-  pub at: Option<u32>,
-  #[doc = "Plan with the compiler: the TypeScript 7 checker for TypeScript, rust-analyzer for Rust"]
+  #[arg(long, value_name = "BYTE")]
+  pub offset: Option<u32>,
+  #[doc = "Plan with the compiler-backed tier: the TypeScript 7 checker for TS, rust-analyzer for Rust"]
   #[arg(long)]
   #[serde(default)]
   pub slow: bool,
-  #[doc = "Apply instead of dry run"]
-  #[arg(long)]
-  #[serde(default)]
-  pub commit: bool,
-  #[doc = "Report leftover old-name spellings in plain text"]
-  #[arg(long)]
-  #[serde(default)]
-  pub text_refs: bool,
-  #[doc = "SCIP index (default ROOT/index.scip): its seats join the plan"]
-  #[arg(long, value_name = "INDEX")]
-  pub verify_scip: Option<PathBuf>,
+  #[doc = "Load this index.scip (default ROOT/index.scip); its seats join the plan"]
+  #[arg(long, value_name = "FILE")]
+  pub scip_index: Option<PathBuf>,
   #[doc = "Only report the SCIP diff; keep the syntax plan as is"]
   #[arg(long)]
   #[serde(default)]
@@ -326,9 +302,9 @@ pub struct QueryArgs {
   #[doc = "Expected content digest (one input only)"]
   #[arg(long)]
   pub digest: Option<String>,
-  #[doc = "Write to a new SQLite database instead of stdout"]
-  #[arg(long, value_name = "PATH")]
-  pub sqlite: Option<PathBuf>,
+  #[command(flatten)]
+  #[serde(flatten)]
+  pub store: Store,
   #[doc = "Seconds the scm++ run may take; past it query exits 3"]
   #[arg(long, value_name = "SECS", requires = "scmpp", value_parser = clap::value_parser!(u64).range(1..))]
   pub timeout: Option<u64>,
@@ -350,8 +326,8 @@ pub struct RegionArgs {
   #[arg(long)]
   #[serde(default)]
   pub apply: bool,
-  #[doc = "Soopy state root for --apply"]
-  #[arg(long)]
+  #[doc = "Soopy state root, outside the corpus"]
+  #[arg(long, value_name = "DIR")]
   pub state: Option<PathBuf>,
 }
 
@@ -364,8 +340,8 @@ pub struct WatchArgs {
   #[arg(long = "pattern", value_name = "GLOB")]
   #[serde(default)]
   pub patterns: Vec<String>,
-  #[doc = "Fact kinds (cst,type,call,df,data)"]
-  #[arg(long, value_delimiter = ',')]
+  #[doc = "Fact kinds (cst,type,call,df,data,cfg; default all but cst)"]
+  #[arg(long, value_name = "KINDS", value_delimiter = ',')]
   #[serde(default)]
   pub kinds: Vec<String>,
   #[doc = "Receipt store path"]
@@ -386,23 +362,20 @@ pub struct DiffArgs {
   #[doc = "Repository root (default: git root of the working directory)"]
   #[arg(long, value_name = "DIR")]
   pub root: Option<PathBuf>,
-  #[doc = "Base revision"]
-  #[arg(long, value_name = "REV")]
-  pub from: String,
-  #[doc = "Target revision"]
-  #[arg(long, value_name = "REV")]
-  pub to: String,
+  #[doc = "Fact delta from BASE to TARGET"]
+  #[arg(long, value_name = "REV|BASE..TARGET")]
+  pub rev: String,
   #[doc = "Glob to include; repeatable (default: every roster extension)"]
   #[arg(long = "pattern", value_name = "GLOB")]
   #[serde(default)]
   pub patterns: Vec<String>,
-  #[doc = "Resolve arms (call,type)"]
-  #[arg(long, value_delimiter = ',')]
+  #[doc = "Resolve arms (call,type,flow; default call,type)"]
+  #[arg(long, value_name = "ARMS", value_delimiter = ',')]
   #[serde(default)]
   pub arms: Vec<String>,
-  #[doc = "Write to a new SQLite database instead of stdout"]
-  #[arg(long, value_name = "PATH")]
-  pub sqlite: Option<PathBuf>,
+  #[command(flatten)]
+  #[serde(flatten)]
+  pub store: Store,
 }
 
 #[derive(clap::Args, Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -414,7 +387,7 @@ pub struct IngestArgs {
   #[arg(skip)]
   #[serde(skip)]
   pub trace: Option<String>,
-  #[doc = "Write to a new SQLite database instead of stdout"]
+  #[doc = "Write the fact store to a new SQLite database at PATH"]
   #[arg(long, value_name = "PATH")]
   pub sqlite: Option<PathBuf>,
 }
@@ -435,10 +408,10 @@ pub struct StratifyArgs {
   #[command(flatten)]
   #[serde(flatten)]
   pub inputs: Inputs,
-  #[doc = "Entry point PATH[:NAME][=RANK]; repeatable"]
-  #[arg(long, value_name = "PATH[:NAME][=RANK]")]
+  #[doc = "Entry point to rank from, PATH[#NAME][=RANK]; repeatable"]
+  #[arg(long, value_name = "PATH[#NAME][=RANK]")]
   #[serde(default)]
-  pub from: Vec<String>,
+  pub rank: Vec<String>,
   #[doc = "Base line target; default is the corpus median"]
   #[arg(long, value_name = "N")]
   pub base_lines: Option<u32>,

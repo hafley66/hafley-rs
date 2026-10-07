@@ -5,7 +5,7 @@
 //!
 //! A Prolog symbol is a predicate NAME AT A FIXED ARITY, `helper/2`, distinct
 //! from `helper/3` and from the DCG non-terminal `helper//2`. The anchor's own
-//! declarations pick the arity; two arities in one anchor need `--at`. A
+//! declarations pick the arity; two arities in one anchor need `--offset`. A
 //! variable is clause-local and heads no clause, so a request naming one lands
 //! on `NotFound`.
 //!
@@ -130,7 +130,7 @@ fn not_found(request: &RenameRequest) -> RenameStop {
     }
 }
 
-/// The one symbol the anchor names: its single declared arity, or the one `--at`
+/// The one symbol the anchor names: its single declared arity, or the one `--offset`
 /// picks out of several. Two arities with no offset name two symbols.
 fn pick_key(anchor: &FileScan, request: &RenameRequest) -> Result<PredKey, RenameStop> {
     let mut keys: Vec<PredKey> = anchor.decls.iter().map(|decl| decl.key).collect();
@@ -160,7 +160,7 @@ fn pick_key(anchor: &FileScan, request: &RenameRequest) -> Result<PredKey, Renam
     }
 }
 
-/// `--at` picks the declaration its offset lands in, else the nearest one
+/// `--offset` picks the declaration its offset lands in, else the nearest one
 /// opening at or before it (`ts_rename.rs:111`); a head's span is its clause.
 fn select_by_at(candidates: &[Decl], at: Option<u32>) -> Option<&Decl> {
     let at = at?;
@@ -431,7 +431,7 @@ struct Decl {
     key: PredKey,
     /// The functor atom's own span, which is what a respell replaces.
     span: Span,
-    /// The clause or directive holding it, which is what `--at` lands in.
+    /// The clause or directive holding it, which is what `--offset` lands in.
     outer: Span,
     role: RefRole,
 }

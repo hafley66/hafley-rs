@@ -128,7 +128,7 @@ fn ambiguous(request: &RenameRequest, sites: Vec<Span>) -> RenameStop {
     }
 }
 
-/// `--at` picks the declaration the offset lands in, else the nearest one
+/// `--offset` picks the declaration the offset lands in, else the nearest one
 /// opening at or before it, the law `ts_rename.rs:111` states.
 fn select_by_at(candidates: &[Span], at: Option<u32>) -> Option<Span> {
     let at = at?;

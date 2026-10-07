@@ -23,7 +23,7 @@ fn cargo_ownership_selects_the_source_workspace_or_names_the_searched_manifest()
         let fixture = Fixture::from_dir(case);
         let output = fixture.run(
             &fixture.root,
-            &["cleave", &format!("{source}#lifted"), dest, "--commit"],
+            &["cleave", &format!("{source}#lifted"), dest, "--apply"],
         );
         assert_eq!(
             output.status.success(),

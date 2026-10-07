@@ -101,7 +101,7 @@
         "rename",
         "src/box.ts#run",
         "execute",
-        "--commit",
+        "--apply",
         "--state",
         "$work/state"
       ],

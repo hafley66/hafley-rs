@@ -23,7 +23,7 @@
         "$work/repo",
         "--state",
         "$work/state",
-        "--commit"
+        "--apply"
       ],
       "success": false,
       "environment": {
@@ -69,9 +69,9 @@
         "$work/repo",
         "--state",
         "$work/state",
-        "--at",
+        "--offset",
         "101",
-        "--commit"
+        "--apply"
       ],
       "success": true,
       "environment": {

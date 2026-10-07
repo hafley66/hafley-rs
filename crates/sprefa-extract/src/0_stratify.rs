@@ -153,7 +153,7 @@ pub fn run_to(args: StratifyArgs, out: &mut dyn Write) -> Result<(), crate::RyiE
         )
     });
     let files: Vec<String> = file_set.into_iter().collect();
-    let seeds = parse_seeds(&args.from, &root)?;
+    let seeds = parse_seeds(&args.rank, &root)?;
     let ranks = reachable_depths(&files, &edges, &seeds, &args.kind);
     let components = strongly_connected(&files, &edges);
     let reached: Vec<String> = ranks
@@ -274,7 +274,7 @@ fn parse_seeds(values: &[String], root: &Path) -> Result<Vec<Seed>, crate::RyiEx
     if values.is_empty() {
         return Err(crate::RyiExit::new(
             2,
-            "ryi stratify: pass at least one --from PATH[:NAME][=RANK]",
+            "ryi stratify: pass at least one --rank PATH[#NAME][=RANK]",
         ));
     }
     values
@@ -289,7 +289,7 @@ fn parse_seeds(values: &[String], root: &Path) -> Result<Vec<Seed>, crate::RyiEx
                 ),
                 None => (value.as_str(), None),
             };
-            let (path, name) = match base.rsplit_once(':') {
+            let (path, name) = match base.rsplit_once('#') {
                 Some((path, name)) if !path.is_empty() && !name.is_empty() => {
                     (path, Some(name.to_string()))
                 }

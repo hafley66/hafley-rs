@@ -1,4 +1,4 @@
-//! `demo/cleave/play.sh` replayed: four successive `ryi cleave --commit` moves
+//! `demo/cleave/play.sh` replayed: four successive `ryi cleave --apply` moves
 //! over the six-file app in `demo/cleave/src`, each committed, then a checker
 //! run over the result.
 

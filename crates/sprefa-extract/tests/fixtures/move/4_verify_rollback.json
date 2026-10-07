@@ -60,7 +60,7 @@
         "$work/repo",
         "--state",
         "$work/state",
-        "--commit",
+        "--apply",
         "--verify",
         "false"
       ],

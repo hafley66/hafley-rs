@@ -55,7 +55,7 @@
         "src/util.ts#loadConfig",
         "src/config.ts",
         "--drag",
-        "--commit",
+        "--apply",
         "--root",
         "$work/repo",
         "--state",

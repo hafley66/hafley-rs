@@ -37,7 +37,7 @@
         "cleave",
         "src/util.rs#load_config",
         "src/config.rs",
-        "--commit",
+        "--apply",
         "--verify",
         "exit 1",
         "--root",
@@ -76,7 +76,7 @@
     {
       "action": "sql_query",
       "database": "$work/.agent/dl6.db",
-      "query": "SELECT count(*) FROM extract_run WHERE argv LIKE '%ryii cleave % --commit --verify %'",
+      "query": "SELECT count(*) FROM extract_run WHERE argv LIKE '%ryii cleave % --apply --verify %'",
       "expect": 1,
       "capture": "run_trail_count"
     }

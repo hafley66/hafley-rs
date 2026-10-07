@@ -41,7 +41,7 @@
         "src/source.rs#Packet",
         "src/dest.rs",
         "--slow",
-        "--commit",
+        "--apply",
         "--root",
         "$work/repo",
         "--state",

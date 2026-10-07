@@ -14,3 +14,9 @@ max-threads = 1
 filter = 'test(/^t_15_typegraph_d2::/)'
 test-group = 'nested-cargo'
 slow-timeout = { period = "60s", terminate-after = 10 }
+
+# cleave_rust runs cargo check per case inside the fixture repos: 56s alone,
+# past 120s under full-suite load.
+[[profile.default.overrides]]
+filter = 'test(/^t_166_cleave_rust::/)'
+slow-timeout = { period = "60s", terminate-after = 5 }

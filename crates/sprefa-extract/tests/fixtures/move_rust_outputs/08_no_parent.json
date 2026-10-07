@@ -56,7 +56,7 @@
         "$work/repo",
         "--state",
         "$work/state",
-        "--commit",
+        "--apply",
         "--relocate-mod"
       ],
       "environment": {

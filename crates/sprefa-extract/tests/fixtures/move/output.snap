@@ -175,14 +175,14 @@ source: tests/support/2_fixture_runner.rs
     "move": {
       "exit_code": 2,
       "stdout": "",
-      "stderr": "--verify needs --commit\n"
+      "stderr": "--verify needs --apply\n"
     }
   },
   "6_verify_dry": {
     "move": {
       "exit_code": 2,
       "stdout": "",
-      "stderr": "--verify needs --commit\n"
+      "stderr": "--verify needs --apply\n"
     },
     "path_29": {
       "exists": false

@@ -32,11 +32,8 @@ op fast(
   ...Inputs,
   @bodyRoot input: RawByteStream,
 
-  /** Write to a new SQLite database instead of stdout */
-  @valueName("PATH") sqlite?: path,
-
-  /** Add 1-based line/col beside every span */
-  lines?: boolean,
+  ...Store,
+  ...Spans,
 ): JsonlStream<jsonValue>;
 
 /** The SCIP oracle written as fast's tables */
@@ -44,11 +41,8 @@ op slow(
   ...Inputs,
   @bodyRoot input: RawByteStream,
 
-  /** Write to a new SQLite database instead of stdout */
-  @valueName("PATH") sqlite?: path,
-
-  /** Add 1-based line/col beside every span */
-  lines?: boolean,
+  ...Store,
+  ...Spans,
 
   /** Load this index.scip instead of finding or building one */
   @valueName("FILE") scip_index?: path,
@@ -65,11 +59,8 @@ op scip(
   ...Inputs,
   @bodyRoot input: RawByteStream,
 
-  /** Write to a new SQLite database instead of stdout */
-  @valueName("PATH") sqlite?: path,
-
-  /** Add 1-based line/col beside every span */
-  lines?: boolean,
+  ...Store,
+  ...Spans,
 
   /** Load this index.scip instead of finding or building one */
   @valueName("FILE") @conflictsWith(#["indexer"]) scip_index?: path,
@@ -128,20 +119,16 @@ op graph(
   /** Control-dependence slice at PATH:BYTE */
   @valueName("PATH:BYTE") slice?: string,
 
-  /** Keep the fact store in a new SQLite database at PATH */
-  @valueName("PATH") sqlite?: path,
+  ...Store,
 
-  /** Walk the SCIP oracle's edges (ryi slow) instead of the syntax resolve */
+  /** Answer from the compiler-backed tier (ryi slow) instead of the syntax resolve */
   @conflictsWith(#["rust_checker", "ts_checker", "go_checker"]) slow?: boolean,
 
   /** Seconds the question may run; past it graph exits 3 */
   @minValue(1) @valueName("SECS") timeout?: uint64 = 30,
 
-  /** Query a committed revision */
-  @valueName("REV") @requires("root") @conflictsWith(#["rust_checker", "ts_checker", "go_checker", "scip_index", "sqlite"]) at?: string,
-
-  /** Diff the answers against REV */
-  @valueName("REV") @requires("at") @conflictsWith(#["sqlite"]) compare?: string,
+  /** Answer at REV, or diff the answers from BASE to TARGET */
+  @valueName("REV|BASE..TARGET") @conflictsWith(#["rust_checker", "ts_checker", "go_checker", "scip_index", "sqlite"]) rev?: string,
 
   /** Load this index.scip */
   @valueName("FILE") @requires("root") scip_index?: path,
@@ -164,29 +151,21 @@ op cleave(
   /** Destination file, created if missing (omit with --list) */
   @positional dest?: path,
 
-  /** TSV of SRC#ITEM<TAB>DEST rows, applied in order as one stage */
-  @conflictsWith(#["target", "dest"]) list?: path,
+  /** TSV of SRC#ITEM<TAB>DEST rows, applied in order as one stage; positionals become PATH scope */
+  @valueName("FILE") list?: path,
 
-  /** Corpus root (default: git root of SRC) */
-  root?: path,
-
-  /** Soopy state root, outside the corpus */
-  state?: path,
+  ...Inputs,
+  @bodyRoot input: RawByteStream,
+  ...Edit,
 
   /** Also move private helpers only this item uses */
   drag?: boolean,
 
-  /** Use rust-analyzer for Rust and the TypeScript LSP for TS */
+  /** Plan with the compiler-backed tier: rust-analyzer for Rust, the TypeScript LSP for TS */
   slow?: boolean,
 
-  /** Apply instead of dry run */
-  commit?: boolean,
-
-  /** Command to run after --commit; failure rolls back */
+  /** Command to run after --apply; failure rolls back */
   verify?: string,
-
-  /** Report leftover SRC spellings in plain text */
-  text_refs?: boolean,
 
   /** End with one JSON line holding the plan */
   json?: boolean,
@@ -200,20 +179,18 @@ op `move`(
   /** Destination */
   @positional new?: path,
 
-  /** TSV of old<TAB>new rows */
-  list?: path,
+  /** TSV of old<TAB>new rows; positionals become PATH scope */
+  @valueName("FILE") list?: path,
 
-  /** Corpus root; repeatable */
-  root?: path[],
+  ...Inputs,
+  @bodyRoot input: RawByteStream,
+  ...Edit,
 
-  /** Directory --verify runs in (default: first root) */
-  verify_cwd?: path,
+  /** Plan each DIR as its own corpus in one stage; repeatable */
+  @valueName("DIR") @conflictsWith(#["root"]) roots?: path[],
 
-  /** Soopy state root, outside the corpus */
-  state?: path,
-
-  /** Apply instead of dry run */
-  commit?: boolean,
+  /** Directory --verify runs in (default: the first root) */
+  @valueName("DIR") verify_cwd?: path,
 
   /** Leave a reexport shim at OLD instead of rewriting importers */
   shim?: boolean,
@@ -221,15 +198,12 @@ op `move`(
   /** Move a Rust module's `mod` line instead of adding #[path] */
   relocate_mod?: boolean,
 
-  /** Command to run after --commit; failure rolls back */
+  /** Command to run after --apply; failure rolls back */
   verify?: string,
-
-  /** Report leftover old-path spellings in plain text */
-  text_refs?: boolean,
 ): jsonValue;
 
 /** Rename a symbol and every occurrence bound to it */
-@afterHelp("Exit codes: 2 plan error, 3 ambiguous (pass --at), 4 not found, 5 inexact, 6 dynamic, 7 plan has abstains, 8 the --slow engine refused")
+@afterHelp("Exit codes: 2 plan error, 3 ambiguous (pass --offset), 4 not found, 5 inexact, 6 dynamic, 7 plan has abstains, 8 the --slow engine refused")
 op rename(
   /** FILE#OLD (omit with --list) */
   @positional target?: string,
@@ -237,29 +211,21 @@ op rename(
   /** New name */
   @positional new?: string,
 
-  /** TSV of anchor<TAB>old<TAB>new rows */
-  list?: path,
+  /** TSV of anchor<TAB>old<TAB>new rows; positionals become PATH scope */
+  @valueName("FILE") list?: path,
 
-  /** Corpus root (default: git root of the first anchor) */
-  root?: path,
-
-  /** Soopy state root, outside the corpus */
-  state?: path,
+  ...Inputs,
+  @bodyRoot input: RawByteStream,
+  ...Edit,
 
   /** Byte offset of the declaration when OLD is declared twice */
-  at?: uint32,
+  @valueName("BYTE") offset?: uint32,
 
-  /** Plan with the compiler: the TypeScript 7 checker for TypeScript, rust-analyzer for Rust */
+  /** Plan with the compiler-backed tier: the TypeScript 7 checker for TS, rust-analyzer for Rust */
   slow?: boolean,
 
-  /** Apply instead of dry run */
-  commit?: boolean,
-
-  /** Report leftover old-name spellings in plain text */
-  text_refs?: boolean,
-
-  /** SCIP index (default ROOT/index.scip): its seats join the plan */
-  @valueName("INDEX") verify_scip?: path,
+  /** Load this index.scip (default ROOT/index.scip); its seats join the plan */
+  @valueName("FILE") scip_index?: path,
 
   /** Only report the SCIP diff; keep the syntax plan as is */
   no_scip_merge?: boolean,
@@ -285,8 +251,7 @@ op query(
   /** Expected content digest (one input only) */
   digest?: string,
 
-  /** Write to a new SQLite database instead of stdout */
-  @valueName("PATH") sqlite?: path,
+  ...Store,
 
   /** Seconds the scm++ run may take; past it query exits 3 */
   @minValue(1) @valueName("SECS") @requires("scmpp") timeout?: uint64,
@@ -303,8 +268,8 @@ op region(
   generated: path = "-",
   /** Write the replacement (default: report drift) */
   apply?: boolean,
-  /** Soopy state root for --apply */
-  state?: path,
+  /** Soopy state root, outside the corpus */
+  @valueName("DIR") state?: path,
 ): jsonValue;
 
 /** Stream fact deltas as the worktree changes */
@@ -313,8 +278,8 @@ op watch(
   @valueName("DIR") root?: path,
   /** Glob to watch; repeatable (default: every roster extension) */
   @encodedName("application/x-clap", "pattern") @valueName("GLOB") patterns: string[],
-  /** Fact kinds (cst,type,call,df,data) */
-  @valueDelimiter(",") kinds: string[],
+  /** Fact kinds (cst,type,call,df,data,cfg; default all but cst) */
+  @valueDelimiter(",") @valueName("KINDS") kinds: string[],
   /** Receipt store path */
   @valueName("PATH") receipts?: path,
   /** Emit one snapshot and exit */
@@ -327,16 +292,13 @@ op watch(
 op diff(
   /** Repository root (default: git root of the working directory) */
   @valueName("DIR") root?: path,
-  /** Base revision */
-  @valueName("REV") from: string,
-  /** Target revision */
-  @valueName("REV") to: string,
+  /** Fact delta from BASE to TARGET */
+  @valueName("REV|BASE..TARGET") rev: string,
   /** Glob to include; repeatable (default: every roster extension) */
   @encodedName("application/x-clap", "pattern") @valueName("GLOB") patterns: string[],
-  /** Resolve arms (call,type) */
-  @valueDelimiter(",") arms: string[],
-  /** Write to a new SQLite database instead of stdout */
-  @valueName("PATH") sqlite?: path,
+  /** Resolve arms (call,type,flow; default call,type) */
+  @valueDelimiter(",") @valueName("ARMS") arms: string[],
+  ...Store,
 ): JsonlStream<jsonValue>;
 
 /** Validate and re-emit foreign TSI JSONL */
@@ -348,7 +310,7 @@ op ingest(
 
   @skip @header("X-Trace") trace?: string,
 
-  /** Write to a new SQLite database instead of stdout */
+  /** Write the fact store to a new SQLite database at PATH */
   @query @valueName("PATH") sqlite?: path,
 ): jsonValue;
 
@@ -364,10 +326,11 @@ op trail(
 /** Rank files from entrypoints and propose dependency-first numeric prefixes */
 op stratify(
   ...Inputs,
+  @bodyRoot input: RawByteStream,
 
-  /** Entry point PATH[:NAME][=RANK]; repeatable */
-  @valueName("PATH[:NAME][=RANK]")
-  from: string[],
+  /** Entry point to rank from, PATH[#NAME][=RANK]; repeatable */
+  @valueName("PATH[#NAME][=RANK]")
+  rank: string[],
 
   /** Base line target; default is the corpus median */
   @valueName("N")

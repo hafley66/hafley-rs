@@ -63,7 +63,7 @@ fn moving_this_crates_own_module_leaves_it_compiling() {
         .arg(&root)
         .arg("--state")
         .arg(&state)
-        .arg("--commit")
+        .arg("--apply")
         .output()
         .expect("extract binary runs");
     assert!(
