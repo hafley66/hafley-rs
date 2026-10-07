@@ -33,3 +33,12 @@ Summary table in the .md: concern, tests, test lines, files, duplicate claims, p
 ## Limits
 KACHE_DISABLED=1. Build/test commands uncapped; other commands under 2 min. No merge, no push.
 Do not touch src/ except tests inside src (`#[cfg(test)]` modules), which fold under the same rule.
+
+## Resume (2026-10-07, after lane chore-test-shrink-glm died at 675813bf)
+- Base origin/main 675813bf. Read plans/2026-10-06-test-map.md; skip concerns marked folded or DSL-converted.
+- Every fold commit cuts net test code (tests/**/*.rs); message states lines before/after. No new
+  per-concern tests/support/NN_<concern>.rs; per-case data goes in fixtures/<concern>/ via 2_fixture_runner.
+- Snapshots carry no machine paths (runner redacts <ryii>, <fixture>).
+- Do NOT run the full suite or hafley_scm tests. Gate per commit: folded concern + t_186 + module
+  inventory. The coordinator runs the full suite on batch heads and pushes.
+- After each 3-5 folds, commit a map update ("docs(map): ...") as the batch head.
