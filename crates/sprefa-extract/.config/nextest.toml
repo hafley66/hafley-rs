@@ -1,4 +1,5 @@
 # sprefa-extract is its own workspace root, so the repo-level config does not
-# reach it. Same slow-test policy as the root workspace.
+# reach it. rust-analyzer-backed tables (cleave_rust, graph_slow, client_daemon,
+# quality_gate) run 60-90s under full-suite load; terminate past 120s.
 [profile.default]
-slow-timeout = { period = "20s", terminate-after = 3 }
+slow-timeout = { period = "30s", terminate-after = 4 }
