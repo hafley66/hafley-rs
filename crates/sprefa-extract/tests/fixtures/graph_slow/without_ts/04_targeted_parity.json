@@ -1,0 +1,44 @@
+{
+  "steps": [
+    {
+      "action": "run",
+      "name": "whole",
+      "arguments": [
+        "--resolve",
+        "--arms",
+        "call",
+        "--root",
+        "tests/fixtures/rust_checker_wiring",
+        "--rust-checker",
+        "tests/fixtures/rust_checker_wiring/src"
+      ],
+      "cwd": "$manifest",
+      "expect_exit_code": 0,
+      "unasserted_stderr": true
+    },
+    {
+      "action": "run",
+      "name": "targeted",
+      "arguments": [
+        "graph",
+        "--slow",
+        "--callers",
+        "render",
+        "--root",
+        "tests/fixtures/rust_checker_wiring",
+        "--sqlite",
+        "$work/graph.db",
+        "tests/fixtures/rust_checker_wiring/src"
+      ],
+      "cwd": "$manifest",
+      "expect_exit_code": 0,
+      "unasserted_stderr": true
+    },
+    {
+      "action": "sqlite_rows",
+      "name": "render_rows",
+      "path": "$work/graph.db",
+      "sql": "SELECT caller_path, caller_name, callee_path, callee_name, caller_site_start, caller_site_end, callee_start, callee_end, kind, resolution_origin FROM resolved_edge WHERE callee_name = 'render' ORDER BY caller_path, caller_site_start, callee_path, callee_start"
+    }
+  ]
+}

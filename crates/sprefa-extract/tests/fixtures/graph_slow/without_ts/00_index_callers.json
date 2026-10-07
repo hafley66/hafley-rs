@@ -1,0 +1,22 @@
+{
+  "steps": [
+    {
+      "action": "run",
+      "name": "callers",
+      "arguments": [
+        "graph",
+        "--slow",
+        "--callers",
+        "fetch_ref",
+        "--root",
+        "tests/fixtures/ratchet_soopy",
+        "--scip-index",
+        "tests/fixtures/ratchet_soopy/index.scip",
+        "tests/fixtures/ratchet_soopy/src"
+      ],
+      "cwd": "$manifest",
+      "expect_exit_code": 0,
+      "unasserted_stderr": true
+    }
+  ]
+}

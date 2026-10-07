@@ -1,0 +1,49 @@
+{
+  "steps": [
+    {
+      "action": "copy",
+      "source": "$fixtures/graph_ts/chain_c.ts",
+      "path": "$work/chain_c.ts"
+    },
+    {
+      "action": "copy",
+      "source": "$fixtures/graph_ts/chain_d.ts",
+      "path": "$work/chain_d.ts"
+    },
+    {
+      "action": "run",
+      "name": "declined",
+      "arguments": [
+        "graph",
+        "--slow",
+        "--from",
+        "chainC",
+        "--root",
+        ".",
+        "."
+      ],
+      "cwd": "$work",
+      "environment": {
+        "SPREFA_TSGO": "$work/absent/tsgo"
+      },
+      "unasserted_exit": true,
+      "assert_success": false,
+      "raw_stdout": true,
+      "unasserted_stderr": true
+    },
+    {
+      "action": "claim",
+      "name": "tier_named",
+      "kind": "contains",
+      "cell": "declined.stderr",
+      "text": "ryi slow: tier.tsgo declined"
+    },
+    {
+      "action": "claim",
+      "name": "no_output",
+      "kind": "text_equals",
+      "cell": "declined.stdout",
+      "text": ""
+    }
+  ]
+}

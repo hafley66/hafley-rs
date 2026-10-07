@@ -1,0 +1,20 @@
+{
+  "steps": [
+    {
+      "action": "run",
+      "name": "references",
+      "arguments": [
+        "graph",
+        "--slow",
+        "--callers",
+        "chainD",
+        "--root",
+        "tests/fixtures/graph_ts",
+        "tests/fixtures/graph_ts"
+      ],
+      "cwd": "$manifest",
+      "expect_exit_code": 0,
+      "unasserted_stderr": true
+    }
+  ]
+}

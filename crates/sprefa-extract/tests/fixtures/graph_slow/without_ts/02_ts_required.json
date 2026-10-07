@@ -1,0 +1,124 @@
+{
+  "steps": [
+    {
+      "action": "run",
+      "name": "required_0",
+      "arguments": [
+        "graph",
+        "--slow",
+        "--from",
+        "chainC",
+        "tests/fixtures/graph_ts"
+      ],
+      "cwd": "$manifest",
+      "unasserted_exit": true,
+      "assert_success": false,
+      "raw_stdout": true,
+      "unasserted_stderr": true
+    },
+    {
+      "action": "claim",
+      "name": "feature_named_0",
+      "kind": "contains",
+      "cell": "required_0.stderr",
+      "text": "ts-checker"
+    },
+    {
+      "action": "claim",
+      "name": "no_output_0",
+      "kind": "text_equals",
+      "cell": "required_0.stdout",
+      "text": ""
+    },
+    {
+      "action": "run",
+      "name": "required_1",
+      "arguments": [
+        "graph",
+        "--slow",
+        "--call-path",
+        "chainC",
+        "tests/fixtures/graph_ts"
+      ],
+      "cwd": "$manifest",
+      "unasserted_exit": true,
+      "assert_success": false,
+      "raw_stdout": true,
+      "unasserted_stderr": true
+    },
+    {
+      "action": "claim",
+      "name": "feature_named_1",
+      "kind": "contains",
+      "cell": "required_1.stderr",
+      "text": "ts-checker"
+    },
+    {
+      "action": "claim",
+      "name": "no_output_1",
+      "kind": "text_equals",
+      "cell": "required_1.stdout",
+      "text": ""
+    },
+    {
+      "action": "run",
+      "name": "required_2",
+      "arguments": [
+        "graph",
+        "--slow",
+        "--callers",
+        "chainD",
+        "tests/fixtures/graph_ts"
+      ],
+      "cwd": "$manifest",
+      "unasserted_exit": true,
+      "assert_success": false,
+      "raw_stdout": true,
+      "unasserted_stderr": true
+    },
+    {
+      "action": "claim",
+      "name": "feature_named_2",
+      "kind": "contains",
+      "cell": "required_2.stderr",
+      "text": "ts-checker"
+    },
+    {
+      "action": "claim",
+      "name": "no_output_2",
+      "kind": "text_equals",
+      "cell": "required_2.stdout",
+      "text": ""
+    },
+    {
+      "action": "run",
+      "name": "required_3",
+      "arguments": [
+        "graph",
+        "--slow",
+        "--uses",
+        "Widget",
+        "tests/fixtures/graph_ts"
+      ],
+      "cwd": "$manifest",
+      "unasserted_exit": true,
+      "assert_success": false,
+      "raw_stdout": true,
+      "unasserted_stderr": true
+    },
+    {
+      "action": "claim",
+      "name": "feature_named_3",
+      "kind": "contains",
+      "cell": "required_3.stderr",
+      "text": "ts-checker"
+    },
+    {
+      "action": "claim",
+      "name": "no_output_3",
+      "kind": "text_equals",
+      "cell": "required_3.stdout",
+      "text": ""
+    }
+  ]
+}

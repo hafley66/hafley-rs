@@ -1,0 +1,39 @@
+{
+  "steps": [
+    {
+      "action": "copy_tree",
+      "source": "$fixtures/graph_slow/shimmed",
+      "target": "$work/repo"
+    },
+    {
+      "action": "run",
+      "name": "owned",
+      "arguments": [
+        "graph",
+        "--slow",
+        "--from",
+        "lib.rs#build",
+        "--root",
+        ".",
+        "src"
+      ],
+      "cwd": "$work/repo",
+      "expect_exit_code": 0
+    },
+    {
+      "action": "run",
+      "name": "unowned",
+      "arguments": [
+        "graph",
+        "--slow",
+        "--from",
+        "shim.rs#shimmed",
+        "--root",
+        ".",
+        "src"
+      ],
+      "cwd": "$work/repo",
+      "expect_exit_code": 0
+    }
+  ]
+}

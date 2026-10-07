@@ -1,0 +1,552 @@
+---
+source: crates/sprefa-extract/tests/support/2_fixture_runner.rs
+---
+{
+  "00_index_callers": {
+    "callers": {
+      "exit_code": 0,
+      "stdout": [
+        {
+          "record": "graph_edge",
+          "from_path": "tests/fixtures/ratchet_soopy/src/_13_fetch.rs",
+          "from_name": "execute_one",
+          "to_path": "tests/fixtures/ratchet_soopy/src/_13_fetch.rs",
+          "to_name": "fetch_ref",
+          "kind": "call",
+          "grade": "+",
+          "from_line": 69,
+          "to_line": 76
+        }
+      ]
+    }
+  },
+  "01_zero_timeout": {
+    "refused": {
+      "exit_code": 2
+    }
+  },
+  "02_ts_decline": {
+    "declined": {
+      "success": false,
+      "stdout": ""
+    },
+    "no_output": "",
+    "tier_named": true
+  },
+  "03_rust_owned": {
+    "owned": {
+      "exit_code": 0,
+      "stdout": [
+        {
+          "record": "graph_node",
+          "path": "src/helper.rs",
+          "name": "assemble",
+          "depth": 1,
+          "grade": "+",
+          "line": 1
+        }
+      ],
+      "stderr": "demand walk: 2 bodies inferred, 1 call, 0 method, 0 passed, 0 trait_impl, 0 extern edges\n1 edges: 1 +, 0 ~, 0 -\n"
+    },
+    "unowned": {
+      "exit_code": 0,
+      "stdout": [],
+      "stderr": "ryi slow: tier.rust-analyzer declined src/shim.rs: owns no module in the loaded crate graph (cfg-gated, or outside every crate root)\ndemand walk: 0 bodies inferred, 0 call, 0 method, 0 passed, 0 trait_impl, 0 extern edges\n0 edges: 0 +, 0 ~, 0 -\n"
+    }
+  },
+  "04_targeted_parity": {
+    "render_rows": {
+      "rows": [
+        [
+          {
+            "text": "tests/fixtures/rust_checker_wiring/src/lib.rs"
+          },
+          {
+            "text": "drive_t2"
+          },
+          {
+            "text": "tests/fixtures/rust_checker_wiring/src/widget.rs"
+          },
+          {
+            "text": "render"
+          },
+          {
+            "integer": 612
+          },
+          {
+            "integer": 618
+          },
+          {
+            "integer": 141
+          },
+          {
+            "integer": 189
+          },
+          {
+            "text": "checker_resolve"
+          },
+          {
+            "text": "checker"
+          }
+        ],
+        [
+          {
+            "text": "tests/fixtures/rust_checker_wiring/src/lib.rs"
+          },
+          {
+            "text": "drive_cfg_test"
+          },
+          {
+            "text": "tests/fixtures/rust_checker_wiring/src/widget.rs"
+          },
+          {
+            "text": "render"
+          },
+          {
+            "integer": 1113
+          },
+          {
+            "integer": 1119
+          },
+          {
+            "integer": 141
+          },
+          {
+            "integer": 189
+          },
+          {
+            "text": "checker_resolve"
+          },
+          {
+            "text": "checker"
+          }
+        ]
+      ]
+    },
+    "targeted": {
+      "exit_code": 0,
+      "stdout": [
+        {
+          "record": "graph_edge",
+          "from_path": "tests/fixtures/rust_checker_wiring/src/lib.rs",
+          "from_name": "drive_cfg_test",
+          "to_path": "tests/fixtures/rust_checker_wiring/src/widget.rs",
+          "to_name": "render",
+          "kind": "checker_resolve",
+          "grade": "+",
+          "from_line": 38,
+          "to_line": 12
+        },
+        {
+          "record": "graph_edge",
+          "from_path": "tests/fixtures/rust_checker_wiring/src/lib.rs",
+          "from_name": "drive_t2",
+          "to_path": "tests/fixtures/rust_checker_wiring/src/widget.rs",
+          "to_name": "render",
+          "kind": "checker_resolve",
+          "grade": "+",
+          "from_line": 20,
+          "to_line": 12
+        }
+      ]
+    },
+    "whole": {
+      "exit_code": 0,
+      "stdout": [
+        {
+          "record": "resolved_edge",
+          "caller_path": "tests/fixtures/rust_checker_wiring/src/editor.rs",
+          "caller_name": "build",
+          "callee_path": "tests/fixtures/rust_checker_wiring/src/editor.rs",
+          "callee_name": "Editor",
+          "caller_site_start": 111,
+          "caller_site_end": 117,
+          "callee_start": 11,
+          "callee_end": 17,
+          "kind": "checker_resolve",
+          "resolution_origin": "checker"
+        },
+        {
+          "record": "resolved_edge",
+          "caller_path": "tests/fixtures/rust_checker_wiring/src/lib.rs",
+          "caller_name": "drive_a2",
+          "callee_path": "tests/fixtures/rust_checker_wiring/src/editor.rs",
+          "callee_name": "build",
+          "caller_site_start": 338,
+          "caller_site_end": 351,
+          "callee_start": 70,
+          "callee_end": 148,
+          "kind": "checker_resolve",
+          "resolution_origin": "checker"
+        },
+        {
+          "record": "resolved_edge",
+          "caller_path": "tests/fixtures/rust_checker_wiring/src/lib.rs",
+          "caller_name": "drive_a2",
+          "callee_path": "tests/fixtures/rust_checker_wiring/src/editor.rs",
+          "callee_name": "finish",
+          "caller_site_start": 381,
+          "caller_site_end": 387,
+          "callee_start": 161,
+          "callee_end": 215,
+          "kind": "checker_resolve",
+          "resolution_origin": "checker"
+        },
+        {
+          "record": "resolved_edge",
+          "caller_path": "tests/fixtures/rust_checker_wiring/src/lib.rs",
+          "caller_name": "drive_a2",
+          "callee_path": "tests/fixtures/rust_checker_wiring/src/editor.rs",
+          "callee_name": "replace",
+          "caller_site_start": 417,
+          "caller_site_end": 424,
+          "callee_start": 228,
+          "callee_end": 287,
+          "kind": "checker_resolve",
+          "resolution_origin": "checker"
+        },
+        {
+          "record": "resolved_edge",
+          "caller_path": "tests/fixtures/rust_checker_wiring/src/lib.rs",
+          "caller_name": "drive_cfg_test",
+          "callee_path": "tests/fixtures/rust_checker_wiring/src/helpers.rs",
+          "callee_name": "helper",
+          "caller_site_start": 1144,
+          "caller_site_end": 1159,
+          "callee_start": 7,
+          "callee_end": 34,
+          "kind": "checker_resolve",
+          "resolution_origin": "checker"
+        },
+        {
+          "record": "resolved_edge",
+          "caller_path": "tests/fixtures/rust_checker_wiring/src/lib.rs",
+          "caller_name": "drive_cfg_test",
+          "callee_path": "tests/fixtures/rust_checker_wiring/src/widget.rs",
+          "callee_name": "render",
+          "caller_site_start": 1113,
+          "caller_site_end": 1119,
+          "callee_start": 141,
+          "callee_end": 189,
+          "kind": "checker_resolve",
+          "resolution_origin": "checker"
+        },
+        {
+          "record": "resolved_edge",
+          "caller_path": "tests/fixtures/rust_checker_wiring/src/lib.rs",
+          "caller_name": "drive_t1",
+          "callee_path": "tests/fixtures/rust_checker_wiring/src/widget.rs",
+          "callee_name": "label",
+          "caller_site_start": 796,
+          "caller_site_end": 801,
+          "callee_start": 29,
+          "callee_end": 68,
+          "kind": "checker_resolve",
+          "resolution_origin": "checker"
+        },
+        {
+          "record": "resolved_edge",
+          "caller_path": "tests/fixtures/rust_checker_wiring/src/lib.rs",
+          "caller_name": "drive_t2",
+          "callee_path": "tests/fixtures/rust_checker_wiring/src/widget.rs",
+          "callee_name": "render",
+          "caller_site_start": 612,
+          "caller_site_end": 618,
+          "callee_start": 141,
+          "callee_end": 189,
+          "kind": "checker_resolve",
+          "resolution_origin": "checker"
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/rust_checker_wiring/src/lib.rs",
+          "name": "Described",
+          "local": "Described",
+          "target_path": "tests/fixtures/rust_checker_wiring/src/widget.rs",
+          "target_name": "Described",
+          "kind": "local",
+          "hops": 0
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/rust_checker_wiring/src/lib.rs",
+          "name": "Editor",
+          "local": "Editor",
+          "target_path": "tests/fixtures/rust_checker_wiring/src/editor.rs",
+          "target_name": "Editor",
+          "kind": "local",
+          "hops": 0
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/rust_checker_wiring/src/lib.rs",
+          "name": "Widget",
+          "local": "Widget",
+          "target_path": "tests/fixtures/rust_checker_wiring/src/widget.rs",
+          "target_name": "Widget",
+          "kind": "local",
+          "hops": 0
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/rust_checker_wiring/src/lib.rs",
+          "name": "decoys",
+          "local": "",
+          "target_path": "tests/fixtures/rust_checker_wiring/src/decoys.rs",
+          "target_name": null,
+          "kind": "module",
+          "hops": 1
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/rust_checker_wiring/src/lib.rs",
+          "name": "editor",
+          "local": "",
+          "target_path": "tests/fixtures/rust_checker_wiring/src/editor.rs",
+          "target_name": null,
+          "kind": "module",
+          "hops": 1
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/rust_checker_wiring/src/lib.rs",
+          "name": "helpers",
+          "local": "",
+          "target_path": "tests/fixtures/rust_checker_wiring/src/helpers.rs",
+          "target_name": null,
+          "kind": "module",
+          "hops": 1
+        },
+        {
+          "record": "resolved_import",
+          "src_path": "tests/fixtures/rust_checker_wiring/src/lib.rs",
+          "name": "widget",
+          "local": "",
+          "target_path": "tests/fixtures/rust_checker_wiring/src/widget.rs",
+          "target_name": null,
+          "kind": "module",
+          "hops": 1
+        },
+        {
+          "record": "unresolved",
+          "family": "call",
+          "path": "tests/fixtures/rust_checker_wiring/src/editor.rs",
+          "span": {
+            "start": 106,
+            "end": 110
+          },
+          "reason": "external",
+          "detail": "core::option::Some"
+        },
+        {
+          "record": "unresolved",
+          "family": "call",
+          "path": "tests/fixtures/rust_checker_wiring/src/editor.rs",
+          "span": {
+            "start": 126,
+            "end": 137
+          },
+          "reason": "external",
+          "detail": "alloc::string::String::new"
+        },
+        {
+          "record": "unresolved",
+          "family": "call",
+          "path": "tests/fixtures/rust_checker_wiring/src/editor.rs",
+          "span": {
+            "start": 204,
+            "end": 207
+          },
+          "reason": "external",
+          "detail": "alloc::string::String::len"
+        },
+        {
+          "record": "unresolved",
+          "family": "call",
+          "path": "tests/fixtures/rust_checker_wiring/src/editor.rs",
+          "span": {
+            "start": 272,
+            "end": 275
+          },
+          "reason": "external",
+          "detail": "alloc::string::String::len"
+        },
+        {
+          "record": "unresolved",
+          "family": "call",
+          "path": "tests/fixtures/rust_checker_wiring/src/lib.rs",
+          "span": {
+            "start": 1096,
+            "end": 1101
+          },
+          "reason": "external",
+          "detail": "core::slice::first"
+        },
+        {
+          "record": "unresolved",
+          "family": "call",
+          "path": "tests/fixtures/rust_checker_wiring/src/lib.rs",
+          "span": {
+            "start": 1104,
+            "end": 1110
+          },
+          "reason": "external",
+          "detail": "core::option::Option::unwrap"
+        },
+        {
+          "record": "unresolved",
+          "family": "call",
+          "path": "tests/fixtures/rust_checker_wiring/src/lib.rs",
+          "span": {
+            "start": 395,
+            "end": 399
+          },
+          "reason": "external",
+          "detail": "core::option::Some"
+        },
+        {
+          "record": "unresolved",
+          "family": "call",
+          "path": "tests/fixtures/rust_checker_wiring/src/lib.rs",
+          "span": {
+            "start": 595,
+            "end": 600
+          },
+          "reason": "external",
+          "detail": "core::slice::first"
+        },
+        {
+          "record": "unresolved",
+          "family": "call",
+          "path": "tests/fixtures/rust_checker_wiring/src/lib.rs",
+          "span": {
+            "start": 603,
+            "end": 609
+          },
+          "reason": "external",
+          "detail": "core::option::Option::unwrap"
+        },
+        {
+          "record": "unresolved",
+          "family": "call",
+          "path": "tests/fixtures/rust_checker_wiring/src/lib.rs",
+          "span": {
+            "start": 779,
+            "end": 784
+          },
+          "reason": "external",
+          "detail": "core::slice::first"
+        },
+        {
+          "record": "unresolved",
+          "family": "call",
+          "path": "tests/fixtures/rust_checker_wiring/src/lib.rs",
+          "span": {
+            "start": 787,
+            "end": 793
+          },
+          "reason": "external",
+          "detail": "core::option::Option::unwrap"
+        }
+      ]
+    }
+  },
+  "05_ts_references": {
+    "references": {
+      "exit_code": 0,
+      "stdout": [
+        {
+          "record": "graph_edge",
+          "from_path": "tests/fixtures/graph_ts/chain_c.ts",
+          "from_name": "chainC",
+          "to_path": "tests/fixtures/graph_ts/chain_d.ts",
+          "to_name": "chainD",
+          "kind": "checker_resolve",
+          "grade": "+",
+          "from_line": 4,
+          "to_line": 2
+        }
+      ]
+    }
+  },
+  "06_rust_aliased": {
+    "aliased": {
+      "exit_code": 0,
+      "stdout": [
+        {
+          "record": "graph_edge",
+          "from_path": "tests/fixtures/rust_checker_usages/src/callers.rs",
+          "from_name": "aliased",
+          "to_path": "tests/fixtures/rust_checker_usages/src/widget.rs",
+          "to_name": "render",
+          "kind": "checker_resolve",
+          "grade": "+",
+          "from_line": 14,
+          "to_line": 1
+        },
+        {
+          "record": "graph_edge",
+          "from_path": "tests/fixtures/rust_checker_usages/src/callers.rs",
+          "from_name": "decoyed",
+          "to_path": "tests/fixtures/rust_checker_usages/src/decoy.rs",
+          "to_name": "render",
+          "kind": "checker_resolve",
+          "grade": "+",
+          "from_line": 22,
+          "to_line": 1
+        },
+        {
+          "record": "graph_edge",
+          "from_path": "tests/fixtures/rust_checker_usages/src/callers.rs",
+          "from_name": "plain",
+          "to_path": "tests/fixtures/rust_checker_usages/src/widget.rs",
+          "to_name": "render",
+          "kind": "checker_resolve",
+          "grade": "+",
+          "from_line": 10,
+          "to_line": 1
+        }
+      ]
+    }
+  },
+  "07_ts_overload": {
+    "overload": {
+      "exit_code": 0,
+      "stdout": [
+        {
+          "record": "graph_edge",
+          "from_path": "tests/fixtures/graph_ts_overload/consumer/use_dist.ts",
+          "from_name": "useDist",
+          "to_path": "tests/fixtures/graph_ts_overload/pick.ts",
+          "to_name": "pick",
+          "kind": "checker_resolve",
+          "grade": "+",
+          "from_line": 4,
+          "to_line": 4
+        },
+        {
+          "record": "graph_edge",
+          "from_path": "tests/fixtures/graph_ts_overload/pick.ts",
+          "from_name": "pickText",
+          "to_path": "tests/fixtures/graph_ts_overload/pick.ts",
+          "to_name": "pick",
+          "kind": "checker_resolve",
+          "grade": "+",
+          "from_line": 9,
+          "to_line": 4
+        },
+        {
+          "record": "graph_edge",
+          "from_path": "tests/fixtures/graph_ts_overload/use_pick.ts",
+          "from_name": "usePick",
+          "to_path": "tests/fixtures/graph_ts_overload/pick.ts",
+          "to_name": "pick",
+          "kind": "checker_resolve",
+          "grade": "+",
+          "from_line": 4,
+          "to_line": 4
+        }
+      ]
+    }
+  }
+}
