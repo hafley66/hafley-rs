@@ -1,0 +1,70 @@
+{
+  "top": {
+    "lines": 72,
+    "bytes": 4902
+  },
+  "capabilities": {
+    "lines": 6,
+    "bytes": 104
+  },
+  "fast": {
+    "lines": 16,
+    "bytes": 788
+  },
+  "slow": {
+    "lines": 18,
+    "bytes": 876
+  },
+  "scip": {
+    "lines": 23,
+    "bytes": 1258
+  },
+  "graph": {
+    "lines": 31,
+    "bytes": 2804
+  },
+  "cleave": {
+    "lines": 19,
+    "bytes": 886
+  },
+  "move": {
+    "lines": 19,
+    "bytes": 894
+  },
+  "rename": {
+    "lines": 22,
+    "bytes": 1138
+  },
+  "query": {
+    "lines": 19,
+    "bytes": 944
+  },
+  "region": {
+    "lines": 13,
+    "bytes": 480
+  },
+  "watch": {
+    "lines": 12,
+    "bytes": 554
+  },
+  "diff": {
+    "lines": 12,
+    "bytes": 499
+  },
+  "ingest": {
+    "lines": 10,
+    "bytes": 270
+  },
+  "schema": {
+    "lines": 6,
+    "bytes": 86
+  },
+  "trail": {
+    "lines": 9,
+    "bytes": 141
+  },
+  "stratify": {
+    "lines": 16,
+    "bytes": 859
+  }
+}

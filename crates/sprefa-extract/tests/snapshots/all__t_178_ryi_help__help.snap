@@ -1,0 +1,382 @@
+---
+source: tests/178_ryi_help.rs
+expression: snapshot
+---
+=== top (exit 0) ===
+stdout:
+Source files -> flat graph facts (JSONL on stdout, or --sqlite)
+
+Usage: ryii [OPTIONS] [PATH]...
+       ryii <COMMAND>
+
+Commands:
+  capabilities  Declared language and tooling capabilities
+  fast          Syntax-only whole-project facts (no compiler)
+  slow          The SCIP oracle written as fast's tables
+  scip          Raw SCIP index rows
+  graph         Ask one question of the resolved call/type graph
+  cleave        Move one item into another file, with its imports
+  move          Move a file and repair every specifier that names it
+  rename        Rename a symbol and every occurrence bound to it
+  query         Run a tree-sitter query over files
+  region        Replace a generated region between sprefa markers
+  watch         Stream fact deltas as the worktree changes
+  diff          Fact delta between two commits
+  ingest        Validate and re-emit foreign TSI JSONL
+  schema        Print the output record schema
+  trail         Print the last N runs from the trail
+  stratify      Rank files from entrypoints and propose dependency-first numeric prefixes
+
+Arguments:
+  [PATH]...  Files, directories, or globs; - reads a path list from stdin
+
+Options:
+      --fast-receivers <written>  Resolve written receiver types in fast mode
+      --pattern <GLOB>            Keep files matching GLOB under each directory input; repeatable
+      --entry <FILE>              Run on the files FILE reaches over imports (universe: the PATH inputs, else FILE's project)
+      --depth <N>                 Import hops from --entry
+      --root <DIR>                Corpus root
+      --kinds <KINDS>             Fact kinds per file (cst,type,call,df,data,cfg)
+      --arms <ARMS>               Resolve arms under --resolve (call,type,flow)
+      --sqlite <PATH>             Write to a new SQLite database instead of stdout
+      --bench                     Time extraction and print per-family counts to stderr
+      --resolve                   Resolve cross-file edges over all given paths
+      --scip-index <FILE>         Load this index.scip
+      --rust-checker              Use rust-analyzer for Rust call/type targets
+      --ts-checker                Use the TypeScript compiler for TS call/type targets
+      --go-checker                Use go/types for Go call/type targets
+      --scip-build                Build the index with the language's indexer, then load it
+      --scip-timeout <SECS>       Seconds allowed for one indexer run under --scip-build
+      --scip-deps                 File-to-file edges folded from a SCIP index
+      --deps                      File-to-file edges resolved from syntax, no index
+      --package-deps              Manifest-to-manifest workspace edges
+      --file-fact                 Prepend one file record: path, digest, bytes, lines
+      --lines                     Add 1-based line/col beside every span
+      --witness                   Wrap output in the TSI envelope
+      --max-bytes <BYTES>         Skip inputs over this many bytes (0 = no limit)
+  -h, --help                      Print help
+  -V, --version                   Print version
+
+Logging: RUST_LOG (default sprefa_extract=info,hafley_scm=info), HAFLEY_LOG_FORMAT=json|text
+Capabilities: `ryii capabilities` prints the declared language matrix.
+SQLite with --resolve stores phase 1 per-file and phase 2 project rows; stdout streams phase 2 only. Every SQLite unresolved row has its path.
+Build: <stamp>
+Declared language capabilities:
+LANGUAGE     PLANES                 RESOLVE  REHOME                 RENAME  CHECKER         SCIP
+rust         cst,types,call,df      call+types manifests,plan_check   yes     rust-analyzer   rust
+go           cst,types,call,df      call+types                        no      go-types        go
+kotlin       cst,types,call,df      call+types                        yes     -               kotlin/java
+markdown     cst,types              +types                          no      -               -
+prolog       cst,types,call,df      call                            yes     -               -
+python       cst,types,call,df      call+types                        no      -               python
+data         cst,data                                               no      -               -
+ts           cst,types,call,df      call+types manifests,text_spellings,plan_check yes     tsgo            typescript
+gdscript     cst                                                    no      -               -
+commonlisp   cst                                                    no      -               -
+typespec     cst                                                    no      -               -
+fallback     cst,call               call                            no      -               -
+cpp                                                                 no      -               cpp
+stderr:
+=== capabilities (exit 0) ===
+stdout:
+Declared language and tooling capabilities
+
+Usage: ryii capabilities
+
+Options:
+  -h, --help  Print help
+stderr:
+=== fast (exit 0) ===
+stdout:
+Syntax-only whole-project facts (no compiler)
+
+Usage: ryii fast [OPTIONS] [PATH]...
+
+Arguments:
+  [PATH]...  Files, directories, or globs; - reads a path list from stdin
+
+Options:
+      --fast-receivers <written>  Resolve written receiver types in fast mode
+      --pattern <GLOB>            Keep files matching GLOB under each directory input; repeatable
+      --entry <FILE>              Run on the files FILE reaches over imports (universe: the PATH inputs, else FILE's project)
+      --depth <N>                 Import hops from --entry
+      --root <DIR>                Corpus root
+      --sqlite <PATH>             Write to a new SQLite database instead of stdout
+      --lines                     Add 1-based line/col beside every span
+  -h, --help                      Print help
+stderr:
+=== slow (exit 0) ===
+stdout:
+The SCIP oracle written as fast's tables
+
+Usage: ryii slow [OPTIONS] [PATH]...
+
+Arguments:
+  [PATH]...  Files, directories, or globs; - reads a path list from stdin
+
+Options:
+      --pattern <GLOB>       Keep files matching GLOB under each directory input; repeatable
+      --entry <FILE>         Run on the files FILE reaches over imports (universe: the PATH inputs, else FILE's project)
+      --depth <N>            Import hops from --entry
+      --root <DIR>           Corpus root
+      --sqlite <PATH>        Write to a new SQLite database instead of stdout
+      --lines                Add 1-based line/col beside every span
+      --scip-index <FILE>    Load this index.scip instead of finding or building one
+      --no-checker           Skip the compiler checkers
+      --scip-timeout <SECS>  Seconds allowed for one indexer run
+  -h, --help                 Print help
+stderr:
+=== scip (exit 0) ===
+stdout:
+Raw SCIP index rows
+
+Usage: ryii scip [OPTIONS] [PATH]...
+
+Arguments:
+  [PATH]...  Files, directories, or globs; - reads a path list from stdin
+
+Options:
+      --pattern <GLOB>       Keep files matching GLOB under each directory input; repeatable
+      --entry <FILE>         Run on the files FILE reaches over imports (universe: the PATH inputs, else FILE's project)
+      --depth <N>            Import hops from --entry
+      --root <DIR>           Corpus root
+      --sqlite <PATH>        Write to a new SQLite database instead of stdout
+      --lines                Add 1-based line/col beside every span
+      --scip-index <FILE>    Load this index.scip instead of finding or building one
+      --scip-cache <DIR>     SCIP index cache directory
+      --scip-timeout <SECS>  Seconds allowed for one indexer run
+      --indexer <LANG>       Run only this language's SCIP indexer
+      --raw                  Stream the index records themselves instead of the scip_* relations
+      --records <KINDS>      Only these --raw record kinds (comma-separated)
+      --occurrence-text      Add the source text to each scip_occurrence
+      --scip-build           Build the index for --raw with the inputs' language indexer
+  -h, --help                 Print help
+stderr:
+=== graph (exit 0) ===
+stdout:
+Ask one question of the resolved call/type graph
+
+Usage: ryii graph [OPTIONS] <--callers <[PATH#]NAME>|--uses <NAME>|--from <[PATH#]NAME>|--call-path <[PATH#]NAME>|--type-path <[PATH#]NAME>|--flow-path <BLOB@START:END>|--slice <PATH:BYTE>> [PATH]...
+
+Arguments:
+  [PATH]...  Files, directories, or globs; - reads a path list from stdin
+
+Options:
+      --fast-receivers <written>    Resolve written receiver types in fast mode
+      --pattern <GLOB>              Keep files matching GLOB under each directory input; repeatable
+      --entry <FILE>                Run on the files FILE reaches over imports (universe: the PATH inputs, else FILE's project)
+      --depth <N>                   Import hops from --entry
+      --root <DIR>                  Corpus root
+      --callers <[PATH#]NAME>       Resolved call edges landing on NAME; PATH#NAME keeps NAME declared in files whose path ends with PATH
+      --uses <NAME>                 Declarations that reference type NAME
+      --from <[PATH#]NAME>          Everything NAME reaches along call edges; PATH#NAME seeds only NAME declared in files whose path ends with PATH
+      --call-path <[PATH#]NAME>     Shortest call paths from NAME; PATH#NAME seeds only NAME declared in files whose path ends with PATH
+      --type-path <[PATH#]NAME>     Shortest type-reference paths from NAME; PATH#NAME seeds only NAME declared in files whose path ends with PATH
+      --flow-path <BLOB@START:END>  Flow paths from PATH@START:END or BLOB@START:END. START/END are zero-based UTF-8 byte offsets, END exclusive. PATH is read under --root (or the current directory); --at reads the revision. BLOB is the exact tagged content digest from file.digest or flow_edge.from_blob (blake3:HEX for worktree facts), not a bare git object ID. Follows local df edges and interprocedural flow_edge facts from the asked node only. --reverse answers what reaches the node
+      --reverse                     Follow incoming value-flow edges to answer what reaches the seed
+      --slice <PATH:BYTE>           Control-dependence slice at PATH:BYTE
+      --sqlite <PATH>               Keep the fact store in a new SQLite database at PATH
+      --slow                        Walk the SCIP oracle's edges (ryi slow) instead of the syntax resolve
+      --timeout <SECS>              Seconds the question may run; past it graph exits 3 [default: 30]
+      --at <REV>                    Query a committed revision
+      --compare <REV>               Diff the answers against REV
+      --scip-index <FILE>           Load this index.scip
+      --rust-checker                Add rust-analyzer type evidence
+      --ts-checker                  Add TypeScript checker type evidence
+      --go-checker                  Add go/types type evidence
+  -h, --help                        Print help
+stderr:
+=== cleave (exit 0) ===
+stdout:
+Move one item into another file, with its imports
+
+Usage: ryii cleave [OPTIONS] [TARGET] [DEST]
+
+Arguments:
+  [TARGET]  SRC#ITEM (omit with --list)
+  [DEST]    Destination file, created if missing (omit with --list)
+
+Options:
+      --list <LIST>      TSV of SRC#ITEM<TAB>DEST rows, applied in order as one stage
+      --root <ROOT>      Corpus root (default: git root of SRC)
+      --state <STATE>    Soopy state root, outside the corpus
+      --drag             Also move private helpers only this item uses
+      --slow             Use rust-analyzer for Rust and the TypeScript LSP for TS
+      --commit           Apply instead of dry run
+      --verify <VERIFY>  Command to run after --commit; failure rolls back
+      --text-refs        Report leftover SRC spellings in plain text
+      --json             End with one JSON line holding the plan
+  -h, --help             Print help
+stderr:
+=== move (exit 0) ===
+stdout:
+Move a file and repair every specifier that names it
+
+Usage: ryii move [OPTIONS] [OLD] [NEW]
+
+Arguments:
+  [OLD]  File to move (omit with --list)
+  [NEW]  Destination
+
+Options:
+      --list <LIST>              TSV of old<TAB>new rows
+      --root <ROOT>              Corpus root; repeatable
+      --verify-cwd <VERIFY_CWD>  Directory --verify runs in (default: first root)
+      --state <STATE>            Soopy state root, outside the corpus
+      --commit                   Apply instead of dry run
+      --shim                     Leave a reexport shim at OLD instead of rewriting importers
+      --relocate-mod             Move a Rust module's `mod` line instead of adding #[path]
+      --verify <VERIFY>          Command to run after --commit; failure rolls back
+      --text-refs                Report leftover old-path spellings in plain text
+  -h, --help                     Print help
+stderr:
+=== rename (exit 0) ===
+stdout:
+Rename a symbol and every occurrence bound to it
+
+Usage: ryii rename [OPTIONS] [TARGET] [NEW]
+
+Arguments:
+  [TARGET]  FILE#OLD (omit with --list)
+  [NEW]     New name
+
+Options:
+      --list <LIST>          TSV of anchor<TAB>old<TAB>new rows
+      --root <ROOT>          Corpus root (default: git root of the first anchor)
+      --state <STATE>        Soopy state root, outside the corpus
+      --at <AT>              Byte offset of the declaration when OLD is declared twice
+      --slow                 Plan with the compiler: the TypeScript 7 checker for TypeScript, rust-analyzer for Rust
+      --commit               Apply instead of dry run
+      --text-refs            Report leftover old-name spellings in plain text
+      --verify-scip <INDEX>  SCIP index (default ROOT/index.scip): its seats join the plan
+      --no-scip-merge        Only report the SCIP diff; keep the syntax plan as is
+      --json                 End with one JSON line of abstains
+  -h, --help                 Print help
+
+Exit codes: 2 plan error, 3 ambiguous (pass --at), 4 not found, 5 inexact, 6 dynamic, 7 plan has abstains, 8 the --slow engine refused
+stderr:
+=== query (exit 0) ===
+stdout:
+Run a tree-sitter query over files
+
+Usage: ryii query [OPTIONS] [PATH]...
+
+Arguments:
+  [PATH]...  Files, directories, or globs; - reads a path list from stdin
+
+Options:
+      --pattern <GLOB>   Keep files matching GLOB under each directory input; repeatable
+      --entry <FILE>     Run on the files FILE reaches over imports (universe: the PATH inputs, else FILE's project)
+      --depth <N>        Import hops from --entry
+      --root <DIR>       Corpus root
+      --lang <LANG>      Language name (default: from each file's extension)
+      --query <QUERY>    Tree-sitter query text
+      --scmpp <FILE>     scm++ query file: nested relations lowered to SQL over capture and CST rows
+      --digest <DIGEST>  Expected content digest (one input only)
+      --sqlite <PATH>    Write to a new SQLite database instead of stdout
+      --timeout <SECS>   Seconds the scm++ run may take; past it query exits 3
+  -h, --help             Print help
+stderr:
+=== region (exit 0) ===
+stdout:
+Replace a generated region between sprefa markers
+
+Usage: ryii region [OPTIONS] <TARGET> <ID>
+
+Arguments:
+  <TARGET>  DL7 file holding the markers
+  <ID>      Marker id after sprefa:auto-begin / sprefa:auto-end
+
+Options:
+      --generated <GENERATED>  Generated body file, or - for stdin [default: -]
+      --apply                  Write the replacement (default: report drift)
+      --state <STATE>          Soopy state root for --apply
+  -h, --help                   Print help
+stderr:
+=== watch (exit 0) ===
+stdout:
+Stream fact deltas as the worktree changes
+
+Usage: ryii watch [OPTIONS]
+
+Options:
+      --root <DIR>         Repository root (default: git root of the working directory)
+      --pattern <GLOB>     Glob to watch; repeatable (default: every roster extension)
+      --kinds <KINDS>      Fact kinds (cst,type,call,df,data)
+      --receipts <PATH>    Receipt store path
+      --once               Emit one snapshot and exit
+      --poll-ms <POLL_MS>  Poll interval when the platform watcher is unavailable [default: 500]
+  -h, --help               Print help
+stderr:
+=== diff (exit 0) ===
+stdout:
+Fact delta between two commits
+
+Usage: ryii diff [OPTIONS] --from <REV> --to <REV>
+
+Options:
+      --root <DIR>      Repository root (default: git root of the working directory)
+      --from <REV>      Base revision
+      --to <REV>        Target revision
+      --pattern <GLOB>  Glob to include; repeatable (default: every roster extension)
+      --arms <ARMS>     Resolve arms (call,type)
+      --sqlite <PATH>   Write to a new SQLite database instead of stdout
+  -h, --help            Print help
+stderr:
+=== ingest (exit 0) ===
+stdout:
+Validate and re-emit foreign TSI JSONL
+
+Usage: ryii ingest [OPTIONS] <PATH>...
+
+Arguments:
+  <PATH>...  TSI JSONL files (/dev/stdin reads standard input)
+
+Options:
+      --sqlite <PATH>  Write to a new SQLite database instead of stdout
+  -h, --help           Print help
+stderr:
+=== schema (exit 0) ===
+stdout:
+Print the output record schema
+
+Usage: ryii schema
+
+Options:
+  -h, --help  Print help
+stderr:
+=== trail (exit 0) ===
+stdout:
+Print the last N runs from the trail
+
+Usage: ryii trail [N]
+
+Arguments:
+  [N]  Runs to print [default: 5]
+
+Options:
+  -h, --help  Print help
+stderr:
+=== stratify (exit 0) ===
+stdout:
+Rank files from entrypoints and propose dependency-first numeric prefixes
+
+Usage: ryii stratify [OPTIONS] [PATH]...
+
+Arguments:
+  [PATH]...  Files, directories, or globs; - reads a path list from stdin
+
+Options:
+      --pattern <GLOB>             Keep files matching GLOB under each directory input; repeatable
+      --entry <FILE>               Run on the files FILE reaches over imports (universe: the PATH inputs, else FILE's project)
+      --depth <N>                  Import hops from --entry
+      --root <DIR>                 Corpus root
+      --from <PATH[:NAME][=RANK]>  Entry point PATH[:NAME][=RANK]; repeatable
+      --base-lines <N>             Base line target; default is the corpus median
+      --kind <KIND>                Edge plane used to build the graph (call, type, or both) [default: both]
+  -h, --help                       Print help
+stderr:
+=== bare (exit 2) ===
+stdout:
+stderr:
+rust Rust workspace -> 'ryii' --sqlite 'facts-rust-_.db' '.'  |  'ryii' graph --callers main --root '.' '.'  |  'ryii' --root '.' --package-deps '.'
