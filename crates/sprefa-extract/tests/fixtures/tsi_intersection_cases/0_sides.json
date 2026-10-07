@@ -1,0 +1,33 @@
+{
+  "tests": [
+    "the_two_streams_share_one_projected_tsi_row_set",
+    "every_minimum_claim_is_in_the_shared_set",
+    "every_unshared_tsi_row_is_a_missing_name_or_a_pinned_difference",
+    "native_rows_are_non_empty_and_the_namespaces_are_disjoint",
+    "every_relation_both_streams_emit_is_in_the_registry"
+  ],
+  "steps": [
+    {"action": "api", "api": "projection", "bucket": "shared", "name": "shared_rows"},
+    {"action": "claim", "name": "shared_type_row", "kind": "contains", "cell": "shared_rows", "text": "\"kind\":\"shared\",\"relation\":\"tsi.type\""},
+
+    {"action": "api", "api": "projection", "bucket": "ts_only", "name": "ts_only_rows"},
+    {"action": "api", "api": "projection", "bucket": "rust_only", "name": "rust_only_rows"},
+
+    {"action": "api", "api": "projection", "bucket": "ts_native", "name": "ts_native_rows"},
+    {"action": "claim", "name": "ts_native_namespace", "kind": "absent", "cell": "ts_native_rows", "text": "\"relation\":\"rust."},
+
+    {"action": "api", "api": "projection", "bucket": "rust_native", "name": "rust_native_rows"},
+    {"action": "claim", "name": "rust_native_rows", "kind": "nonempty_lines_equal", "cell": "rust_native_rows", "expect": [
+      "{\"kind\":\"rust_native\",\"relation\":\"rust.assoc\",\"args\":[\"Mapper\",\"Output\",\"Output\"]}",
+      "{\"kind\":\"rust_native\",\"relation\":\"rust.assoc\",\"args\":[\"User\",\"Output\",\"Vec\"]}",
+      "{\"kind\":\"rust_native\",\"relation\":\"rust.impl\",\"args\":[\"_\",\"User\",\"Mapper\"]}",
+      "{\"kind\":\"rust_native\",\"relation\":\"rust.lifetime\",\"args\":[\"View\",\"a\"]}",
+      "{\"kind\":\"rust_native\",\"relation\":\"rust.ownership\",\"args\":[\"_\",\"owned\"]}",
+      "{\"kind\":\"rust_native\",\"relation\":\"rust.ownership\",\"args\":[\"_\",\"shared\"]}",
+      "{\"kind\":\"rust_native\",\"relation\":\"rust.trait\",\"args\":[\"Mapper\"]}"
+    ]},
+    {"action": "claim", "name": "rust_native_namespace", "kind": "absent", "cell": "rust_native_rows", "text": "\"relation\":\"ts."},
+
+    {"action": "api", "api": "projection", "bucket": "relations", "name": "relation_names"}
+  ]
+}

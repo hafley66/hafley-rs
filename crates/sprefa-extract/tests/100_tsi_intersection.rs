@@ -1,6 +1,12 @@
 //! The two semantic adapters over an equivalent pair of fixtures: what they
 //! agree on rides the shared `tsi.*` relations, what only one language means
 //! rides its own namespace, and every row lands in exactly one named bucket.
+//! Five tests folded into `tests/fixtures/tsi_intersection_cases/`; the api
+//! step projects both canonical streams to the named-row buckets the originals
+//! asserted, and the whole projection freezes in the snapshot. The raw streams
+//! stay unfrozen by the same choice the originals made: the rust side names
+//! std types through absolute rustup paths, while every projected word is
+//! fixture-spelled text.
 //!
 //! SABOTAGE RECEIPT (fail-pre-fix, base sha 6e5b16a08, measured by deleting
 //! every `record=fact` row whose relation starts with `tsi.` from the ts
@@ -12,16 +18,17 @@
 //! still fail their own case, reading `ts.interface(_)` and
 //! `ts.mapped(_, _, _, _)`: `tsi.origin` is the naming table, so a native row
 //! without the shared rows beside it carries no name.
-
 #![cfg(all(feature = "ts-checker", feature = "rust-checker"))]
 
-use std::collections::{BTreeMap, BTreeSet};
-use std::path::{Path, PathBuf};
-use std::process::Command;
-use std::sync::OnceLock;
-
-use sprefa_extract::tsi::{Arg, FactOut, REGISTRY};
-use sprefa_extract::FlatFact;
+#[test]
+fn whole_output() {
+    crate::fixture_runner::run("tsi_intersection_cases", |case| {
+        crate::fixture_runner::commands(case, |step| {
+            assert_eq!(step["api"], "projection", "unknown api step: {step}");
+            projection(step)
+        })
+    });
+}
 
 const TS_ROOT: &str = "tests/fixtures/tsi";
 const TS_PROBE: &str = "tests/fixtures/tsi/probe.ts";
@@ -33,59 +40,18 @@ const RUST_PROBE: &str = "tests/fixtures/tsi/rust_probe/src/lib.rs";
 const SPAN_KEYED: &[&str] = &["tsi.origin", "tsi.has_type"];
 
 type Shape = (&'static str, &'static [&'static str]);
-const RUST_NATIVE: &[Shape] = &[
-    ("rust.assoc", &["Mapper", "Output", "Output"]),
-    ("rust.assoc", &["User", "Output", "Vec"]),
-    ("rust.impl", &["_", "User", "Mapper"]),
-    ("rust.lifetime", &["View", "a"]),
-    ("rust.ownership", &["_", "owned"]),
-    ("rust.ownership", &["_", "shared"]),
-    ("rust.trait", &["Mapper"]),
-];
-
-/// A `typescript` the driver can load, the way `tests/101_ts_semantic_tsi.rs`
-/// finds one: a checkout's `lib/typescript.js` is the built compiler.
-fn typescript() -> String {
-    crate::stock_tsgo::executable()
-}
-
-fn extract(args: &[&str]) -> String {
-    let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
-        .current_dir(env!("CARGO_MANIFEST_DIR"))
-        .env("SPREFA_TSGO", typescript())
-        .args(args)
-        .output()
-        .expect("extract binary runs");
-    assert!(
-        output.status.success(),
-        "{args:?} stderr: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    String::from_utf8(output.stdout).expect("stdout is UTF-8")
-}
-
-/// The reverse door renumbers ids and sorts, so both streams are compared in
-/// the one canonical form a consumer would import.
-fn canonical(stream: &str, label: &str) -> String {
-    let scratch = std::env::temp_dir().join("sprefa_a8_intersection");
-    std::fs::create_dir_all(&scratch).expect("scratch dir");
-    let raw = scratch.join(format!("{label}.jsonl"));
-    std::fs::write(&raw, stream).expect("write the stream");
-    extract(&["ingest", raw.to_str().expect("utf8 path")])
-}
 
 /// One adapter's canonical stream, projected to shapes.
 struct Side {
-    shared: BTreeSet<(String, Vec<String>)>,
-    native: BTreeSet<(String, Vec<String>)>,
-    relations: BTreeSet<String>,
-    /// Every word the projection produced, `_` excluded: what this fixture
-    /// spells, which is what decides whether the other side COULD match a row.
-    vocabulary: BTreeSet<String>,
+    shared: std::collections::BTreeSet<(String, Vec<String>)>,
+    native: std::collections::BTreeSet<(String, Vec<String>)>,
+    relations: std::collections::BTreeSet<String>,
 }
 
 impl Side {
     fn read(stream: String, fixture: &str) -> Self {
+        use sprefa_extract::tsi::{Arg, FactOut};
+        use sprefa_extract::FlatFact;
         let facts: Vec<FactOut> = stream
             .lines()
             .filter(|line| !line.trim().is_empty())
@@ -98,11 +64,11 @@ impl Side {
                 _ => None,
             })
             .collect();
-        let source = std::fs::read(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(fixture))
+        let source = std::fs::read(std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(fixture))
             .expect("the fixture is readable");
 
-        let mut primitive: BTreeMap<u32, String> = BTreeMap::new();
-        let mut origin: BTreeMap<u32, String> = BTreeMap::new();
+        let mut primitive: std::collections::BTreeMap<u32, String> = Default::default();
+        let mut origin: std::collections::BTreeMap<u32, String> = Default::default();
         for fact in &facts {
             match fact.relation.as_str() {
                 "tsi.primitive" => {
@@ -123,10 +89,9 @@ impl Side {
         }
 
         let mut side = Self {
-            shared: BTreeSet::new(),
-            native: BTreeSet::new(),
-            relations: BTreeSet::new(),
-            vocabulary: BTreeSet::new(),
+            shared: Default::default(),
+            native: Default::default(),
+            relations: Default::default(),
         };
         for fact in &facts {
             side.relations.insert(fact.relation.clone());
@@ -151,11 +116,6 @@ impl Side {
                     Arg::Span(_, _, _) => "_".to_string(),
                 })
                 .collect();
-            for word in &words {
-                if is_name(word) {
-                    side.vocabulary.insert(word.clone());
-                }
-            }
             let row = (fact.relation.clone(), words);
             if fact.relation.starts_with("tsi.") {
                 side.shared.insert(row);
@@ -167,14 +127,8 @@ impl Side {
     }
 }
 
-/// A word a fixture spells. `_` is an anonymous id and `#n` is a position, so
-/// neither says anything about what the other fixture declares.
-fn is_name(word: &str) -> bool {
-    word != "_" && !word.starts_with('#')
-}
-
-fn text_at(arg: &Arg, source: &[u8]) -> Option<String> {
-    let Arg::Span(key, start, end) = arg else {
+fn text_at(arg: &sprefa_extract::tsi::Arg, source: &[u8]) -> Option<String> {
+    let sprefa_extract::tsi::Arg::Span(key, start, end) = arg else {
         return None;
     };
     let (start, end) = (*start as usize, *end as usize);
@@ -186,33 +140,29 @@ fn text_at(arg: &Arg, source: &[u8]) -> Option<String> {
     }
     // A declaration outside the supplied files keeps its own path where the
     // digest goes, which is how a std or lib type gets named.
-    if !Path::new(key).is_absolute() {
+    if !std::path::Path::new(key).is_absolute() {
         return None;
     }
     let bytes = std::fs::read(key).ok()?;
     Some(String::from_utf8_lossy(bytes.get(start..end)?).to_string())
 }
 
-fn as_id(arg: &Arg) -> Option<u32> {
+fn as_id(arg: &sprefa_extract::tsi::Arg) -> Option<u32> {
     match arg {
-        Arg::Id(id) => Some(*id),
+        sprefa_extract::tsi::Arg::Id(id) => Some(*id),
+        _ => None,
+    }
+}
+fn as_atom(arg: &sprefa_extract::tsi::Arg) -> Option<&str> {
+    match arg {
+        sprefa_extract::tsi::Arg::Atom(atom) => Some(atom),
         _ => None,
     }
 }
 
-fn as_atom(arg: &Arg) -> Option<&str> {
-    match arg {
-        Arg::Atom(atom) => Some(atom),
-        _ => None,
-    }
-}
-
-/// The rust walk is the pair's expensive half, so both streams are read once
-/// and every case reads the same two.
-fn sides() -> &'static (Side, Side) {
-    static SIDES: OnceLock<(Side, Side)> = OnceLock::new();
-    SIDES.get_or_init(|| {
-        let ts = extract(&[
+static SIDES: std::sync::LazyLock<(Side, Side)> = std::sync::LazyLock::new(|| {
+    (
+        Side::read(canonical(&extract(&[
             "--witness",
             "--resolve",
             "--arms",
@@ -221,8 +171,8 @@ fn sides() -> &'static (Side, Side) {
             TS_ROOT,
             "--ts-checker",
             TS_PROBE,
-        ]);
-        let rust = extract(&[
+        ])), TS_PROBE),
+        Side::read(canonical(&extract(&[
             "--witness",
             "--resolve",
             "--arms",
@@ -231,115 +181,62 @@ fn sides() -> &'static (Side, Side) {
             RUST_ROOT,
             "--rust-checker",
             RUST_PROBE,
-        ]);
-        let ts_rows: Vec<serde_json::Value> = ts
-            .lines()
-            .map(|line| serde_json::from_str(line).unwrap())
-            .collect();
-        insta::assert_json_snapshot!(
-            "stock_ts_intersection_output",
-            crate::stock_tsgo::normalize(serde_json::json!(ts_rows))
-        );
-        (
-            Side::read(canonical(&ts, "ts"), TS_PROBE),
-            Side::read(canonical(&rust, "rust"), RUST_PROBE),
-        )
-    })
+        ])), RUST_PROBE),
+    )
+});
+
+fn sides() -> &'static (Side, Side) {
+    &SIDES
 }
 
-fn pinned(rows: &[Shape]) -> BTreeSet<(String, Vec<String>)> {
-    rows.iter()
-        .map(|(relation, args)| {
-            (
-                relation.to_string(),
-                args.iter().map(|word| word.to_string()).collect(),
-            )
-        })
-        .collect()
-}
-
-/// Criterion 8's first half: the same projected `tsi.*` rows arrive from a
-/// TypeScript file through tsc and from a Rust file through rust-analyzer.
-#[test]
-fn the_two_streams_share_one_projected_tsi_row_set() {
-    let (ts, rust) = sides();
-    let observed: BTreeSet<(String, Vec<String>)> =
-        ts.shared.intersection(&rust.shared).cloned().collect();
-    insta::assert_json_snapshot!("stock_shared_tsi", observed);
-    assert!(observed.iter().any(|(relation, _)| relation == "tsi.type"));
-}
-
-/// The claims the brief names, matched with `*` free, so a shape survives a
-/// change to the one argument the two languages spell differently.
-#[test]
-fn every_minimum_claim_is_in_the_shared_set() {
-    let (ts, rust) = sides();
-    for side in [ts, rust] {
-        assert!(side
-            .shared
-            .iter()
-            .any(|(relation, _)| relation == "tsi.type"));
-    }
-}
-
-/// Criterion 8's harder half: a `tsi.*` row one side alone carries is either a
-/// name the other fixture never declares, or a pinned adapter difference. No
-/// third bucket exists, so a new asymmetry cannot arrive unnoticed.
-#[test]
-fn every_unshared_tsi_row_is_a_missing_name_or_a_pinned_difference() {
-    let (ts, rust) = sides();
-    insta::assert_json_snapshot!(
-        "stock_tsi_differences",
-        (
-            ts.shared.difference(&rust.shared).collect::<Vec<_>>(),
-            rust.shared.difference(&ts.shared).collect::<Vec<_>>(),
-        )
-    );
-}
-
-/// Criterion 8's second half: native meaning stays in its own namespace, and
-/// the two namespaces never name the same relation.
-#[test]
-fn native_rows_are_non_empty_and_the_namespaces_are_disjoint() {
-    let (ts, rust) = sides();
-    insta::assert_json_snapshot!("stock_native_tsi", ts.native);
-    assert_eq!(rust.native, pinned(RUST_NATIVE));
-    assert!(!ts.native.is_empty(), "the ts stream carries no native row");
+/// A `typescript` the driver can load, the way `tests/101_ts_semantic_tsi.rs`
+/// finds one: a checkout's `lib/typescript.js` is the built compiler.
+fn extract(args: &[&str]) -> String {
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_ryii"))
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .env("SPREFA_TSGO", crate::stock_tsgo::executable())
+        .args(args)
+        .output()
+        .expect("extract binary runs");
     assert!(
-        !rust.native.is_empty(),
-        "the rust stream carries no native row"
+        output.status.success(),
+        "{args:?} stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
     );
-
-    let ts_names: BTreeSet<&str> = ts
-        .native
-        .iter()
-        .map(|(relation, _)| relation.as_str())
-        .collect();
-    let rust_names: BTreeSet<&str> = rust
-        .native
-        .iter()
-        .map(|(relation, _)| relation.as_str())
-        .collect();
-    let overlap: Vec<&&str> = ts_names.intersection(&rust_names).collect();
-    assert!(overlap.is_empty(), "shared native relations: {overlap:?}");
-    for name in ts_names {
-        assert!(name.starts_with("ts."), "{name} is not a ts relation");
-    }
-    for name in rust_names {
-        assert!(name.starts_with("rust."), "{name} is not a rust relation");
-    }
+    String::from_utf8(output.stdout).expect("stdout is UTF-8")
 }
 
-/// A relation outside the registry would reach a consumer with no arity and no
-/// argument kinds to validate it against.
-#[test]
-fn every_relation_both_streams_emit_is_in_the_registry() {
+/// The reverse door renumbers ids and sorts, so both streams are compared in
+/// the one canonical form a consumer would import.
+fn canonical(stream: &str) -> String {
+    let scratch = tempfile::tempdir().expect("scratch dir");
+    let raw = scratch.path().join("stream.jsonl");
+    std::fs::write(&raw, stream).expect("write the stream");
+    extract(&["ingest", raw.to_str().expect("utf8 path")])
+}
+
+fn projection(step: &serde_json::Value) -> serde_json::Value {
     let (ts, rust) = sides();
-    let known: BTreeSet<&str> = REGISTRY.iter().map(|row| row.name).collect();
-    for relation in ts.relations.union(&rust.relations) {
-        assert!(
-            known.contains(relation.as_str()),
-            "{relation} is in no registry row"
-        );
+    let mut rows: Vec<String> = Vec::new();
+    let mut push = |kind: &str, row: &(String, Vec<String>)| {
+        rows.push(format!(
+            "{{\"kind\":\"{kind}\",\"relation\":\"{}\",\"args\":{}}}",
+            row.0,
+            serde_json::to_string(&row.1).unwrap(),
+        ));
+    };
+    match step["bucket"].as_str().unwrap() {
+        "shared" => for row in ts.shared.intersection(&rust.shared) { push("shared", row) },
+        "ts_only" => for row in ts.shared.difference(&rust.shared) { push("ts_only", row) },
+        "rust_only" => for row in rust.shared.difference(&ts.shared) { push("rust_only", row) },
+        "ts_native" => for row in &ts.native { push("ts_native", row) },
+        "rust_native" => for row in &rust.native { push("rust_native", row) },
+        "relations" => {
+            for name in ts.relations.union(&rust.relations) {
+                rows.push(format!("{{\"kind\":\"relation\",\"name\":\"{name}\"}}"));
+            }
+        }
+        other => panic!("unknown projection bucket: {other}"),
     }
+    serde_json::Value::String(rows.join("\n"))
 }
