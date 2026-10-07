@@ -97,6 +97,9 @@ pub(super) fn checker_workspace_loaded(
     let mut load = Duration::ZERO;
     let fresh = !all.contains_key(&key);
     if fresh {
+        // One workspace root stays warm. A database holds GBs, and a daemon
+        // that walks worktrees would otherwise keep one per root forever.
+        all.retain(|(cached_root, _, _), _| cached_root == &root);
         let (db, vfs, roots, elapsed) =
             load_checker_workspace(&root, tier, budget, &discovered.metadata)?;
         load = elapsed;

@@ -34,6 +34,8 @@ pub(super) fn names_project(
     let mut crates: Vec<serde_json::Value> = Vec::new();
     let mut library: HashMap<&PackageId, (usize, String)> = HashMap::new();
     let mut targets: Vec<(&PackageId, bool, bool, bool, usize)> = Vec::new();
+    // Build output and JS deps hold `.rs`, `.toml` and `.md` the loader would read.
+    let target_dir = metadata.target_directory.to_string();
     for package in metadata.workspace_packages() {
         // Edges come from the default-feature resolve; every feature is on as a cfg.
         let cfg: Vec<String> = package
@@ -73,7 +75,7 @@ pub(super) fn names_project(
                 "cfg": cfg,
                 "is_workspace_member": true,
                 "is_proc_macro": target.kind.iter().any(|kind| matches!(kind, TargetKind::ProcMacro)),
-                "source": { "include_dirs": [package_dir, source_dir], "exclude_dirs": [] },
+                "source": { "include_dirs": [package_dir, source_dir], "exclude_dirs": [target_dir, format!("{package_dir}/target"), format!("{package_dir}/node_modules")] },
             }));
             if is_lib {
                 library.insert(&package.id, (index, target.name.replace('-', "_")));

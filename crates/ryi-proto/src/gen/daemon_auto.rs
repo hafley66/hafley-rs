@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest as _, Sha256};
 
-pub const IDLE_SECS: u64 = 600;
+pub const IDLE_SECS: u64 = 120;
 pub const HANDSHAKE: bool = true;
 pub const SERVER_BIN: &str = "ryii";
 
