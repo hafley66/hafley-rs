@@ -1,0 +1,32 @@
+{
+  "args": [
+    "rust_findings/module_plane/crate_a/src/lib.rs",
+    "rust_findings/module_plane/crate_a/src/nested.rs",
+    "rust_findings/module_plane/crate_a/src/real_target.rs",
+    "rust_findings/module_plane/crate_a/src/hop_source.rs",
+    "rust_findings/module_plane/crate_a/src/hop_one.rs",
+    "rust_findings/module_plane/crate_a/src/hop_two.rs",
+    "rust_findings/module_plane/crate_a/src/glob_one.rs",
+    "rust_findings/module_plane/crate_a/src/glob_two.rs",
+    "rust_findings/module_plane/crate_a/src/renamed_src.rs",
+    "rust_findings/module_plane/crate_b/src/lib.rs"
+  ],
+  "claims": [
+    { "table": "edges", "present": ["crate_path_caller", "nested", "crate_path_fn", "import_resolve"] },
+    { "table": "edges", "present": ["super_caller", "lib", "root_target", "import_resolve"] },
+    { "table": "edges", "present": ["path_mod_caller", "real_target", "path_fn", "import_resolve"] },
+    { "table": "edges", "present": ["hop_two_caller", "hop_source", "hop_target_fn", "import_resolve"] },
+    { "table": "edges", "present": ["renamed_caller", "renamed_src", "original_name", "import_resolve"] },
+    { "table": "edges", "present": ["shadow_caller", "lib", "glob_a_fn", "name_resolve"] },
+    { "table": "edges", "present": ["inline_caller", "lib", "inline_fn", "name_resolve"] },
+    { "table": "edges", "present": ["cross_crate_caller", "lib", "cross_fn", "import_resolve"] },
+    { "table": "imports", "present": ["hop_one", "reexported_fn", "hop_target_fn", "hop_source", "hop_target_fn", "local", 0] },
+    { "table": "imports", "present": ["lib", "reexported_fn_two", "reexported_fn_two", "hop_source", "hop_target_fn", "indirect", 2] },
+    { "table": "imports", "present": ["lib", "renamed_local", "original_name", "renamed_src", "original_name", "local", 0] },
+    { "table": "imports", "present": ["lib", "inline_fn", "inline_fn", "lib", "inline_fn", "local", 0] },
+    { "table": "unresolved", "present": ["lib", "ambiguous", "conflict"] },
+    { "table": "edges", "absent_caller": "glob_ambiguous_caller" },
+    { "table": "imports", "absent_local": "StdMapUnused" },
+    { "table": "imports", "counts": { "non_module": 9, "module": 9 } }
+  ]
+}

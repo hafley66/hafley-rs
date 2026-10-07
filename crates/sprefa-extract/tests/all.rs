@@ -630,3 +630,6 @@ mod rust_call_contract_support;
 
 #[path = "support/17_go_residual.rs"]
 mod go_residual_support;
+
+#[path = "support/18_rust_module_plane.rs"]
+mod rust_module_plane_support;
