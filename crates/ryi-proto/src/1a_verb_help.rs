@@ -1,22 +1,22 @@
 use clap::ArgAction;
 
 pub const EXAMPLES: &[(&str, &[&str])] = &[
-    ("capabilities", &["ryi capabilities", "ryi capabilities --format jsonl"]),
-    ("schema", &["ryi schema", "ryi schema --format jsonl"]),
-    ("fast", &["ryi fast crates/sprefa-extract/tests/fixtures/type_ladder/src/_1_none.rs", "ryi fast --lines crates/sprefa-extract/tests/fixtures/type_ladder/src/_1_none.rs"]),
-    ("slow", &["ryi slow --no-checker --scip-index crates/sprefa-extract/tests/fixtures/scip_relationship/fixture.scip crates/sprefa-extract/tests/fixtures/scip_relationship/animal.ts", "ryi slow --no-checker --lines --scip-index crates/sprefa-extract/tests/fixtures/scip_relationship/fixture.scip crates/sprefa-extract/tests/fixtures/scip_relationship/animal.ts"]),
-    ("scip", &["ryi scip --root crates/sprefa-extract/tests/fixtures/scip_relationship --scip-index crates/sprefa-extract/tests/fixtures/scip_relationship/fixture.scip --raw", "ryi scip --root crates/sprefa-extract/tests/fixtures/scip_relationship --scip-index crates/sprefa-extract/tests/fixtures/scip_relationship/fixture.scip --raw --records document"]),
-    ("ingest", &["ryi ingest crates/sprefa-extract/tests/fixtures/ingest/00_foreign.jsonl", "ryi ingest crates/sprefa-extract/tests/fixtures/ingest/05_symbol.jsonl"]),
-    ("query", &["ryi query --query '(function_item name: (identifier) @name)' crates/sprefa-extract/tests/fixtures/type_ladder/src/_1_none.rs", "ryi query --lang rust --query '(struct_item name: (type_identifier) @name)' crates/sprefa-extract/tests/fixtures/type_ladder/src/_1_none.rs"]),
-    ("graph", &["ryi graph --callers slug --root crates/sprefa-extract/tests/fixtures/cleave_ts/basic crates/sprefa-extract/tests/fixtures/cleave_ts/basic", "ryi graph --from boot --root crates/sprefa-extract/tests/fixtures/cleave_ts/basic crates/sprefa-extract/tests/fixtures/cleave_ts/basic"]),
-    ("trail", &["ryi trail 1", "ryi trail 3"]),
-    ("diff", &["ryi diff --from HEAD --to HEAD --root . --pattern '*.ts'", "ryi diff --from HEAD --to HEAD --root . --pattern '*.rs'"]),
-    ("watch", &["ryi watch --root crates/sprefa-extract/tests/fixtures/cleave_ts/basic --once", "ryi watch --root crates/sprefa-extract/tests/fixtures/cleave_ts/basic --once --pattern '*.ts'"]),
-    ("stratify", &["ryi stratify --from crates/sprefa-extract/tests/fixtures/cleave_ts/basic/src/app.ts --root crates/sprefa-extract/tests/fixtures/cleave_ts/basic crates/sprefa-extract/tests/fixtures/cleave_ts/basic", "ryi stratify --kind call --from crates/sprefa-extract/tests/fixtures/cleave_ts/basic/src/app.ts --root crates/sprefa-extract/tests/fixtures/cleave_ts/basic crates/sprefa-extract/tests/fixtures/cleave_ts/basic"]),
-    ("rename", &["ryi rename crates/sprefa-extract/tests/fixtures/cleave_ts/basic/src/util.ts#slug slugged --root crates/sprefa-extract/tests/fixtures/cleave_ts/basic", "ryi rename crates/sprefa-extract/tests/fixtures/cleave_ts/basic/src/util.ts#slug slugged --root crates/sprefa-extract/tests/fixtures/cleave_ts/basic --text-refs"]),
-    ("move", &["ryi move crates/sprefa-extract/tests/fixtures/cleave_ts/basic/src/util.ts crates/sprefa-extract/tests/fixtures/cleave_ts/basic/src/utils.ts --root crates/sprefa-extract/tests/fixtures/cleave_ts/basic", "ryi move crates/sprefa-extract/tests/fixtures/cleave_ts/basic/src/util.ts crates/sprefa-extract/tests/fixtures/cleave_ts/basic/src/utils.ts --root crates/sprefa-extract/tests/fixtures/cleave_ts/basic --text-refs"]),
-    ("cleave", &["ryi cleave crates/sprefa-extract/tests/fixtures/cleave_ts/basic/src/util.ts#slug crates/sprefa-extract/tests/fixtures/cleave_ts/basic/src/slug.ts --root crates/sprefa-extract/tests/fixtures/cleave_ts/basic", "ryi cleave crates/sprefa-extract/tests/fixtures/cleave_ts/basic/src/util.ts#slug crates/sprefa-extract/tests/fixtures/cleave_ts/basic/src/slug.ts --root crates/sprefa-extract/tests/fixtures/cleave_ts/basic --text-refs"]),
-    ("region", &["ryi region crates/sprefa-extract/tests/fixtures/help_region/0_region.dl7 demo --generated crates/sprefa-extract/tests/fixtures/help_region/1_body.txt", "ryi region crates/sprefa-extract/tests/fixtures/help_region/0_region.dl7 demo --generated crates/sprefa-extract/tests/fixtures/help_region/1_body.txt --format jsonl"]),
+    ("capabilities", &["ryi capabilities"]),
+    ("schema", &["ryi schema"]),
+    ("fast", &["ryi fast src/"]),
+    ("slow", &["ryi slow --scip-index index.scip src/a.ts"]),
+    ("scip", &["ryi scip --root . --raw"]),
+    ("ingest", &["ryi ingest rows.jsonl"]),
+    ("query", &["ryi query --query '(function_item name: (identifier) @n)' src/"]),
+    ("graph", &["ryi graph --callers src/a.ts#slug --root . src/"]),
+    ("trail", &["ryi trail 1"]),
+    ("diff", &["ryi diff --from HEAD~1 --to HEAD --root ."]),
+    ("watch", &["ryi watch --root . --once"]),
+    ("stratify", &["ryi stratify --from src/main.ts --root . src/"]),
+    ("rename", &["ryi rename src/a.ts#slug slugged --root ."]),
+    ("move", &["ryi move src/a.ts src/b.ts --root ."]),
+    ("cleave", &["ryi cleave src/a.ts#slug src/slug.ts --root ."]),
+    ("region", &["ryi region gen.rs demo --generated body.txt"]),
 ];
 
 pub fn compact_help(command: &clap::Command, examples: &[&str]) -> String {
@@ -28,8 +28,7 @@ pub fn compact_help(command: &clap::Command, examples: &[&str]) -> String {
     };
     let mut text = format!("Usage: {usage}\n");
     if let Some(about) = command.get_about() { text.push_str(&format!("{about}\n")); }
-    text.push_str("\nExamples:\n");
-    for example in examples { text.push_str(&format!("  {example}\n")); }
+    for example in examples { text.push_str(&format!("e.g. {example}\n")); }
     let common = ["root", "pattern", "entry", "depth", "lines"];
     let mut input_flags = Vec::new();
     let mut value_flags = Vec::new();
@@ -42,10 +41,11 @@ pub fn compact_help(command: &clap::Command, examples: &[&str]) -> String {
         if common.contains(&id) { input_flags.push(spelling); continue; }
         let doc = match id {
             "flow_path" => "value paths from PATH@START:END or tagged BLOB@START:END; UTF-8 offsets",
-            "callers" => "incoming calls to [PATH#]NAME",
-            "from" => "reachability from [PATH#]NAME",
-            "call_path" => "shortest call paths from [PATH#]NAME",
-            "type_path" => "shortest type paths from [PATH#]NAME",
+            "callers" => "incoming calls",
+            "uses" => "type uses",
+            "from" => "reachable set",
+            "call_path" => "shortest call paths",
+            "type_path" => "shortest type paths",
             _ => "",
         };
         let doc = if doc.is_empty() { arg.get_help().map(ToString::to_string).unwrap_or_default() } else { doc.to_owned() };
@@ -55,10 +55,11 @@ pub fn compact_help(command: &clap::Command, examples: &[&str]) -> String {
         else if matches!(arg.get_action(), ArgAction::SetTrue | ArgAction::SetFalse) { switches.push(row); }
         else { value_flags.push(row); }
     }
-    if !input_flags.is_empty() { text.push_str(&format!("\nCommon: {}\n", input_flags.join(" | "))); }
-    for group in question_flags.chunks(3) { text.push_str(&format!("  {}\n", group.join(" | "))); }
-    if !value_flags.is_empty() { text.push_str("\nFlags:\n"); for flag in value_flags { text.push_str(&format!("  {flag}\n")); } }
-    if !switches.is_empty() { text.push_str("Switches:\n"); for group in switches.chunks(2) { text.push_str(&format!("  {}\n", group.join(" | "))); } }
+    for row in question_flags { text.push_str(&format!("  {row}\n")); }
+    if !input_flags.is_empty() { text.push_str(&format!("Input: {}\n", input_flags.join(" "))); }
+    let bare = |rows: Vec<String>| rows.iter().map(|row| row.split("  ").next().unwrap().to_owned()).collect::<Vec<_>>().join(" ");
+    if !value_flags.is_empty() { text.push_str(&format!("Flags: {}\n", bare(value_flags))); }
+    if !switches.is_empty() { text.push_str(&format!("Switches: {}\n", bare(switches))); }
     text
 }
 

@@ -46,10 +46,7 @@ pub fn local_help() -> bool {
     let topic = matches.subcommand_matches("help").and_then(|m| m.get_one::<String>("topic")).unwrap();
     let mut command = help_command();
     if topic == "flags" || topic == "extract" {
-        let text = crate::verb_help::compact_help(&Ryi::command(), &[
-            "ryi crates/sprefa-extract/tests/fixtures/type_ladder/src/_1_none.rs",
-            "ryi --lines crates/sprefa-extract/tests/fixtures/type_ladder/src/_1_none.rs",
-        ]);
+        let text = crate::verb_help::compact_help(&Ryi::command(), &["ryi --lines src/"]);
         print!("{text}\nGlobal: --format jsonl\nLogging: RUST_LOG; HAFLEY_LOG_FORMAT=json|text\n");
     } else if let Some(sub) = command.find_subcommand_mut(topic) {
         let _ = sub.print_help();
