@@ -663,3 +663,6 @@ mod resolve_witness_support;
 
 #[path = "support/28_python.rs"]
 mod python_parity_support;
+
+#[path = "support/29_ts_specifiers.rs"]
+mod ts_specifiers_support;
