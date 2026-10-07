@@ -132,6 +132,10 @@ pub struct WorkTrace {
     reported: Work,
 }
 
+// SAFETY: `handle` and the callback's `state` belong to one `rusqlite::Connection`, which is
+// `Send`; the trace moves with its connection and is never shared (`WorkTrace` stays `!Sync`).
+unsafe impl Send for WorkTrace {}
+
 impl WorkTrace {
     pub fn start(db: &Connection) -> rusqlite::Result<WorkTrace> {
         let mut state = State::default();
