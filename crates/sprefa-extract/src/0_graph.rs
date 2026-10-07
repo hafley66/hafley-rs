@@ -459,17 +459,18 @@ fn emit_summary_line(rows: &[FlatFact], arm: &Arm<'_>, compared: bool) {
         return;
     }
     let mut split = GradeSplit::default();
+    let nodes = matches!(arm, Arm::From(_));
     for row in rows {
         match row {
-            FlatFact::GraphEdge { grade, .. } | FlatFact::GraphNode { grade, .. } => {
-                split.bump(grade)
-            }
+            FlatFact::GraphEdge { grade, .. } if !nodes => split.bump(grade),
+            FlatFact::GraphNode { grade, .. } if nodes => split.bump(grade),
             _ => {}
         }
     }
     crate::ops::print_diagnostic(format_args!(
-        "{} edges: {} +, {} ~, {} -",
-        rows.len(),
+        "{} {}: {} +, {} ~, {} -",
+        split.plus + split.tilde + split.minus,
+        if nodes { "nodes" } else { "edges" },
         split.plus,
         split.tilde,
         split.minus
