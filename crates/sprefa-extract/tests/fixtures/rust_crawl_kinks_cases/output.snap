@@ -1,0 +1,186 @@
+---
+source: tests/support/2_fixture_runner.rs
+---
+{
+  "0_kinks": {
+    "closure_chain_edges": [
+      [
+        "closure@1182",
+        "worker",
+        1185,
+        "name_resolve"
+      ],
+      [
+        "entry",
+        "spawn",
+        1176,
+        "name_resolve"
+      ],
+      [
+        "entry",
+        "worker",
+        1185,
+        "name_resolve"
+      ]
+    ],
+    "closure_chain_unresolved": [
+      [
+        "needs_types",
+        "f"
+      ]
+    ],
+    "closure_mirror_edges": [
+      [
+        "closure@1014",
+        "spawn",
+        1017,
+        "name_resolve"
+      ],
+      [
+        "closure@1023",
+        "worker",
+        1026,
+        "name_resolve"
+      ],
+      [
+        "closure@1045",
+        "other",
+        1048,
+        "name_resolve"
+      ],
+      [
+        "entry",
+        "other",
+        1048,
+        "name_resolve"
+      ],
+      [
+        "entry",
+        "spawn",
+        1008,
+        "name_resolve"
+      ],
+      [
+        "entry",
+        "spawn",
+        1017,
+        "name_resolve"
+      ],
+      [
+        "entry",
+        "spawn",
+        1039,
+        "name_resolve"
+      ],
+      [
+        "entry",
+        "worker",
+        1026,
+        "name_resolve"
+      ]
+    ],
+    "closure_mirror_unresolved": [
+      [
+        "needs_types",
+        "f"
+      ]
+    ],
+    "const_block_edges": [
+      [
+        "outer",
+        "inner",
+        869,
+        "name_resolve"
+      ]
+    ],
+    "const_block_nodes": [
+      "inner",
+      "outer"
+    ],
+    "const_block_unresolved": [],
+    "no_call_initializer_nodes": [],
+    "qualified_edges": [
+      [
+        "main",
+        "wrapper.rs",
+        "main"
+      ],
+      [
+        "relative",
+        "util/deep.rs",
+        "local"
+      ],
+      [
+        "relative",
+        "util/mod.rs",
+        "helper"
+      ],
+      [
+        "spread",
+        "main.rs",
+        "build"
+      ],
+      [
+        "spread",
+        "util/deep.rs",
+        "helper"
+      ],
+      [
+        "spread",
+        "util/mod.rs",
+        "helper"
+      ]
+    ],
+    "qualified_unresolved": [
+      [
+        "no_corpus_def",
+        "other_crate::helper"
+      ]
+    ],
+    "static_init_edges": [
+      [
+        "ROW",
+        "helper",
+        981,
+        "name_resolve"
+      ],
+      [
+        "TABLE",
+        "helper",
+        946,
+        "name_resolve"
+      ]
+    ],
+    "static_init_unresolved": [],
+    "ts_pair_edges": [
+      [
+        "run",
+        "helper",
+        33,
+        "name_resolve"
+      ]
+    ],
+    "ts_pair_unresolved": [],
+    "unresolved_edges": [
+      [
+        "caller",
+        "compute",
+        1398,
+        "name_resolve"
+      ],
+      [
+        "caller",
+        "compute",
+        1417,
+        "name_resolve"
+      ]
+    ],
+    "unresolved_sites": 3,
+    "unresolved_unresolved": [
+      [
+        "no_corpus_def",
+        "Vec::new"
+      ]
+    ]
+  }
+}

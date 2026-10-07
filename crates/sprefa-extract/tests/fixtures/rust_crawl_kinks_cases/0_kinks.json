@@ -1,0 +1,11 @@
+{
+  "sets": [
+    "const_block",
+    "static_init",
+    "closure_chain",
+    "closure_mirror",
+    "qualified",
+    "unresolved",
+    "ts_pair"
+  ]
+}

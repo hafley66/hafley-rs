@@ -639,3 +639,6 @@ mod python_call_grind_support;
 
 #[path = "support/20_ts_crawl_kinks.rs"]
 mod ts_crawl_kinks_support;
+
+#[path = "support/21_rust_crawl_kinks.rs"]
+mod rust_crawl_kinks_support;
