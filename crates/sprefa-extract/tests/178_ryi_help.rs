@@ -8,6 +8,7 @@ fn generated_clap_help_matches_captured_main() {
     cases.extend(ryi_proto::help::help_command().get_subcommands().map(|sub| {
         (sub.get_name().to_owned(), vec![sub.get_name().to_owned(), "--help".to_owned()])
     }));
+    cases.push(("flags".to_owned(), vec!["help".to_owned(), "flags".to_owned()]));
     cases.push(("bare".to_owned(), vec![]));
     let mut snapshot = String::new();
     for (name, args) in cases {

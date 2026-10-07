@@ -44,3 +44,6 @@ pub mod build_identity;
 
 #[path = "1_help.rs"]
 pub mod help;
+
+#[path = "1a_verb_help.rs"]
+pub mod verb_help;
