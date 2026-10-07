@@ -182,7 +182,3 @@ Global: --format jsonl
 Logging: RUST_LOG; HAFLEY_LOG_FORMAT=json|text
 SQLite: --resolve stores phase 1 per-file and phase 2 project rows; stdout streams phase 2 only. Every SQLite unresolved row has its path.
 stderr:
-=== bare (exit 2) ===
-stdout:
-stderr:
-rust Rust workspace -> 'ryii' --sqlite 'facts-rust-_.db' '.'  |  'ryii' graph --callers main --root '.' '.'  |  'ryii' --root '.' --package-deps '.'

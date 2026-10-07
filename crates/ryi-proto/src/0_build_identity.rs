@@ -21,15 +21,18 @@ fn git_directory(root: &Path) -> Option<PathBuf> {
     }
 }
 
+/// origin/main when the checkout tracks a remote, else the local main branch.
 pub fn main_hash(root: &Path) -> Option<String> {
     let directory = git_directory(root)?;
-    if let Ok(hash) = std::fs::read_to_string(directory.join("refs/heads/main")) {
-        return (!hash.trim().is_empty()).then(|| hash.trim().to_owned());
-    }
-    let packed = std::fs::read_to_string(directory.join("packed-refs")).ok()?;
-    packed.lines().find_map(|line| {
-        let (hash, reference) = line.split_once(' ')?;
-        (reference == "refs/heads/main").then(|| hash.to_owned())
+    let packed = std::fs::read_to_string(directory.join("packed-refs")).unwrap_or_default();
+    ["refs/remotes/origin/main", "refs/heads/main"].into_iter().find_map(|reference| {
+        let loose = std::fs::read_to_string(directory.join(reference)).ok()
+            .map(|hash| hash.trim().to_owned())
+            .filter(|hash| !hash.is_empty());
+        loose.or_else(|| packed.lines().find_map(|line| {
+            let (hash, name) = line.split_once(' ')?;
+            (name == reference).then(|| hash.to_owned())
+        }))
     })
 }
 
@@ -39,9 +42,9 @@ impl Build<'_> {
         let Some(main) = main_hash(self.root) else { return String::new(); };
         if main == self.hash { return String::new(); }
         let crate_path = match binary { "ryii" => "crates/sprefa-extract", _ => "crates/ryi" };
-        let features = if binary == "ryii" { " --features cli,ts-checker" } else { "" };
+        let features = if binary == "ryii" { " --features cli,read" } else { "" };
         let path = self.root.join(crate_path).display().to_string().replace('\'', "'\\''");
-        format!("{binary}: stale build {} ({}) from {}; main is {main}. Rebuild: cargo install --path '{path}'{features} --bin {binary} --force\n", self.hash, self.date, self.root.display())
+        format!("{binary}: stale build {} ({}) from {}; main is {main}. Rebuild: cargo install --locked --path '{path}'{features} --bin {binary} --force\n", self.hash, self.date, self.root.display())
     }
 
     pub fn version(&self, binary: &str) -> String {

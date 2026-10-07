@@ -9,6 +9,8 @@ fn build_identity_fixture_table() {
         ("packed", vec![(".git/packed-refs", "# packed\nbbbb refs/heads/main\n")], true),
         ("worktree", vec![(".git", "gitdir: common/worktrees/lane\n"), ("common/worktrees/lane/commondir", "../..\n"), ("common/refs/heads/main", "bbbb\n")], true),
         ("current", vec![(".git/refs/heads/main", "aaaa\n")], true),
+        ("origin", vec![(".git/refs/heads/main", "aaaa\n"), (".git/refs/remotes/origin/main", "bbbb\n")], true),
+        ("origin_packed", vec![(".git/refs/heads/main", "bbbb\n"), (".git/packed-refs", "aaaa refs/remotes/origin/main\n")], true),
         ("unreadable", vec![(".git/config", "")], true),
         ("missing", vec![], true),
         ("unset", vec![(".git/refs/heads/main", "bbbb\n")], false),
