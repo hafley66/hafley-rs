@@ -1,0 +1,66 @@
+---
+source: tests/support/2_fixture_runner.rs
+---
+{
+  "0_query": {
+    "plain_rows": 4,
+    "plain_named_rows": [
+      [
+        "trim",
+        15,
+        17
+      ],
+      [
+        "make_engine",
+        19,
+        23
+      ]
+    ],
+    "alternate_rows": 5,
+    "predicate_row": [
+      "shift",
+      7,
+      12
+    ],
+    "unknown_lang_stderr": "unknown lang 'klingon'\n",
+    "invalid_query_exit": 2,
+    "digest_matches_path_stream": true,
+    "bad_digest_exit": 2,
+    "markdown_rows": [
+      {
+        "end_line": 2,
+        "heading": "# Title\n",
+        "line": 1,
+        "path": "<path>"
+      }
+    ],
+    "markdown_inline_rows": [
+      {
+        "em": "*em*",
+        "end_line": 1,
+        "line": 1,
+        "path": "<path>"
+      },
+      {
+        "end_line": 1,
+        "line": 1,
+        "lnk": "[link](url)",
+        "path": "<path>"
+      }
+    ],
+    "html_rows": [
+      {
+        "end_line": 1,
+        "line": 1,
+        "path": "<path>",
+        "tag": "div"
+      },
+      {
+        "end_line": 1,
+        "line": 1,
+        "path": "<path>",
+        "tag": "p"
+      }
+    ]
+  }
+}

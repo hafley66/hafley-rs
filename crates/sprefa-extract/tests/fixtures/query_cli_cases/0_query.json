@@ -1,0 +1,3 @@
+{
+  "fixtures": ["rust/sample.rs", "ts/sample.ts", "temp git repo (digest)", "temp md/md_inline/html files"]
+}

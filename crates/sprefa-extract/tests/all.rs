@@ -669,3 +669,6 @@ mod ts_specifiers_support;
 
 #[path = "support/30_stratify.rs"]
 mod stratify_support;
+
+#[path = "support/31_query_cli.rs"]
+mod query_cli_support;
