@@ -681,7 +681,7 @@ fn land(
         // The recipient reads pushed mail beside its own turns, so the typed
         // line names its sender through the same mood template a lane uses.
         let rendered = crate::supervise::render_mail(
-            &crate::supervise::mood_template(to),
+            &crate::supervise::mood_template_in(store, to),
             message.kind.as_str(),
             &message.id,
             &message.from,
@@ -719,7 +719,7 @@ fn land(
     // The recipient reads pushed mail beside its own turns, so the row names
     // its sender through the same mood template a lane's supervisor uses.
     let rendered = crate::supervise::render_mail(
-        &crate::supervise::mood_template(to),
+        &crate::supervise::mood_template_in(store, to),
         message.kind.as_str(),
         &message.id,
         &message.from,

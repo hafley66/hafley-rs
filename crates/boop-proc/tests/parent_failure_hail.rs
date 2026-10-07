@@ -263,8 +263,8 @@ fn a_clean_completion_hails_nothing_but_its_rc() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// A parentless lane addresses nobody, so it writes nothing at all: a row to
-/// the empty string would match no wait.
+/// A parentless lane has no parent to hail: no failure rows, only the
+/// completion receipt every lane writes.
 #[test]
 fn a_parentless_lane_writes_no_failure_row() {
     let dir = mail_dir("parentless");
@@ -281,7 +281,7 @@ fn a_parentless_lane_writes_no_failure_row() {
     assert_eq!(count(&dir, RETRYING), 0);
     assert_eq!(count(&dir, RETRY_BUDGET_EXHAUSTED), 0);
     assert_eq!(count(&dir, NO_DUPLICATE_END_ROW), 0);
-    assert_eq!(count(&dir, "result"), 0);
+    assert_eq!(count(&dir, "result"), 1);
     let _ = std::fs::remove_dir_all(&dir);
 }
 

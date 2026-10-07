@@ -102,7 +102,8 @@ fn one_lane_exit_writes_exactly_one_result_row() {
         verify: None,
         timeout_secs: None,
     };
-    std::thread::spawn(move || {
+    boop_store::_0_test_paths::set_root(&dir);
+    boop_store::_0_test_paths::spawn(move || {
         let _ = boop::supervise::run(lane, &mut DoneChannel);
     });
     wait_for(

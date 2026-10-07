@@ -1,0 +1,4 @@
+# sprefa-extract is its own workspace root, so the repo-level config does not
+# reach it. Same slow-test policy as the root workspace.
+[profile.default]
+slow-timeout = { period = "20s", terminate-after = 3 }

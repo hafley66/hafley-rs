@@ -492,9 +492,16 @@ fn run_case(case: &Case, llmock: &std::path::Path, registry: &Registry) -> Resul
     // the harness processes under it die with it.
     let _ = tmux(&server, &[], &["kill-server"]);
     scratch.teardown();
+    // The restarted server's environment is what the revived pane inherits:
+    // the same scratch home and provider env the first pane ran under.
+    let server_env: Vec<(String, String)> =
+        boop_store::testing::boop_test_env(&scratch.root.join("home"))
+            .into_iter()
+            .chain(launch.env.iter().cloned())
+            .collect();
     let restart = tmux(
         &server,
-        &launch.env,
+        &server_env,
         &["new-session", "-d", "-s", &scratch.route, "sleep 100000"],
     );
     assert!(

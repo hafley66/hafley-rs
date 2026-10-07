@@ -5,7 +5,7 @@
 test-threads = 16
 # A test past this is waiting on something that is not coming back; the 10
 # second law says investigate, not wait.
-slow-timeout = { period = "20s", terminations = 3 }
+slow-timeout = { period = "20s", terminate-after = 3 }
 
 # Filesystem watcher tests race each other for fsevents delivery; they fail
 # 1 in 3 even at -j 1 on main and 3 in 3 at 16 threads. Serialize them.
@@ -15,3 +15,18 @@ watchers = { max-threads = 1 }
 [[profile.default.overrides]]
 filter = 'test(/watch/)'
 test-group = 'watchers'
+
+# boop e2e tests each start a tmux server, a mock provider and real harness
+# TUIs. Alone they pass; 16 at once beside the rest of the workspace they miss
+# their own readiness deadlines (pr_push, lane_lifecycle, sync_convoy,
+# 2026-10-07). Cap them.
+[test-groups.boop-e2e]
+max-threads = 2
+
+[[profile.default.overrides]]
+filter = 'package(boop) & test(/_e2e::|^sync_convoy::/)'
+test-group = 'boop-e2e'
+# A harness TUI cold start alone takes 20-40s under load.
+slow-timeout = { period = "60s", terminate-after = 3 }
+# Load-sensitive; a pass on retry prints FLAKY, never a silent PASS.
+retries = 1

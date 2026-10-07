@@ -639,9 +639,19 @@ pub fn render_mail(template: &str, kind: &str, id: &str, from: &str, body: &str)
 /// The template mail addressed to `receiver` renders through. A store that
 /// cannot open leaves the default shape rather than dropping the mail.
 pub fn mood_template(receiver: &str) -> String {
-    boop_store::Store::default_path()
-        .and_then(boop_store::Store::open)
-        .and_then(|store| store.effective_mood(receiver))
+    match boop_store::Store::default_path().and_then(boop_store::Store::open) {
+        Ok(store) => mood_template_in(&store, receiver),
+        Err(error) => {
+            warn!(receiver, error = %error, "effective mood unresolved");
+            boop_store::ident::DEFAULT_MOOD_TEMPLATE.to_owned()
+        }
+    }
+}
+
+/// The same template read from a store the caller already holds.
+pub fn mood_template_in(store: &boop_store::Store, receiver: &str) -> String {
+    store
+        .effective_mood(receiver)
         .map(|mood| mood.template)
         .unwrap_or_else(|error| {
             warn!(receiver, error = %error, "effective mood unresolved");
@@ -1085,12 +1095,15 @@ fn supervise(
     let mut opening_hails: Vec<Hail> = Vec::new();
     // Resolved once: a lane's mood is a spawn-time attribute, and re-reading it
     // per hail would open the store inside the delivery path.
-    let mood = mood_template(&lane.lane);
     let mut watch = ParentWatch::new(&lane.mail_dir, &lane.lane);
     // One store for the lane's whole run: the commit push reads subscriptions
     // and records the reported head through it, and `deliver_outbound` opens
     // its own per send.
     let mail_store = bus::open_store(&lane.mail_dir).ok();
+    let mood = match &mail_store {
+        Some(store) => mood_template_in(store, &lane.lane),
+        None => mood_template(&lane.lane),
+    };
     let reported = mail_store
         .as_ref()
         .and_then(|store| store.lane_reported_head(&lane.lane).ok().flatten());

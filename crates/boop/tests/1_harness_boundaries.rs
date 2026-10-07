@@ -280,7 +280,7 @@ fn rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
         if path.is_dir() {
             if !matches!(
                 path.file_name().and_then(|n| n.to_str()),
-                Some("target" | "node_modules" | ".git")
+                Some("target" | "node_modules" | ".git" | "fixtures" | "fx" | "labs")
             ) {
                 rust_files(&path, out);
             }
