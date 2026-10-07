@@ -1,0 +1,82 @@
+{
+  "steps": [
+    {
+      "action": "run",
+      "name": "fast",
+      "arguments": [
+        "fast",
+        "tests/fixtures/call_ladder/src",
+        "--sqlite",
+        "$work/fast.db"
+      ],
+      "cwd": "$manifest",
+      "expect_exit_code": 0,
+      "raw_stdout": true,
+      "unasserted_stdout": true,
+      "unasserted_stderr": true
+    },
+    {
+      "action": "run",
+      "name": "slow",
+      "arguments": [
+        "slow",
+        "tests/fixtures/call_ladder/src",
+        "--root",
+        "tests/fixtures/call_ladder",
+        "--scip-index",
+        "tests/fixtures/call_ladder/index.scip",
+        "--no-checker",
+        "--sqlite",
+        "$work/slow.db"
+      ],
+      "cwd": "$manifest",
+      "expect_exit_code": 0,
+      "raw_stdout": true,
+      "unasserted_stdout": true,
+      "unasserted_stderr": true
+    },
+    {
+      "action": "sqlite_rows",
+      "name": "table",
+      "path": "$work/fast.db",
+      "sql": "\nwith f as (select distinct replace(caller_path, rtrim(caller_path, replace(caller_path, '/', '')), '') file,\n                  caller_site_start site, caller_name caller,\n                  replace(callee_path, rtrim(callee_path, replace(callee_path, '/', '')), '') target_file,\n                  callee_name target from resolved_edge),\n     s as (select distinct replace(caller_path, rtrim(caller_path, replace(caller_path, '/', '')), '') file,\n                  caller_site_start site, caller_name caller,\n                  replace(callee_path, rtrim(callee_path, replace(callee_path, '/', '')), '') target_file,\n                  callee_name target from slow.resolved_edge),\n     u as (select * from f union select * from s)\nselect group_concat(line, char(10)) from (\n  select printf('%-12s %4d %-18s -> %s:%-10s %s%s', file, site, caller, target_file, target,\n                iif((file, site, caller, target_file, target) in (select * from f), 'f', '-'),\n                iif((file, site, caller, target_file, target) in (select * from s), 's', '-')) line\n  from u order by file, site, caller, target)",
+      "attach": {
+        "slow": "$work/slow.db"
+      }
+    },
+    {
+      "action": "sql_query",
+      "name": "foreign_output",
+      "database": "$work/fast.db",
+      "query": "select count(*) from resolved_edge where caller_name = 'external_receiver' and callee_name = 'output' and callee_path like '%/_5_foreign/src/lib.rs'",
+      "expect": 0
+    },
+    {
+      "action": "sqlite_rows",
+      "name": "local_probes",
+      "path": "$work/fast.db",
+      "sql": "select (select count(*) from resolved_edge where caller_name in ('local_probe_six', 'local_probe_seven') and caller_path = callee_path and callee_name = 'rows'), (select count(*) from slow.resolved_edge where caller_name in ('local_probe_six', 'local_probe_seven') and caller_path = callee_path and callee_name = 'rows')",
+      "attach": {
+        "slow": "$work/slow.db"
+      }
+    },
+    {
+      "action": "sqlite_rows",
+      "name": "trait_adapter",
+      "path": "$work/fast.db",
+      "sql": "select (select count(*) from resolved_edge where caller_path like '%/_8_trait.rs' and callee_path like '%/_0_types.rs' and callee_name = 'ping'), (select count(*) from resolved_edge where caller_path like '%/_8_trait.rs' and callee_path like '%/_8_trait.rs' and callee_name = 'ping')"
+    },
+    {
+      "action": "sqlite_rows",
+      "name": "method_drops",
+      "path": "$work/fast.db",
+      "sql": "select detail, reason from unresolved where path like '%/_10_self_constructor.rs' and detail = 'rows' order by span__start"
+    },
+    {
+      "action": "sqlite_rows",
+      "name": "path_parent",
+      "path": "$work/fast.db",
+      "sql": "select substr(callee_path, length(callee_path) - length('/call_ladder/src/lib.rs') + 1), callee_name from resolved_edge where caller_path like '%/deep/_11_path_module.rs' and caller_name = 'path_module_probe' order by callee_path, callee_name"
+    }
+  ]
+}

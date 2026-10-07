@@ -1,0 +1,75 @@
+{
+  "steps": [
+    {
+      "action": "run",
+      "name": "fast",
+      "arguments": [
+        "fast",
+        "tests/fixtures/rust_visibility",
+        "--sqlite",
+        "$work/fast.db"
+      ],
+      "cwd": "$manifest",
+      "expect_exit_code": 0,
+      "raw_stdout": true,
+      "unasserted_stdout": true,
+      "unasserted_stderr": true
+    },
+    {
+      "action": "sql_query",
+      "name": "library_bin",
+      "database": "$work/fast.db",
+      "query": "select count(*) from resolved_edge where caller_name = 'library_target_probe' and callee_name = 'bin_helper' and caller_path like '%/rust_visibility/app/src/lib.rs' and callee_path like '%/app/src/bin/0_tool.rs'",
+      "expect": 0
+    },
+    {
+      "action": "sql_query",
+      "name": "library_nested",
+      "database": "$work/fast.db",
+      "query": "select count(*) from resolved_edge where caller_name = 'library_target_probe' and callee_name = 'nested_helper' and caller_path like '%/rust_visibility/app/src/lib.rs' and callee_path like '%/app/tests/data/nested/src/lib.rs'",
+      "expect": 0
+    },
+    {
+      "action": "sql_query",
+      "name": "library_normal",
+      "database": "$work/fast.db",
+      "query": "select count(*) from resolved_edge where caller_name = 'library_target_probe' and callee_name = 'normal_call' and caller_path like '%/rust_visibility/app/src/lib.rs' and callee_path like '%/normal_dep/src/lib.rs'",
+      "expect": 1
+    },
+    {
+      "action": "sql_query",
+      "name": "library_dev",
+      "database": "$work/fast.db",
+      "query": "select count(*) from resolved_edge where caller_name = 'library_target_probe' and callee_name = 'dev_call' and caller_path like '%/rust_visibility/app/src/lib.rs' and callee_path like '%/dev_dep/src/lib.rs'",
+      "expect": 0
+    },
+    {
+      "action": "sql_query",
+      "name": "library_build",
+      "database": "$work/fast.db",
+      "query": "select count(*) from resolved_edge where caller_name = 'library_target_probe' and callee_name = 'build_call' and caller_path like '%/rust_visibility/app/src/lib.rs' and callee_path like '%/build_dep/src/lib.rs'",
+      "expect": 0
+    },
+    {
+      "action": "sql_query",
+      "name": "buildscript",
+      "database": "$work/fast.db",
+      "query": "select count(*) from resolved_edge where caller_name = 'main' and callee_name = 'build_call' and caller_path like '%/rust_visibility/app/build.rs' and callee_path like '%/build_dep/src/lib.rs'",
+      "expect": 1
+    },
+    {
+      "action": "sql_query",
+      "name": "devtest",
+      "database": "$work/fast.db",
+      "query": "select count(*) from resolved_edge where caller_name = 'dev_probe' and callee_name = 'dev_call' and caller_path like '%/rust_visibility/app/tests/0_dev.rs' and callee_path like '%/dev_dep/src/lib.rs'",
+      "expect": 1
+    },
+    {
+      "action": "sql_query",
+      "name": "binself",
+      "database": "$work/fast.db",
+      "query": "select count(*) from resolved_edge where caller_name = 'main' and callee_name = 'bin_helper' and caller_path like '%/rust_visibility/app/src/bin/0_tool.rs' and callee_path like '%/app/src/bin/0_tool.rs'",
+      "expect": 1
+    }
+  ]
+}

@@ -1,0 +1,156 @@
+---
+source: crates/sprefa-extract/tests/support/2_fixture_runner.rs
+---
+{
+  "0_ladder": {
+    "fast": {
+      "exit_code": 0
+    },
+    "foreign_output": 0,
+    "local_probes": {
+      "rows": [
+        [
+          {
+            "integer": 0
+          },
+          {
+            "integer": 2
+          }
+        ]
+      ]
+    },
+    "method_drops": {
+      "rows": [
+        [
+          {
+            "text": "rows"
+          },
+          {
+            "text": "needs_types"
+          }
+        ],
+        [
+          {
+            "text": "rows"
+          },
+          {
+            "text": "needs_types"
+          }
+        ]
+      ]
+    },
+    "path_parent": {
+      "rows": [
+        [
+          {
+            "text": "/call_ladder/src/lib.rs"
+          },
+          {
+            "text": "exit"
+          }
+        ]
+      ]
+    },
+    "slow": {
+      "exit_code": 0
+    },
+    "table": {
+      "rows": [
+        [
+          {
+            "text": "_10_self_constructor.rs   91 first              -> _10_self_constructor.rs:First      f-\n_10_self_constructor.rs  226 first_rows         -> _10_self_constructor.rs:First      f-\n_10_self_constructor.rs  360 second             -> _10_self_constructor.rs:Second     f-\n_10_self_constructor.rs  498 second_rows        -> _10_self_constructor.rs:Second     f-\n_11_path_module.rs   33 path_module_probe  -> lib.rs:exit       f-\n_2_one.rs     104 free_call          -> _0_types.rs:free_zero  fs\n_2_one.rs     166 inherent_call      -> _0_types.rs:ping       -s\n_2_one.rs     225 trait_impl_call    -> _0_types.rs:act        -s\n_2_one.rs     289 trait_object_call  -> _0_types.rs:act        -s\n_2_one.rs     350 generic_call       -> _0_types.rs:act        -s\n_2_one.rs     395 ufcs_call          -> _0_types.rs:act        fs\n_2_one.rs     471 closure@468        -> _0_types.rs:free_zero  fs\n_2_one.rs     471 closure_call       -> _0_types.rs:free_zero  f-\n_2_one.rs     546 deref_call         -> _0_types.rs:ping       -s\n_2_one.rs     581 reexport_call      -> _0_types.rs:free_zero  fs\n_2_one.rs     668 macro_call         -> _0_types.rs:free_zero  f-\n_3_many.rs     89 many_calls         -> _0_types.rs:free_zero  fs\n_3_many.rs    106 many_calls         -> _0_types.rs:free_one   fs\n_3_many.rs    123 many_calls         -> _0_types.rs:free_two   fs\n_3_many.rs    143 many_calls         -> _0_types.rs:make       fs\n_3_many.rs    158 many_calls         -> _0_types.rs:ping       -s\n_4_nested.rs  114 inner              -> _0_types.rs:act        -s\n_4_nested.rs  140 nested_calls       -> _0_types.rs:make       fs\n_4_nested.rs  160 nested_calls       -> _4_nested.rs:inner      fs\n_4_nested.rs  184 closure@181        -> _0_types.rs:free_zero  fs\n_4_nested.rs  184 nested_calls       -> _0_types.rs:free_zero  f-\n_6_local.rs   119 local_probe_six    -> _6_local.rs:rows       -s\n_7_local.rs   121 local_probe_seven  -> _7_local.rs:rows       -s\n_8_trait.rs   123 ping               -> _0_types.rs:ping       -s"
+          }
+        ]
+      ]
+    },
+    "trait_adapter": {
+      "rows": [
+        [
+          {
+            "integer": 0
+          },
+          {
+            "integer": 0
+          }
+        ]
+      ]
+    }
+  },
+  "1_ladder_absolute": {
+    "fast": {
+      "exit_code": 0
+    },
+    "path_parent": {
+      "rows": [
+        [
+          {
+            "text": "/call_ladder/src/lib.rs"
+          },
+          {
+            "text": "exit"
+          }
+        ]
+      ]
+    }
+  },
+  "2_qualified": {
+    "fast": {
+      "exit_code": 0
+    },
+    "qualified": {
+      "rows": [
+        [
+          {
+            "text": "choose_left -> _0_left.rs:new"
+          }
+        ]
+      ]
+    }
+  },
+  "3_default": {
+    "names": {
+      "exit_code": 0
+    },
+    "names_contract": "drop _3_default.rs:190 Default::default no_corpus_def\ndrop _3_default.rs:92 Default::default no_corpus_def\nedge _3_default.rs:37 default_probe -> _0_left.rs:82 Defaults name_resolve module_plane",
+    "types": {
+      "exit_code": 0
+    },
+    "types_contract": "edge _3_default.rs:190 typed_default_probe -> _0_left.rs:145 default checker_resolve checker\nedge _3_default.rs:37 default_probe -> _0_left.rs:82 Defaults checker_resolve checker\nedge _3_default.rs:92 default_probe -> _0_left.rs:145 default checker_resolve checker"
+  },
+  "4_gem": {
+    "names": {
+      "exit_code": 0
+    },
+    "names_contract": "drop lib.rs:471 Gem::from no_corpus_def",
+    "types": {
+      "exit_code": 0
+    },
+    "types_contract": "edge lib.rs:471 lib_user -> gem.rs:102 from checker_resolve checker"
+  },
+  "5_visibility": {
+    "binself": 1,
+    "buildscript": 1,
+    "devtest": 1,
+    "fast": {
+      "exit_code": 0
+    },
+    "library_bin": 0,
+    "library_build": 0,
+    "library_dev": 0,
+    "library_nested": 0,
+    "library_normal": 1
+  },
+  "6_visibility_absolute": {
+    "binself": 1,
+    "buildscript": 1,
+    "devtest": 1,
+    "fast": {
+      "exit_code": 0
+    },
+    "library_bin": 0,
+    "library_build": 0,
+    "library_dev": 0,
+    "library_nested": 0,
+    "library_normal": 1
+  }
+}

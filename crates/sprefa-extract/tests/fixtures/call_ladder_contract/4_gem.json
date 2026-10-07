@@ -1,0 +1,55 @@
+{
+  "steps": [
+    {
+      "action": "run",
+      "name": "names",
+      "arguments": [
+        "--resolve",
+        "--arms",
+        "call",
+        "--root",
+        "tests/fixtures/rust_findings/paths3/crate_a",
+        "tests/fixtures/rust_findings/paths3/crate_a/src"
+      ],
+      "cwd": "$manifest",
+      "expect_exit_code": 0,
+      "raw_stdout": true,
+      "unasserted_stdout": true,
+      "unasserted_stderr": true,
+      "stdout_to": "$work/names.jsonl"
+    },
+    {
+      "action": "api",
+      "name": "names_contract",
+      "path": "$work/names.jsonl",
+      "file": "lib.rs",
+      "site": 471
+    },
+    {
+      "action": "run",
+      "name": "types",
+      "arguments": [
+        "--resolve",
+        "--arms",
+        "call",
+        "--root",
+        "tests/fixtures/rust_findings/paths3/crate_a",
+        "tests/fixtures/rust_findings/paths3/crate_a/src",
+        "--rust-checker"
+      ],
+      "cwd": "$manifest",
+      "expect_exit_code": 0,
+      "raw_stdout": true,
+      "unasserted_stdout": true,
+      "unasserted_stderr": true,
+      "stdout_to": "$work/types.jsonl"
+    },
+    {
+      "action": "api",
+      "name": "types_contract",
+      "path": "$work/types.jsonl",
+      "file": "lib.rs",
+      "site": 471
+    }
+  ]
+}

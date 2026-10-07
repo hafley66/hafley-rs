@@ -1,0 +1,25 @@
+{
+  "steps": [
+    {
+      "action": "run",
+      "name": "fast",
+      "arguments": [
+        "fast",
+        "tests/fixtures/call_ladder_qualified/src",
+        "--sqlite",
+        "$work/fast.db"
+      ],
+      "cwd": "$manifest",
+      "expect_exit_code": 0,
+      "raw_stdout": true,
+      "unasserted_stdout": true,
+      "unasserted_stderr": true
+    },
+    {
+      "action": "sqlite_rows",
+      "name": "qualified",
+      "path": "$work/fast.db",
+      "sql": "select printf('%s -> %s:%s', caller_name, replace(callee_path, rtrim(callee_path, replace(callee_path, '/', '')), ''), callee_name) from resolved_edge where caller_path like '%/_2_qualified.rs' order by caller_site_start, callee_name"
+    }
+  ]
+}

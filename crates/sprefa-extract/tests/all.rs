@@ -624,3 +624,6 @@ mod rust_walk_support;
 
 #[path = "../bench/7_ts_module_scaling.rs"]
 mod t_ts_module_scaling;
+
+#[path = "support/16_rust_call_contract.rs"]
+mod rust_call_contract_support;

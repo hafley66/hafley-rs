@@ -1,0 +1,55 @@
+{
+  "steps": [
+    {
+      "action": "run",
+      "name": "names",
+      "arguments": [
+        "--resolve",
+        "--arms",
+        "call",
+        "--root",
+        "tests/fixtures/call_ladder_qualified",
+        "tests/fixtures/call_ladder_qualified/src"
+      ],
+      "cwd": "$manifest",
+      "expect_exit_code": 0,
+      "raw_stdout": true,
+      "unasserted_stdout": true,
+      "unasserted_stderr": true,
+      "stdout_to": "$work/names.jsonl"
+    },
+    {
+      "action": "api",
+      "name": "names_contract",
+      "path": "$work/names.jsonl",
+      "file": "_3_default.rs",
+      "site": null
+    },
+    {
+      "action": "run",
+      "name": "types",
+      "arguments": [
+        "--resolve",
+        "--arms",
+        "call",
+        "--root",
+        "tests/fixtures/call_ladder_qualified",
+        "tests/fixtures/call_ladder_qualified/src",
+        "--rust-checker"
+      ],
+      "cwd": "$manifest",
+      "expect_exit_code": 0,
+      "raw_stdout": true,
+      "unasserted_stdout": true,
+      "unasserted_stderr": true,
+      "stdout_to": "$work/types.jsonl"
+    },
+    {
+      "action": "api",
+      "name": "types_contract",
+      "path": "$work/types.jsonl",
+      "file": "_3_default.rs",
+      "site": null
+    }
+  ]
+}
