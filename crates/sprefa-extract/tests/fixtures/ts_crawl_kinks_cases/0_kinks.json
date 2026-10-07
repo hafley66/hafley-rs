@@ -1,0 +1,79 @@
+{
+  "commands": [
+    {
+      "name": "top_level_edges",
+      "mode": "edge_triples",
+      "args": ["--resolve", "--arms", "call", "tests/fixtures/ts5_findings/top_level_call.ts", "tests/fixtures/ts5_findings/top_level_callee.ts"]
+    },
+    {
+      "name": "top_level_kinds",
+      "mode": "records",
+      "record": "node",
+      "name_equals": "<module>",
+      "args": ["--kinds", "call", "tests/fixtures/ts5_findings/top_level_call.ts"]
+    },
+    {
+      "name": "sample_kinds",
+      "mode": "records",
+      "record": "node",
+      "name_equals": "<module>",
+      "args": ["--kinds", "call", "tests/fixtures/ts/sample.ts"]
+    },
+    {
+      "name": "prototype_tracing_edges",
+      "mode": "edge_triples",
+      "args": ["--resolve", "--arms", "call", "tests/fixtures/ts5_findings/receiver_blind_prototype.ts", "tests/fixtures/ts5_findings/tracing_like.ts"]
+    },
+    {
+      "name": "method_edges",
+      "mode": "edge_triples",
+      "args": ["--resolve", "--arms", "call", "tests/fixtures/ts_findings/receiver_blind_method/consumer.ts", "tests/fixtures/ts_findings/receiver_blind_method/writer.ts"]
+    },
+    {
+      "name": "user_api_edges",
+      "mode": "edge_triples",
+      "args": ["--resolve", "--arms", "call", "tests/fixtures/ts5_findings/user_api_receiver/consumer.ts", "tests/fixtures/ts5_findings/user_api_receiver/program.ts"]
+    },
+    {
+      "name": "known_receiver_edges",
+      "mode": "edge_triples",
+      "args": ["--resolve", "--arms", "call", "tests/fixtures/ts5_findings/known_receiver/consumer.ts", "tests/fixtures/ts5_findings/known_receiver/ns.ts"]
+    },
+    {
+      "name": "prototype_sites",
+      "mode": "records",
+      "record": "site",
+      "args": ["--kinds", "call", "tests/fixtures/ts5_findings/receiver_blind_prototype.ts"]
+    },
+    {
+      "name": "function_ref_refs",
+      "mode": "records",
+      "record": "reference",
+      "args": ["--kinds", "call", "tests/fixtures/ts5_findings/function_ref_as_value.ts"]
+    },
+    {
+      "name": "function_ref_edges",
+      "mode": "edge_triples",
+      "args": ["--resolve", "--arms", "call", "tests/fixtures/ts5_findings/function_ref_as_value.ts"]
+    },
+    {
+      "name": "consumer_refs",
+      "mode": "records",
+      "record": "reference",
+      "args": ["--kinds", "call", "tests/fixtures/ts5_findings/known_receiver/consumer.ts"]
+    }
+  ],
+  "claims": [
+    { "command": "top_level_edges", "kind": "edges", "expect": [["<module>", "entry"], ["<module>", "entry"], ["insideFn", "entry"]] },
+    { "command": "top_level_kinds", "kind": "module_node", "file": "tests/fixtures/ts5_findings/top_level_call.ts" },
+    { "command": "sample_kinds", "kind": "no_module" },
+    { "command": "prototype_tracing_edges", "kind": "edges", "expect": [] },
+    { "command": "method_edges", "kind": "edges", "expect": [] },
+    { "command": "user_api_edges", "kind": "edges", "expect": [["run", "getTypeChecker"]] },
+    { "command": "known_receiver_edges", "kind": "edges", "expect": [["run", "normalize"], ["run", "tidy"]] },
+    { "command": "prototype_sites", "kind": "site_paths", "expect": ["out.push"] },
+    { "command": "function_ref_refs", "kind": "refs", "expect": [["handler", "value"]] },
+    { "command": "function_ref_edges", "kind": "edges", "expect": [["register", "handler"]] },
+    { "command": "consumer_refs", "kind": "no_refs" }
+  ]
+}

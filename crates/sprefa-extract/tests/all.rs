@@ -636,3 +636,6 @@ mod rust_module_plane_support;
 
 #[path = "support/19_python_call_grind.rs"]
 mod python_call_grind_support;
+
+#[path = "support/20_ts_crawl_kinks.rs"]
+mod ts_crawl_kinks_support;
