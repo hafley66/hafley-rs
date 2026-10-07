@@ -4,61 +4,24 @@ use std::process::Command;
 
 #[test]
 fn generated_clap_help_matches_captured_main() {
-    let fixtures = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/ryi_help");
-    for verb in [
-        "root",
-        "fast",
-        "slow",
-        "scip",
-        "graph",
-        "cleave",
-        "move",
-        "rename",
-        "query",
-        "region",
-        "watch",
-        "diff",
-        "ingest",
-        "schema",
-        "trail",
-        "stratify",
-        "capabilities",
-    ] {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_ryii"));
-        if verb != "root" {
-            command.arg(verb);
-        }
-        let output = command.arg("--help").output().expect("ryi help");
-        assert!(
-            output.status.success(),
-            "{verb}: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        // The build stamp comes from whichever build last wrote the binary; a
-        // shared cargo target can swap it mid-run. Every other byte is pinned.
-        let stamp = |text: &str| -> String {
-            text.split_inclusive('\n')
-                .map(|line| {
-                    if line.starts_with("Build: git hash: ") {
-                        "Build: <stamp>\n"
-                    } else {
-                        line
-                    }
-                })
-                .collect()
-        };
-        let actual = stamp(&String::from_utf8(output.stdout).expect("UTF-8 help"));
-        let expected = stamp(
-            &std::fs::read_to_string(format!("{fixtures}/{verb}.txt")).expect("captured main help"),
-        );
-        if verb == "root" {
-            assert!(
-                actual.contains("Build: <stamp>\n"),
-                "root help carries a build line"
-            );
-        }
-        assert_eq!(actual.as_bytes(), expected.as_bytes(), "{verb} help bytes");
+    let mut cases = vec![("top".to_owned(), vec!["--help".to_owned()])];
+    cases.extend(ryi_proto::help::help_command().get_subcommands().map(|sub| {
+        (sub.get_name().to_owned(), vec![sub.get_name().to_owned(), "--help".to_owned()])
+    }));
+    cases.push(("flags".to_owned(), vec!["help".to_owned(), "flags".to_owned()]));
+    cases.push(("bare".to_owned(), vec![]));
+    let mut snapshot = String::new();
+    for (name, args) in cases {
+        let result = std::process::Command::new(env!("CARGO_BIN_EXE_ryii"))
+            .args(args).current_dir("tests/fixtures/rust")
+            .env("RUST_LOG", "off").env_remove("RYI_STALE_CHECK")
+            .output().unwrap();
+        let normalize = |bytes: &[u8]| String::from_utf8_lossy(bytes)
+            .replace(env!("CARGO_BIN_EXE_ryii"), "ryii")
+            .split_inclusive('\n').map(|line| if line.starts_with("Build: git hash: ") { "Build: <stamp>\n" } else { line }).collect::<String>();
+        snapshot.push_str(&format!("=== {name} (exit {}) ===\nstdout:\n{}stderr:\n{}", result.status.code().unwrap_or(-1), normalize(&result.stdout), normalize(&result.stderr)));
     }
+    insta::assert_snapshot!("help", snapshot);
 }
 
 #[test]

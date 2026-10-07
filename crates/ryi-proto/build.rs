@@ -24,8 +24,9 @@ fn main() {
             println!("cargo:rerun-if-changed={path}");
         }
     }
-    let git_hash = output("git", &["rev-parse", "--short=12", "HEAD"]);
+    let git_hash = output("git", &["rev-parse", "HEAD"]);
     println!("cargo:rustc-env=SPREFA_BUILD_GIT_HASH={git_hash}");
+    println!("cargo:rustc-env=SPREFA_BUILD_REPO_ROOT={}", output("git", &["rev-parse", "--show-toplevel"]));
     println!(
         "cargo:rustc-env=SPREFA_BUILD_DATETIME={}",
         output("date", &["-u", "+%Y-%m-%dT%H:%M:%SZ"])
