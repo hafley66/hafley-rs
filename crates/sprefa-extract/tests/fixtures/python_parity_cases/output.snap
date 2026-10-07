@@ -1,0 +1,203 @@
+---
+source: tests/support/2_fixture_runner.rs
+---
+{
+  "0_parity": {
+    "type_entities": [
+      [
+        "module",
+        "<module>",
+        0
+      ],
+      [
+        "function",
+        "add",
+        11
+      ],
+      [
+        "class",
+        "Animal",
+        71
+      ],
+      [
+        "method",
+        "speak",
+        89
+      ],
+      [
+        "class",
+        "Dog",
+        136
+      ],
+      [
+        "method",
+        "bark",
+        159
+      ],
+      [
+        "function",
+        "inner",
+        191
+      ],
+      [
+        "function",
+        "main",
+        263
+      ]
+    ],
+    "type_sigs": [
+      [
+        11,
+        "param",
+        0,
+        "Number"
+      ],
+      [
+        11,
+        "param",
+        1,
+        "Number"
+      ],
+      [
+        11,
+        "ret",
+        0,
+        "Number"
+      ],
+      [
+        89,
+        "ret",
+        0,
+        "Text"
+      ],
+      [
+        159,
+        "ret",
+        0,
+        "Text"
+      ],
+      [
+        191,
+        "ret",
+        0,
+        "Text"
+      ],
+      [
+        263,
+        "ret",
+        0,
+        "Result"
+      ]
+    ],
+    "call_defs": [
+      [
+        "module",
+        null
+      ],
+      [
+        "function",
+        "add"
+      ],
+      [
+        "method",
+        "speak"
+      ],
+      [
+        "method",
+        "bark"
+      ],
+      [
+        "function",
+        "inner"
+      ],
+      [
+        "function",
+        "main"
+      ]
+    ],
+    "call_sites": [
+      "inner",
+      "add",
+      "Dog",
+      "bark",
+      "join"
+    ],
+    "cst_root": "module",
+    "docs_specifiers": [
+      [
+        "named",
+        "Optional",
+        "typing",
+        null
+      ],
+      [
+        "named",
+        "osp",
+        "os.path",
+        null
+      ],
+      [
+        "named",
+        "sibling",
+        ".",
+        null
+      ],
+      [
+        "named",
+        "alias",
+        ".pkg.sub",
+        "thing"
+      ],
+      [
+        "named",
+        "other",
+        ".pkg.sub",
+        null
+      ]
+    ],
+    "sample_specifiers": [
+      [
+        "os",
+        null
+      ]
+    ],
+    "doc_tags": [
+      [
+        0,
+        "author",
+        null,
+        "fixture"
+      ],
+      [
+        160,
+        "param",
+        "name",
+        "the engine name"
+      ],
+      [
+        160,
+        "returns",
+        null,
+        "nothing"
+      ],
+      [
+        305,
+        "param",
+        "mode",
+        "how to run"
+      ],
+      [
+        305,
+        "returns",
+        null,
+        "the outcome"
+      ]
+    ],
+    "doc_texts": [
+      "Module docstring.",
+      "An engine.",
+      "Run it.",
+      "single-quoted doc"
+    ]
+  }
+}

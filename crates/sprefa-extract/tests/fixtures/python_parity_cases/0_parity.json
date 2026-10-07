@@ -1,0 +1,3 @@
+{
+  "fixtures": ["tests/fixtures/python/sample.py (types/call/cst/mask/specifiers)", "tests/fixtures/python/docs.py (specifiers/doc tags)"]
+}
