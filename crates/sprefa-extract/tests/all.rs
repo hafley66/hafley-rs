@@ -666,3 +666,6 @@ mod python_parity_support;
 
 #[path = "support/29_ts_specifiers.rs"]
 mod ts_specifiers_support;
+
+#[path = "support/30_stratify.rs"]
+mod stratify_support;

@@ -1,0 +1,182 @@
+---
+source: tests/support/2_fixture_runner.rs
+---
+{
+  "0_stratify": {
+    "stable": {
+      "record_kinds": [
+        "locality",
+        "locality",
+        "locality",
+        "locality",
+        "locality",
+        "locality",
+        "locality",
+        "stratify_move",
+        "stratify_move",
+        "stratify_move",
+        "stratify_move",
+        "stratify_move",
+        "stratify_move",
+        "stratify_move",
+        "stratum",
+        "stratum",
+        "stratum",
+        "stratum",
+        "stratum",
+        "stratum",
+        "stratum",
+        "stratum_cycle",
+        "stratum_cycle"
+      ],
+      "cycle_members": 2,
+      "strata": [
+        [
+          "cycle_a.ts",
+          "0_",
+          0,
+          1,
+          "main.ts:main"
+        ],
+        [
+          "cycle_b.ts",
+          "0_",
+          0,
+          2,
+          "main.ts:main"
+        ],
+        [
+          "main.ts",
+          "2_",
+          2,
+          0,
+          "main.ts:main"
+        ],
+        [
+          "merge_a.ts",
+          "0_",
+          0,
+          1,
+          "main.ts:main"
+        ],
+        [
+          "merge_b.ts",
+          "0_",
+          0,
+          2,
+          "main.ts:main"
+        ],
+        [
+          "small.ts",
+          "1_",
+          1,
+          1,
+          "main.ts:main"
+        ],
+        [
+          "target.ts",
+          "0_",
+          0,
+          2,
+          "main.ts:main"
+        ]
+      ],
+      "localities": [
+        [
+          "cycle_a.ts",
+          "move_candidate",
+          2,
+          11,
+          36
+        ],
+        [
+          "cycle_b.ts",
+          "move_candidate",
+          2,
+          8,
+          50
+        ],
+        [
+          "main.ts",
+          "split_candidate",
+          1,
+          10,
+          20
+        ],
+        [
+          "merge_a.ts",
+          "merge_candidate",
+          20,
+          29,
+          138
+        ],
+        [
+          "merge_b.ts",
+          "merge_candidate",
+          20,
+          26,
+          154
+        ],
+        [
+          "small.ts",
+          "move_candidate",
+          1,
+          7,
+          29
+        ],
+        [
+          "target.ts",
+          "split_candidate",
+          0,
+          3,
+          0
+        ]
+      ],
+      "reasons": [
+        "move_candidate",
+        "move_candidate",
+        "split_candidate",
+        "merge_candidate",
+        "merge_candidate",
+        "move_candidate",
+        "split_candidate",
+        "depth_prefix",
+        "depth_prefix",
+        "depth_prefix",
+        "depth_prefix",
+        "depth_prefix",
+        "depth_prefix",
+        "depth_prefix"
+      ],
+      "move_tsv_accepted": true
+    },
+    "unknown_kind_rejected": true,
+    "entrypoints": {
+      "unranked_via": "small.ts:small",
+      "unranked_entry_depth": 1,
+      "ranked_via": "small.ts:small"
+    },
+    "numbered_moves": [
+      [
+        "0_log.ts",
+        "0_log.ts"
+      ],
+      [
+        "10_history.memory.ts",
+        "0_history.memory.ts"
+      ],
+      [
+        "2a_Signal.browser.test.ts",
+        "0_Signal.browser.test.ts"
+      ],
+      [
+        "3_plain.tsx",
+        "0_plain.tsx"
+      ],
+      [
+        "4_jsxAuto.test.ts",
+        "0_jsxAuto.test.ts"
+      ]
+    ]
+  }
+}
