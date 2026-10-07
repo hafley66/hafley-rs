@@ -347,6 +347,12 @@ fn lane_env_pairs(scratch: &Scratch, launch: &MockTuiLaunch) -> BTreeMap<String,
         "BOOP_READER_HOME".into(),
         scratch.root.join("home").display().to_string(),
     );
+    // The lane's own `boop` calls (invocation analytics, route delete) resolve
+    // the default store; point it at the scratch store, never ~/.agent.
+    env.insert(
+        "BOOP_DB".into(),
+        scratch.mail.join("boop.db").display().to_string(),
+    );
     env
 }
 
