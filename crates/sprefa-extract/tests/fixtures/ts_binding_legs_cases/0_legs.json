@@ -1,0 +1,3 @@
+{
+  "universes": ["lib.ts + use.ts (binding legs)", "free.ts + shadow.ts (shadow cases)"]
+}

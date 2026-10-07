@@ -651,3 +651,6 @@ mod rust_mbe_support;
 
 #[path = "support/24_prolog_metacall.rs"]
 mod prolog_metacall_support;
+
+#[path = "support/25_ts_binding_legs.rs"]
+mod ts_binding_legs_support;
