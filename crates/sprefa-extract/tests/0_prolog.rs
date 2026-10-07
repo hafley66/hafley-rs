@@ -1,99 +1,138 @@
-use sprefa_extract::{
-    build_def_index, content_id_of, flatten, CallEdgeKind, CallF, FamilyMask, FamilyTag, FileSet,
-    IndexBag, ManifestMap, ProjectCx, ProjectDigest, PrologSource, Resolve, Source,
-};
-
-const PATH: &str = "tests/fixtures/prolog/0_sample.pl";
-const SOURCE: &[u8] = include_bytes!("fixtures/prolog/0_sample.pl");
+//! Prolog families, call resolution and specifier spelling. Five library-API
+//! tests folded into `tests/fixtures/prolog_cases/`; every original assert is
+//! a claim step there and the whole projection tables freeze in the snapshot.
+//! The corpus parse ledger keeps its own test below: its claims bind the
+//! external sprefa checkout (`SPREFA_ROOT` or the sibling `sprefa`), the walk
+//! floor and the 19-file clean list are live ratchets by contract, and the
+//! clean-file complement is deliberately unpinned — a whole-output snapshot
+//! would turn corpus growth into a failure the original refused to have.
+#![cfg(feature = "cli")]
 
 #[test]
-fn prolog_all_families_and_names() {
-    let output = PrologSource.extract(PATH, SOURCE, FamilyMask::ALL);
-    let facts = flatten(&output);
-
-    let definitions: Vec<_> = facts
-        .iter()
-        .filter_map(|fact| match fact {
-            sprefa_extract::FlatFact::Node {
-                family: FamilyTag::Call,
-                name: Some(name),
-                ..
-            } => Some(name.as_str()),
-            _ => None,
-        })
-        .collect();
-    let sites: Vec<_> = facts
-        .iter()
-        .filter_map(|fact| match fact {
-            sprefa_extract::FlatFact::Site {
-                callee,
-                callee_path,
-                ..
-            } => Some((callee.as_str(), callee_path.as_deref())),
-            _ => None,
-        })
-        .collect();
-
-    assert_eq!(
-        definitions,
-        [
-            "edge/2",
-            "edge/2",
-            "path/2",
-            "path/2",
-            "greeting//0",
-            "qualified/1"
-        ]
-    );
-    assert_eq!(
-        sites,
-        [
-            ("edge/2", None),
-            ("path/2", None),
-            ("edge/2", None),
-            ("token//1", None),
-            ("token//1", None),
-            ("member/2", Some("lists:member/2")),
-        ]
-    );
-    assert!(output
-        .cst
-        .as_ref()
-        .is_some_and(|bundle| !bundle.nodes.is_empty()));
-    assert!(output
-        .df
-        .as_ref()
-        .is_some_and(|bundle| { !bundle.nodes.is_empty() && !bundle.edges.is_empty() }));
+fn whole_output() {
+    crate::fixture_runner::run("prolog_cases", |case| {
+        crate::fixture_runner::commands(case, prolog_api)
+    });
 }
 
-#[test]
-fn prolog_name_arity_resolution() {
-    let output = PrologSource.extract(PATH, SOURCE, FamilyMask::ALL);
-    let blob = content_id_of(SOURCE);
-    let index = build_def_index(&[(blob, &output)]);
-    let indexes = IndexBag::default();
-    indexes.def_index.set(index).unwrap();
-    let files = FileSet;
-    let manifests = ManifestMap;
-    let cx = ProjectCx {
-        files: &files,
-        manifests: &manifests,
-        reader: None,
-        digest: ProjectDigest::default(),
-        indexes,
-        witness: false,
-    };
-    let edges = Resolve::<CallF>::resolve(&PrologSource, &output, &cx);
-    let resolved: Vec<_> = edges.iter().map(|edge| edge.kind).collect();
+/// The path label every original extract call passed; the bytes come from the
+/// step's fixture file.
+const PATH_LABEL: &str = "tests/fixtures/prolog/0_sample.pl";
 
-    assert_eq!(
-        resolved,
-        [
-            CallEdgeKind::NameResolve,
-            CallEdgeKind::NameResolve,
-            CallEdgeKind::NameResolve,
-        ]
-    );
+fn prolog_api(step: &serde_json::Value) -> serde_json::Value {
+    use sprefa_extract::{
+        build_def_index, content_id_of, flatten, CallEdgeKind, CallF, FamilyMask, FamilyTag,
+        FileSet, IndexBag, ManifestMap, ProjectCx, ProjectDigest, PrologSource, Resolve, Source,
+    };
+    let bytes = std::fs::read(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(step["file"].as_str().unwrap()),
+    )
+    .unwrap();
+    let mut rows: Vec<String> = Vec::new();
+    match step["api"].as_str().unwrap() {
+        "extract" => {
+            let output = PrologSource.extract(PATH_LABEL, &bytes, FamilyMask::ALL);
+            let facts = flatten(&output);
+            match step["rows"].as_str().unwrap() {
+                "definitions" => {
+                    for fact in &facts {
+                        if let sprefa_extract::FlatFact::Node {
+                            family: FamilyTag::Call,
+                            name: Some(name),
+                            ..
+                        } = fact
+                        {
+                            rows.push(format!("{{\"kind\":\"definition\",\"name\":\"{name}\"}}"));
+                        }
+                    }
+                }
+                "sites" => {
+                    for fact in &facts {
+                        if let sprefa_extract::FlatFact::Site { callee, callee_path, .. } = fact {
+                            rows.push(match callee_path {
+                                Some(path) => format!(
+                                    "{{\"callee\":\"{callee}\",\"callee_path\":\"{path}\",\"kind\":\"site\"}}"
+                                ),
+                                None => format!(
+                                    "{{\"callee\":\"{callee}\",\"callee_path\":null,\"kind\":\"site\"}}"
+                                ),
+                            });
+                        }
+                    }
+                }
+                "presence" => {
+                    rows.push(format!(
+                        "{{\"kind\":\"cst_nodes\",\"present\":{}}}",
+                        output
+                            .cst
+                            .as_ref()
+                            .is_some_and(|bundle| !bundle.nodes.is_empty())
+                    ));
+                    rows.push(format!(
+                        "{{\"kind\":\"df_nodes\",\"present\":{}}}",
+                        output
+                            .df
+                            .as_ref()
+                            .is_some_and(|bundle| !bundle.nodes.is_empty())
+                    ));
+                    rows.push(format!(
+                        "{{\"kind\":\"df_edges\",\"present\":{}}}",
+                        output
+                            .df
+                            .as_ref()
+                            .is_some_and(|bundle| !bundle.edges.is_empty())
+                    ));
+                }
+                other => panic!("unknown extract rows: {other} ({step})"),
+            }
+        }
+        "resolve" => {
+            let output = PrologSource.extract(PATH_LABEL, &bytes, FamilyMask::ALL);
+            let blob = content_id_of(&bytes);
+            let index = build_def_index(&[(blob, &output)]);
+            let indexes = IndexBag::default();
+            indexes.def_index.set(index).unwrap();
+            let files = FileSet;
+            let manifests = ManifestMap;
+            let cx = ProjectCx {
+                files: &files,
+                manifests: &manifests,
+                reader: None,
+                digest: ProjectDigest::default(),
+                indexes,
+                witness: false,
+            };
+            for edge in Resolve::<CallF>::resolve(&PrologSource, &output, &cx).iter() {
+                let kind = match edge.kind {
+                    CallEdgeKind::NameResolve => "NameResolve",
+                    CallEdgeKind::ScipOverride => "ScipOverride",
+                    CallEdgeKind::ValueRef => "ValueRef",
+                    CallEdgeKind::ImportResolve => "ImportResolve",
+                    CallEdgeKind::Implements => "Implements",
+                    CallEdgeKind::ScipMacro => "ScipMacro",
+                    CallEdgeKind::CheckerResolve => "CheckerResolve",
+                };
+                rows.push(format!("{{\"kind\":\"{kind}\"}}"));
+            }
+        }
+        "specifiers" => {
+            let output = PrologSource.extract(PATH_LABEL, &bytes, FamilyMask::ALL);
+            let facts = flatten(&output);
+            for fact in &facts {
+                if let sprefa_extract::FlatFact::Specifier { kind, module, name, .. } = fact {
+                    let module = match module {
+                        Some(module) => format!("\"{module}\""),
+                        None => "null".to_string(),
+                    };
+                    rows.push(format!(
+                        "{{\"kind\":\"{kind}\",\"module\":{module},\"name\":\"{name}\"}}"
+                    ));
+                }
+            }
+        }
+        other => panic!("unknown api step: {other} ({step})"),
+    }
+    serde_json::Value::String(rows.join("\n"))
 }
 
 /// Only its own job: catch a mis-rooted or empty walk. It is NOT a pin on how
@@ -238,107 +277,6 @@ fn collect_prolog_files(dir: &std::path::Path, files: &mut Vec<std::path::PathBu
             files.push(path);
         }
     }
-}
-
-/// SABOTAGE RECEIPT: dropping the `[reachable/2, walk//1]` list from the
-/// fixture's second `use_module` leaves one side_effect row and no named rows,
-/// and this test fails on the missing `graph:reachable/2` pair.
-#[test]
-fn prolog_module_declaration_and_import_lists() {
-    let output = PrologSource.extract(PATH, SOURCE, FamilyMask::ALL);
-    let facts = flatten(&output);
-
-    let specifiers: Vec<(&str, Option<&str>, &str)> = facts
-        .iter()
-        .filter_map(|fact| match fact {
-            sprefa_extract::FlatFact::Specifier {
-                kind, module, name, ..
-            } => Some((kind.as_str(), module.as_deref(), name.as_str())),
-            _ => None,
-        })
-        .collect();
-
-    assert_eq!(
-        specifiers,
-        [
-            ("reexport", Some("sample"), "path/2"),
-            ("reexport", Some("sample"), "greeting//0"),
-            ("side_effect", None, "library(lists)"),
-            ("named", Some("'../shared/graph'"), "reachable/2"),
-            ("named", Some("'../shared/graph'"), "walk//1"),
-        ]
-    );
-}
-
-/// The re-home program keys on the include/reexport rows, so this pins their
-/// exact spelling: `include/1` rides `name` with no module, `reexport/1` rides
-/// `name` with no module, and `reexport/2` keys on (module, name) one row per
-/// indicator, mirroring the module-import two-argument form.
-#[test]
-fn prolog_include_and_reexport_directives() {
-    let source: &[u8] = b"\
-:- module(rehome, []).
-:- use_module(library(lists)).
-:- include('part.pl').
-:- reexport('other.pl').
-:- reexport('third.pl', [foo/1, bar//0]).
-hello.
-";
-    let output = PrologSource.extract(PATH, source, FamilyMask::ALL);
-    let facts = flatten(&output);
-
-    let specifiers: Vec<(&str, Option<&str>, &str)> = facts
-        .iter()
-        .filter_map(|fact| match fact {
-            sprefa_extract::FlatFact::Specifier {
-                kind, module, name, ..
-            } => Some((kind.as_str(), module.as_deref(), name.as_str())),
-            _ => None,
-        })
-        .collect();
-
-    assert_eq!(
-        specifiers,
-        [
-            ("side_effect", None, "library(lists)"),
-            ("include", None, "'part.pl'"),
-            ("reexport_module", None, "'other.pl'"),
-            ("reexport_module", Some("'third.pl'"), "foo/1"),
-            ("reexport_module", Some("'third.pl'"), "bar//0"),
-        ]
-    );
-}
-
-/// FAIL PRE FIX: `use_module('part', [])` produced zero specifier rows, so
-/// `extract move` never rewrote `1_expansion.pl:28` and the moved module was
-/// unreachable (lab/rehome-passes move 8, 2026-08-24). An empty import list
-/// is a load edge and rides `side_effect` like the one-argument form.
-#[test]
-fn prolog_empty_import_list_is_a_side_effect_load() {
-    let source: &[u8] = b"\
-:- module(empty_list, []).
-:- use_module('part', []).
-:- use_module(other).
-hello.
-";
-    let output = PrologSource.extract(PATH, source, FamilyMask::ALL);
-    let facts = flatten(&output);
-    let specifiers: Vec<(&str, Option<&str>, &str)> = facts
-        .iter()
-        .filter_map(|fact| match fact {
-            sprefa_extract::FlatFact::Specifier {
-                kind, module, name, ..
-            } => Some((kind.as_str(), module.as_deref(), name.as_str())),
-            _ => None,
-        })
-        .collect();
-    assert_eq!(
-        specifiers,
-        [
-            ("side_effect", None, "'part'"),
-            ("side_effect", None, "other"),
-        ]
-    );
 }
 
 /// The corpus lives in the sprefa repository: `SPREFA_ROOT`, else `sprefa`

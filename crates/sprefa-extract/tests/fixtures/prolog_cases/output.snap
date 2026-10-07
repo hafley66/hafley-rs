@@ -1,0 +1,56 @@
+---
+source: tests/support/2_fixture_runner.rs
+---
+{
+  "0_prolog": {
+    "empty_list_specifier_rows": [
+      "{\"kind\":\"side_effect\",\"module\":null,\"name\":\"'part'\"}",
+      "{\"kind\":\"side_effect\",\"module\":null,\"name\":\"other\"}"
+    ],
+    "empty_list_specifiers": "{\"kind\":\"side_effect\",\"module\":null,\"name\":\"'part'\"}\n{\"kind\":\"side_effect\",\"module\":null,\"name\":\"other\"}",
+    "module_specifier_rows": [
+      "{\"kind\":\"reexport\",\"module\":\"sample\",\"name\":\"path/2\"}",
+      "{\"kind\":\"reexport\",\"module\":\"sample\",\"name\":\"greeting//0\"}",
+      "{\"kind\":\"side_effect\",\"module\":null,\"name\":\"library(lists)\"}",
+      "{\"kind\":\"named\",\"module\":\"'../shared/graph'\",\"name\":\"reachable/2\"}",
+      "{\"kind\":\"named\",\"module\":\"'../shared/graph'\",\"name\":\"walk//1\"}"
+    ],
+    "rehome_specifier_rows": [
+      "{\"kind\":\"side_effect\",\"module\":null,\"name\":\"library(lists)\"}",
+      "{\"kind\":\"include\",\"module\":null,\"name\":\"'part.pl'\"}",
+      "{\"kind\":\"reexport_module\",\"module\":null,\"name\":\"'other.pl'\"}",
+      "{\"kind\":\"reexport_module\",\"module\":\"'third.pl'\",\"name\":\"foo/1\"}",
+      "{\"kind\":\"reexport_module\",\"module\":\"'third.pl'\",\"name\":\"bar//0\"}"
+    ],
+    "rehome_specifiers": "{\"kind\":\"side_effect\",\"module\":null,\"name\":\"library(lists)\"}\n{\"kind\":\"include\",\"module\":null,\"name\":\"'part.pl'\"}\n{\"kind\":\"reexport_module\",\"module\":null,\"name\":\"'other.pl'\"}\n{\"kind\":\"reexport_module\",\"module\":\"'third.pl'\",\"name\":\"foo/1\"}\n{\"kind\":\"reexport_module\",\"module\":\"'third.pl'\",\"name\":\"bar//0\"}",
+    "resolved_kinds": [
+      "{\"kind\":\"NameResolve\"}",
+      "{\"kind\":\"NameResolve\"}",
+      "{\"kind\":\"NameResolve\"}"
+    ],
+    "sample_cst_present": true,
+    "sample_definition_rows": [
+      "{\"kind\":\"definition\",\"name\":\"edge/2\"}",
+      "{\"kind\":\"definition\",\"name\":\"edge/2\"}",
+      "{\"kind\":\"definition\",\"name\":\"path/2\"}",
+      "{\"kind\":\"definition\",\"name\":\"path/2\"}",
+      "{\"kind\":\"definition\",\"name\":\"greeting//0\"}",
+      "{\"kind\":\"definition\",\"name\":\"qualified/1\"}"
+    ],
+    "sample_definitions": "{\"kind\":\"definition\",\"name\":\"edge/2\"}\n{\"kind\":\"definition\",\"name\":\"edge/2\"}\n{\"kind\":\"definition\",\"name\":\"path/2\"}\n{\"kind\":\"definition\",\"name\":\"path/2\"}\n{\"kind\":\"definition\",\"name\":\"greeting//0\"}\n{\"kind\":\"definition\",\"name\":\"qualified/1\"}",
+    "sample_df_edges_present": true,
+    "sample_df_nodes_present": true,
+    "sample_presence": "{\"kind\":\"cst_nodes\",\"present\":true}\n{\"kind\":\"df_nodes\",\"present\":true}\n{\"kind\":\"df_edges\",\"present\":true}",
+    "sample_resolve": "{\"kind\":\"NameResolve\"}\n{\"kind\":\"NameResolve\"}\n{\"kind\":\"NameResolve\"}",
+    "sample_site_rows": [
+      "{\"callee\":\"edge/2\",\"callee_path\":null,\"kind\":\"site\"}",
+      "{\"callee\":\"path/2\",\"callee_path\":null,\"kind\":\"site\"}",
+      "{\"callee\":\"edge/2\",\"callee_path\":null,\"kind\":\"site\"}",
+      "{\"callee\":\"token//1\",\"callee_path\":null,\"kind\":\"site\"}",
+      "{\"callee\":\"token//1\",\"callee_path\":null,\"kind\":\"site\"}",
+      "{\"callee\":\"member/2\",\"callee_path\":\"lists:member/2\",\"kind\":\"site\"}"
+    ],
+    "sample_sites": "{\"callee\":\"edge/2\",\"callee_path\":null,\"kind\":\"site\"}\n{\"callee\":\"path/2\",\"callee_path\":null,\"kind\":\"site\"}\n{\"callee\":\"edge/2\",\"callee_path\":null,\"kind\":\"site\"}\n{\"callee\":\"token//1\",\"callee_path\":null,\"kind\":\"site\"}\n{\"callee\":\"token//1\",\"callee_path\":null,\"kind\":\"site\"}\n{\"callee\":\"member/2\",\"callee_path\":\"lists:member/2\",\"kind\":\"site\"}",
+    "sample_specifiers": "{\"kind\":\"reexport\",\"module\":\"sample\",\"name\":\"path/2\"}\n{\"kind\":\"reexport\",\"module\":\"sample\",\"name\":\"greeting//0\"}\n{\"kind\":\"side_effect\",\"module\":null,\"name\":\"library(lists)\"}\n{\"kind\":\"named\",\"module\":\"'../shared/graph'\",\"name\":\"reachable/2\"}\n{\"kind\":\"named\",\"module\":\"'../shared/graph'\",\"name\":\"walk//1\"}"
+  }
+}

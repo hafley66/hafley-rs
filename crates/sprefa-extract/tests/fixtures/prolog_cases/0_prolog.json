@@ -1,0 +1,64 @@
+{
+  "tests": [
+    "prolog_all_families_and_names",
+    "prolog_name_arity_resolution",
+    "prolog_module_declaration_and_import_lists",
+    "prolog_include_and_reexport_directives",
+    "prolog_empty_import_list_is_a_side_effect_load"
+  ],
+  "steps": [
+    {"action": "api", "api": "extract", "rows": "definitions", "file": "tests/fixtures/prolog/0_sample.pl", "name": "sample_definitions"},
+    {"action": "claim", "name": "sample_definition_rows", "kind": "nonempty_lines_equal", "cell": "sample_definitions", "expect": [
+      "{\"kind\":\"definition\",\"name\":\"edge/2\"}",
+      "{\"kind\":\"definition\",\"name\":\"edge/2\"}",
+      "{\"kind\":\"definition\",\"name\":\"path/2\"}",
+      "{\"kind\":\"definition\",\"name\":\"path/2\"}",
+      "{\"kind\":\"definition\",\"name\":\"greeting//0\"}",
+      "{\"kind\":\"definition\",\"name\":\"qualified/1\"}"
+    ]},
+    {"action": "api", "api": "extract", "rows": "sites", "file": "tests/fixtures/prolog/0_sample.pl", "name": "sample_sites"},
+    {"action": "claim", "name": "sample_site_rows", "kind": "nonempty_lines_equal", "cell": "sample_sites", "expect": [
+      "{\"callee\":\"edge/2\",\"callee_path\":null,\"kind\":\"site\"}",
+      "{\"callee\":\"path/2\",\"callee_path\":null,\"kind\":\"site\"}",
+      "{\"callee\":\"edge/2\",\"callee_path\":null,\"kind\":\"site\"}",
+      "{\"callee\":\"token//1\",\"callee_path\":null,\"kind\":\"site\"}",
+      "{\"callee\":\"token//1\",\"callee_path\":null,\"kind\":\"site\"}",
+      "{\"callee\":\"member/2\",\"callee_path\":\"lists:member/2\",\"kind\":\"site\"}"
+    ]},
+    {"action": "api", "api": "extract", "rows": "presence", "file": "tests/fixtures/prolog/0_sample.pl", "name": "sample_presence"},
+    {"action": "claim", "name": "sample_cst_present", "kind": "json_scalar", "cell": "sample_presence", "line": 0, "pointer": "present", "expect": true},
+    {"action": "claim", "name": "sample_df_nodes_present", "kind": "json_scalar", "cell": "sample_presence", "line": 1, "pointer": "present", "expect": true},
+    {"action": "claim", "name": "sample_df_edges_present", "kind": "json_scalar", "cell": "sample_presence", "line": 2, "pointer": "present", "expect": true},
+
+    {"action": "api", "api": "resolve", "file": "tests/fixtures/prolog/0_sample.pl", "name": "sample_resolve"},
+    {"action": "claim", "name": "resolved_kinds", "kind": "nonempty_lines_equal", "cell": "sample_resolve", "expect": [
+      "{\"kind\":\"NameResolve\"}",
+      "{\"kind\":\"NameResolve\"}",
+      "{\"kind\":\"NameResolve\"}"
+    ]},
+
+    {"action": "api", "api": "specifiers", "file": "tests/fixtures/prolog/0_sample.pl", "name": "sample_specifiers"},
+    {"action": "claim", "name": "module_specifier_rows", "kind": "nonempty_lines_equal", "cell": "sample_specifiers", "expect": [
+      "{\"kind\":\"reexport\",\"module\":\"sample\",\"name\":\"path/2\"}",
+      "{\"kind\":\"reexport\",\"module\":\"sample\",\"name\":\"greeting//0\"}",
+      "{\"kind\":\"side_effect\",\"module\":null,\"name\":\"library(lists)\"}",
+      "{\"kind\":\"named\",\"module\":\"'../shared/graph'\",\"name\":\"reachable/2\"}",
+      "{\"kind\":\"named\",\"module\":\"'../shared/graph'\",\"name\":\"walk//1\"}"
+    ]},
+
+    {"action": "api", "api": "specifiers", "file": "tests/fixtures/prolog_cases/rehome.pl", "name": "rehome_specifiers"},
+    {"action": "claim", "name": "rehome_specifier_rows", "kind": "nonempty_lines_equal", "cell": "rehome_specifiers", "expect": [
+      "{\"kind\":\"side_effect\",\"module\":null,\"name\":\"library(lists)\"}",
+      "{\"kind\":\"include\",\"module\":null,\"name\":\"'part.pl'\"}",
+      "{\"kind\":\"reexport_module\",\"module\":null,\"name\":\"'other.pl'\"}",
+      "{\"kind\":\"reexport_module\",\"module\":\"'third.pl'\",\"name\":\"foo/1\"}",
+      "{\"kind\":\"reexport_module\",\"module\":\"'third.pl'\",\"name\":\"bar//0\"}"
+    ]},
+
+    {"action": "api", "api": "specifiers", "file": "tests/fixtures/prolog_cases/empty_list.pl", "name": "empty_list_specifiers"},
+    {"action": "claim", "name": "empty_list_specifier_rows", "kind": "nonempty_lines_equal", "cell": "empty_list_specifiers", "expect": [
+      "{\"kind\":\"side_effect\",\"module\":null,\"name\":\"'part'\"}",
+      "{\"kind\":\"side_effect\",\"module\":null,\"name\":\"other\"}"
+    ]}
+  ]
+}
