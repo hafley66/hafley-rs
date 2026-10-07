@@ -2,181 +2,1686 @@
 source: tests/support/2_fixture_runner.rs
 ---
 {
-  "0_stratify": {
-    "stable": {
-      "record_kinds": [
-        "locality",
-        "locality",
-        "locality",
-        "locality",
-        "locality",
-        "locality",
-        "locality",
-        "stratify_move",
-        "stratify_move",
-        "stratify_move",
-        "stratify_move",
-        "stratify_move",
-        "stratify_move",
-        "stratify_move",
-        "stratum",
-        "stratum",
-        "stratum",
-        "stratum",
-        "stratum",
-        "stratum",
-        "stratum",
-        "stratum_cycle",
-        "stratum_cycle"
-      ],
-      "cycle_members": 2,
-      "strata": [
-        [
-          "cycle_a.ts",
-          "0_",
-          0,
-          1,
-          "main.ts:main"
-        ],
-        [
-          "cycle_b.ts",
-          "0_",
-          0,
-          2,
-          "main.ts:main"
-        ],
-        [
-          "main.ts",
-          "2_",
-          2,
-          0,
-          "main.ts:main"
-        ],
-        [
-          "merge_a.ts",
-          "0_",
-          0,
-          1,
-          "main.ts:main"
-        ],
-        [
-          "merge_b.ts",
-          "0_",
-          0,
-          2,
-          "main.ts:main"
-        ],
-        [
-          "small.ts",
-          "1_",
-          1,
-          1,
-          "main.ts:main"
-        ],
-        [
-          "target.ts",
-          "0_",
-          0,
-          2,
-          "main.ts:main"
-        ]
-      ],
-      "localities": [
-        [
-          "cycle_a.ts",
-          "move_candidate",
-          2,
-          11,
-          36
-        ],
-        [
-          "cycle_b.ts",
-          "move_candidate",
-          2,
-          8,
-          50
-        ],
-        [
-          "main.ts",
-          "split_candidate",
-          1,
-          10,
-          20
-        ],
-        [
-          "merge_a.ts",
-          "merge_candidate",
-          20,
-          29,
-          138
-        ],
-        [
-          "merge_b.ts",
-          "merge_candidate",
-          20,
-          26,
-          154
-        ],
-        [
-          "small.ts",
-          "move_candidate",
-          1,
-          7,
-          29
-        ],
-        [
-          "target.ts",
-          "split_candidate",
-          0,
-          3,
-          0
-        ]
-      ],
-      "reasons": [
-        "move_candidate",
-        "move_candidate",
-        "split_candidate",
-        "merge_candidate",
-        "merge_candidate",
-        "move_candidate",
-        "split_candidate",
-        "depth_prefix",
-        "depth_prefix",
-        "depth_prefix",
-        "depth_prefix",
-        "depth_prefix",
-        "depth_prefix",
-        "depth_prefix"
-      ],
-      "move_tsv_accepted": true
+  "0_universe": {
+    "bad_kind": {
+      "exit_code": 2,
+      "stdout": [],
+      "stderr": "ryi stratify: unknown --kind value; use call, type, or both\n"
     },
-    "unknown_kind_rejected": true,
-    "entrypoints": {
-      "unranked_via": "small.ts:small",
-      "unranked_entry_depth": 1,
-      "ranked_via": "small.ts:small"
+    "bad_kind_message": true,
+    "move_accepted": {
+      "exit_code": 0,
+      "stdout": "root $work/stable\nplan cycle_a.ts -> 0_cycle_a.ts\nreplace cycle_b.ts -> cycle_b.ts  update cycle_b.ts (169 bytes)\n    --- original\n    +++ modified\n    @@ -1,4 +1,4 @@\n    -import { cycleA } from \"./cycle_a\";\n    +import { cycleA } from \"./0_cycle_a\";\n    \n     export function cycleB() {\n       cycleA();\nreplace main.ts -> main.ts  update main.ts (612 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,5 @@\n     import { small } from \"./small\";\n    -import { cycleA } from \"./cycle_a\";\n    +import { cycleA } from \"./0_cycle_a\";\n     import { mergeA } from \"./merge_a\";\n    \n     export function main() {\nstage $STAGE dry run, tree untouched\nmove    cycle_a.ts -> 0_cycle_a.ts  move cycle_a.ts -> 0_cycle_a.ts (161 bytes)\nstage $STAGE dry run, tree untouched\n",
+      "stderr": ""
     },
-    "numbered_moves": [
-      [
-        "0_log.ts",
-        "0_log.ts"
-      ],
-      [
-        "10_history.memory.ts",
-        "0_history.memory.ts"
-      ],
-      [
-        "2a_Signal.browser.test.ts",
-        "0_Signal.browser.test.ts"
-      ],
-      [
-        "3_plain.tsx",
-        "0_plain.tsx"
-      ],
-      [
-        "4_jsxAuto.test.ts",
-        "0_jsxAuto.test.ts"
+    "numbered_first": {
+      "exit_code": 0,
+      "stdout": [
+        {
+          "record": "locality",
+          "path": "0_blocked.ts",
+          "internal": 0,
+          "touching": 0,
+          "score": 0.0,
+          "lines": 2,
+          "target_lines": 0
+        },
+        {
+          "record": "locality",
+          "path": "0_log.ts",
+          "internal": 0,
+          "touching": 0,
+          "score": 0.0,
+          "lines": 2,
+          "target_lines": 0
+        },
+        {
+          "record": "locality",
+          "path": "10_history.memory.ts",
+          "internal": 0,
+          "touching": 0,
+          "score": 0.0,
+          "lines": 2,
+          "target_lines": 0
+        },
+        {
+          "record": "locality",
+          "path": "1_duplicate.ts",
+          "internal": 0,
+          "touching": 0,
+          "score": 0.0,
+          "lines": 2,
+          "target_lines": 0
+        },
+        {
+          "record": "locality",
+          "path": "2_duplicate.ts",
+          "internal": 0,
+          "touching": 0,
+          "score": 0.0,
+          "lines": 2,
+          "target_lines": 0
+        },
+        {
+          "record": "locality",
+          "path": "2a_Signal.browser.test.ts",
+          "internal": 0,
+          "touching": 0,
+          "score": 0.0,
+          "lines": 2,
+          "target_lines": 0
+        },
+        {
+          "record": "locality",
+          "path": "3_plain.tsx",
+          "internal": 0,
+          "touching": 0,
+          "score": 0.0,
+          "lines": 2,
+          "target_lines": 0
+        },
+        {
+          "record": "locality",
+          "path": "4_jsxAuto.test.ts",
+          "internal": 0,
+          "touching": 0,
+          "score": 0.0,
+          "lines": 2,
+          "target_lines": 0
+        },
+        {
+          "record": "locality",
+          "path": "8_directory.ts",
+          "internal": 0,
+          "touching": 0,
+          "score": 0.0,
+          "lines": 2,
+          "target_lines": 0
+        },
+        {
+          "record": "locality",
+          "path": "9_blocked.ts",
+          "internal": 0,
+          "touching": 0,
+          "score": 0.0,
+          "lines": 2,
+          "target_lines": 0
+        },
+        {
+          "record": "locality",
+          "path": "cycle_a.ts",
+          "internal": 2,
+          "touching": 11,
+          "score": 0.1818181872367859,
+          "lines": 11,
+          "target_lines": 0,
+          "reason": "split_candidate",
+          "to_path": "cycle_a.ts",
+          "cut_lines": [
+            9,
+            10
+          ],
+          "shared_edges": 6
+        },
+        {
+          "record": "locality",
+          "path": "cycle_b.ts",
+          "internal": 2,
+          "touching": 8,
+          "score": 0.25,
+          "lines": 11,
+          "target_lines": 1,
+          "reason": "split_candidate",
+          "to_path": "cycle_b.ts",
+          "cut_lines": [
+            9,
+            10
+          ],
+          "shared_edges": 3
+        },
+        {
+          "record": "locality",
+          "path": "main.ts",
+          "internal": 1,
+          "touching": 10,
+          "score": 0.10000000149011612,
+          "lines": 37,
+          "target_lines": 0,
+          "reason": "split_candidate",
+          "to_path": "main.ts",
+          "cut_lines": [
+            12
+          ],
+          "shared_edges": 1
+        },
+        {
+          "record": "locality",
+          "path": "merge_a.ts",
+          "internal": 20,
+          "touching": 29,
+          "score": 0.6896551847457886,
+          "lines": 12,
+          "target_lines": 1
+        },
+        {
+          "record": "locality",
+          "path": "merge_b.ts",
+          "internal": 20,
+          "touching": 26,
+          "score": 0.7692307829856873,
+          "lines": 12,
+          "target_lines": 2
+        },
+        {
+          "record": "locality",
+          "path": "small.ts",
+          "internal": 1,
+          "touching": 7,
+          "score": 0.1428571492433548,
+          "lines": 9,
+          "target_lines": 0,
+          "reason": "split_candidate",
+          "to_path": "small.ts",
+          "cut_lines": [
+            8
+          ],
+          "shared_edges": 3
+        },
+        {
+          "record": "locality",
+          "path": "target.ts",
+          "internal": 0,
+          "touching": 3,
+          "score": 0.0,
+          "lines": 2,
+          "target_lines": 0,
+          "reason": "split_candidate",
+          "to_path": "target.ts",
+          "cut_lines": [],
+          "shared_edges": 3
+        },
+        {
+          "record": "stratify_move",
+          "from_path": "0_log.ts",
+          "to_path": "0_log.ts",
+          "reason": "depth_prefix",
+          "move_tsv": "0_log.ts\t0_log.ts"
+        },
+        {
+          "record": "stratify_move",
+          "from_path": "10_history.memory.ts",
+          "to_path": "0_history.memory.ts",
+          "reason": "depth_prefix",
+          "move_tsv": "10_history.memory.ts\t0_history.memory.ts"
+        },
+        {
+          "record": "stratify_move",
+          "from_path": "2a_Signal.browser.test.ts",
+          "to_path": "0_Signal.browser.test.ts",
+          "reason": "depth_prefix",
+          "move_tsv": "2a_Signal.browser.test.ts\t0_Signal.browser.test.ts"
+        },
+        {
+          "record": "stratify_move",
+          "from_path": "3_plain.tsx",
+          "to_path": "0_plain.tsx",
+          "reason": "depth_prefix",
+          "move_tsv": "3_plain.tsx\t0_plain.tsx"
+        },
+        {
+          "record": "stratify_move",
+          "from_path": "4_jsxAuto.test.ts",
+          "to_path": "0_jsxAuto.test.ts",
+          "reason": "depth_prefix",
+          "move_tsv": "4_jsxAuto.test.ts\t0_jsxAuto.test.ts"
+        },
+        {
+          "record": "stratum",
+          "depth": 0,
+          "entry_depth": 0,
+          "path": "0_log.ts",
+          "prefix": "0_",
+          "scc": 1,
+          "via": "0_log.ts"
+        },
+        {
+          "record": "stratum",
+          "depth": 0,
+          "entry_depth": 0,
+          "path": "10_history.memory.ts",
+          "prefix": "0_",
+          "scc": 2,
+          "via": "10_history.memory.ts"
+        },
+        {
+          "record": "stratum",
+          "depth": 0,
+          "entry_depth": 0,
+          "path": "1_duplicate.ts",
+          "prefix": "0_",
+          "scc": 3,
+          "via": "1_duplicate.ts"
+        },
+        {
+          "record": "stratum",
+          "depth": 0,
+          "entry_depth": 0,
+          "path": "2_duplicate.ts",
+          "prefix": "0_",
+          "scc": 4,
+          "via": "2_duplicate.ts"
+        },
+        {
+          "record": "stratum",
+          "depth": 0,
+          "entry_depth": 0,
+          "path": "2a_Signal.browser.test.ts",
+          "prefix": "0_",
+          "scc": 5,
+          "via": "2a_Signal.browser.test.ts"
+        },
+        {
+          "record": "stratum",
+          "depth": 0,
+          "entry_depth": 0,
+          "path": "3_plain.tsx",
+          "prefix": "0_",
+          "scc": 6,
+          "via": "3_plain.tsx"
+        },
+        {
+          "record": "stratum",
+          "depth": 0,
+          "entry_depth": 0,
+          "path": "4_jsxAuto.test.ts",
+          "prefix": "0_",
+          "scc": 7,
+          "via": "4_jsxAuto.test.ts"
+        },
+        {
+          "record": "stratum",
+          "depth": 0,
+          "entry_depth": 0,
+          "path": "8_directory.ts",
+          "prefix": "0_",
+          "scc": 8,
+          "via": "8_directory.ts"
+        },
+        {
+          "record": "stratum",
+          "depth": 0,
+          "entry_depth": 0,
+          "path": "9_blocked.ts",
+          "prefix": "0_",
+          "scc": 9,
+          "via": "9_blocked.ts"
+        },
+        {
+          "record": "stratum_cycle",
+          "scc": 10,
+          "members": 2,
+          "paths": [
+            "cycle_a.ts",
+            "cycle_b.ts"
+          ]
+        },
+        {
+          "record": "stratum_cycle",
+          "scc": 12,
+          "members": 2,
+          "paths": [
+            "merge_a.ts",
+            "merge_b.ts"
+          ]
+        },
+        {
+          "record": "unreached",
+          "path": "0_blocked.ts",
+          "scc": 0
+        },
+        {
+          "record": "unreached",
+          "path": "cycle_a.ts",
+          "scc": 10
+        },
+        {
+          "record": "unreached",
+          "path": "cycle_b.ts",
+          "scc": 10
+        },
+        {
+          "record": "unreached",
+          "path": "main.ts",
+          "scc": 11
+        },
+        {
+          "record": "unreached",
+          "path": "merge_a.ts",
+          "scc": 12
+        },
+        {
+          "record": "unreached",
+          "path": "merge_b.ts",
+          "scc": 12
+        },
+        {
+          "record": "unreached",
+          "path": "small.ts",
+          "scc": 13
+        },
+        {
+          "record": "unreached",
+          "path": "target.ts",
+          "scc": 14
+        }
       ]
-    ]
+    },
+    "numbered_history_target": "0_history.memory.ts",
+    "numbered_jsx_reason": "depth_prefix",
+    "numbered_log_target": "0_log.ts",
+    "numbered_move_rows": 5,
+    "numbered_plain_target": "0_plain.tsx",
+    "numbered_runs_agree": true,
+    "numbered_second": {
+      "exit_code": 0,
+      "stdout": [
+        {
+          "record": "locality",
+          "path": "0_blocked.ts",
+          "internal": 0,
+          "touching": 0,
+          "score": 0.0,
+          "lines": 2,
+          "target_lines": 0
+        },
+        {
+          "record": "locality",
+          "path": "0_log.ts",
+          "internal": 0,
+          "touching": 0,
+          "score": 0.0,
+          "lines": 2,
+          "target_lines": 0
+        },
+        {
+          "record": "locality",
+          "path": "10_history.memory.ts",
+          "internal": 0,
+          "touching": 0,
+          "score": 0.0,
+          "lines": 2,
+          "target_lines": 0
+        },
+        {
+          "record": "locality",
+          "path": "1_duplicate.ts",
+          "internal": 0,
+          "touching": 0,
+          "score": 0.0,
+          "lines": 2,
+          "target_lines": 0
+        },
+        {
+          "record": "locality",
+          "path": "2_duplicate.ts",
+          "internal": 0,
+          "touching": 0,
+          "score": 0.0,
+          "lines": 2,
+          "target_lines": 0
+        },
+        {
+          "record": "locality",
+          "path": "2a_Signal.browser.test.ts",
+          "internal": 0,
+          "touching": 0,
+          "score": 0.0,
+          "lines": 2,
+          "target_lines": 0
+        },
+        {
+          "record": "locality",
+          "path": "3_plain.tsx",
+          "internal": 0,
+          "touching": 0,
+          "score": 0.0,
+          "lines": 2,
+          "target_lines": 0
+        },
+        {
+          "record": "locality",
+          "path": "4_jsxAuto.test.ts",
+          "internal": 0,
+          "touching": 0,
+          "score": 0.0,
+          "lines": 2,
+          "target_lines": 0
+        },
+        {
+          "record": "locality",
+          "path": "8_directory.ts",
+          "internal": 0,
+          "touching": 0,
+          "score": 0.0,
+          "lines": 2,
+          "target_lines": 0
+        },
+        {
+          "record": "locality",
+          "path": "9_blocked.ts",
+          "internal": 0,
+          "touching": 0,
+          "score": 0.0,
+          "lines": 2,
+          "target_lines": 0
+        },
+        {
+          "record": "locality",
+          "path": "cycle_a.ts",
+          "internal": 2,
+          "touching": 11,
+          "score": 0.1818181872367859,
+          "lines": 11,
+          "target_lines": 0,
+          "reason": "split_candidate",
+          "to_path": "cycle_a.ts",
+          "cut_lines": [
+            9,
+            10
+          ],
+          "shared_edges": 6
+        },
+        {
+          "record": "locality",
+          "path": "cycle_b.ts",
+          "internal": 2,
+          "touching": 8,
+          "score": 0.25,
+          "lines": 11,
+          "target_lines": 1,
+          "reason": "split_candidate",
+          "to_path": "cycle_b.ts",
+          "cut_lines": [
+            9,
+            10
+          ],
+          "shared_edges": 3
+        },
+        {
+          "record": "locality",
+          "path": "main.ts",
+          "internal": 1,
+          "touching": 10,
+          "score": 0.10000000149011612,
+          "lines": 37,
+          "target_lines": 0,
+          "reason": "split_candidate",
+          "to_path": "main.ts",
+          "cut_lines": [
+            12
+          ],
+          "shared_edges": 1
+        },
+        {
+          "record": "locality",
+          "path": "merge_a.ts",
+          "internal": 20,
+          "touching": 29,
+          "score": 0.6896551847457886,
+          "lines": 12,
+          "target_lines": 1
+        },
+        {
+          "record": "locality",
+          "path": "merge_b.ts",
+          "internal": 20,
+          "touching": 26,
+          "score": 0.7692307829856873,
+          "lines": 12,
+          "target_lines": 2
+        },
+        {
+          "record": "locality",
+          "path": "small.ts",
+          "internal": 1,
+          "touching": 7,
+          "score": 0.1428571492433548,
+          "lines": 9,
+          "target_lines": 0,
+          "reason": "split_candidate",
+          "to_path": "small.ts",
+          "cut_lines": [
+            8
+          ],
+          "shared_edges": 3
+        },
+        {
+          "record": "locality",
+          "path": "target.ts",
+          "internal": 0,
+          "touching": 3,
+          "score": 0.0,
+          "lines": 2,
+          "target_lines": 0,
+          "reason": "split_candidate",
+          "to_path": "target.ts",
+          "cut_lines": [],
+          "shared_edges": 3
+        },
+        {
+          "record": "stratify_move",
+          "from_path": "0_log.ts",
+          "to_path": "0_log.ts",
+          "reason": "depth_prefix",
+          "move_tsv": "0_log.ts\t0_log.ts"
+        },
+        {
+          "record": "stratify_move",
+          "from_path": "10_history.memory.ts",
+          "to_path": "0_history.memory.ts",
+          "reason": "depth_prefix",
+          "move_tsv": "10_history.memory.ts\t0_history.memory.ts"
+        },
+        {
+          "record": "stratify_move",
+          "from_path": "2a_Signal.browser.test.ts",
+          "to_path": "0_Signal.browser.test.ts",
+          "reason": "depth_prefix",
+          "move_tsv": "2a_Signal.browser.test.ts\t0_Signal.browser.test.ts"
+        },
+        {
+          "record": "stratify_move",
+          "from_path": "3_plain.tsx",
+          "to_path": "0_plain.tsx",
+          "reason": "depth_prefix",
+          "move_tsv": "3_plain.tsx\t0_plain.tsx"
+        },
+        {
+          "record": "stratify_move",
+          "from_path": "4_jsxAuto.test.ts",
+          "to_path": "0_jsxAuto.test.ts",
+          "reason": "depth_prefix",
+          "move_tsv": "4_jsxAuto.test.ts\t0_jsxAuto.test.ts"
+        },
+        {
+          "record": "stratum",
+          "depth": 0,
+          "entry_depth": 0,
+          "path": "0_log.ts",
+          "prefix": "0_",
+          "scc": 1,
+          "via": "0_log.ts"
+        },
+        {
+          "record": "stratum",
+          "depth": 0,
+          "entry_depth": 0,
+          "path": "10_history.memory.ts",
+          "prefix": "0_",
+          "scc": 2,
+          "via": "10_history.memory.ts"
+        },
+        {
+          "record": "stratum",
+          "depth": 0,
+          "entry_depth": 0,
+          "path": "1_duplicate.ts",
+          "prefix": "0_",
+          "scc": 3,
+          "via": "1_duplicate.ts"
+        },
+        {
+          "record": "stratum",
+          "depth": 0,
+          "entry_depth": 0,
+          "path": "2_duplicate.ts",
+          "prefix": "0_",
+          "scc": 4,
+          "via": "2_duplicate.ts"
+        },
+        {
+          "record": "stratum",
+          "depth": 0,
+          "entry_depth": 0,
+          "path": "2a_Signal.browser.test.ts",
+          "prefix": "0_",
+          "scc": 5,
+          "via": "2a_Signal.browser.test.ts"
+        },
+        {
+          "record": "stratum",
+          "depth": 0,
+          "entry_depth": 0,
+          "path": "3_plain.tsx",
+          "prefix": "0_",
+          "scc": 6,
+          "via": "3_plain.tsx"
+        },
+        {
+          "record": "stratum",
+          "depth": 0,
+          "entry_depth": 0,
+          "path": "4_jsxAuto.test.ts",
+          "prefix": "0_",
+          "scc": 7,
+          "via": "4_jsxAuto.test.ts"
+        },
+        {
+          "record": "stratum",
+          "depth": 0,
+          "entry_depth": 0,
+          "path": "8_directory.ts",
+          "prefix": "0_",
+          "scc": 8,
+          "via": "8_directory.ts"
+        },
+        {
+          "record": "stratum",
+          "depth": 0,
+          "entry_depth": 0,
+          "path": "9_blocked.ts",
+          "prefix": "0_",
+          "scc": 9,
+          "via": "9_blocked.ts"
+        },
+        {
+          "record": "stratum_cycle",
+          "scc": 10,
+          "members": 2,
+          "paths": [
+            "cycle_a.ts",
+            "cycle_b.ts"
+          ]
+        },
+        {
+          "record": "stratum_cycle",
+          "scc": 12,
+          "members": 2,
+          "paths": [
+            "merge_a.ts",
+            "merge_b.ts"
+          ]
+        },
+        {
+          "record": "unreached",
+          "path": "0_blocked.ts",
+          "scc": 0
+        },
+        {
+          "record": "unreached",
+          "path": "cycle_a.ts",
+          "scc": 10
+        },
+        {
+          "record": "unreached",
+          "path": "cycle_b.ts",
+          "scc": 10
+        },
+        {
+          "record": "unreached",
+          "path": "main.ts",
+          "scc": 11
+        },
+        {
+          "record": "unreached",
+          "path": "merge_a.ts",
+          "scc": 12
+        },
+        {
+          "record": "unreached",
+          "path": "merge_b.ts",
+          "scc": 12
+        },
+        {
+          "record": "unreached",
+          "path": "small.ts",
+          "scc": 13
+        },
+        {
+          "record": "unreached",
+          "path": "target.ts",
+          "scc": 14
+        }
+      ]
+    },
+    "numbered_signal_target": "0_Signal.browser.test.ts",
+    "ranked": {
+      "exit_code": 0,
+      "stdout": [
+        {
+          "record": "locality",
+          "path": "cycle_a.ts",
+          "internal": 2,
+          "touching": 11,
+          "score": 0.1818181872367859,
+          "lines": 11,
+          "target_lines": 2,
+          "reason": "split_candidate",
+          "to_path": "cycle_a.ts",
+          "cut_lines": [
+            9,
+            10
+          ],
+          "shared_edges": 6
+        },
+        {
+          "record": "locality",
+          "path": "cycle_b.ts",
+          "internal": 2,
+          "touching": 8,
+          "score": 0.25,
+          "lines": 11,
+          "target_lines": 3,
+          "reason": "split_candidate",
+          "to_path": "cycle_b.ts",
+          "cut_lines": [
+            9,
+            10
+          ],
+          "shared_edges": 3
+        },
+        {
+          "record": "locality",
+          "path": "main.ts",
+          "internal": 1,
+          "touching": 10,
+          "score": 0.10000000149011612,
+          "lines": 37,
+          "target_lines": 1,
+          "reason": "split_candidate",
+          "to_path": "main.ts",
+          "cut_lines": [
+            12
+          ],
+          "shared_edges": 1
+        },
+        {
+          "record": "locality",
+          "path": "merge_a.ts",
+          "internal": 20,
+          "touching": 29,
+          "score": 0.6896551847457886,
+          "lines": 12,
+          "target_lines": 8
+        },
+        {
+          "record": "locality",
+          "path": "merge_b.ts",
+          "internal": 20,
+          "touching": 26,
+          "score": 0.7692307829856873,
+          "lines": 12,
+          "target_lines": 8
+        },
+        {
+          "record": "locality",
+          "path": "small.ts",
+          "internal": 1,
+          "touching": 7,
+          "score": 0.1428571492433548,
+          "lines": 9,
+          "target_lines": 2,
+          "reason": "split_candidate",
+          "to_path": "small.ts",
+          "cut_lines": [
+            8
+          ],
+          "shared_edges": 3
+        },
+        {
+          "record": "locality",
+          "path": "target.ts",
+          "internal": 0,
+          "touching": 3,
+          "score": 0.0,
+          "lines": 2,
+          "target_lines": 0,
+          "reason": "split_candidate",
+          "to_path": "target.ts",
+          "cut_lines": [],
+          "shared_edges": 3
+        },
+        {
+          "record": "stratify_move",
+          "from_path": "cycle_a.ts",
+          "to_path": "0_cycle_a.ts",
+          "reason": "depth_prefix",
+          "move_tsv": "cycle_a.ts\t0_cycle_a.ts"
+        },
+        {
+          "record": "stratify_move",
+          "from_path": "cycle_b.ts",
+          "to_path": "0_cycle_b.ts",
+          "reason": "depth_prefix",
+          "move_tsv": "cycle_b.ts\t0_cycle_b.ts"
+        },
+        {
+          "record": "stratify_move",
+          "from_path": "main.ts",
+          "to_path": "2_main.ts",
+          "reason": "depth_prefix",
+          "move_tsv": "main.ts\t2_main.ts"
+        },
+        {
+          "record": "stratify_move",
+          "from_path": "merge_a.ts",
+          "to_path": "0_merge_a.ts",
+          "reason": "depth_prefix",
+          "move_tsv": "merge_a.ts\t0_merge_a.ts"
+        },
+        {
+          "record": "stratify_move",
+          "from_path": "merge_b.ts",
+          "to_path": "0_merge_b.ts",
+          "reason": "depth_prefix",
+          "move_tsv": "merge_b.ts\t0_merge_b.ts"
+        },
+        {
+          "record": "stratify_move",
+          "from_path": "small.ts",
+          "to_path": "1_small.ts",
+          "reason": "depth_prefix",
+          "move_tsv": "small.ts\t1_small.ts"
+        },
+        {
+          "record": "stratify_move",
+          "from_path": "target.ts",
+          "to_path": "0_target.ts",
+          "reason": "depth_prefix",
+          "move_tsv": "target.ts\t0_target.ts"
+        },
+        {
+          "record": "stratum",
+          "depth": 0,
+          "entry_depth": 1,
+          "path": "cycle_a.ts",
+          "prefix": "0_",
+          "scc": 0,
+          "via": "main.ts:main"
+        },
+        {
+          "record": "stratum",
+          "depth": 0,
+          "entry_depth": 2,
+          "path": "cycle_b.ts",
+          "prefix": "0_",
+          "scc": 0,
+          "via": "main.ts:main"
+        },
+        {
+          "record": "stratum",
+          "depth": 2,
+          "entry_depth": 0,
+          "path": "main.ts",
+          "prefix": "2_",
+          "scc": 1,
+          "via": "main.ts:main"
+        },
+        {
+          "record": "stratum",
+          "depth": 0,
+          "entry_depth": 1,
+          "path": "merge_a.ts",
+          "prefix": "0_",
+          "scc": 2,
+          "via": "main.ts:main"
+        },
+        {
+          "record": "stratum",
+          "depth": 0,
+          "entry_depth": 2,
+          "path": "merge_b.ts",
+          "prefix": "0_",
+          "scc": 2,
+          "via": "main.ts:main"
+        },
+        {
+          "record": "stratum",
+          "depth": 1,
+          "entry_depth": 0,
+          "path": "small.ts",
+          "prefix": "1_",
+          "scc": 3,
+          "via": "small.ts:small"
+        },
+        {
+          "record": "stratum",
+          "depth": 0,
+          "entry_depth": 1,
+          "path": "target.ts",
+          "prefix": "0_",
+          "scc": 4,
+          "via": "small.ts:small"
+        },
+        {
+          "record": "stratum_cycle",
+          "scc": 0,
+          "members": 2,
+          "paths": [
+            "cycle_a.ts",
+            "cycle_b.ts"
+          ]
+        },
+        {
+          "record": "stratum_cycle",
+          "scc": 2,
+          "members": 2,
+          "paths": [
+            "merge_a.ts",
+            "merge_b.ts"
+          ]
+        }
+      ]
+    },
+    "ranked_entry_depth": 1,
+    "ranked_via": "small.ts:small",
+    "stable_cycle_rows": 2,
+    "stable_depth_prefix_reasons": 7,
+    "stable_first": {
+      "exit_code": 0,
+      "stdout": [
+        {
+          "record": "locality",
+          "path": "cycle_a.ts",
+          "internal": 2,
+          "touching": 11,
+          "score": 0.1818181872367859,
+          "lines": 11,
+          "target_lines": 36,
+          "reason": "move_candidate",
+          "to_path": "cycle_b.ts",
+          "cut_lines": [],
+          "shared_edges": 6
+        },
+        {
+          "record": "locality",
+          "path": "cycle_b.ts",
+          "internal": 2,
+          "touching": 8,
+          "score": 0.25,
+          "lines": 11,
+          "target_lines": 50,
+          "reason": "move_candidate",
+          "to_path": "cycle_a.ts",
+          "cut_lines": [],
+          "shared_edges": 6
+        },
+        {
+          "record": "locality",
+          "path": "main.ts",
+          "internal": 1,
+          "touching": 10,
+          "score": 0.10000000149011612,
+          "lines": 37,
+          "target_lines": 20,
+          "reason": "split_candidate",
+          "to_path": "main.ts",
+          "cut_lines": [
+            12
+          ],
+          "shared_edges": 1
+        },
+        {
+          "record": "locality",
+          "path": "merge_a.ts",
+          "internal": 20,
+          "touching": 29,
+          "score": 0.6896551847457886,
+          "lines": 12,
+          "target_lines": 138,
+          "reason": "merge_candidate",
+          "to_path": "merge_b.ts",
+          "cut_lines": [],
+          "shared_edges": 6
+        },
+        {
+          "record": "locality",
+          "path": "merge_b.ts",
+          "internal": 20,
+          "touching": 26,
+          "score": 0.7692307829856873,
+          "lines": 12,
+          "target_lines": 154,
+          "reason": "merge_candidate",
+          "to_path": "merge_a.ts",
+          "cut_lines": [],
+          "shared_edges": 6
+        },
+        {
+          "record": "locality",
+          "path": "small.ts",
+          "internal": 1,
+          "touching": 7,
+          "score": 0.1428571492433548,
+          "lines": 9,
+          "target_lines": 29,
+          "reason": "move_candidate",
+          "to_path": "target.ts",
+          "cut_lines": [],
+          "shared_edges": 3
+        },
+        {
+          "record": "locality",
+          "path": "target.ts",
+          "internal": 0,
+          "touching": 3,
+          "score": 0.0,
+          "lines": 2,
+          "target_lines": 0,
+          "reason": "split_candidate",
+          "to_path": "target.ts",
+          "cut_lines": [],
+          "shared_edges": 3
+        },
+        {
+          "record": "stratify_move",
+          "from_path": "cycle_a.ts",
+          "to_path": "0_cycle_a.ts",
+          "reason": "depth_prefix",
+          "move_tsv": "cycle_a.ts\t0_cycle_a.ts"
+        },
+        {
+          "record": "stratify_move",
+          "from_path": "cycle_b.ts",
+          "to_path": "0_cycle_b.ts",
+          "reason": "depth_prefix",
+          "move_tsv": "cycle_b.ts\t0_cycle_b.ts"
+        },
+        {
+          "record": "stratify_move",
+          "from_path": "main.ts",
+          "to_path": "2_main.ts",
+          "reason": "depth_prefix",
+          "move_tsv": "main.ts\t2_main.ts"
+        },
+        {
+          "record": "stratify_move",
+          "from_path": "merge_a.ts",
+          "to_path": "0_merge_a.ts",
+          "reason": "depth_prefix",
+          "move_tsv": "merge_a.ts\t0_merge_a.ts"
+        },
+        {
+          "record": "stratify_move",
+          "from_path": "merge_b.ts",
+          "to_path": "0_merge_b.ts",
+          "reason": "depth_prefix",
+          "move_tsv": "merge_b.ts\t0_merge_b.ts"
+        },
+        {
+          "record": "stratify_move",
+          "from_path": "small.ts",
+          "to_path": "1_small.ts",
+          "reason": "depth_prefix",
+          "move_tsv": "small.ts\t1_small.ts"
+        },
+        {
+          "record": "stratify_move",
+          "from_path": "target.ts",
+          "to_path": "0_target.ts",
+          "reason": "depth_prefix",
+          "move_tsv": "target.ts\t0_target.ts"
+        },
+        {
+          "record": "stratum",
+          "depth": 0,
+          "entry_depth": 1,
+          "path": "cycle_a.ts",
+          "prefix": "0_",
+          "scc": 0,
+          "via": "main.ts:main"
+        },
+        {
+          "record": "stratum",
+          "depth": 0,
+          "entry_depth": 2,
+          "path": "cycle_b.ts",
+          "prefix": "0_",
+          "scc": 0,
+          "via": "main.ts:main"
+        },
+        {
+          "record": "stratum",
+          "depth": 2,
+          "entry_depth": 0,
+          "path": "main.ts",
+          "prefix": "2_",
+          "scc": 1,
+          "via": "main.ts:main"
+        },
+        {
+          "record": "stratum",
+          "depth": 0,
+          "entry_depth": 1,
+          "path": "merge_a.ts",
+          "prefix": "0_",
+          "scc": 2,
+          "via": "main.ts:main"
+        },
+        {
+          "record": "stratum",
+          "depth": 0,
+          "entry_depth": 2,
+          "path": "merge_b.ts",
+          "prefix": "0_",
+          "scc": 2,
+          "via": "main.ts:main"
+        },
+        {
+          "record": "stratum",
+          "depth": 1,
+          "entry_depth": 1,
+          "path": "small.ts",
+          "prefix": "1_",
+          "scc": 3,
+          "via": "main.ts:main"
+        },
+        {
+          "record": "stratum",
+          "depth": 0,
+          "entry_depth": 2,
+          "path": "target.ts",
+          "prefix": "0_",
+          "scc": 4,
+          "via": "main.ts:main"
+        },
+        {
+          "record": "stratum_cycle",
+          "scc": 0,
+          "members": 2,
+          "paths": [
+            "cycle_a.ts",
+            "cycle_b.ts"
+          ]
+        },
+        {
+          "record": "stratum_cycle",
+          "scc": 2,
+          "members": 2,
+          "paths": [
+            "merge_a.ts",
+            "merge_b.ts"
+          ]
+        }
+      ]
+    },
+    "stable_locality_rows": 7,
+    "stable_merge_reasons": 2,
+    "stable_merge_shared_edges": 6,
+    "stable_move_reasons": 3,
+    "stable_prefix_move_tsv": "cycle_a.ts\t0_cycle_a.ts",
+    "stable_runs_agree": true,
+    "stable_second": {
+      "exit_code": 0,
+      "stdout": [
+        {
+          "record": "locality",
+          "path": "cycle_a.ts",
+          "internal": 2,
+          "touching": 11,
+          "score": 0.1818181872367859,
+          "lines": 11,
+          "target_lines": 36,
+          "reason": "move_candidate",
+          "to_path": "cycle_b.ts",
+          "cut_lines": [],
+          "shared_edges": 6
+        },
+        {
+          "record": "locality",
+          "path": "cycle_b.ts",
+          "internal": 2,
+          "touching": 8,
+          "score": 0.25,
+          "lines": 11,
+          "target_lines": 50,
+          "reason": "move_candidate",
+          "to_path": "cycle_a.ts",
+          "cut_lines": [],
+          "shared_edges": 6
+        },
+        {
+          "record": "locality",
+          "path": "main.ts",
+          "internal": 1,
+          "touching": 10,
+          "score": 0.10000000149011612,
+          "lines": 37,
+          "target_lines": 20,
+          "reason": "split_candidate",
+          "to_path": "main.ts",
+          "cut_lines": [
+            12
+          ],
+          "shared_edges": 1
+        },
+        {
+          "record": "locality",
+          "path": "merge_a.ts",
+          "internal": 20,
+          "touching": 29,
+          "score": 0.6896551847457886,
+          "lines": 12,
+          "target_lines": 138,
+          "reason": "merge_candidate",
+          "to_path": "merge_b.ts",
+          "cut_lines": [],
+          "shared_edges": 6
+        },
+        {
+          "record": "locality",
+          "path": "merge_b.ts",
+          "internal": 20,
+          "touching": 26,
+          "score": 0.7692307829856873,
+          "lines": 12,
+          "target_lines": 154,
+          "reason": "merge_candidate",
+          "to_path": "merge_a.ts",
+          "cut_lines": [],
+          "shared_edges": 6
+        },
+        {
+          "record": "locality",
+          "path": "small.ts",
+          "internal": 1,
+          "touching": 7,
+          "score": 0.1428571492433548,
+          "lines": 9,
+          "target_lines": 29,
+          "reason": "move_candidate",
+          "to_path": "target.ts",
+          "cut_lines": [],
+          "shared_edges": 3
+        },
+        {
+          "record": "locality",
+          "path": "target.ts",
+          "internal": 0,
+          "touching": 3,
+          "score": 0.0,
+          "lines": 2,
+          "target_lines": 0,
+          "reason": "split_candidate",
+          "to_path": "target.ts",
+          "cut_lines": [],
+          "shared_edges": 3
+        },
+        {
+          "record": "stratify_move",
+          "from_path": "cycle_a.ts",
+          "to_path": "0_cycle_a.ts",
+          "reason": "depth_prefix",
+          "move_tsv": "cycle_a.ts\t0_cycle_a.ts"
+        },
+        {
+          "record": "stratify_move",
+          "from_path": "cycle_b.ts",
+          "to_path": "0_cycle_b.ts",
+          "reason": "depth_prefix",
+          "move_tsv": "cycle_b.ts\t0_cycle_b.ts"
+        },
+        {
+          "record": "stratify_move",
+          "from_path": "main.ts",
+          "to_path": "2_main.ts",
+          "reason": "depth_prefix",
+          "move_tsv": "main.ts\t2_main.ts"
+        },
+        {
+          "record": "stratify_move",
+          "from_path": "merge_a.ts",
+          "to_path": "0_merge_a.ts",
+          "reason": "depth_prefix",
+          "move_tsv": "merge_a.ts\t0_merge_a.ts"
+        },
+        {
+          "record": "stratify_move",
+          "from_path": "merge_b.ts",
+          "to_path": "0_merge_b.ts",
+          "reason": "depth_prefix",
+          "move_tsv": "merge_b.ts\t0_merge_b.ts"
+        },
+        {
+          "record": "stratify_move",
+          "from_path": "small.ts",
+          "to_path": "1_small.ts",
+          "reason": "depth_prefix",
+          "move_tsv": "small.ts\t1_small.ts"
+        },
+        {
+          "record": "stratify_move",
+          "from_path": "target.ts",
+          "to_path": "0_target.ts",
+          "reason": "depth_prefix",
+          "move_tsv": "target.ts\t0_target.ts"
+        },
+        {
+          "record": "stratum",
+          "depth": 0,
+          "entry_depth": 1,
+          "path": "cycle_a.ts",
+          "prefix": "0_",
+          "scc": 0,
+          "via": "main.ts:main"
+        },
+        {
+          "record": "stratum",
+          "depth": 0,
+          "entry_depth": 2,
+          "path": "cycle_b.ts",
+          "prefix": "0_",
+          "scc": 0,
+          "via": "main.ts:main"
+        },
+        {
+          "record": "stratum",
+          "depth": 2,
+          "entry_depth": 0,
+          "path": "main.ts",
+          "prefix": "2_",
+          "scc": 1,
+          "via": "main.ts:main"
+        },
+        {
+          "record": "stratum",
+          "depth": 0,
+          "entry_depth": 1,
+          "path": "merge_a.ts",
+          "prefix": "0_",
+          "scc": 2,
+          "via": "main.ts:main"
+        },
+        {
+          "record": "stratum",
+          "depth": 0,
+          "entry_depth": 2,
+          "path": "merge_b.ts",
+          "prefix": "0_",
+          "scc": 2,
+          "via": "main.ts:main"
+        },
+        {
+          "record": "stratum",
+          "depth": 1,
+          "entry_depth": 1,
+          "path": "small.ts",
+          "prefix": "1_",
+          "scc": 3,
+          "via": "main.ts:main"
+        },
+        {
+          "record": "stratum",
+          "depth": 0,
+          "entry_depth": 2,
+          "path": "target.ts",
+          "prefix": "0_",
+          "scc": 4,
+          "via": "main.ts:main"
+        },
+        {
+          "record": "stratum_cycle",
+          "scc": 0,
+          "members": 2,
+          "paths": [
+            "cycle_a.ts",
+            "cycle_b.ts"
+          ]
+        },
+        {
+          "record": "stratum_cycle",
+          "scc": 2,
+          "members": 2,
+          "paths": [
+            "merge_a.ts",
+            "merge_b.ts"
+          ]
+        }
+      ]
+    },
+    "stable_split_cut_lines": 1,
+    "stable_split_reasons": 2,
+    "stable_stratum_rows": 7,
+    "stable_tree_unchanged": {
+      "files": {
+        "cycle_a.ts": "import { cycleB } from \"./cycle_b\";\n\nexport function cycleA() {\n  cycleB();\n  privateOne();\n  privateTwo();\n}\n\nfunction privateOne() {}\nfunction privateTwo() {}\n",
+        "cycle_b.ts": "import { cycleA } from \"./cycle_a\";\n\nexport function cycleB() {\n  cycleA();\n  privateThree();\n  privateFour();\n}\n\nfunction privateThree() {}\nfunction privateFour() {}\n",
+        "main.ts": "import { small } from \"./small\";\nimport { cycleA } from \"./cycle_a\";\nimport { mergeA } from \"./merge_a\";\n\nexport function main() {\n  small();\n  cycleA();\n  mergeA();\n  helper();\n}\n\nfunction helper() {}\n// retained line\n// retained line\n// retained line\n// retained line\n// retained line\n// retained line\n// retained line\n// retained line\n// retained line\n// retained line\n// retained line\n// retained line\n// retained line\n// retained line\n// retained line\n// retained line\n// retained line\n// retained line\n// retained line\n// retained line\n// retained line\n// retained line\n// retained line\n// retained line\n",
+        "merge_a.ts": "import { mergeB } from \"./merge_b\";\n\nexport function mergeA() {\n  mergeB();\n  a0(); a1(); a2(); a3(); a4(); a5(); a6(); a7(); a8(); a9();\n  a10(); a11(); a12(); a13(); a14(); a15(); a16(); a17(); a18(); a19();\n}\nfunction a0() {} function a1() {} function a2() {} function a3() {} function a4() {}\nfunction a5() {} function a6() {} function a7() {} function a8() {} function a9() {}\nfunction a10() {} function a11() {} function a12() {} function a13() {} function a14() {}\nfunction a15() {} function a16() {} function a17() {} function a18() {} function a19() {}\n",
+        "merge_b.ts": "import { mergeA } from \"./merge_a\";\n\nexport function mergeB() {\n  mergeA();\n  b0(); b1(); b2(); b3(); b4(); b5(); b6(); b7(); b8(); b9();\n  b10(); b11(); b12(); b13(); b14(); b15(); b16(); b17(); b18(); b19();\n}\nfunction b0() {} function b1() {} function b2() {} function b3() {} function b4() {}\nfunction b5() {} function b6() {} function b7() {} function b8() {} function b9() {}\nfunction b10() {} function b11() {} function b12() {} function b13() {} function b14() {}\nfunction b15() {} function b16() {} function b17() {} function b18() {} function b19() {}\n",
+        "small.ts": "import { target } from \"./target\";\n\nexport function small() {\n  local();\n  target();\n}\n\nfunction local() {}\n",
+        "target.ts": "export function target() {}\n"
+      }
+    },
+    "unranked": {
+      "exit_code": 0,
+      "stdout": [
+        {
+          "record": "locality",
+          "path": "cycle_a.ts",
+          "internal": 2,
+          "touching": 11,
+          "score": 0.1818181872367859,
+          "lines": 11,
+          "target_lines": 2,
+          "reason": "split_candidate",
+          "to_path": "cycle_a.ts",
+          "cut_lines": [
+            9,
+            10
+          ],
+          "shared_edges": 6
+        },
+        {
+          "record": "locality",
+          "path": "cycle_b.ts",
+          "internal": 2,
+          "touching": 8,
+          "score": 0.25,
+          "lines": 11,
+          "target_lines": 3,
+          "reason": "split_candidate",
+          "to_path": "cycle_b.ts",
+          "cut_lines": [
+            9,
+            10
+          ],
+          "shared_edges": 3
+        },
+        {
+          "record": "locality",
+          "path": "main.ts",
+          "internal": 1,
+          "touching": 10,
+          "score": 0.10000000149011612,
+          "lines": 37,
+          "target_lines": 1,
+          "reason": "split_candidate",
+          "to_path": "main.ts",
+          "cut_lines": [
+            12
+          ],
+          "shared_edges": 1
+        },
+        {
+          "record": "locality",
+          "path": "merge_a.ts",
+          "internal": 20,
+          "touching": 29,
+          "score": 0.6896551847457886,
+          "lines": 12,
+          "target_lines": 8
+        },
+        {
+          "record": "locality",
+          "path": "merge_b.ts",
+          "internal": 20,
+          "touching": 26,
+          "score": 0.7692307829856873,
+          "lines": 12,
+          "target_lines": 8
+        },
+        {
+          "record": "locality",
+          "path": "small.ts",
+          "internal": 1,
+          "touching": 7,
+          "score": 0.1428571492433548,
+          "lines": 9,
+          "target_lines": 2,
+          "reason": "split_candidate",
+          "to_path": "small.ts",
+          "cut_lines": [
+            8
+          ],
+          "shared_edges": 3
+        },
+        {
+          "record": "locality",
+          "path": "target.ts",
+          "internal": 0,
+          "touching": 3,
+          "score": 0.0,
+          "lines": 2,
+          "target_lines": 0,
+          "reason": "split_candidate",
+          "to_path": "target.ts",
+          "cut_lines": [],
+          "shared_edges": 3
+        },
+        {
+          "record": "stratify_move",
+          "from_path": "cycle_a.ts",
+          "to_path": "0_cycle_a.ts",
+          "reason": "depth_prefix",
+          "move_tsv": "cycle_a.ts\t0_cycle_a.ts"
+        },
+        {
+          "record": "stratify_move",
+          "from_path": "cycle_b.ts",
+          "to_path": "0_cycle_b.ts",
+          "reason": "depth_prefix",
+          "move_tsv": "cycle_b.ts\t0_cycle_b.ts"
+        },
+        {
+          "record": "stratify_move",
+          "from_path": "main.ts",
+          "to_path": "2_main.ts",
+          "reason": "depth_prefix",
+          "move_tsv": "main.ts\t2_main.ts"
+        },
+        {
+          "record": "stratify_move",
+          "from_path": "merge_a.ts",
+          "to_path": "0_merge_a.ts",
+          "reason": "depth_prefix",
+          "move_tsv": "merge_a.ts\t0_merge_a.ts"
+        },
+        {
+          "record": "stratify_move",
+          "from_path": "merge_b.ts",
+          "to_path": "0_merge_b.ts",
+          "reason": "depth_prefix",
+          "move_tsv": "merge_b.ts\t0_merge_b.ts"
+        },
+        {
+          "record": "stratify_move",
+          "from_path": "small.ts",
+          "to_path": "1_small.ts",
+          "reason": "depth_prefix",
+          "move_tsv": "small.ts\t1_small.ts"
+        },
+        {
+          "record": "stratify_move",
+          "from_path": "target.ts",
+          "to_path": "0_target.ts",
+          "reason": "depth_prefix",
+          "move_tsv": "target.ts\t0_target.ts"
+        },
+        {
+          "record": "stratum",
+          "depth": 0,
+          "entry_depth": 1,
+          "path": "cycle_a.ts",
+          "prefix": "0_",
+          "scc": 0,
+          "via": "main.ts:main"
+        },
+        {
+          "record": "stratum",
+          "depth": 0,
+          "entry_depth": 2,
+          "path": "cycle_b.ts",
+          "prefix": "0_",
+          "scc": 0,
+          "via": "main.ts:main"
+        },
+        {
+          "record": "stratum",
+          "depth": 2,
+          "entry_depth": 0,
+          "path": "main.ts",
+          "prefix": "2_",
+          "scc": 1,
+          "via": "main.ts:main"
+        },
+        {
+          "record": "stratum",
+          "depth": 0,
+          "entry_depth": 1,
+          "path": "merge_a.ts",
+          "prefix": "0_",
+          "scc": 2,
+          "via": "main.ts:main"
+        },
+        {
+          "record": "stratum",
+          "depth": 0,
+          "entry_depth": 2,
+          "path": "merge_b.ts",
+          "prefix": "0_",
+          "scc": 2,
+          "via": "main.ts:main"
+        },
+        {
+          "record": "stratum",
+          "depth": 1,
+          "entry_depth": 0,
+          "path": "small.ts",
+          "prefix": "1_",
+          "scc": 3,
+          "via": "small.ts:small"
+        },
+        {
+          "record": "stratum",
+          "depth": 0,
+          "entry_depth": 1,
+          "path": "target.ts",
+          "prefix": "0_",
+          "scc": 4,
+          "via": "small.ts:small"
+        },
+        {
+          "record": "stratum_cycle",
+          "scc": 0,
+          "members": 2,
+          "paths": [
+            "cycle_a.ts",
+            "cycle_b.ts"
+          ]
+        },
+        {
+          "record": "stratum_cycle",
+          "scc": 2,
+          "members": 2,
+          "paths": [
+            "merge_a.ts",
+            "merge_b.ts"
+          ]
+        }
+      ]
+    },
+    "unranked_entry_depth": 1,
+    "unranked_via": "small.ts:small"
   }
 }
