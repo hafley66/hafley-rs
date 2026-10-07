@@ -152,6 +152,7 @@ fn load_store(
 /// `None`, so its rows keep `line: null` and it costs one probe.
 struct Lines {
     root: Option<PathBuf>,
+    source_root: Option<PathBuf>,
     tables: HashMap<String, Option<Vec<u32>>>,
 }
 
@@ -159,11 +160,20 @@ impl Lines {
     fn line(&mut self, path: &str, byte: Option<u32>) -> Option<u32> {
         let byte = byte?;
         if !self.tables.contains_key(path) {
-            let content = fs::read(path).ok().or_else(|| {
-                self.root
-                    .as_ref()
-                    .and_then(|root| fs::read(root.join(path)).ok())
-            });
+            let source_path = Path::new(path);
+            let source = match &self.source_root {
+                Some(root) if !source_path.is_absolute() => root.join(source_path),
+                _ => sprefa_extract::io_path(source_path),
+            };
+            let content = match fs::read(&source) {
+                Ok(bytes) => Some(bytes),
+                Err(error) => {
+                    crate::ops::print_diagnostic(format_args!(
+                        "graph location declined {}: {error}", source.display()
+                    ));
+                    None
+                }
+            };
             self.tables.insert(
                 path.to_string(),
                 content.map(|bytes| newline_offsets(&bytes)),
@@ -407,6 +417,16 @@ fn paths(
             to_name: found.node.1,
             depth: found.depth,
             witness: found.witness,
+            from_file: None,
+            from_line: None,
+            from_col: None,
+            from_text: None,
+            from_reason: None,
+            to_file: None,
+            to_line: None,
+            to_col: None,
+            to_text: None,
+            to_reason: None,
         })
         .collect())
 }
@@ -589,7 +609,9 @@ impl Arm<'_> {
                         std::mem::swap(&mut edge.src, &mut edge.dst);
                     }
                 }
-                paths(&edges, "flow", |_| flow_seed(seed, lines.root.as_deref()), deadline)
+                let mut rows = paths(&edges, "flow", |_| flow_seed(seed, lines.root.as_deref()), deadline)?;
+                flow::locate(connection, &mut rows, lines.source_root.as_deref())?;
+                Ok(rows)
             },
         }
     }
@@ -600,10 +622,12 @@ impl Arm<'_> {
         connection: &Connection,
         secs: u64,
         root: Option<PathBuf>,
+        source_root: Option<PathBuf>,
     ) -> Result<Vec<FlatFact>, Box<dyn std::error::Error>> {
         crate::deadline::within(Some(connection.get_interrupt_handle()), Some(secs), "graph", |deadline| {
             let mut lines = Lines {
                 root,
+                source_root,
                 tables: HashMap::new(),
             };
             self.ask(connection, deadline, &mut lines)
@@ -628,6 +652,7 @@ fn ask_at(
             let rows = arm.ask_within(
                 database.connection(),
                 cli.timeout,
+                Some(scratch.to_path_buf()),
                 Some(scratch.to_path_buf()),
             )?;
             database.close()?;
@@ -786,7 +811,7 @@ pub fn run_to(
             walk::walk_rows(&arm, &cli, &paths, anchor)?
         } else {
             let database = load_store(&paths, &arm, &cli, None, cli.sqlite.as_deref())?;
-            let rows = arm.ask_within(database.connection(), cli.timeout, cli.inputs.root.clone())?;
+            let rows = arm.ask_within(database.connection(), cli.timeout, cli.inputs.root.clone(), None)?;
             database.close()?;
             rows
         }

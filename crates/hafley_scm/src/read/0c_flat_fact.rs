@@ -383,6 +383,30 @@ pub enum FlatFact {
         depth: u32,
         /// Export row ids of the ordered edges that witness this path.
         witness: Vec<u64>,
+        /// Worktree-relative source path mapped from the endpoint digest.
+        #[serde(skip_serializing_if = "Option::is_none", default)]
+        from_file: Option<String>,
+        /// 1-based line and byte column at the endpoint span start.
+        #[serde(skip_serializing_if = "Option::is_none", default)]
+        from_line: Option<u32>,
+        #[serde(skip_serializing_if = "Option::is_none", default)]
+        from_col: Option<u32>,
+        /// Exact source bytes of the endpoint span, decoded as UTF-8.
+        #[serde(skip_serializing_if = "Option::is_none", default)]
+        from_text: Option<String>,
+        /// Why endpoint location could not be supplied.
+        #[serde(skip_serializing_if = "Option::is_none", default)]
+        from_reason: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none", default)]
+        to_file: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none", default)]
+        to_line: Option<u32>,
+        #[serde(skip_serializing_if = "Option::is_none", default)]
+        to_col: Option<u32>,
+        #[serde(skip_serializing_if = "Option::is_none", default)]
+        to_text: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none", default)]
+        to_reason: Option<String>,
     },
     #[serde(rename = "graph_path_change")]
     GraphPathChange {

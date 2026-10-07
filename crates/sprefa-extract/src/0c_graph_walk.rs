@@ -114,6 +114,7 @@ pub(super) fn walk_rows(
     let walked = Deadline { at: None };
     let mut lines = Lines {
         root: cli.inputs.root.clone(),
+        source_root: None,
         tables: Default::default(),
     };
     match arm {

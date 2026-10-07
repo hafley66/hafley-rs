@@ -4072,6 +4072,96 @@
             }
           ]
         }
+      },
+      {
+        "name": "from_file",
+        "path": [
+          "from_file"
+        ],
+        "kind": "string",
+        "optional": true,
+        "nullable": false
+      },
+      {
+        "name": "from_line",
+        "path": [
+          "from_line"
+        ],
+        "kind": "uint32",
+        "optional": true,
+        "nullable": false
+      },
+      {
+        "name": "from_col",
+        "path": [
+          "from_col"
+        ],
+        "kind": "uint32",
+        "optional": true,
+        "nullable": false
+      },
+      {
+        "name": "from_text",
+        "path": [
+          "from_text"
+        ],
+        "kind": "string",
+        "optional": true,
+        "nullable": false
+      },
+      {
+        "name": "from_reason",
+        "path": [
+          "from_reason"
+        ],
+        "kind": "string",
+        "optional": true,
+        "nullable": false
+      },
+      {
+        "name": "to_file",
+        "path": [
+          "to_file"
+        ],
+        "kind": "string",
+        "optional": true,
+        "nullable": false
+      },
+      {
+        "name": "to_line",
+        "path": [
+          "to_line"
+        ],
+        "kind": "uint32",
+        "optional": true,
+        "nullable": false
+      },
+      {
+        "name": "to_col",
+        "path": [
+          "to_col"
+        ],
+        "kind": "uint32",
+        "optional": true,
+        "nullable": false
+      },
+      {
+        "name": "to_text",
+        "path": [
+          "to_text"
+        ],
+        "kind": "string",
+        "optional": true,
+        "nullable": false
+      },
+      {
+        "name": "to_reason",
+        "path": [
+          "to_reason"
+        ],
+        "kind": "string",
+        "optional": true,
+        "nullable": false
       }
     ]
   },
