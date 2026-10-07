@@ -83,14 +83,13 @@ pub fn snapshot(directory: &str, output: BTreeMap<String, Value>) {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures")
         .join(directory);
-    // Machine paths never enter a snapshot: the fixture root becomes
-    // `<fixture>` and the extract binary `<ryii>`, so a frozen table reads
-    // identically in every checkout.
+    // Binary path first: when the target dir sits under the manifest, the
+    // shorter manifest replacement would otherwise eat the binary path.
     let output = replace_strings(
         &serde_json::to_value(output).expect("the tables are JSON"),
         &[
-            (env!("CARGO_MANIFEST_DIR"), "<fixture>"),
             (env!("CARGO_BIN_EXE_ryii"), "<ryii>"),
+            (env!("CARGO_MANIFEST_DIR"), "<fixture>"),
         ],
     );
     insta::with_settings!({snapshot_path=>root,prepend_module_to_snapshot=>false,omit_expression=>true}, {
