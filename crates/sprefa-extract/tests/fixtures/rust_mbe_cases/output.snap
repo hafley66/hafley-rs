@@ -1,0 +1,118 @@
+---
+source: tests/support/2_fixture_runner.rs
+---
+{
+  "0_mbe": {
+    "files": [
+      {
+        "file": "f1_local_call_in_body.rs",
+        "expand_file": true,
+        "budget_hit": false,
+        "nodes": 2,
+        "sites": 2,
+        "macro_sites": [
+          {
+            "macro_name": "twice",
+            "source": "Mbe",
+            "span_start": 72,
+            "span_end": 88,
+            "covers_invocation": false
+          }
+        ]
+      },
+      {
+        "file": "f2_cross_file.rs",
+        "expand_file": false,
+        "budget_hit": null,
+        "nodes": 1,
+        "sites": 1,
+        "macro_sites": []
+      },
+      {
+        "file": "f3_nested.rs",
+        "expand_file": true,
+        "budget_hit": false,
+        "nodes": 2,
+        "sites": 1,
+        "macro_sites": [
+          {
+            "macro_name": "outer",
+            "source": "Mbe",
+            "span_start": 108,
+            "span_end": 122,
+            "covers_invocation": false
+          }
+        ]
+      },
+      {
+        "file": "f4_builtins.rs",
+        "expand_file": false,
+        "budget_hit": null,
+        "nodes": 2,
+        "sites": 1,
+        "macro_sites": []
+      },
+      {
+        "file": "f5_derive.rs",
+        "expand_file": false,
+        "budget_hit": null,
+        "nodes": 1,
+        "sites": 1,
+        "macro_sites": []
+      },
+      {
+        "file": "f6_attr_proc_macro.rs",
+        "expand_file": false,
+        "budget_hit": null,
+        "nodes": 2,
+        "sites": 2,
+        "macro_sites": []
+      },
+      {
+        "file": "f7_mints_fn.rs",
+        "expand_file": true,
+        "budget_hit": false,
+        "nodes": 3,
+        "sites": 2,
+        "macro_sites": [
+          {
+            "macro_name": "mkfn",
+            "source": "Mbe",
+            "span_start": 89,
+            "span_end": 108,
+            "covers_invocation": true
+          }
+        ]
+      },
+      {
+        "file": "f8_include.rs",
+        "expand_file": false,
+        "budget_hit": null,
+        "nodes": 1,
+        "sites": 1,
+        "macro_sites": []
+      },
+      {
+        "file": "f9_recursive.rs",
+        "expand_file": true,
+        "budget_hit": true,
+        "nodes": 1,
+        "sites": 0,
+        "macro_sites": [
+          {
+            "macro_name": "spin",
+            "source": "Mbe",
+            "span_start": 59,
+            "span_end": 66,
+            "covers_invocation": false
+          }
+        ]
+      }
+    ],
+    "f7_inner_call_site": {
+      "start": 89,
+      "end": 108
+    },
+    "f7_mapped_invocation_text": "mkfn! { generated }"
+  }
+}

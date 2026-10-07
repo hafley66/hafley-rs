@@ -1,0 +1,3 @@
+{
+  "fixtures": "tests/fixtures/rust_findings/mbe f1-f9: expand_file + RustSource.extract tables"
+}
