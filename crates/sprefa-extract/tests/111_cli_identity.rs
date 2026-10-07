@@ -27,18 +27,6 @@ fn scratch(name: &str) -> PathBuf {
     dir
 }
 
-#[test]
-fn help_names_the_build_and_mode_aliases() {
-    let output = extract(&["--help"]);
-    assert!(output.status.success());
-    let help = String::from_utf8_lossy(&output.stdout);
-    assert!(help.contains(concat!("git hash: ", env!("SPREFA_BUILD_GIT_HASH"))));
-    assert!(help.contains(&format!("datetime: {}", ryi_proto::BUILD_DATETIME)));
-    assert!(help.contains("  fast "));
-    assert!(help.contains("  slow "));
-    assert!(help.contains("sprefa_extract=info,hafley_scm=info"));
-    assert!(help.contains("HAFLEY_LOG_FORMAT"));
-}
 
 #[test]
 fn slow_decodes_a_saved_index() {

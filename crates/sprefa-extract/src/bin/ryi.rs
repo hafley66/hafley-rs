@@ -545,7 +545,6 @@ fn parse_cli() -> Ryi {
         argv.insert(3, value);
     }
     match cli_command()
-        .name(daemon_auto::SERVER_BIN)
         .try_get_matches_from(argv)
         .and_then(|matches| Ryi::from_arg_matches(&matches))
     {
@@ -636,15 +635,7 @@ fn run(ryi: Ryi) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn cli_command() -> clap::Command {
-    let mut command = Ryi::command();
-    let mut after_help = command
-        .get_after_help()
-        .map(ToString::to_string)
-        .unwrap_or_default();
-    after_help.push_str("\nDeclared language capabilities:\n");
-    after_help.push_str(&capabilities::help_table());
-    command = command.after_help(after_help);
-    command
+    ryi_proto::help::help_command()
 }
 
 fn write_formatted_rows(

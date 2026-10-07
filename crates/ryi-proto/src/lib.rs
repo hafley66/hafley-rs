@@ -41,3 +41,6 @@ mod tests {
 
 #[path = "0_build_identity.rs"]
 pub mod build_identity;
+
+#[path = "1_help.rs"]
+pub mod help;

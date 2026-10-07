@@ -4,9 +4,8 @@ use std::process::Command;
 
 #[test]
 fn generated_clap_help_matches_captured_main() {
-    use clap::CommandFactory as _;
     let mut cases = vec![("top".to_owned(), vec!["--help".to_owned()])];
-    cases.extend(ryi_proto::cli_auto::Ryi::command().get_subcommands().map(|sub| {
+    cases.extend(ryi_proto::help::help_command().get_subcommands().map(|sub| {
         (sub.get_name().to_owned(), vec![sub.get_name().to_owned(), "--help".to_owned()])
     }));
     cases.push(("bare".to_owned(), vec![]));
