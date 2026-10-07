@@ -44,20 +44,33 @@ fn discover_projects(cwd: &Path, capabilities: &BTreeSet<String>) -> Vec<Project
         .standard_filters(true)
         .require_git(false)
         .hidden(false)
-        .max_depth(Some(2));
-    for entry in walker.build() {
-        if started.elapsed() >= DISCOVERY_BUDGET {
-            break;
-        }
-        let Ok(entry) = entry else { continue };
-        if let Some((language, label, root)) = project_for(&entry, cwd, capabilities) {
-            let key = (language, root.clone());
-            if seen.insert(key) {
-                projects.push(Project {
-                    language,
-                    label,
-                    root,
-                });
+        .filter_entry(|entry| {
+            entry.depth() == 0
+                || !entry.file_type().is_some_and(|kind| kind.is_dir())
+                || ![".git", "target", ".boop-worktrees"]
+                    .iter()
+                    .any(|name| entry.file_name() == *name)
+        });
+    // Inspect the workspace root before spending the budget on child directories.
+    'discovery: for depth in 1..=2 {
+        walker.max_depth(Some(depth));
+        for entry in walker.build() {
+            if started.elapsed() >= DISCOVERY_BUDGET {
+                break 'discovery;
+            }
+            let Ok(entry) = entry else { continue };
+            if entry.depth() != depth {
+                continue;
+            }
+            if let Some((language, label, root)) = project_for(&entry, cwd, capabilities) {
+                let key = (language, root.clone());
+                if seen.insert(key) {
+                    projects.push(Project {
+                        language,
+                        label,
+                        root,
+                    });
+                }
             }
         }
     }
