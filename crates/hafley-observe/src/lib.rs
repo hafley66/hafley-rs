@@ -34,6 +34,8 @@ pub mod testkit;
 pub mod tracy;
 #[path = "12_span_alloc.rs"]
 pub mod allocation;
+#[path = "13_memcap.rs"]
+pub mod memcap;
 
 extern crate self as oh;
 

@@ -377,6 +377,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if ryi_proto::build_identity::startup("ryii") || ryi_proto::help::local_help() {
         return Ok(());
     }
+    hafley_observe::memcap::spawn("ryii");
     if std::env::args_os().nth(1).as_deref() == Some(std::ffi::OsStr::new("--daemon")) {
         hafley_scm::read::cache::RETAIN_PROJECT_EXTRACTIONS
             .store(true, std::sync::atomic::Ordering::Relaxed);
