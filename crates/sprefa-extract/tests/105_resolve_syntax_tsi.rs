@@ -239,3 +239,120 @@ fn two_files_never_share_one_type_id() {
         facts.len()
     );
 }
+
+#[test]
+fn repeated_scope_edges_have_unique_labels_in_both_streams() {
+    for fixture in [
+        "tests/fixtures/lift/scope.ts",
+        "tests/fixtures/lift/scope.rs",
+    ] {
+        let project = extract(&[
+            "--witness",
+            "--resolve",
+            "--arms",
+            "type",
+            "--kinds",
+            "type",
+            "--root",
+            "tests/fixtures/lift",
+            fixture,
+        ]);
+        let file = per_file(fixture);
+        assert_eq!(tsi_set(&project), tsi_set(&file), "{fixture}");
+        let mut labels = BTreeSet::new();
+        let mut edges = 0;
+        for row in &project {
+            let FlatFact::Fact(fact) = row else { continue };
+            if fact.relation != "tsi.edge" {
+                continue;
+            }
+            let [Arg::Id(_), Arg::Id(owner), Arg::Text(label), _, _] = fact.args.as_slice() else {
+                panic!("edge shape: {fact:?}")
+            };
+            edges += 1;
+            assert!(
+                labels.insert((*owner, label)),
+                "duplicate owner/label: {fact:?}"
+            );
+        }
+        assert!(edges > 0, "{fixture} emitted no edges");
+    }
+}
+
+#[test]
+fn edge_label_collisions_preserve_rows_and_local_identity() {
+    let mut rows: Vec<FactOut> = [
+        (2, 0, "x", 1, 10),
+        (4, 0, "x", 3, 20),
+        (6, 0, "x@4", 5, 30),
+        (8, 0, "x@4@1", 7, 40),
+        (10, 0, "x", 9, 20),
+        (12, 11, "x", 1, 10),
+    ]
+    .into_iter()
+    .enumerate()
+    .map(|(fact, (edge, owner, label, target, position))| FactOut {
+        fact: fact as u32,
+        relation: "tsi.edge".into(),
+        args: vec![
+            Arg::Id(edge),
+            Arg::Id(owner),
+            Arg::Text(label.into()),
+            Arg::Id(target),
+            Arg::Int(position),
+        ],
+    })
+    .collect();
+    rows.push(FactOut {
+        fact: 6,
+        relation: "ts.readonly".into(),
+        args: vec![Arg::Id(4)],
+    });
+    rows.push(FactOut {
+        fact: 7,
+        relation: "tsi.name".into(),
+        args: vec![Arg::Id(3), Arg::Text("x".into())],
+    });
+    let (local, next) = sprefa_extract::wire::tsi_rows_rebased(&rows, "blob", 0);
+    let labels: Vec<_> = local
+        .iter()
+        .filter_map(|row| {
+            if row.relation != "tsi.edge" {
+                return None;
+            }
+            match &row.args[2] {
+                Arg::Text(label) => Some(label.as_str()),
+                _ => panic!("edge label"),
+            }
+        })
+        .collect();
+    insta::assert_debug_snapshot!(labels, @r###"
+    [
+        "x",
+        "x@4@2",
+        "x@4",
+        "x@4@1",
+        "x@10",
+        "x",
+    ]
+    "###);
+    let mut expected = rows.clone();
+    expected[1].args[2] = Arg::Text("x@4@2".into());
+    expected[4].args[2] = Arg::Text("x@10".into());
+    assert_eq!(local, expected);
+    assert_eq!(next, 13);
+    let (project, next) = sprefa_extract::wire::tsi_rows_rebased(&rows, "blob", 100);
+    for row in &mut expected {
+        for arg in &mut row.args {
+            if let Arg::Id(id) = arg {
+                *id += 100;
+            }
+        }
+    }
+    assert_eq!(project, expected);
+    assert_eq!(next, 113);
+    assert_eq!(
+        sprefa_extract::wire::tsi_rows_rebased(&local, "blob", 0).0,
+        local
+    );
+}

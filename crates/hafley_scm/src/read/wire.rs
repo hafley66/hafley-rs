@@ -142,27 +142,58 @@ pub fn flatten_each<E>(
 /// so a stream over many files shifts each past `base`; returns the next free.
 pub fn tsi_rows_rebased(rows: &[FactOut], digest: &str, base: u32) -> (Vec<FactOut>, u32) {
     let mut next = base;
-    let rebased = rows
-        .iter()
-        .map(|row| {
-            let mut row = row.clone();
-            for arg in &mut row.args {
-                match arg {
-                    TsiArg::Span(blob, _, _) => {
-                        blob.clear();
-                        blob.push_str(digest);
-                    }
-                    TsiArg::Id(id) => {
-                        *id += base;
-                        next = next.max(*id + 1);
-                    }
-                    _ => {}
+    let mut rebased = rows.to_vec();
+    tsi_unique_edge_labels(&mut rebased);
+    for row in &mut rebased {
+        for arg in &mut row.args {
+            match arg {
+                TsiArg::Span(blob, _, _) => {
+                    blob.clear();
+                    blob.push_str(digest);
                 }
+                TsiArg::Id(id) => {
+                    *id += base;
+                    next = next.max(*id + 1);
+                }
+                _ => {}
             }
-            row
-        })
-        .collect();
+        }
+    }
     (rebased, next)
+}
+
+/// The graph consumer keys edges by (owner, label), independently of position.
+/// Scope writes, shadowed bindings and member declarations can share a spelling.
+/// Preserve every edge and suffix subsequent claims with their local edge id,
+/// before rebasing so per-file and project emission use the same labels. Reserve
+/// written labels first so a generated label cannot take another edge's name.
+fn tsi_unique_edge_labels(rows: &mut [FactOut]) {
+    let mut labels = std::collections::HashSet::new();
+    for row in rows.iter().filter(|row| row.relation == "tsi.edge") {
+        if let [TsiArg::Id(_), TsiArg::Id(owner), TsiArg::Text(label), _, _] =
+            row.args.as_slice()
+        {
+            labels.insert((*owner, label.clone()));
+        }
+    }
+    let mut seen = std::collections::HashSet::new();
+    for row in rows.iter_mut().filter(|row| row.relation == "tsi.edge") {
+        let [TsiArg::Id(edge), TsiArg::Id(owner), TsiArg::Text(label), _, _] =
+            row.args.as_mut_slice()
+        else {
+            continue;
+        };
+        if seen.insert((*owner, label.clone())) {
+            continue;
+        }
+        let mut unique = format!("{label}@{edge}");
+        let mut suffix = 0;
+        while !labels.insert((*owner, unique.clone())) {
+            suffix += 1;
+            unique = format!("{label}@{edge}@{suffix}");
+        }
+        *label = unique;
+    }
 }
 
 /// The relations a syntax run touched, in walk order. A parse enumerates no

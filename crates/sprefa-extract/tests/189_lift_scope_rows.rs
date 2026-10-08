@@ -39,7 +39,7 @@ fn rust_nested_scopes_and_shadow_versions() {
     let rows = rows("tests/fixtures/lift/scope.rs");
     let products = rows.iter().filter(|row| row.relation == "tsi.product").count();
     let x_versions = rows.iter().filter(|row| {
-        row.relation == "tsi.edge" && matches!(row.args.get(2), Some(Arg::Text(name)) if name == "x")
+        row.relation == "tsi.edge" && matches!(row.args.get(2), Some(Arg::Text(name)) if name == "x" || name.starts_with("x@"))
     }).count();
     assert!(products >= 3, "expected function and closure scope products; got {products}");
     assert!(x_versions >= 3, "expected shadowed x versions; got {x_versions}");
@@ -57,7 +57,7 @@ fn ts_arrow_env_and_var_cell() {
     let rows = rows("tests/fixtures/lift/scope.ts");
     let products = rows.iter().filter(|row| row.relation == "tsi.product").count();
     let x_versions = rows.iter().filter(|row| {
-        row.relation == "tsi.edge" && matches!(row.args.get(2), Some(Arg::Text(name)) if name == "x")
+        row.relation == "tsi.edge" && matches!(row.args.get(2), Some(Arg::Text(name)) if name == "x" || name.starts_with("x@"))
     }).count();
     assert!(products >= 2, "expected function and arrow scope products; got {products}");
     assert!(x_versions >= 2, "expected var cell and reassignment version; got {x_versions}");

@@ -455,8 +455,8 @@
       },
       "reset_state": null,
       "expect_table": [
-        "watch   cli     459 c4f909b069cc",
-        "watch   router  459 c4f909b069cc"
+        "watch   cli     459 0181a0456385",
+        "watch   router  459 0181a0456385"
       ]
     },
     {
