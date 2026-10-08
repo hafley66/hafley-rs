@@ -296,13 +296,21 @@ fn load_checker_workspace(
         }
     };
     let roots = ProjectFolders::new(std::slice::from_ref(&workspace), &[], None).source_root_config;
-    let (db, vfs, _proc_macro) =
-        ra_ap_load_cargo::load_workspace(workspace, &Default::default(), &load_config)
-            .map_err(no_workspace)?;
+    // The load runs on its own thread so the budget stops the caller mid-load; a load past the
+    // budget finishes in the background and is dropped.
+    let (sender, receiver) = std::sync::mpsc::channel();
+    std::thread::Builder::new()
+        .name("rust-analyzer-load".into())
+        .spawn(move || {
+            let _ = sender.send(ra_ap_load_cargo::load_workspace(workspace, &Default::default(), &load_config));
+        })
+        .map_err(no_workspace)?;
+    let remaining = budget.saturating_sub(started.elapsed());
+    let (db, vfs, _proc_macro) = match receiver.recv_timeout(remaining) {
+        Ok(loaded) => loaded.map_err(no_workspace)?,
+        Err(_) => return Err(CheckerError::Budget(budget)),
+    };
     drop(_load_span);
     let load = started.elapsed();
-    if load > budget {
-        return Err(CheckerError::Budget(budget));
-    }
     Ok((db, vfs, roots, load))
 }

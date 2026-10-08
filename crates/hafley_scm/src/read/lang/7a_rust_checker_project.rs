@@ -47,6 +47,7 @@ pub(super) fn names_project(
             .parent()
             .map(|dir| dir.to_string())
             .unwrap_or_default();
+        let exclude_dirs = unrelated_dirs(package);
         for target in &package.targets {
             let is_build = target
                 .kind
@@ -73,7 +74,7 @@ pub(super) fn names_project(
                 "cfg": cfg,
                 "is_workspace_member": true,
                 "is_proc_macro": target.kind.iter().any(|kind| matches!(kind, TargetKind::ProcMacro)),
-                "source": { "include_dirs": [package_dir, source_dir], "exclude_dirs": [] },
+                "source": { "include_dirs": [package_dir, source_dir], "exclude_dirs": exclude_dirs },
             }));
             if is_lib {
                 library.insert(&package.id, (index, target.name.replace('-', "_")));
@@ -115,6 +116,35 @@ pub(super) fn names_project(
         serde_json::from_value(project).map_err(|error| failed(error.to_string()))?;
     let base = std::fs::canonicalize(root).map_err(|error| failed(error.to_string()))?;
     Ok(ProjectJson::new(None, &AbsPathBuf::assert_utf8(base), data))
+}
+
+/// Top-level directories of the package that hold none of its target roots. The package
+/// directory of a root package is often a whole repository (vendored trees, symlinked sibling
+/// checkouts, worktrees); rust-analyzer walks every included directory before it answers.
+fn unrelated_dirs(package: &cargo_metadata::Package) -> Vec<String> {
+    let Some(dir) = package.manifest_path.parent() else {
+        return Vec::new();
+    };
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return Vec::new();
+    };
+    let mut excluded: Vec<String> = entries
+        .filter_map(Result::ok)
+        .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_dir() || kind.is_symlink()))
+        .map(|entry| entry.path())
+        .filter(|path| path.is_dir())
+        .filter(|path| {
+            let dir = std::fs::canonicalize(path).unwrap_or_else(|_| path.clone());
+            !package.targets.iter().any(|target| {
+                let source = target.src_path.as_std_path();
+                source.starts_with(path)
+                    || std::fs::canonicalize(source).is_ok_and(|source| source.starts_with(&dir))
+            })
+        })
+        .map(|path| path.to_string_lossy().into_owned())
+        .collect();
+    excluded.sort();
+    excluded
 }
 
 type Edge<'a> = (&'a PackageId, String, Vec<DependencyKind>);
