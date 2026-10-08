@@ -7,7 +7,7 @@ use ra_ap_ide::{AnalysisHost, RootDatabase};
 use ra_ap_ide_db::ChangeWithProcMacros;
 use ra_ap_load_cargo::{LoadCargoConfig, ProcMacroServerChoice, ProjectFolders, SourceRootConfig};
 use ra_ap_project_model::{
-    CargoConfig, CargoFeatures, ProjectManifest, ProjectWorkspace, RustLibSource,
+    CargoConfig, CargoFeatures, ProjectWorkspace, RustLibSource,
 };
 use ra_ap_vfs::{Change as VfsChange, Vfs, VfsPath};
 
@@ -98,7 +98,7 @@ pub(super) fn checker_workspace_loaded(
     let fresh = !all.contains_key(&key);
     if fresh {
         let (db, vfs, roots, elapsed) =
-            load_checker_workspace(&root, tier, budget, &discovered.metadata)?;
+            load_checker_workspace(&root, tier, budget, &discovered.metadata, files)?;
         load = elapsed;
         key.2 = discovered
             .manifest_key()
@@ -122,7 +122,7 @@ pub(super) fn checker_workspace_loaded(
         && !unloaded(&workspace.vfs, files).is_subset(&workspace.outside)
     {
         let (db, vfs, roots, elapsed) =
-            load_checker_workspace(&root, tier, budget, &discovered.metadata)?;
+            load_checker_workspace(&root, tier, budget, &discovered.metadata, files)?;
         workspace.host = AnalysisHost::with_database(db);
         workspace.outside = unloaded(&vfs, files);
         workspace.vfs = vfs;
@@ -262,6 +262,7 @@ fn load_checker_workspace(
     tier: LoadMode,
     budget: Duration,
     metadata: &cargo_metadata::Metadata,
+    files: &[(String, PathBuf)],
 ) -> Result<(RootDatabase, ra_ap_vfs::Vfs, SourceRootConfig, Duration), CheckerError> {
     let load_config = LoadCargoConfig {
         load_out_dirs_from_check: false,
@@ -290,9 +291,8 @@ fn load_checker_workspace(
                 features: CargoFeatures::All,
                 ..CargoConfig::default()
             };
-            let root = ra_ap_vfs::AbsPathBuf::assert_utf8(root.to_path_buf());
-            let manifest = ProjectManifest::discover_single(&root).map_err(no_workspace)?;
-            ProjectWorkspace::load(manifest, &cargo_config, &|_| {}).map_err(no_workspace)?
+            let project = super::rust_checker_project::types_project(root, files)?;
+            ProjectWorkspace::load_inline(project, &cargo_config, &|_| {})
         }
     };
     let roots = ProjectFolders::new(std::slice::from_ref(&workspace), &[], None).source_root_config;
