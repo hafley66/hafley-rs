@@ -64,17 +64,14 @@ source: tests/support/2_fixture_runner.rs
       "stdout": "root $work/repo\nplan src/util.rs#target -> src/app.rs\ntravel Config from crate::config::Config as crate::config::Config (package)\norphan Config from crate::config::Config\ndrag fixpoint 1 passes\nreplace src/app.rs -> src/app.rs  update src/app.rs (176 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,8 @@\n     use crate::util::{load_config, slug};\n    +use crate::config::Config;\n    \n     pub fn boot(dir: &str) -> String {\n         slug(&load_config(dir))\n     }\n    +\n    +pub fn target() -> Config { Config::new() }\nreplace src/util.rs -> src/util.rs  update src/util.rs (63 bytes)\n    --- original\n    +++ modified\n    @@ -1,5 +1,3 @@\n    -use crate::config::Config;\n     use crate::log::Log;\n    \n    -pub fn target() -> Config { Config::new() }\n     pub fn untouched() -> Log { Log::new() }\nstage $STAGE dry run, tree untouched\n{\"record\":\"cleave_plan\",\"src\":\"src/util.rs\",\"dest\":\"src/app.rs\",\"item\":\"target\",\"item_span\":{\"start\":49,\"len\":44},\"travelling\":[{\"name\":\"Config\",\"module\":\"crate::config::Config\",\"dest_module\":\"crate::config::Config\",\"span\":{\"start\":19,\"len\":6},\"kind\":\"package\"}],\"orphans\":[{\"name\":\"Config\",\"module\":\"crate::config::Config\",\"dest_module\":\"crate::config::Config\",\"span\":{\"start\":19,\"len\":6},\"kind\":\"package\"}],\"callers\":[],\"dragged\":[],\"drag_iterations\":1,\"unresolved\":[]}\n"
     }
   },
-  "04_default_corpus_walk_is_tracked_and_explicit_root_includes_ignored_files": {
-    "default_excludes_untracked": false,
+  "04_default_corpus_respects_gitignore_and_tracked_narrows": {
+    "default_excludes_ignored": false,
     "default_includes_tracked": true,
-    "explicit_includes_ignored": true,
-    "explicit_includes_untracked": true,
+    "default_includes_untracked": true,
+    "tracked_excludes_untracked": false,
+    "tracked_includes_tracked": true,
     "walk_default": [
-      "tracked.rs"
-    ],
-    "walk_explicit": [
       ".gitignore",
-      ".probe/noise.rs",
       "Cargo.toml",
       "scratch.rs",
       "src/app.rs",
@@ -82,6 +79,9 @@ source: tests/support/2_fixture_runner.rs
       "src/lib.rs",
       "src/log.rs",
       "src/util.rs",
+      "tracked.rs"
+    ],
+    "walk_tracked": [
       "tracked.rs"
     ]
   },

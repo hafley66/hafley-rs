@@ -106,7 +106,7 @@
     }
   ],
   "notes": [
-    "no --commit; --json output form",
+    "no --apply; --json output form",
     "old exit assertion message: 'plan plus abstain exits 7'"
   ]
 }

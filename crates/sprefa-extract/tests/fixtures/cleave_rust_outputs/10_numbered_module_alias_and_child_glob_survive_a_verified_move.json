@@ -32,7 +32,7 @@
         "cleave",
         "src/lib.rs#target",
         "src/2_call.rs",
-        "--commit",
+        "--apply",
         "--verify",
         "cargo check --quiet",
         "--root",

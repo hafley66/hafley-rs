@@ -19,22 +19,30 @@ use sprefa_extract::{
 
 const PRODUCER: &str = "extract-move";
 
-/// One plan per root: a single root (zero or one `--root`) keeps the one-plan
-/// shape, more than one gets a plan batch in root order.
+/// The corpora a move plans over: every `--roots DIR`, else the one `--root`.
+fn roots_of(cli: &MoveArgs) -> Vec<PathBuf> {
+    match cli.roots.as_slice() {
+        [] => cli.inputs.root.iter().cloned().collect(),
+        roots => roots.to_vec(),
+    }
+}
+
+/// One plan per root: zero or one root keeps the one-plan shape, more than
+/// one gets a plan batch in root order.
 fn plan_of(cli: &MoveArgs) -> Result<Vec<Plan>, String> {
-    match cli.root.len() {
+    match roots_of(cli).len() {
         0 | 1 => Ok(vec![Plan::build(cli)?]),
         _ => Plan::build_multi(cli),
     }
 }
 
 pub fn run(cli: MoveArgs, home: Option<&Path>) -> Result<(), crate::RyiExit> {
-    if cli.verify.is_some() && !cli.commit {
-        return Err("--verify needs --commit".to_string().into());
+    if cli.verify.is_some() && !cli.edit.apply {
+        return Err("--verify needs --apply".to_string().into());
     }
     let plan = plan_of(&cli)?;
     let roots: Vec<_> = plan.iter().map(|plan| plan.root.as_path()).collect();
-    let state = state_root_for(cli.state.as_deref(), home, &roots)?;
+    let state = state_root_for(cli.edit.state.as_deref(), home, &roots)?;
     let state = move_request_state(&cli, &plan, &state)?;
     let multi = plan.len() > 1;
     let prefix = |plan: &Plan| root_prefix(multi, &plan.root);
@@ -58,7 +66,7 @@ pub fn run(cli: MoveArgs, home: Option<&Path>) -> Result<(), crate::RyiExit> {
         .map(|plan| emptied_directories(&plan.cx))
         .collect();
 
-    if cli.commit {
+    if cli.edit.apply {
         let journals = plan
             .iter()
             .map(|plan| {
@@ -111,7 +119,7 @@ pub fn run(cli: MoveArgs, home: Option<&Path>) -> Result<(), crate::RyiExit> {
         }
     }
     for plan in &plan {
-        if cli.text_refs {
+        if cli.edit.text_refs {
             crate::move_text::report(&plan.cx);
         }
     }
@@ -219,7 +227,7 @@ struct Plan {
 impl Plan {
     fn build(cli: &MoveArgs) -> Result<Self, String> {
         let requested = requested_moves(cli)?;
-        let root = plan_root(cli.root.first(), &requested[0].0)?;
+        let root = plan_root(roots_of(cli).first(), &requested[0].0)?;
         Self::build_for(root, requested, cli)
     }
 
@@ -227,8 +235,7 @@ impl Plan {
     /// row under none or under two is a named error before any stage is built.
     fn build_multi(cli: &MoveArgs) -> Result<Vec<Self>, String> {
         let requested = requested_moves(cli)?;
-        let roots = cli
-            .root
+        let roots = roots_of(cli)
             .iter()
             .map(|root| absolute(root).and_then(canonical_directory))
             .collect::<Result<Vec<_>, _>>()?;
@@ -290,7 +297,23 @@ impl Plan {
         requested: Vec<(PathBuf, PathBuf)>,
         cli: &MoveArgs,
     ) -> Result<Self, String> {
-        let cx = MoveCx::open(&root)?;
+        // PATH scope narrows the files whose specifiers get repaired; the moved
+        // files themselves always stay in scope.
+        let positionals = match cli.list {
+            Some(_) => vec![cli.old.as_deref(), cli.new.as_deref()],
+            None => Vec::new(),
+        };
+        let positionals: Vec<Option<&str>> =
+            positionals.into_iter().map(|path| path.and_then(Path::to_str)).collect();
+        let scope = match crate::inputs::edit_scope(&cli.inputs, &positionals, &root)? {
+            None => None,
+            Some(_) => {
+                let mut extra = positionals.clone();
+                extra.extend(requested.iter().map(|(old, _)| old.to_str()));
+                crate::inputs::edit_scope(&cli.inputs, &extra, &root)?
+            }
+        };
+        let cx = MoveCx::open_corpus(&root, cli.edit.tracked)?.scoped(scope.as_ref());
         let moves = validated_moves(&cx, &root, requested)?;
         if cli.shim && moves.len() > 1 {
             return Err("--shim cannot be combined with --list".to_string());
@@ -503,8 +526,8 @@ fn under(path: &str, directory: &str) -> bool {
 /// the `--list` tsv. The two forms are exclusive.
 fn requested_moves(cli: &MoveArgs) -> Result<Vec<(PathBuf, PathBuf)>, String> {
     match (&cli.list, &cli.old, &cli.new) {
-        (Some(list), None, None) => read_move_list(list),
-        (Some(_), _, _) => Err("--list cannot be combined with OLD NEW".to_string()),
+        // With --list, the positionals are PATH scope (`edit_scope`).
+        (Some(list), _, _) => read_move_list(list),
         (None, Some(old), Some(new)) => Ok(vec![(old.clone(), new.clone())]),
         (None, _, _) => Err("ryi move takes OLD NEW, or --list TSV".to_string()),
     }

@@ -33,10 +33,10 @@ fn declaration_table_compiles_and_matches_text() {
         let description = std::fs::read_to_string(root.join("case.txt")).unwrap();
         let row: Vec<_> = description.lines().collect();
         let [mode, declarer, source, dest] = row.as_slice() else { panic!("invalid row") };
-        let cx = MoveCx::open_with_untracked(&root, true).unwrap();
+        let cx = MoveCx::open_corpus(&root, false).unwrap();
         let mut edits = Vec::new();
         if *mode == "rename" {
-            let cx = RenameCx::open_with_untracked(&root, true).unwrap();
+            let cx = RenameCx::open_corpus(&root, false).unwrap();
             let request = RenameRequest { anchor: declarer.to_string(), old: "round".into(), new: dest.to_string(), at: None };
             for reference in RustSource.symbol_refs(&cx, &request).unwrap() {
                 if let Some(replacement) = RustSource.respell_symbol(&cx, &request, &reference) {

@@ -40,7 +40,7 @@
         "cleave",
         "src/source.rs#target",
         "src/dest.rs",
-        "--commit",
+        "--apply",
         "--root",
         "$work/repo",
         "--state",

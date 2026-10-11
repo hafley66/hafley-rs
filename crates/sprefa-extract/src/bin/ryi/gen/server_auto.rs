@@ -150,14 +150,10 @@ macro_rules! raw_handler {
 }
 
 stream_handler!(capabilities, "capabilities", CapabilitiesArgs, capabilities);
-raw_handler!(cleave, "cleave", CleaveArgs, cleave);
-raw_handler!(r#move, "move", MoveArgs, r#move);
-raw_handler!(rename, "rename", RenameArgs, rename);
 stream_handler!(watch, "watch", WatchArgs, watch);
 stream_handler!(diff, "diff", DiffArgs, diff);
 raw_handler!(schema, "schema", SchemaArgs, schema);
 raw_handler!(trail, "trail", TrailArgs, trail);
-stream_handler!(stratify, "stratify", StratifyArgs, stratify);
 
 
 async fn extract(headers: HeaderMap, body: Body) -> Response {
@@ -335,6 +331,111 @@ async fn graph(headers: HeaderMap, body: Body) -> Response {
     match out { Ok(out) => jsonl_response(out, diagnostics).await, Err(error) => error_response(OpError(error.to_string(), 1)) }
 }
 
+async fn cleave(headers: HeaderMap, body: Body) -> Response {
+    let (json, input) = if let Some(encoded) = headers.get("x-ryi-request") {
+        let json = match base64::engine::general_purpose::STANDARD.decode(encoded.as_bytes()) {
+            Ok(json) => json,
+            Err(error) => return bad_request(error.to_string()),
+        };
+        let staged = match tempfile::NamedTempFile::new() { Ok(file) => file, Err(error) => return bad_request(error.to_string()) };
+        let file = match staged.reopen() { Ok(file) => file, Err(error) => return bad_request(error.to_string()) };
+        let mut file = tokio::fs::File::from_std(file);
+        let chunks = body.into_data_stream().map(|chunk| chunk.map_err(std::io::Error::other));
+        let mut reader = tokio_util::io::StreamReader::new(chunks);
+        if let Err(error) = tokio::io::copy(&mut reader, &mut file).await { return bad_request(error.to_string()); }
+        if let Err(error) = file.flush().await { return bad_request(error.to_string()); }
+        (json, Some(Arc::new(staged)))
+    } else {
+        let json = match axum::body::to_bytes(body, 1024 * 1024).await {
+            Ok(json) => json.to_vec(),
+            Err(error) => return bad_request(error.to_string()),
+        };
+        (json, None)
+    };
+    let request: Request = match serde_json::from_slice(&json) {
+        Ok(request) => request,
+        Err(error) => return bad_request(error.to_string()),
+    };
+    let root = request.request_root.clone();
+    tracing::Span::current().record("request_root", &tracing::field::display(root.display()));
+    let args: CleaveArgs = match request.decode() { Ok(args) => args, Err(error) => return bad_request(error) };
+
+    let diagnostics = Arc::new(Mutex::new(Vec::new()));
+    let captured = diagnostics.clone();
+    let out = tokio::task::spawn_blocking(move || crate::ops::with_request_context(root, Some(captured), || crate::ops::with_request_input(input, || crate::ops::cleave(&args)))).await;
+    match out { Ok(out) => raw_response(out, &diagnostics).await, Err(error) => error_response(OpError(error.to_string(), 1)) }
+}
+
+async fn r#move(headers: HeaderMap, body: Body) -> Response {
+    let (json, input) = if let Some(encoded) = headers.get("x-ryi-request") {
+        let json = match base64::engine::general_purpose::STANDARD.decode(encoded.as_bytes()) {
+            Ok(json) => json,
+            Err(error) => return bad_request(error.to_string()),
+        };
+        let staged = match tempfile::NamedTempFile::new() { Ok(file) => file, Err(error) => return bad_request(error.to_string()) };
+        let file = match staged.reopen() { Ok(file) => file, Err(error) => return bad_request(error.to_string()) };
+        let mut file = tokio::fs::File::from_std(file);
+        let chunks = body.into_data_stream().map(|chunk| chunk.map_err(std::io::Error::other));
+        let mut reader = tokio_util::io::StreamReader::new(chunks);
+        if let Err(error) = tokio::io::copy(&mut reader, &mut file).await { return bad_request(error.to_string()); }
+        if let Err(error) = file.flush().await { return bad_request(error.to_string()); }
+        (json, Some(Arc::new(staged)))
+    } else {
+        let json = match axum::body::to_bytes(body, 1024 * 1024).await {
+            Ok(json) => json.to_vec(),
+            Err(error) => return bad_request(error.to_string()),
+        };
+        (json, None)
+    };
+    let request: Request = match serde_json::from_slice(&json) {
+        Ok(request) => request,
+        Err(error) => return bad_request(error.to_string()),
+    };
+    let root = request.request_root.clone();
+    tracing::Span::current().record("request_root", &tracing::field::display(root.display()));
+    let args: MoveArgs = match request.decode() { Ok(args) => args, Err(error) => return bad_request(error) };
+
+    let diagnostics = Arc::new(Mutex::new(Vec::new()));
+    let captured = diagnostics.clone();
+    let out = tokio::task::spawn_blocking(move || crate::ops::with_request_context(root, Some(captured), || crate::ops::with_request_input(input, || crate::ops::r#move(&args)))).await;
+    match out { Ok(out) => raw_response(out, &diagnostics).await, Err(error) => error_response(OpError(error.to_string(), 1)) }
+}
+
+async fn rename(headers: HeaderMap, body: Body) -> Response {
+    let (json, input) = if let Some(encoded) = headers.get("x-ryi-request") {
+        let json = match base64::engine::general_purpose::STANDARD.decode(encoded.as_bytes()) {
+            Ok(json) => json,
+            Err(error) => return bad_request(error.to_string()),
+        };
+        let staged = match tempfile::NamedTempFile::new() { Ok(file) => file, Err(error) => return bad_request(error.to_string()) };
+        let file = match staged.reopen() { Ok(file) => file, Err(error) => return bad_request(error.to_string()) };
+        let mut file = tokio::fs::File::from_std(file);
+        let chunks = body.into_data_stream().map(|chunk| chunk.map_err(std::io::Error::other));
+        let mut reader = tokio_util::io::StreamReader::new(chunks);
+        if let Err(error) = tokio::io::copy(&mut reader, &mut file).await { return bad_request(error.to_string()); }
+        if let Err(error) = file.flush().await { return bad_request(error.to_string()); }
+        (json, Some(Arc::new(staged)))
+    } else {
+        let json = match axum::body::to_bytes(body, 1024 * 1024).await {
+            Ok(json) => json.to_vec(),
+            Err(error) => return bad_request(error.to_string()),
+        };
+        (json, None)
+    };
+    let request: Request = match serde_json::from_slice(&json) {
+        Ok(request) => request,
+        Err(error) => return bad_request(error.to_string()),
+    };
+    let root = request.request_root.clone();
+    tracing::Span::current().record("request_root", &tracing::field::display(root.display()));
+    let args: RenameArgs = match request.decode() { Ok(args) => args, Err(error) => return bad_request(error) };
+
+    let diagnostics = Arc::new(Mutex::new(Vec::new()));
+    let captured = diagnostics.clone();
+    let out = tokio::task::spawn_blocking(move || crate::ops::with_request_context(root, Some(captured), || crate::ops::with_request_input(input, || crate::ops::rename(&args)))).await;
+    match out { Ok(out) => raw_response(out, &diagnostics).await, Err(error) => error_response(OpError(error.to_string(), 1)) }
+}
+
 async fn query(headers: HeaderMap, body: Body) -> Response {
     let (json, input) = if let Some(encoded) = headers.get("x-ryi-request") {
         let json = match base64::engine::general_purpose::STANDARD.decode(encoded.as_bytes()) {
@@ -438,6 +539,41 @@ async fn ingest(headers: HeaderMap, body: Body) -> Response {
     let captured = diagnostics.clone();
     let out = tokio::task::spawn_blocking(move || crate::ops::with_request_context(root, Some(captured), || crate::ops::with_request_input(input, || crate::ops::ingest(&args)))).await;
     match out { Ok(out) => raw_response(out, &diagnostics).await, Err(error) => error_response(OpError(error.to_string(), 1)) }
+}
+
+async fn stratify(headers: HeaderMap, body: Body) -> Response {
+    let (json, input) = if let Some(encoded) = headers.get("x-ryi-request") {
+        let json = match base64::engine::general_purpose::STANDARD.decode(encoded.as_bytes()) {
+            Ok(json) => json,
+            Err(error) => return bad_request(error.to_string()),
+        };
+        let staged = match tempfile::NamedTempFile::new() { Ok(file) => file, Err(error) => return bad_request(error.to_string()) };
+        let file = match staged.reopen() { Ok(file) => file, Err(error) => return bad_request(error.to_string()) };
+        let mut file = tokio::fs::File::from_std(file);
+        let chunks = body.into_data_stream().map(|chunk| chunk.map_err(std::io::Error::other));
+        let mut reader = tokio_util::io::StreamReader::new(chunks);
+        if let Err(error) = tokio::io::copy(&mut reader, &mut file).await { return bad_request(error.to_string()); }
+        if let Err(error) = file.flush().await { return bad_request(error.to_string()); }
+        (json, Some(Arc::new(staged)))
+    } else {
+        let json = match axum::body::to_bytes(body, 1024 * 1024).await {
+            Ok(json) => json.to_vec(),
+            Err(error) => return bad_request(error.to_string()),
+        };
+        (json, None)
+    };
+    let request: Request = match serde_json::from_slice(&json) {
+        Ok(request) => request,
+        Err(error) => return bad_request(error.to_string()),
+    };
+    let root = request.request_root.clone();
+    tracing::Span::current().record("request_root", &tracing::field::display(root.display()));
+    let args: StratifyArgs = match request.decode() { Ok(args) => args, Err(error) => return bad_request(error) };
+
+    let diagnostics = Arc::new(Mutex::new(Vec::new()));
+    let captured = diagnostics.clone();
+    let out = tokio::task::spawn_blocking(move || crate::ops::with_request_context(root, Some(captured), || crate::ops::with_request_input(input, || crate::ops::stratify(&args)))).await;
+    match out { Ok(out) => jsonl_response(out, diagnostics).await, Err(error) => error_response(OpError(error.to_string(), 1)) }
 }
 
 #[derive(Clone)]

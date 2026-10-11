@@ -116,7 +116,7 @@ fn diff_rq(left: &Path, right: &Path) -> Vec<String> {
 #[test]
 fn prolog_rename_matches_the_hand_written_after() {
     let fixture = fixture("local", "commit");
-    let stdout = rename_verb(&fixture, &format!("{ANCHOR}#helper"), "tool", &["--commit"]);
+    let stdout = rename_verb(&fixture, &format!("{ANCHOR}#helper"), "tool", &["--apply"]);
     for line in [
         format!("plan {ANCHOR} helper -> tool"),
         "  main.pl  2 uses".to_string(),
@@ -142,7 +142,7 @@ fn variable_functor_is_a_dynamic_stop() {
         &fixture.state,
         &format!("{ANCHOR}#helper"),
         "tool",
-        &["--commit"],
+        &["--apply"],
     );
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
     assert_eq!(output.status.code(), Some(6), "Dynamic exits 6:\n{stderr}");
@@ -175,7 +175,7 @@ fn two_arities_need_at() {
         &blind.state,
         &format!("{ANCHOR}#helper"),
         "tool",
-        &["--commit"],
+        &["--apply"],
     );
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
     assert_eq!(
@@ -200,7 +200,7 @@ fn two_arities_need_at() {
         &picked,
         &format!("{ANCHOR}#helper"),
         "tool",
-        &["--commit", "--at", &head.to_string()],
+        &["--apply", "--offset", &head.to_string()],
     );
     let entries = diff_rq(&picked.root, &tree("arities", "after"));
     assert!(

@@ -1,5 +1,5 @@
 {
-  "test": "default_corpus_walk_is_tracked_and_explicit_root_includes_ignored_files",
+  "test": "default_corpus_respects_gitignore_and_tracked_narrows",
   "source_range": "232-251",
   "fixture": {
     "group": "cleave_rust",
@@ -59,21 +59,21 @@
     },
     {
       "action": "api",
-      "name": "walk_files_with_untracked",
+      "name": "walk_corpus",
       "arguments": {
         "root": "$work/repo",
-        "untracked": false
+        "tracked": true
       },
-      "capture": "walk_default"
+      "capture": "walk_tracked"
     },
     {
       "action": "api",
-      "name": "walk_files_with_untracked",
+      "name": "walk_corpus",
       "arguments": {
         "root": "$work/repo",
-        "untracked": true
+        "tracked": false
       },
-      "capture": "walk_explicit"
+      "capture": "walk_default"
     },
     {
       "action": "claim",
@@ -84,24 +84,31 @@
     },
     {
       "action": "claim",
-      "kind": "list_absent",
+      "kind": "list_contains",
       "cell": "walk_default",
       "value": "scratch.rs",
-      "name": "default_excludes_untracked"
+      "name": "default_includes_untracked"
     },
     {
       "action": "claim",
-      "kind": "list_contains",
-      "cell": "walk_explicit",
-      "value": "scratch.rs",
-      "name": "explicit_includes_untracked"
-    },
-    {
-      "action": "claim",
-      "kind": "list_contains",
-      "cell": "walk_explicit",
+      "kind": "list_absent",
+      "cell": "walk_default",
       "value": ".probe/noise.rs",
-      "name": "explicit_includes_ignored"
+      "name": "default_excludes_ignored"
+    },
+    {
+      "action": "claim",
+      "kind": "list_contains",
+      "cell": "walk_tracked",
+      "value": "tracked.rs",
+      "name": "tracked_includes_tracked"
+    },
+    {
+      "action": "claim",
+      "kind": "list_absent",
+      "cell": "walk_tracked",
+      "value": "scratch.rs",
+      "name": "tracked_excludes_untracked"
     }
   ]
 }

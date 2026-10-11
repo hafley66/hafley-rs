@@ -129,7 +129,7 @@ fn fixture(label: &str, files: &[(&str, &str)]) -> Fixture {
     }
 }
 
-/// `--commit` rewrites the fixture tree, so the assertions read the real bytes.
+/// `--apply` rewrites the fixture tree, so the assertions read the real bytes.
 fn rename_run(fixture: &Fixture, target: &str, new: &str) -> Run {
     let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
         .current_dir(&fixture.root)
@@ -140,7 +140,7 @@ fn rename_run(fixture: &Fixture, target: &str, new: &str) -> Run {
         .arg(&fixture.root)
         .arg("--state")
         .arg(&fixture.state)
-        .arg("--commit")
+        .arg("--apply")
         .output()
         .expect("extract binary runs");
     Run {

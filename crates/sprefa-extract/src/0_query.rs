@@ -26,7 +26,7 @@ pub fn run_to(cli: QueryArgs, writer: Box<dyn Write + Send>) -> Result<()> {
         (Some(_), Some(_)) => return Err("query: pass --query or --scmpp, not both".into()),
         (None, None) => return Err("query: pass --query TEXT or --scmpp FILE".into()),
     };
-    let mut output = crate::sqlite::Output::with_writer(cli.sqlite.as_deref(), writer, true)
+    let mut output = crate::sqlite::Output::with_writer(cli.store.sqlite.as_deref(), writer, true)
         .map_err(|error| error.to_string())?;
     let mut compatible = std::collections::HashMap::<String, bool>::new();
     let mut skipped = std::collections::BTreeMap::<String, usize>::new();
@@ -157,7 +157,7 @@ fn run_scmpp(
 ) -> Result<()> {
     let text = std::fs::read_to_string(sprefa_extract::io_path(file))
         .map_err(|error| format!("--scmpp '{}': {error}", file.display()))?;
-    let mut output = crate::sqlite::Output::with_writer(cli.sqlite.as_deref(), writer, true)
+    let mut output = crate::sqlite::Output::with_writer(cli.store.sqlite.as_deref(), writer, true)
         .map_err(|error| error.to_string())?;
     if output.database.is_none() {
         output.database = Some(crate::sqlite::Database::memory().map_err(|error| error.to_string())?);
@@ -234,7 +234,7 @@ fn run_scmpp(
             let database = output.database.as_mut().expect("scm++ database");
             let rows = crate::scmpp::run_sql(database, found).map_err(|error| format!("scm++ SQL: {error}"))?;
             // --sqlite keeps the rows in `scmpp_row` and prints none, like every other --sqlite verb.
-            if cli.sqlite.is_none() {
+            if cli.store.sqlite.is_none() {
                 for row in rows {
                     let line = serde_json::to_string(&row).map_err(|error| format!("query output: {error}"))?;
                     output.stdout_line(&line).map_err(|error| error.to_string())?;

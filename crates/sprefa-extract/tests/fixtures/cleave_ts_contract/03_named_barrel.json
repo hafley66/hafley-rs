@@ -30,7 +30,7 @@
         "cleave",
         "src/util.ts#loadConfig",
         "src/config.ts",
-        "--commit",
+        "--apply",
         "--root",
         "$work/repo",
         "--state",

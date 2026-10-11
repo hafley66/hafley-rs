@@ -25,7 +25,7 @@
         "cleave",
         "src/util.ts#loadConfig",
         "src/config.ts",
-        "--commit",
+        "--apply",
         "--verify",
         "exit 1",
         "--root",

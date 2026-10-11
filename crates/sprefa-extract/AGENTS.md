@@ -26,7 +26,7 @@ semi-naive, `sqlite_ivm`. It is the parent; this crate is its EDB producer.
 | EDB | this crate, phase 1 (`extract watch` retract/assert receipts, blob-keyed) | facts: `call_site`, `def`, `import`, `receiver_binding`, module indexes |
 | rules | dl8 `.dl7` programs | `resolved_edge(site, def, origin) :- leg(...)`, one rule per `ResolutionOrigin` variant, stratified in the order the Rust arms try them |
 | maintenance | dl8 `_6_eval` + `sqlite_ivm` | a blob delta re-derives only dependent edges, incrementally, across runs |
-| commit-to-commit delta | this crate, one shot (`extract diff --from A --to B`, issue `extract-diff-verb`) | soopy snapshots at two revisions, `diff_snapshots`, phase 1 on the changed blobs, resolve at both ends, set-difference keyed by (path, names, kind, origin) |
+| commit-to-commit delta | this crate, one shot (`ryi diff --rev A..B`, issue `extract-diff-verb`) | soopy snapshots at two revisions, `diff_snapshots`, phase 1 on the changed blobs, resolve at both ends, set-difference keyed by (path, names, kind, origin) |
 | oracle | scip slow lane here, graded by a dl8 rule | `RATCHET.tsv` is a query result |
 
 `Resolve<CallF>` in this crate is the hand-compiled fast path; the DL7 rule

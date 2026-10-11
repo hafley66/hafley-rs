@@ -1,6 +1,6 @@
 #!/bin/bash
 set -euo pipefail
-"$RYII" diff --from HEAD~1 --to HEAD --pattern '**/*.ts' --pattern '**/*.tsx' > "$STATE/D19-corpus.jsonl"
+"$RYII" diff --rev HEAD~1..HEAD --pattern '**/*.ts' --pattern '**/*.tsx' > "$STATE/D19-corpus.jsonl"
 jq -se 'all(.[]; .callee_name as $name | .record != "diff_edge" or (.caller_path | endswith("/6_graphRenderer.ts") | not) or (["sameCamera","hoverOpacity","graphHoverColor"] | index($name)) == null)' "$STATE/D19-corpus.jsonl" >/dev/null
 repo="$STATE/D19-repo"
 mkdir -p "$repo"

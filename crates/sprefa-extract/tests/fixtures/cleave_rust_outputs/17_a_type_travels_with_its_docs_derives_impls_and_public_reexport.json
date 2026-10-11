@@ -55,7 +55,7 @@
         "cleave",
         "src/util.rs#Stop",
         "src/stops.rs",
-        "--commit",
+        "--apply",
         "--root",
         "$work/repo",
         "--state",

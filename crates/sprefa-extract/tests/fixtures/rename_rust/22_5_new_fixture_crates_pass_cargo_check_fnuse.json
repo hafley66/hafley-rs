@@ -20,7 +20,7 @@
         "$work/repo",
         "--state",
         "$work/state",
-        "--commit"
+        "--apply"
       ],
       "cwd": "$work/repo",
       "expect_exit_code": 0,

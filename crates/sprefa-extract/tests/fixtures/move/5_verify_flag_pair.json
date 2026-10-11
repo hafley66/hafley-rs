@@ -74,7 +74,7 @@
       "name": "claim_28",
       "kind": "contains",
       "cell": "move.stderr",
-      "text": "--commit"
+      "text": "--apply"
     }
   ]
 }

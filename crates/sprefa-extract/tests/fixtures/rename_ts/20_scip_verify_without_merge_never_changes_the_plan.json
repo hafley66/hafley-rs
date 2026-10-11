@@ -161,10 +161,10 @@
         "$work/verified",
         "--state",
         "$work/state_verified",
-        "--verify-scip",
+        "--scip-index",
         "$work/ts.index",
         "--no-scip-merge",
-        "--commit"
+        "--apply"
       ],
       "success": true,
       "environment": {
@@ -192,7 +192,7 @@
         "$work/plain",
         "--state",
         "$work/state_plain",
-        "--commit"
+        "--apply"
       ],
       "success": true,
       "environment": {

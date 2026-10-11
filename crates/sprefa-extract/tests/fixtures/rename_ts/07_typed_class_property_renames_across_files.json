@@ -36,9 +36,9 @@
         "$work/repo",
         "--state",
         "$work/state",
-        "--verify-scip",
+        "--scip-index",
         "$work/ts.index",
-        "--commit"
+        "--apply"
       ],
       "success": true,
       "environment": {

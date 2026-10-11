@@ -24,13 +24,13 @@
         "rename",
         "src/util.rs#size",
         "width",
-        "--at",
+        "--offset",
         "28",
         "--root",
         "$work/repo",
         "--state",
         "$work/state",
-        "--verify-scip",
+        "--scip-index",
         "$work/index.scip"
       ],
       "cwd": "$work/repo",
@@ -64,6 +64,6 @@
     }
   ],
   "notes": [
-    "no --commit (dry run); index built in-process before the verb runs"
+    "no --apply (dry run); index built in-process before the verb runs"
   ]
 }

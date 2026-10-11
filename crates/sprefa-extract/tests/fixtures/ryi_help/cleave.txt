@@ -12,8 +12,8 @@ Options:
       --state <STATE>    Soopy state root, outside the corpus
       --drag             Also move private helpers only this item uses
       --slow             Use rust-analyzer for Rust and the TypeScript LSP for TS
-      --commit           Apply instead of dry run
-      --verify <VERIFY>  Command to run after --commit; failure rolls back
+      --apply           Apply instead of dry run
+      --verify <VERIFY>  Command to run after --apply; failure rolls back
       --text-refs        Report leftover SRC spellings in plain text
       --json             End with one JSON line holding the plan
   -h, --help             Print help

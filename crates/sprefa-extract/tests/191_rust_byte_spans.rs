@@ -105,7 +105,7 @@ fn rename_count_words(slow: bool) {
     let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
         .current_dir(&fixture.root)
         .env("RUST_LOG", "off")
-        .args(["rename", "--commit", "--at", &at.to_string()])
+        .args(["rename", "--apply", "--offset", &at.to_string()])
         .args(slow.then_some("--slow"))
         .arg("--root")
         .arg(&fixture.root)

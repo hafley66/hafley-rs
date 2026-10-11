@@ -137,11 +137,13 @@ impl Options {
         };
         Ok(Options {
             root: args.root.map_or_else(crate::inputs::git_root_of_cwd, Ok)?,
-            from: args.from,
-            to: args.to,
+            from: crate::inputs::rev_range(&args.rev)?.0,
+            to: crate::inputs::rev_range(&args.rev)?
+                .1
+                .ok_or("diff --rev takes BASE..TARGET")?,
             patterns,
             arms: ResolveArms::parse(&args.arms)?,
-            sqlite: args.sqlite,
+            sqlite: args.store.sqlite,
         })
     }
 }

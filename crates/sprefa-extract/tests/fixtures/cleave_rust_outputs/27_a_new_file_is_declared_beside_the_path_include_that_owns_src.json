@@ -32,7 +32,7 @@
         "cleave",
         "src/shared.rs#count",
         "src/counting.rs",
-        "--commit",
+        "--apply",
         "--root",
         "$work/repo",
         "--state",

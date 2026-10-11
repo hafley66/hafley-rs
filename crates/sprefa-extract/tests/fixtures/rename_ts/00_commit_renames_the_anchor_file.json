@@ -23,7 +23,7 @@
         "$work/repo",
         "--state",
         "$work/state",
-        "--commit"
+        "--apply"
       ],
       "success": true,
       "environment": {

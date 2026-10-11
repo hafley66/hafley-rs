@@ -164,7 +164,7 @@ const PKG_REWRITTEN: &str = "{\n  \"name\": \"pkg\",\n  \"version\": \"0.1.0\",\
 #[test]
 fn manifest_commit_rewrites_exact_bytes_and_leaves_pkg2_alone() {
     let fixture = fixture("commit");
-    let table = planned(&fixture, &["--commit"]);
+    let table = planned(&fixture, &["--apply"]);
 
     assert_eq!(
         lines_with_prefix(&table, "manifest ").len(),

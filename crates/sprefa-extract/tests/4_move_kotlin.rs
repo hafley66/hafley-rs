@@ -136,7 +136,7 @@ const MISMATCHED: [(&str, &str); 1] = [("src/Odd.kt", "src/core/Odd.kt")];
 #[test]
 fn an_explicit_importer_is_respelled_across_packages() {
     let fixture = fixture("basic", "explicit_importer");
-    move_files(&fixture, &OUT_OF_PACKAGE, &["--commit"]);
+    move_files(&fixture, &OUT_OF_PACKAGE, &["--apply"]);
     let main = read(&fixture.root, "src/com/app/Main.kt");
 
     assert!(main.contains("import com.core.Util\n"), "{main}");
@@ -154,7 +154,7 @@ fn an_explicit_importer_is_respelled_across_packages() {
 #[test]
 fn the_moved_files_package_line_is_respelled() {
     let fixture = fixture("basic", "package_line");
-    move_files(&fixture, &OUT_OF_PACKAGE, &["--commit"]);
+    move_files(&fixture, &OUT_OF_PACKAGE, &["--apply"]);
     let moved = read(&fixture.root, "src/com/core/Util.kt");
 
     assert!(moved.starts_with("package com.core\n"), "{moved}");
@@ -167,7 +167,7 @@ fn the_moved_files_package_line_is_respelled() {
 fn a_wildcard_importer_is_warned_and_left_alone() {
     let fixture = fixture("basic", "wildcard");
     let before = read(&fixture.root, "src/com/wild/Wide.kt");
-    let table = move_files(&fixture, &OUT_OF_PACKAGE, &["--commit"]);
+    let table = move_files(&fixture, &OUT_OF_PACKAGE, &["--apply"]);
 
     assert!(
         table.contains("warn src/com/lib/Util.kt: 1 wildcard import(s) of com.lib left alone"),

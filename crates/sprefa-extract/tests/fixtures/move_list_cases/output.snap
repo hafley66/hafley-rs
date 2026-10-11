@@ -7,7 +7,7 @@ source: tests/support/2_fixture_runner.rs
     "both_refusal": {
       "exit_code": 2,
       "stdout": [],
-      "stderr": "--list cannot be combined with OLD NEW\n"
+      "stderr": "$work/both/repo/lib/a.ts does not exist\n"
     },
     "collide_message": true,
     "collide_refusal": {

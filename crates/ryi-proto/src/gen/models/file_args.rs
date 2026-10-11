@@ -26,7 +26,7 @@ pub struct FileArgs {
   #[arg(long, value_name = "ARMS", requires = "resolve", value_delimiter = ',')]
   #[serde(default)]
   pub arms: Option<Vec<String>>,
-  #[doc = "Write to a new SQLite database instead of stdout"]
+  #[doc = "Write the fact store to a new SQLite database at PATH"]
   #[arg(long, value_name = "PATH", conflicts_with = "bench")]
   pub sqlite: Option<PathBuf>,
   #[doc = "Time extraction and print per-family counts to stderr"]

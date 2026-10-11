@@ -8,7 +8,7 @@ fn one_cleave_list_stage_merges_a_test_module_and_deletes_its_source_and_declara
     let mut results = Vec::new();
     for verify in [false, true] {
         let fixture = Fixture::from_dir("dogfood_merge");
-        let mut args = vec!["cleave", "--list", "merge.tsv", "--commit"];
+        let mut args = vec!["cleave", "--list", "merge.tsv", "--apply"];
         if verify {
             args.extend(["--verify", "exit 1"]);
         }

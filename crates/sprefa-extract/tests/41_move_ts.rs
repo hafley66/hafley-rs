@@ -127,7 +127,7 @@ const REWRITTEN: [(&str, &str); 5] = [
 #[test]
 fn every_importer_style_is_rewritten_and_still_resolves_to_the_moved_file() {
     let fixture = fixture("styles");
-    let table = move_verb(&fixture, &["--commit"]);
+    let table = move_verb(&fixture, &["--apply"]);
 
     assert_eq!(kind_count(&table, "move"), 1, "table:\n{table}");
     assert_eq!(kind_count(&table, "replace"), 6, "table:\n{table}");
@@ -157,7 +157,7 @@ fn every_importer_style_is_rewritten_and_still_resolves_to_the_moved_file() {
 #[test]
 fn the_moved_file_re_aims_its_relative_import_and_leaves_the_package_alone() {
     let fixture = fixture("selfaim");
-    move_verb(&fixture, &["--commit"]);
+    move_verb(&fixture, &["--apply"]);
 
     let body = read(&fixture.root, NEW);
     assert!(
@@ -199,6 +199,6 @@ fn a_dry_run_prints_the_plan_and_writes_nothing() {
 fn a_file_naming_no_moved_target_is_untouched() {
     let fixture = fixture("untouched");
     let before = read(&fixture.root, "src/index.ts");
-    move_verb(&fixture, &["--commit"]);
+    move_verb(&fixture, &["--apply"]);
     assert_eq!(read(&fixture.root, "src/index.ts"), before);
 }

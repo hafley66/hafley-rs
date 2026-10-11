@@ -20,7 +20,7 @@ const LOAD_BUDGET: Duration = Duration::from_secs(900);
 /// The anchor when the walk answers: `--slow` `--from`/`--call-path` on the
 /// working tree with no SCIP index and no published store, seeded in Rust.
 pub(super) fn rust_anchor<'a>(arm: &Arm<'a>, cli: &GraphArgs, files: &[PathBuf]) -> Option<&'a str> {
-    if !cli.slow || cli.at.is_some() || cli.scip_index.is_some() || cli.sqlite.is_some() {
+    if !cli.slow || cli.rev.is_some() || cli.scip_index.is_some() || cli.store.sqlite.is_some() {
         return None;
     }
     let anchor = match arm {

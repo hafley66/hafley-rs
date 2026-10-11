@@ -148,8 +148,8 @@ fn run_slow(
     let checkers = !slow.no_checker;
     let index = slow.scip_index.as_deref();
     let mut output = match writer {
-        Some(writer) => sqlite::Output::with_writer(slow.sqlite.as_deref(), writer, true)?,
-        None => sqlite::Output::new(slow.sqlite.as_deref())?,
+        Some(writer) => sqlite::Output::with_writer(slow.store.sqlite.as_deref(), writer, true)?,
+        None => sqlite::Output::new(slow.store.sqlite.as_deref())?,
     };
     if output.database.is_some() {
         let mut push_raw = |raw: sprefa_extract::RawProjectFact<'_>| {
@@ -165,7 +165,7 @@ fn run_slow(
         }
         return output.finish();
     }
-    if slow.lines {
+    if slow.spans.lines {
         for path in &files {
             if let Ok(content) = std::fs::read(sprefa_extract::io_path(path)) {
                 output.register_line_table(&path.to_string_lossy(), newline_offsets(&content));
@@ -206,10 +206,10 @@ fn run_scip(
     }
     let root = inputs::root(&args.inputs);
     let mut output = match writer {
-        Some(writer) => sqlite::Output::with_writer(args.sqlite.as_deref(), writer, true)?,
-        None => sqlite::Output::new(args.sqlite.as_deref())?,
+        Some(writer) => sqlite::Output::with_writer(args.store.sqlite.as_deref(), writer, true)?,
+        None => sqlite::Output::new(args.store.sqlite.as_deref())?,
     };
-    if args.lines {
+    if args.spans.lines {
         output.set_line_root(Some(root.clone()));
     }
     let request = ScipFamilyRequest {
@@ -282,10 +282,10 @@ fn run_scip_raw(
         witness: false,
     };
     let mut output = match writer {
-        Some(writer) => sqlite::Output::with_writer(args.sqlite.as_deref(), writer, true)?,
-        None => sqlite::Output::new(args.sqlite.as_deref())?,
+        Some(writer) => sqlite::Output::with_writer(args.store.sqlite.as_deref(), writer, true)?,
+        None => sqlite::Output::new(args.store.sqlite.as_deref())?,
     };
-    if args.lines {
+    if args.spans.lines {
         output.set_line_root(Some(root.clone()));
     }
     for line in scip_facts_jsonl(&request)? {

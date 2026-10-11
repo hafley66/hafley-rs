@@ -46,7 +46,7 @@
         "move",
         "$work/repo/alpha/src/shapes.rs",
         "$work/repo/beta/src/shapes.rs",
-        "--commit",
+        "--apply",
         "--verify",
         "false",
         "--root",

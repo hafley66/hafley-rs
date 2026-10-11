@@ -819,10 +819,12 @@ pub fn run_to(
         (_, _, _, _, _, Some(name)) => Arm::FlowPath(name, cli.reverse),
         _ => unreachable!("the clap ArgGroup requires one of the six"),
     };
-    let rows = if let Some(revision) = &cli.at {
-        let root = fs::canonicalize(sprefa_extract::io_path(
-            cli.inputs.root.as_ref().expect("clap requires the root"),
-        ))?;
+    let range = cli.rev.as_deref().map(crate::inputs::rev_range).transpose()?;
+    let rows = if let Some((revision, compare)) = &range {
+        let root = match &cli.inputs.root {
+            Some(root) => fs::canonicalize(sprefa_extract::io_path(root))?,
+            None => crate::inputs::git_root_of_cwd()?,
+        };
         let selected: Vec<PathBuf> = cli
             .inputs
             .paths
@@ -848,10 +850,10 @@ pub fn run_to(
             .collect::<Result<_, _>>()?;
         let mut reader = crate::revision::RevisionReader::open(&root)?;
         let (sha, before) = ask_at(&mut reader, revision, &selected, &cli, &arm, None)?;
-        match &cli.compare {
+        match compare {
             Some(other) => {
                 if !matches!(arm, Arm::CallPath(_) | Arm::TypePath(_) | Arm::FlowPath(_, _)) {
-                    return Err("--compare requires --call-path, --type-path or --flow-path".into());
+                    return Err("--rev BASE..TARGET requires --call-path, --type-path or --flow-path".into());
                 }
                 let (other_sha, after) = ask_at(&mut reader, other, &selected, &cli, &arm, None)?;
                 if before
@@ -877,14 +879,14 @@ pub fn run_to(
         } else if let Some(anchor) = walk::rust_anchor(&arm, &cli, &paths) {
             walk::walk_rows(&arm, &cli, &paths, anchor)?
         } else {
-            let database = load_store(&paths, &arm, &cli, None, cli.sqlite.as_deref())?;
+            let database = load_store(&paths, &arm, &cli, None, cli.store.sqlite.as_deref())?;
             let rows = arm.ask_within(database.connection(), cli.timeout, cli.inputs.root.clone(), None)?;
             database.close()?;
             rows
         }
     };
     emit_rows(&rows, output)?;
-    emit_summary_line(&rows, &arm, cli.compare.is_some());
+    emit_summary_line(&rows, &arm, range.as_ref().is_some_and(|(_, compare)| compare.is_some()));
     Ok(())
 }
 

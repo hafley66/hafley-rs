@@ -15,7 +15,7 @@ fn rename_resolves_its_positional_path_once_from_the_request_directory() {
             .arg(fixture.root.join("pkg"))
             .args(["--state"])
             .arg(fixture._directory.path().join("state"))
-            .arg("--commit")
+            .arg("--apply")
             .env("KACHE_DISABLED", "1")
             .env("RUST_LOG", "off")
             .output()

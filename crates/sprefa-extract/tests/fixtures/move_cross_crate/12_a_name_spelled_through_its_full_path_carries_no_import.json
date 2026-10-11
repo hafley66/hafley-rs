@@ -56,7 +56,7 @@
         "cleave",
         "$work/repo/alpha/src/tagged.rs#fresh",
         "$work/repo/alpha/src/fresh.rs",
-        "--commit",
+        "--apply",
         "--root",
         "$work/repo",
         "--state",

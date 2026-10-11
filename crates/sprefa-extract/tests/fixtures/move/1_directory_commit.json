@@ -55,7 +55,7 @@
         "$work/repo",
         "--state",
         "$work/state",
-        "--commit"
+        "--apply"
       ],
       "expect_exit_code": 0,
       "raw_stdout": true,

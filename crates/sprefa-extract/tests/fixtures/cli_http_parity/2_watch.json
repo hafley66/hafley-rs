@@ -106,9 +106,7 @@
           "args": {
             "old": "$work/type_ladder/src/_1_none.rs",
             "new": "$work/type_ladder/src/_5_moved.rs",
-            "root": [
-              "$work/type_ladder"
-            ],
+            "root": "$work/type_ladder",
             "state": "$work/state"
           },
           "root": "$work/type_ladder",

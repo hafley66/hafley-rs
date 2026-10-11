@@ -104,6 +104,49 @@ pub fn root(inputs: &Inputs) -> PathBuf {
         .unwrap_or_else(|_| crate::ops::request_root())
 }
 
+/// The files an edit verb may change: what PATH, `--pattern` and `--entry` name,
+/// root-relative. `None` when the inputs name nothing: the whole corpus.
+/// `extra` are positionals the verb reads as PATH (its `--list` form).
+pub fn edit_scope(
+    inputs: &Inputs,
+    extra: &[Option<&str>],
+    root: &Path,
+) -> Result<Option<HashSet<String>>, String> {
+    let mut inputs = inputs.clone();
+    inputs.paths.splice(0..0, extra.iter().flatten().map(PathBuf::from));
+    if inputs.paths.is_empty() && inputs.patterns.is_empty() && inputs.entry.is_empty() {
+        return Ok(None);
+    }
+    let canonical = |path: &Path| {
+        std::fs::canonicalize(sprefa_extract::io_path(path))
+            .map_err(|error| format!("{}: {error}", path.display()))
+    };
+    let root = canonical(root)?;
+    let mut keep = HashSet::new();
+    for file in expand(&inputs)? {
+        let absolute = canonical(&file)?;
+        let relative = absolute
+            .strip_prefix(&root)
+            .map_err(|_| format!("{} is outside {}", file.display(), root.display()))?;
+        keep.insert(relative.to_string_lossy().replace('\\', "/"));
+    }
+    Ok(Some(keep))
+}
+
+/// `--rev REV` or `--rev BASE..TARGET`. An empty side or `...` is an error.
+pub fn rev_range(rev: &str) -> Result<(String, Option<String>), String> {
+    if rev.contains("...") {
+        return Err(format!("--rev {rev}: use BASE..TARGET, not ..."));
+    }
+    match rev.split_once("..") {
+        None if !rev.is_empty() => Ok((rev.to_owned(), None)),
+        Some((base, target)) if !base.is_empty() && !target.is_empty() => {
+            Ok((base.to_owned(), Some(target.to_owned())))
+        }
+        _ => Err(format!("--rev {rev}: use REV or BASE..TARGET")),
+    }
+}
+
 /// The default `--root` for the repository verbs: the working directory's git root.
 pub fn git_root_of_cwd() -> Result<PathBuf, Box<dyn std::error::Error>> {
     Ok(soopy::discover(crate::ops::request_root())

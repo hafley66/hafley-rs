@@ -62,14 +62,14 @@ const IMPORTED_TRAITS: [&str; 16] = [
 const SCOPE: &str = "not supported: cross-language cleave, moving a type with its impl blocks";
 
 pub fn run(cli: CleaveArgs, home: Option<&Path>) -> Result<(), crate::RyiExit> {
-    if cli.verify.is_some() && !cli.commit {
-        return Err("--verify needs --commit".to_string().into());
+    if cli.verify.is_some() && !cli.edit.apply {
+        return Err("--verify needs --apply".to_string().into());
     }
     if let Some(list) = cli.list.as_deref() {
         return run_list(&cli, list, home);
     }
     let plan = Plan::build(&cli)?;
-    let state = state_root_for(cli.state.as_deref(), home, &[plan.root.as_path()])?;
+    let state = state_root_for(cli.edit.state.as_deref(), home, &[plan.root.as_path()])?;
 
     crate::outln!("root {}", plan.root.display());
     crate::outln!(
@@ -134,7 +134,7 @@ pub fn run(cli: CleaveArgs, home: Option<&Path>) -> Result<(), crate::RyiExit> {
         let paths = plan.touched().into_iter().chain(plan.created()).collect();
         sprefa_extract::edit::ts7_cleave_diagnostics::check_preview(&plan.root, mirror.root(), &paths)?;
     }
-    match cli.commit {
+    match cli.edit.apply {
         true => {
             let journal =
                 VerifyJournal::capture(&plan.root, &[], &plan.created(), &plan.touched())?;
@@ -153,7 +153,7 @@ pub fn run(cli: CleaveArgs, home: Option<&Path>) -> Result<(), crate::RyiExit> {
             }
         }
     }
-    if cli.text_refs {
+    if cli.edit.text_refs {
         report_text_refs(&plan);
     }
     if cli.json {
@@ -167,9 +167,13 @@ pub fn run(cli: CleaveArgs, home: Option<&Path>) -> Result<(), crate::RyiExit> {
 fn run_list(cli: &CleaveArgs, list: &Path, home: Option<&Path>) -> Result<(), crate::RyiExit> {
     let rows = read_cleave_list(list)?;
     let (first, _) = split_target(&rows[0].0)?;
-    let root = plan_root(cli.root.as_ref(), &first)?;
-    let state = state_root_for(cli.state.as_deref(), home, &[root.as_path()])?;
-    let mut cx = MoveCx::open_with_untracked(&root, cli.root.is_some())?;
+    let root = plan_root(cli.inputs.root.as_ref(), &first)?;
+    let state = state_root_for(cli.edit.state.as_deref(), home, &[root.as_path()])?;
+    let sources = rows
+        .iter()
+        .map(|(target, _)| split_target(target).map(|(src, _)| src))
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut cx = open_cx(cli, &root, &sources)?;
     let mut imports = Imports::read(&cx, &root)?;
     let mut sources = BTreeSet::new();
     let mut imported_before: BTreeMap<String, BTreeSet<(String, String)>> = BTreeMap::new();
@@ -213,7 +217,7 @@ fn run_list(cli: &CleaveArgs, list: &Path, home: Option<&Path>) -> Result<(), cr
         }
     }
     let (stages, touched, created) = batch_stages(&cx, &deleted)?;
-    match cli.commit {
+    match cli.edit.apply {
         true => {
             let journal = VerifyJournal::capture(&root, &[], &created, &touched)?;
             for stage in &stages {
@@ -544,6 +548,24 @@ fn inline_mod(text: &str, name: &str) -> Option<Decl> {
 }
 
 /// The single form's two positionals.
+/// The cleave corpus: every file `.gitignore` keeps (or tracked only), narrowed
+/// to the PATH scope; the source files the rows move items out of stay in it.
+fn open_cx(cli: &CleaveArgs, root: &Path, sources: &[PathBuf]) -> Result<MoveCx, String> {
+    let positionals = match cli.list {
+        Some(_) => vec![cli.target.as_deref(), cli.dest.as_deref().and_then(Path::to_str)],
+        None => Vec::new(),
+    };
+    let scope = match crate::inputs::edit_scope(&cli.inputs, &positionals, root)? {
+        None => None,
+        Some(_) => {
+            let mut extra = positionals.clone();
+            extra.extend(sources.iter().map(|src| src.to_str()));
+            crate::inputs::edit_scope(&cli.inputs, &extra, root)?
+        }
+    };
+    Ok(MoveCx::open_corpus(root, cli.edit.tracked)?.scoped(scope.as_ref()))
+}
+
 fn single(cli: &CleaveArgs) -> Result<(&str, &Path), String> {
     match (cli.target.as_deref(), cli.dest.as_deref()) {
         (Some(target), Some(dest)) => Ok((target, dest)),
@@ -734,8 +756,8 @@ impl Plan {
     fn build(cli: &CleaveArgs) -> Result<Self, String> {
         let (target, dest) = single(cli)?;
         let (src, _) = split_target(target)?;
-        let root = plan_root(cli.root.as_ref(), &src)?;
-        let cx = MoveCx::open_with_untracked(&root, cli.root.is_some())?;
+        let root = plan_root(cli.inputs.root.as_ref(), &src)?;
+        let cx = open_cx(cli, &root, std::slice::from_ref(&src))?;
         let mut imports = Imports::read(&cx, &root)?;
         Self::build_with(cx, &mut imports, target, dest, cli.drag, cli.slow)
     }

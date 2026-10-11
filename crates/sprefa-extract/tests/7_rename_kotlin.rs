@@ -115,7 +115,7 @@ fn diff_rq(left: &Path, right: &Path) -> Vec<String> {
 #[test]
 fn kotlin_rename_matches_the_hand_written_after() {
     let fixture = fixture("local", "commit");
-    let stdout = rename_verb(&fixture, &format!("{ANCHOR}#Helper"), "Tool", &["--commit"]);
+    let stdout = rename_verb(&fixture, &format!("{ANCHOR}#Helper"), "Tool", &["--apply"]);
     for line in [
         format!("plan {ANCHOR} Helper -> Tool"),
         "  src/main/kotlin/a/Util.kt  3 uses".to_string(),
@@ -146,7 +146,7 @@ fn wildcard_importer_is_a_dynamic_stop() {
         &fixture.state,
         &format!("{ANCHOR}#Helper"),
         "Tool",
-        &["--commit"],
+        &["--apply"],
     );
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
     assert_eq!(output.status.code(), Some(6), "Dynamic exits 6:\n{stderr}");

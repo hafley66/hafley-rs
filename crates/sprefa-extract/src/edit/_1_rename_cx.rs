@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use crate::edit_seams::Rename;
-use crate::move_cx::walk_files_with_untracked;
+use crate::move_cx::walk_corpus;
 
 /// Whether the roster hands `rel` to `rename`.
 pub fn owned_by<R: Rename + ?Sized>(rel: &str, rename: &R) -> bool {
@@ -54,15 +54,15 @@ impl RenameCx {
     /// One walk of `root`. `root` is taken canonicalized; every path this type
     /// hands out is root-relative and forward-slashed.
     pub fn open(root: &Path) -> Result<Self, String> {
-        Self::open_with_untracked(root, true)
+        Self::open_corpus(root, false)
     }
 
-    /// Tracked files only unless the caller supplied the root explicitly, the rule
-    /// cleave uses (`MoveCx::open_with_untracked`).
-    pub fn open_with_untracked(root: &Path, include_untracked: bool) -> Result<Self, String> {
+    /// Every file `.gitignore` keeps, or git-tracked files only when `tracked`;
+    /// the same corpus rule as `MoveCx::open_corpus`.
+    pub fn open_corpus(root: &Path, tracked: bool) -> Result<Self, String> {
         let io_root = hafley_scm::read::io_path(root);
         let root = io_root.as_path();
-        let files = walk_files_with_untracked(root, include_untracked)?;
+        let files = walk_corpus(root, tracked)?;
         Ok(Self {
             root: root.to_path_buf(),
             files,
@@ -78,6 +78,14 @@ impl RenameCx {
     }
 
     /// The batch this run applies. Set once, before any impl is asked anything.
+    /// Keep only `keep` (root-relative) among the files the plan edits.
+    pub fn scoped(mut self, keep: Option<&std::collections::HashSet<String>>) -> Self {
+        if let Some(keep) = keep {
+            self.files.retain(|file| keep.contains(file));
+        }
+        self
+    }
+
     pub fn with_batch(mut self, batch: Vec<RenameRequest>) -> Self {
         self.batch = batch;
         self

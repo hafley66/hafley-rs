@@ -25,7 +25,7 @@ fn a_path_added_between_commits_is_reported_once() {
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .args(["graph", "--call-path", "beta", "--root"])
         .arg(&root)
-        .args(["--at", &shas[0], "--compare", &shas[1], "."])
+        .args(["--rev", &format!("{}..{}", shas[0], shas[1]), "."])
         .output()
         .unwrap();
     assert!(

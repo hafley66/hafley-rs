@@ -61,7 +61,7 @@
         "$work/repo",
         "--state",
         "$work/state",
-        "--commit"
+        "--apply"
       ],
       "cwd": "$work/repo",
       "environment": {

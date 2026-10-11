@@ -91,7 +91,7 @@ impl Rename for TsSource {
         every.sort_by_key(|symbol| scoping.symbol_span(*symbol).start);
         // A binding in the anchor's root scope is the one an importer can reach;
         // a same-named binding nested in a function body shadows nothing outside
-        // its block. Root wins without `--at`; `--at` still selects among all.
+        // its block. Root wins without `--offset`; `--offset` still selects among all.
         let root = scoping.root_scope_id();
         let at_root: Vec<SymbolId> = every
             .iter()
@@ -188,7 +188,7 @@ fn not_found(request: &RenameRequest) -> RenameStop {
     }
 }
 
-/// `--at` picks the declaration the byte offset lands in. When the offset sits
+/// `--offset` picks the declaration the byte offset lands in. When the offset sits
 /// between declarations, the nearest declaration opening at or before it wins,
 /// so an offset anywhere inside a declaration body still selects it. `None`
 /// means the caller reports every candidate as ambiguous.

@@ -66,6 +66,6 @@
     }
   ],
   "notes": [
-    "no --commit; old row value is assert_eq! against a vec![format!(...)] - exact single row"
+    "no --apply; old row value is assert_eq! against a vec![format!(...)] - exact single row"
   ]
 }

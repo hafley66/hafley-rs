@@ -14,7 +14,7 @@ fn public_reexport_routes_survive_a_cleave_into_a_private_module() {
                 "cleave",
                 "src/0_source.rs#covering_def",
                 "src/1_flow.rs",
-                "--commit",
+                "--apply",
             ],
         );
         if case == "dogfood_private_destination" {
