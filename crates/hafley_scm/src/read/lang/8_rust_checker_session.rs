@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
@@ -24,6 +25,7 @@ pub(super) struct CheckerWorkspace {
     /// Supplied files the load left out (another Cargo workspace, no crate):
     /// their absence is known, so it does not force a reload.
     outside: HashSet<PathBuf>,
+    used: Instant,
 }
 
 fn unloaded(vfs: &Vfs, files: &[(String, PathBuf)]) -> HashSet<PathBuf> {
@@ -41,6 +43,68 @@ type SessionKey = (PathBuf, LoadMode, ManifestKey);
 
 static CHECKER_WORKSPACES: OnceLock<Mutex<HashMap<SessionKey, Arc<Mutex<CheckerWorkspace>>>>> =
     OnceLock::new();
+
+/// One loaded workspace holds a whole crate graph plus the sysroot, about a
+/// gigabyte; a second root evicts the first instead of stacking beside it.
+const WARM_WORKSPACES: usize = 1;
+
+/// A workspace no request touched for this long is dropped by the reaper.
+const WARM_IDLE: Duration = Duration::from_secs(60);
+const REAP_EVERY: Duration = Duration::from_secs(15);
+
+/// Loads still running on their own thread, including ones past their budget:
+/// the global type interner may only be collected while this is zero.
+static LOADS_IN_FLIGHT: AtomicUsize = AtomicUsize::new(0);
+static REAPER_RUNNING: AtomicBool = AtomicBool::new(false);
+
+/// Drop every cached workspace no other request holds and that `keep` refuses.
+/// Once the map is empty, nothing is loading, and every dropped host had no
+/// other holder, no rust-analyzer query can be running, so the global type
+/// interner is collected too.
+fn evict(
+    all: &mut HashMap<SessionKey, Arc<Mutex<CheckerWorkspace>>>,
+    keep: impl Fn(&SessionKey, &CheckerWorkspace) -> bool,
+) {
+    let before = all.len();
+    all.retain(|key, workspace| {
+        Arc::strong_count(workspace) > 1
+            || workspace
+                .try_lock()
+                .map_or(true, |workspace| keep(key, &workspace))
+    });
+    if all.len() < before && all.is_empty() && LOADS_IN_FLIGHT.load(Ordering::Acquire) == 0 {
+        // SAFETY: no cached host remains, every evicted host had no other
+        // holder, and no load thread is running, so no query is live.
+        unsafe { ra_ap_hir::collect_ty_garbage() };
+        tracing::info!(evicted = before, "rust checker workspaces dropped, type interner collected");
+    }
+}
+
+/// Wakes every `REAP_EVERY` and drops workspaces idle past `WARM_IDLE`; the
+/// thread ends once the map is empty, so an idle process holds no host.
+fn start_reaper() {
+    if REAPER_RUNNING.swap(true, Ordering::AcqRel) {
+        return;
+    }
+    let spawned = std::thread::Builder::new()
+        .name("rust-checker-reaper".into())
+        .spawn(|| loop {
+            std::thread::sleep(REAP_EVERY);
+            let Some(workspaces) = CHECKER_WORKSPACES.get() else {
+                REAPER_RUNNING.store(false, Ordering::Release);
+                return;
+            };
+            let mut all = workspaces.lock().unwrap();
+            evict(&mut all, |_, workspace| workspace.used.elapsed() < WARM_IDLE);
+            if all.is_empty() {
+                REAPER_RUNNING.store(false, Ordering::Release);
+                return;
+            }
+        });
+    if spawned.is_err() {
+        REAPER_RUNNING.store(false, Ordering::Release);
+    }
+}
 
 pub fn warm_workspace_available(root: &Path, tier: LoadMode) -> bool {
     let Ok(discovered) = super::rust_workspace::discover(root) else {
@@ -97,9 +161,10 @@ pub(super) fn checker_workspace_loaded(
     let mut load = Duration::ZERO;
     let fresh = !all.contains_key(&key);
     if fresh {
-        // One workspace root stays warm. A database holds GBs, and a daemon
-        // that walks worktrees would otherwise keep one per root forever.
-        all.retain(|(cached_root, _, _), _| cached_root == &root);
+        let room = WARM_WORKSPACES.saturating_sub(1);
+        if all.len() > room {
+            evict(&mut all, |_, _| false);
+        }
         let (db, vfs, roots, elapsed) =
             load_checker_workspace(&root, tier, budget, &discovered.metadata, files)?;
         load = elapsed;
@@ -114,12 +179,15 @@ pub(super) fn checker_workspace_loaded(
                 vfs,
                 roots,
                 names: Default::default(),
+                used: Instant::now(),
             })),
         );
+        start_reaper();
     }
     let handle = all.get(&key).unwrap().clone();
     drop(all);
     let mut workspace = handle.lock().unwrap();
+    workspace.used = Instant::now();
     if tier == LoadMode::Types
         && !fresh
         && !unloaded(&workspace.vfs, files).is_subset(&workspace.outside)
@@ -260,6 +328,55 @@ mod warm_workspace_tests {
     }
 }
 
+#[cfg(test)]
+mod warm_bound_tests {
+    use super::*;
+
+    fn scratch_root(scratch: &tempfile::TempDir) -> (PathBuf, Vec<(String, PathBuf)>) {
+        let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../sprefa-extract/tests/fixtures/cleave_ratchet/private_fields");
+        let root = scratch.path().to_path_buf();
+        std::fs::create_dir_all(root.join("src")).unwrap();
+        for path in ["Cargo.toml", "src/lib.rs", "src/source.rs", "src/dest.rs"] {
+            std::fs::copy(fixture.join(path), root.join(path)).unwrap();
+        }
+        let root = std::fs::canonicalize(root).unwrap();
+        let files = ["src/lib.rs", "src/source.rs", "src/dest.rs"]
+            .into_iter()
+            .map(|path| (path.to_string(), root.join(path)))
+            .collect();
+        (root, files)
+    }
+
+    fn cached_under(roots: &[&PathBuf]) -> usize {
+        CHECKER_WORKSPACES.get().map_or(0, |workspaces| {
+            workspaces
+                .lock()
+                .unwrap()
+                .keys()
+                .filter(|(root, _, _)| roots.contains(&root))
+                .count()
+        })
+    }
+
+    #[test]
+    fn a_second_root_evicts_the_first_and_idle_eviction_empties_the_map() {
+        let (first_dir, second_dir) = (tempfile::TempDir::new().unwrap(), tempfile::TempDir::new().unwrap());
+        let (first, first_files) = scratch_root(&first_dir);
+        let (second, second_files) = scratch_root(&second_dir);
+        let budget = Duration::from_secs(120);
+        checker_workspace(&first, LoadMode::Names, &first_files, budget).unwrap();
+        assert_eq!(cached_under(&[&first, &second]), 1);
+        checker_workspace(&second, LoadMode::Names, &second_files, budget).unwrap();
+        assert_eq!(cached_under(&[&first]), 0, "the first root's host stayed loaded");
+        assert_eq!(cached_under(&[&second]), 1);
+        let mut all = CHECKER_WORKSPACES.get().unwrap().lock().unwrap();
+        evict(&mut all, |(root, _, _), _| root != &second);
+        drop(all);
+        assert_eq!(cached_under(&[&first, &second]), 0);
+    }
+}
+
 fn load_checker_workspace(
     root: &Path,
     tier: LoadMode,
@@ -302,12 +419,18 @@ fn load_checker_workspace(
     // The load runs on its own thread so the budget stops the caller mid-load; a load past the
     // budget finishes in the background and is dropped.
     let (sender, receiver) = std::sync::mpsc::channel();
+    LOADS_IN_FLIGHT.fetch_add(1, Ordering::AcqRel);
     std::thread::Builder::new()
         .name("rust-analyzer-load".into())
         .spawn(move || {
-            let _ = sender.send(ra_ap_load_cargo::load_workspace(workspace, &Default::default(), &load_config));
+            let loaded = ra_ap_load_cargo::load_workspace(workspace, &Default::default(), &load_config);
+            let _ = sender.send(loaded);
+            LOADS_IN_FLIGHT.fetch_sub(1, Ordering::AcqRel);
         })
-        .map_err(no_workspace)?;
+        .map_err(|error| {
+            LOADS_IN_FLIGHT.fetch_sub(1, Ordering::AcqRel);
+            no_workspace(error)
+        })?;
     let remaining = budget.saturating_sub(started.elapsed());
     let (db, vfs, _proc_macro) = match receiver.recv_timeout(remaining) {
         Ok(loaded) => loaded.map_err(no_workspace)?,
