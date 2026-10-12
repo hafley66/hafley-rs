@@ -14,6 +14,7 @@ pub mod claude;
 pub mod claude_hooks;
 pub mod codex;
 pub mod kimi;
+pub mod omp;
 pub mod opencode;
 
 /// What became of one delivery.

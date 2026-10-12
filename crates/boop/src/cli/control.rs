@@ -1051,6 +1051,7 @@ pub(crate) fn revive_candidates(
     let now = boop::live::now_ms();
     let window = since.as_millis() as u64;
     let mut out = Vec::new();
+    let mut stale = Vec::new();
     let mut listed: std::collections::HashMap<HarnessId, Option<Vec<boop::harness::SessionRef>>> =
         std::collections::HashMap::new();
     for (name, route) in &routes {
@@ -1068,6 +1069,12 @@ pub(crate) fn revive_candidates(
         else {
             continue;
         };
+        if registry.get(harness).door().tui_resume_args(&session).is_none() {
+            if report_skips {
+                println!("skip {name}: harness {harness} names no TUI resume arguments");
+            }
+            continue;
+        }
         if let Some(owner) = live_session_owner(registry, dir, name, route)? {
             if report_skips {
                 println!("skip {name}: {owner}");
@@ -1095,7 +1102,9 @@ pub(crate) fn revive_candidates(
         .flatten()
         .max()
         .unwrap_or(0);
-        if now.saturating_sub(last_activity_ms) > window {
+        let idle_ms = now.saturating_sub(last_activity_ms);
+        if idle_ms > window {
+            stale.push((idle_ms, name.clone()));
             continue;
         }
         out.push(ReviveCandidate {
@@ -1107,6 +1116,19 @@ pub(crate) fn revive_candidates(
             last_activity_ms,
             digest,
         });
+    }
+    stale.sort();
+    if report_skips && !stale.is_empty() {
+        let nearest = stale
+            .iter()
+            .take(3)
+            .map(|(idle_ms, name)| format!("{name} idle {}m", idle_ms / 60_000))
+            .collect::<Vec<_>>()
+            .join(", ");
+        println!(
+            "skip {} routes outside --since window; nearest: {nearest}",
+            stale.len()
+        );
     }
     out.sort_by(|left, right| {
         right

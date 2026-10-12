@@ -118,6 +118,8 @@ impl LiveSessions for OmpLive {
 
 static LIVE: OmpLive = OmpLive;
 
+static DOOR: crate::door::omp::OmpDoor = crate::door::omp::OmpDoor;
+
 /// The `--mode` values that run omp without its TUI; a value outside this set
 /// (or no `--mode` at all) leaves the interactive frontend in charge. The
 /// `acp` subcommand is separate and headless on its own.
@@ -134,6 +136,10 @@ impl Harness for Omp {
 
     fn live(&self) -> &dyn LiveSessions {
         &LIVE
+    }
+
+    fn door(&self) -> &dyn crate::door::Door {
+        &DOOR
     }
 
     fn matches_model(&self, _name: &str) -> bool {
