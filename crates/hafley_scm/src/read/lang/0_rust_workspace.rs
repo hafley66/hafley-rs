@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 pub struct RustWorkspace {
     pub manifest: PathBuf,
     pub metadata: cargo_metadata::Metadata,
+    local_workspace_manifests: Vec<PathBuf>,
 }
 
 /// Locate the nearest manifest from a source (including an unborn source),
@@ -56,7 +57,7 @@ pub fn discover(source: &Path) -> Result<RustWorkspace, DiscoverError> {
             return Ok(workspace.clone());
         }
     }
-    let metadata = cargo_metadata::MetadataCommand::new()
+    let mut metadata = cargo_metadata::MetadataCommand::new()
         .manifest_path(&manifest)
         .no_deps()
         .other_options(vec!["--offline".to_string()])
@@ -65,9 +66,71 @@ pub fn discover(source: &Path) -> Result<RustWorkspace, DiscoverError> {
             manifest: Some(manifest.clone()),
             reason: error.to_string(),
         })?;
+    // Cargo's --no-deps preserves offline discovery without resolving registry
+    // packages. Follow its explicit local paths so separate workspace roots can
+    // still share a Names graph. Only the requested package joins the graph,
+    // not the other members of its workspace.
+    let mut local_workspace_manifests = Vec::new();
+    let mut seen: std::collections::HashSet<PathBuf> = metadata
+        .packages
+        .iter()
+        .map(|package| package.manifest_path.as_std_path().to_path_buf())
+        .collect();
+    let mut index = 0;
+    while index < metadata.packages.len() {
+        let paths: Vec<_> = metadata.packages[index]
+            .dependencies
+            .iter()
+            .filter_map(|dependency| dependency.path.as_ref())
+            .map(|path| path.join("Cargo.toml").into_std_path_buf())
+            .collect();
+        index += 1;
+        for path in paths {
+            let path = path.canonicalize().map_err(|error| DiscoverError {
+                manifest: Some(path.clone()),
+                reason: error.to_string(),
+            })?;
+            if !seen.insert(path.clone()) {
+                continue;
+            }
+            let dependency = cargo_metadata::MetadataCommand::new()
+                .manifest_path(&path)
+                .no_deps()
+                .other_options(vec!["--offline".to_string()])
+                .exec()
+                .map_err(|error| DiscoverError {
+                    manifest: Some(path.clone()),
+                    reason: error.to_string(),
+                })?;
+            local_workspace_manifests.push(
+                dependency
+                    .workspace_root
+                    .join("Cargo.toml")
+                    .into_std_path_buf(),
+            );
+            let package = dependency
+                .packages
+                .into_iter()
+                .find(|package| {
+                    package
+                        .manifest_path
+                        .as_std_path()
+                        .canonicalize()
+                        .ok()
+                        .as_ref()
+                        == Some(&path)
+                })
+                .ok_or_else(|| DiscoverError {
+                    manifest: Some(path),
+                    reason: "path dependency is absent from Cargo metadata".into(),
+                })?;
+            metadata.packages.push(package);
+        }
+    }
     let workspace = RustWorkspace {
         manifest: manifest.clone(),
         metadata,
+        local_workspace_manifests,
     };
     let key = workspace.manifest_key().map_err(|reason| DiscoverError {
         manifest: Some(manifest.clone()),
@@ -95,7 +158,8 @@ impl RustWorkspace {
                 .as_std_path()
                 .join("Cargo.toml"),
         );
-        for package in self.metadata.workspace_packages() {
+        paths.extend(self.local_workspace_manifests.iter().cloned());
+        for package in &self.metadata.packages {
             paths.insert(package.manifest_path.as_std_path().to_path_buf());
         }
         let locks: Vec<_> = paths

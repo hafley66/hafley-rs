@@ -1,0 +1,9 @@
+[package]
+name = "signal-client"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+signal-domain = { path = "../library" }
+
+[workspace]
