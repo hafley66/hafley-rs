@@ -3,6 +3,16 @@
 A local caching proxy between the `gh` CLI and a normalized SQLite database.
 GitHub data is synced into SQLite; local tools query SQLite directly -- no live API calls at read time.
 
+## Install
+
+Prebuilt, Apple Silicon macOS ([ghcache-v0.1.0](https://github.com/hafley66/hafley-rs/releases/tag/ghcache-v0.1.0)):
+
+```sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/hafley66/hafley-rs/releases/download/ghcache-v0.1.0/ghcache-installer.sh | sh
+```
+
+From source: `cargo install --path crates/ghcache --force`.
+
 ## Quick start
 
 ```sh

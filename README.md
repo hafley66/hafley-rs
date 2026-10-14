@@ -19,6 +19,17 @@ them, and reads every transcript on the machine as one SQLite store.
 
 ## Install
 
+Prebuilt binaries, Apple Silicon macOS only. Each installer puts the binary in
+`$CARGO_HOME/bin`.
+
+| binary | release | install |
+| --- | --- | --- |
+| `boop` | [boop-v0.0.10](https://github.com/hafley66/hafley-rs/releases/tag/boop-v0.0.10) | `curl --proto '=https' --tlsv1.2 -LsSf https://github.com/hafley66/hafley-rs/releases/download/boop-v0.0.10/boop-installer.sh | sh` |
+| `ryi` | [ryi-v0.1.0](https://github.com/hafley66/hafley-rs/releases/tag/ryi-v0.1.0) | `curl --proto '=https' --tlsv1.2 -LsSf https://github.com/hafley66/hafley-rs/releases/download/ryi-v0.1.0/ryi-installer.sh | sh` |
+| `ghcache` | [ghcache-v0.1.0](https://github.com/hafley66/hafley-rs/releases/tag/ghcache-v0.1.0) | `curl --proto '=https' --tlsv1.2 -LsSf https://github.com/hafley66/hafley-rs/releases/download/ghcache-v0.1.0/ghcache-installer.sh | sh` |
+
+From source:
+
 ```bash
 cargo install --path crates/boop --force
 boop --help

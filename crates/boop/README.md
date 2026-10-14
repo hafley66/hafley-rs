@@ -12,6 +12,14 @@ One CLI for driving coding agents and reading what they did.
 
 ## Install
 
+Prebuilt, Apple Silicon macOS ([boop-v0.0.10](https://github.com/hafley66/hafley-rs/releases/tag/boop-v0.0.10)):
+
+```bash
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/hafley66/hafley-rs/releases/download/boop-v0.0.10/boop-installer.sh | sh
+```
+
+From source:
+
 ```bash
 cargo install --path crates/boop --force
 ```
