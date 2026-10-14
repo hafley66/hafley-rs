@@ -2,6 +2,7 @@
 name = "ryi"
 version = "0.1.0"
 edition = "2021"
+repository.workspace = true
 publish = false
 
 [dependencies]
@@ -17,3 +18,6 @@ http-body-util = "0.1"
 bytes = "1"
 futures-util = "0.3"
 base64 = "0.22"
+
+[package.metadata.dist]
+dist = true

@@ -3,6 +3,7 @@ name = "boop"
 version = "0.0.10"
 autotests = false
 edition.workspace = true
+repository.workspace = true
 description = "cross-harness agent transcript reader: tail agent events from every harness on this machine as one stream"
 license.workspace = true
 
@@ -94,3 +95,6 @@ path = "tests/main.rs"
 [[test]]
 name = "omp_live_trait_e2e"
 path = "tests/omp_live_trait_e2e.rs"
+
+[package.metadata.dist]
+dist = true
