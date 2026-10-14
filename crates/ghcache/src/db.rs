@@ -168,8 +168,8 @@ pub async fn set_poll_state(
         "INSERT INTO poll_state (endpoint, etag, last_modified, poll_interval, last_polled_at, last_changed_at)
          VALUES (?, ?, ?, ?, ?, ?)
          ON CONFLICT(endpoint) DO UPDATE SET
-             etag            = excluded.etag,
-             last_modified   = excluded.last_modified,
+             etag            = COALESCE(excluded.etag, poll_state.etag),
+             last_modified   = COALESCE(excluded.last_modified, poll_state.last_modified),
              poll_interval   = COALESCE(excluded.poll_interval, poll_state.poll_interval),
              last_polled_at  = excluded.last_polled_at,
              last_changed_at = COALESCE(excluded.last_changed_at, poll_state.last_changed_at)",
@@ -344,10 +344,13 @@ mod tests {
     async fn poll_state_preserves_interval_on_304() {
         let pool = open_in_memory().await.unwrap();
         let mut c = pool.acquire().await.unwrap();
-        set_poll_state(&mut *c, "/ep", None, None, Some(120), true).await.unwrap();
+        set_poll_state(&mut *c, "/ep", Some("W/\"e\""), Some("lm"), Some(120), true).await.unwrap();
         set_poll_state(&mut *c, "/ep", None, None, None, false).await.unwrap();
         let ps = get_poll_state(&mut *c, "/ep").await.unwrap();
-        assert_eq!(ps.poll_interval, Some(120));
+        assert_eq!(
+            (ps.etag.as_deref(), ps.last_modified.as_deref(), ps.poll_interval),
+            (Some("W/\"e\""), Some("lm"), Some(120)),
+        );
     }
 
     #[tokio::test]

@@ -173,13 +173,10 @@ impl GitHubClient for GhClient {
 
     async fn call(&self, conn: &mut SqliteConnection, req: &GhRequest<'_>) -> Result<GhResponse> {
         let mut cmd = Command::new(&self.binary);
-        cmd.arg("api");
-        // --include gives us headers (etag, rate limit), but combined with
-        // --paginate it emits a separate HTTP block per page, and parse_response
-        // only keeps the last block's body. Skip --include for paginated calls.
-        if !req.paginate {
-            cmd.arg("--include");
-        }
+        // --include gives us headers (etag, rate limit, poll interval). With
+        // --paginate it emits one HTTP block per page; parse_paginated_response
+        // takes status and etag from the first block and joins the page bodies.
+        cmd.arg("api").arg("--include");
 
         if req.method != "GET" {
             cmd.arg("-X").arg(req.method);
@@ -212,9 +209,8 @@ impl GitHubClient for GhClient {
         let stdout = String::from_utf8_lossy(&output.stdout);
 
         let (status, headers, body) = if req.paginate {
-            // No --include, so stdout is raw JSON (no HTTP headers to parse)
-            let body = parse_paginated_body(&stdout)?;
-            (200, HashMap::new(), body)
+            parse_paginated_response(&stdout)
+                .with_context(|| format!("parsing paginated response for {}", req.endpoint))?
         } else {
             let (status, headers, body_str) = parse_response(&stdout)?;
             let body = if body_str.trim().is_empty() || status == 304 {
@@ -255,11 +251,18 @@ impl GitHubClient for GhClient {
         }
         self.emit_rate_log(conn).await;
 
+        // A 304 keeps the stored validators: GitHub's 304 Etag drops the W/
+        // prefix of the weak etag it served with the 200.
+        let (etag, last_modified) = if resp.is_not_modified() {
+            (None, None)
+        } else {
+            (resp.etag(), resp.last_modified())
+        };
         db::set_poll_state(
             conn,
             req.endpoint,
-            resp.etag(),
-            resp.last_modified(),
+            etag,
+            last_modified,
             resp.poll_interval(),
             !resp.is_not_modified(),
         )
@@ -389,18 +392,44 @@ fn inject_rate_limit(query: &str) -> String {
     }
 }
 
-fn parse_paginated_body(body: &str) -> Result<serde_json::Value> {
+/// Parse `gh api --include --paginate` output: one HTTP block per page.
+/// Status and headers come from the first page (its etag is the one GitHub
+/// matches against If-None-Match on the next poll), rate-limit headers from
+/// the last page, and array bodies are concatenated.
+fn parse_paginated_response(raw: &str) -> Result<(u16, HashMap<String, String>, serde_json::Value)> {
+    let mut starts: Vec<usize> = raw.match_indices("\nHTTP/").map(|(i, _)| i + 1).collect();
+    if raw.starts_with("HTTP/") { starts.insert(0, 0); }
+    if starts.is_empty() { bail!("malformed gh response: no HTTP status line"); }
+    starts.push(raw.len());
+
+    let mut first: Option<(u16, HashMap<String, String>)> = None;
     let mut combined: Vec<serde_json::Value> = vec![];
-    for chunk in body.split('\n') {
-        let chunk = chunk.trim();
-        if chunk.is_empty() { continue; }
-        let val: serde_json::Value = serde_json::from_str(chunk)
-            .with_context(|| format!("parsing paginated chunk: {}", &chunk[..chunk.len().min(100)]))?;
-        if let serde_json::Value::Array(arr) = val {
-            combined.extend(arr);
+    let mut single: Option<serde_json::Value> = None;
+    for w in starts.windows(2) {
+        let (status, headers, body_str) = parse_response(&raw[w[0]..w[1]])?;
+        let body_str = body_str.trim();
+        if !body_str.is_empty() && status != 304 {
+            match serde_json::from_str(body_str)
+                .with_context(|| format!("parsing page body: {}", &body_str[..body_str.len().min(100)]))?
+            {
+                serde_json::Value::Array(arr) => combined.extend(arr),
+                other => single = Some(other),
+            }
+        }
+        match &mut first {
+            None => first = Some((status, headers)),
+            Some((_, h)) => for k in ["x-ratelimit-remaining", "x-ratelimit-reset"] {
+                if let Some(v) = headers.get(k) { h.insert(k.to_owned(), v.clone()); }
+            },
         }
     }
-    Ok(serde_json::Value::Array(combined))
+    let (status, headers) = first.expect("at least one block");
+    let body = match (status, single) {
+        (304, _) => serde_json::Value::Null,
+        (_, Some(v)) if combined.is_empty() => v,
+        _ => serde_json::Value::Array(combined),
+    };
+    Ok((status, headers, body))
 }
 
 /// Test double. Records all calls and returns queued responses.
@@ -504,19 +533,22 @@ mod tests {
         assert_eq!(body, "{\"x\":2}");
     }
 
+    /// Shapes copied from `gh api --include --paginate` output (gh 2.x).
     #[test]
-    fn parse_paginated_body_merges_arrays() {
-        let body = "[{\"id\":1},{\"id\":2}]\n[{\"id\":3}]\n";
-        let val = parse_paginated_body(body).unwrap();
-        let arr = val.as_array().unwrap();
-        assert_eq!(arr.len(), 3);
-        assert_eq!(arr[2]["id"], 3);
-    }
-
-    #[test]
-    fn parse_paginated_body_empty() {
-        let val = parse_paginated_body("").unwrap();
-        assert_eq!(val.as_array().unwrap().len(), 0);
+    fn parse_paginated_response_blocks() {
+        let pages = "HTTP/2.0 200 OK\r\nEtag: W/\"p1\"\r\nX-Poll-Interval: 60\r\nX-Ratelimit-Remaining: 4990\r\n\r\n[{\"id\":1},{\"id\":2}]\nHTTP/2.0 200 OK\r\nEtag: W/\"p2\"\r\nX-Ratelimit-Remaining: 4989\r\n\r\n[{\"id\":3}]";
+        let not_modified = "HTTP/2.0 304 Not Modified\r\nEtag: \"p1\"\r\nX-Ratelimit-Remaining: 4988\r\n\r\n";
+        let not_found = "HTTP/2.0 404 Not Found\r\nX-Ratelimit-Remaining: 4987\r\n\r\n{\"message\":\"Not Found\",\"status\":\"404\"}";
+        let got: Vec<_> = [pages, not_modified, not_found].iter().map(|raw| {
+            let (status, h, body) = parse_paginated_response(raw).unwrap();
+            (status, h.get("etag").cloned(), h.get("x-poll-interval").cloned(), h.get("x-ratelimit-remaining").cloned(), body.to_string())
+        }).collect();
+        let s = |v: &str| Some(v.to_owned());
+        assert_eq!(got, vec![
+            (200, s("W/\"p1\""), s("60"), s("4989"), r#"[{"id":1},{"id":2},{"id":3}]"#.to_owned()),
+            (304, s("\"p1\""), None, s("4988"), "null".to_owned()),
+            (404, None, None, s("4987"), r#"{"message":"Not Found","status":"404"}"#.to_owned()),
+        ]);
     }
 
     #[test]
