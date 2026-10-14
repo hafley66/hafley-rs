@@ -1,4 +1,4 @@
-//! Names crate graph: Cargo workspace targets and dependency names, without a sysroot.
+//! Names crate graph: workspace targets and local dependency libraries, without a sysroot.
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -21,8 +21,8 @@ fn is_library(kind: &TargetKind) -> bool {
     )
 }
 
-/// Render Cargo's workspace targets into the Names graph. No dependency
-/// sources or sysroot are loaded, and no file is written.
+/// Render workspace targets and local path dependency libraries into the Names
+/// graph. Registry sources and the sysroot stay unloaded; no file is written.
 pub(super) fn names_project(
     root: &Path,
     metadata: &cargo_metadata::Metadata,
@@ -34,7 +34,8 @@ pub(super) fn names_project(
     let mut crates: Vec<serde_json::Value> = Vec::new();
     let mut library: HashMap<&PackageId, (usize, String)> = HashMap::new();
     let mut targets: Vec<(&PackageId, bool, bool, bool, usize)> = Vec::new();
-    for package in metadata.workspace_packages() {
+    for package in &metadata.packages {
+        let member = members.contains(&package.id);
         // Edges come from the default-feature resolve; every feature is on as a cfg.
         let cfg: Vec<String> = package
             .features
@@ -54,6 +55,9 @@ pub(super) fn names_project(
                 .iter()
                 .any(|kind| matches!(kind, TargetKind::CustomBuild));
             let is_lib = target.kind.iter().any(is_library);
+            if !member && !is_lib {
+                continue;
+            }
             let is_dev = target.kind.iter().any(|kind| {
                 matches!(
                     kind,
@@ -72,7 +76,7 @@ pub(super) fn names_project(
                 "edition": target.edition.as_str(),
                 "deps": [],
                 "cfg": cfg,
-                "is_workspace_member": true,
+                "is_workspace_member": member,
                 "is_proc_macro": target.kind.iter().any(|kind| matches!(kind, TargetKind::ProcMacro)),
                 "source": { "include_dirs": [package_dir, source_dir], "exclude_dirs": exclude_dirs },
             }));
@@ -100,7 +104,7 @@ pub(super) fn names_project(
                 DependencyKind::Build => *is_build,
                 _ => false,
             });
-            if !wanted || !members.contains(dependency) {
+            if !wanted {
                 continue;
             }
             let Some((lib, _)) = library.get(dependency) else {
@@ -300,7 +304,7 @@ fn unrelated_dirs(package: &cargo_metadata::Package) -> Vec<String> {
 type Edge<'a> = (&'a PackageId, String, Vec<DependencyKind>);
 
 /// Each package's dependencies as (package, extern name, kinds): cargo's
-/// resolve, or under `--no-deps` the path dependencies between members.
+/// resolve, or under `--no-deps` the path dependencies between loaded packages.
 fn dependency_edges(metadata: &cargo_metadata::Metadata) -> HashMap<&PackageId, Vec<Edge<'_>>> {
     if let Some(resolve) = &metadata.resolve {
         return resolve

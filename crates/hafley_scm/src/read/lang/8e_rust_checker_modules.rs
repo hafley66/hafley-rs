@@ -78,8 +78,8 @@ pub fn module_tree_for_workspace_files(
     )?;
     let roots: std::collections::BTreeSet<_> = discovered
         .metadata
-        .workspace_packages()
-        .into_iter()
+        .packages
+        .iter()
         .flat_map(|package| &package.targets)
         .map(|target| host_path(target.src_path.as_std_path()))
         .collect();
@@ -90,8 +90,8 @@ pub fn module_tree_for_workspace_files(
         .collect();
     let members: std::collections::BTreeSet<_> = discovered
         .metadata
-        .workspace_packages()
-        .into_iter()
+        .packages
+        .iter()
         .filter_map(|package| {
             package
                 .manifest_path
@@ -100,7 +100,7 @@ pub fn module_tree_for_workspace_files(
         })
         .collect();
     let mut external_names = HashMap::new();
-    for package in discovered.metadata.workspace_packages() {
+    for package in &discovered.metadata.packages {
         let names: std::collections::BTreeSet<_> = package
             .dependencies
             .iter()
