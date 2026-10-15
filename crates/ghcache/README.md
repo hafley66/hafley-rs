@@ -5,10 +5,10 @@ GitHub data is synced into SQLite; local tools query SQLite directly -- no live 
 
 ## Install
 
-Prebuilt, Apple Silicon macOS ([ghcache-v0.1.2](https://github.com/hafley66/hafley-rs/releases/tag/ghcache-v0.1.2)):
+Prebuilt, Apple Silicon macOS ([ghcache-v0.1.3](https://github.com/hafley66/hafley-rs/releases/tag/ghcache-v0.1.3)):
 
 ```sh
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/hafley66/hafley-rs/releases/download/ghcache-v0.1.2/ghcache-installer.sh | sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/hafley66/hafley-rs/releases/download/ghcache-v0.1.3/ghcache-installer.sh | sh
 ```
 
 From source: `cargo install --path crates/ghcache --force`.
