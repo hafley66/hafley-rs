@@ -125,6 +125,7 @@ fn org_to_repos(org: &OrgConfig, repos: Vec<(String, Option<String>)>) -> Vec<Re
             sync_branches:        org.sync_branches.clone(),
             checkout_on_sync:     org.checkout_on_sync,
             checkout_pr_branches: org.checkout_pr_branches,
+            checkout_force_default_branch: org.checkout_force_default_branch,
             fs_alias:             org.fs_alias.clone(),
         })
         .collect()
@@ -330,6 +331,7 @@ pub async fn build_checkout_tasks(
             is_dirty,
             default_branch,
             fetch_pr_branches: wants_pr_fetch,
+            force_default_branch: r.checkout_force_default_branch.unwrap_or(false),
         });
     }
 
@@ -353,6 +355,7 @@ pub async fn build_checkout_tasks(
                 is_dirty,
                 default_branch,
                 fetch_pr_branches: wants_pr_fetch,
+                force_default_branch: org.checkout_force_default_branch.unwrap_or(false),
             });
         }
     }
@@ -431,6 +434,7 @@ pub async fn watch(
                         sync_branches:         None,
                         checkout_on_sync:      None,
                         checkout_pr_branches:  None,
+                        checkout_force_default_branch: None,
                         fs_alias:              None,
                     })
                     .collect();
@@ -539,6 +543,7 @@ mod tests {
                 sync_branches:        None,
                 checkout_on_sync:     None,
                 checkout_pr_branches: None,
+                checkout_force_default_branch: None,
                 fs_alias:             None,
             }],
             orgs: vec![],
@@ -591,6 +596,7 @@ mod tests {
             sync_branches: None,
             checkout_on_sync: None,
             checkout_pr_branches: None,
+            checkout_force_default_branch: None,
             fs_alias: None,
         });
 
@@ -631,6 +637,7 @@ mod tests {
                 sync_branches:       None,
                 checkout_on_sync:    None,
                 checkout_pr_branches: None,
+                checkout_force_default_branch: None,
                 exclude:             vec![],
                 fs_alias:            None,
             }],
@@ -864,6 +871,7 @@ mod tests {
                 sync_branches: Some(vec!["main".into()]),
                 checkout_on_sync: None,
                 checkout_pr_branches: None,
+                checkout_force_default_branch: None,
                 exclude: vec![],
                 fs_alias: None,
             }],
@@ -924,6 +932,7 @@ mod tests {
             sync_branches: None,
             checkout_on_sync: Some(true),
             checkout_pr_branches: None,
+            checkout_force_default_branch: None,
             fs_alias: None,
         }];
         let mut conn = pool.acquire().await.unwrap();
@@ -960,6 +969,7 @@ mod tests {
                 sync_branches: None,
                 checkout_on_sync: None,
                 checkout_pr_branches: None,
+                checkout_force_default_branch: None,
                 exclude: vec![],
                 fs_alias: None,
             }],
@@ -1066,6 +1076,7 @@ mod integration {
                 sync_branches:        Some(vec!["main".into()]),
                 checkout_on_sync:     None,
                 checkout_pr_branches: None,
+                checkout_force_default_branch: None,
                 fs_alias:             None,
             }],
             orgs: vec![],

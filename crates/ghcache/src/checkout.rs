@@ -73,6 +73,9 @@ pub struct CheckoutTask {
     pub default_branch: String,
     /// Mirror GitHub pull request heads into refs/remotes/pr/<number>/head.
     pub fetch_pr_branches: bool,
+    /// `checkout_force_default_branch`: stash + `reset --hard` / `branch -f` the
+    /// default branch to origin. Off: fast-forward only, never stash or reset.
+    pub force_default_branch: bool,
 }
 
 /// CLI-driven explicit checkout: clone if missing, fetch, reset HEAD to `branch`.
@@ -101,14 +104,14 @@ pub async fn checkout_one(
     run_reset(&local_path, branch).await
 }
 
-/// Watch-driven checkout sweep: clone missing dirs and force-update the default
-/// branch. If the default branch is checked out, local changes are stashed before
-/// resetting to origin/<default>. If another branch is checked out, that branch is
-/// left alone and the local default branch ref is force-updated in the background.
+/// Watch-driven checkout sweep: clone missing dirs and update the default branch.
 ///
 /// Decision matrix for an existing clone:
-/// - on default branch     -> stash if needed, fetch, reset --hard origin/default
-/// - on another branch     -> fetch, branch -f default origin/default
+///
+/// | mode   | on default branch                              | on another branch                           |
+/// | ------ | ---------------------------------------------- | ------------------------------------------- |
+/// | ff     | fetch, merge --ff-only; diverged/conflict: skip | fetch, branch -f only if ancestor; else skip |
+/// | force  | fetch, stash if tracked changes, reset --hard  | fetch, branch -f default origin/default     |
 pub async fn checkout_all(
     staging: &Path,
     tasks: &[CheckoutTask],
@@ -124,6 +127,7 @@ pub async fn checkout_all(
         let fs_owner = t.fs_owner.clone();
         let default_branch = t.default_branch.clone();
         let fetch_pr_branches = t.fetch_pr_branches;
+        let force_default_branch = t.force_default_branch;
         let slug = format!("{owner}/{name}");
         let sem = sem.clone();
         handles.push(tokio::spawn(async move {
@@ -139,14 +143,17 @@ pub async fn checkout_all(
                 path = %local_path.display(),
                 branch = %default_branch,
                 fetch_pr_branches,
+                force_default_branch,
                 exists = local_path.exists(),
                 "checkout: repo start"
             );
             let res = if !local_path.exists() {
                 tracing::info!(%slug, path = %local_path.display(), "checkout: cloning");
                 run_clone(&slug, &local_path).await
-            } else {
+            } else if force_default_branch {
                 force_update_default_branch(&slug, &local_path, &default_branch).await
+            } else {
+                ff_update_default_branch(&slug, &local_path, &default_branch).await
             };
             let res = match res {
                 Ok(()) if fetch_pr_branches => run_fetch_pr_heads(&local_path).await,
@@ -164,6 +171,79 @@ pub async fn checkout_all(
         }
     }
     tracing::info!(total = tasks.len(), failed, "checkout: finished");
+    Ok(())
+}
+
+/// Fast-forward-only update. Local commits, staged and modified files stay put;
+/// a default branch that cannot fast-forward is logged and left alone.
+async fn ff_update_default_branch(slug: &str, path: &Path, default_branch: &str) -> Result<()> {
+    let current = git_current_branch(path).await?;
+    run_fetch_default_branch(path, default_branch).await?;
+    let remote_ref = format!("origin/{default_branch}");
+    let remote_after = git_rev_parse_opt(path, &remote_ref).await?;
+    let local_before = git_rev_parse_opt(path, default_branch).await?;
+
+    if current == default_branch {
+        let output = Command::new("git")
+            .args(["-C", &path.to_string_lossy(), "merge", "--ff-only", &remote_ref])
+            .output()
+            .await
+            .context("git merge --ff-only")?;
+        let local_after = git_rev_parse_opt(path, "HEAD").await?;
+        if output.status.success() {
+            tracing::info!(
+                %slug,
+                path = %path.display(),
+                branch = %default_branch,
+                head_before = %short_sha(local_before.as_deref()),
+                head_after = %short_sha(local_after.as_deref()),
+                "default branch fast-forwarded"
+            );
+        } else {
+            tracing::warn!(
+                %slug,
+                path = %path.display(),
+                branch = %default_branch,
+                head = %short_sha(local_after.as_deref()),
+                remote = %short_sha(remote_after.as_deref()),
+                stderr = %String::from_utf8_lossy(&output.stderr).trim(),
+                "checkout: default branch cannot fast-forward, left alone"
+            );
+        }
+        return Ok(());
+    }
+
+    let can_ff = match &local_before {
+        None => true,
+        Some(local) => Command::new("git")
+            .args(["-C", &path.to_string_lossy(), "merge-base", "--is-ancestor", local, &remote_ref])
+            .status()
+            .await
+            .context("git merge-base --is-ancestor")?
+            .success(),
+    };
+    if !can_ff {
+        tracing::warn!(
+            %slug,
+            path = %path.display(),
+            current_branch = %current,
+            branch = %default_branch,
+            local = %short_sha(local_before.as_deref()),
+            remote = %short_sha(remote_after.as_deref()),
+            "checkout: local default branch diverged from origin, left alone"
+        );
+        return Ok(());
+    }
+    run_force_branch(path, default_branch).await?;
+    tracing::info!(
+        %slug,
+        path = %path.display(),
+        current_branch = %current,
+        branch = %default_branch,
+        local_before = %short_sha(local_before.as_deref()),
+        local_after = %short_sha(remote_after.as_deref()),
+        "default branch fast-forwarded in background"
+    );
     Ok(())
 }
 
@@ -509,6 +589,79 @@ mod tests {
         origin_dir.to_path_buf()
     }
 
+    fn ff_task(name: &str, fs_owner: &str) -> CheckoutTask {
+        CheckoutTask {
+            owner: "o".into(),
+            name: name.into(),
+            fs_owner: fs_owner.into(),
+            is_dirty: true,
+            default_branch: "main".into(),
+            fetch_pr_branches: false,
+            force_default_branch: false,
+        }
+    }
+
+    /// ff-only mode, one scratch repo per case. Each row: what HEAD / local main
+    /// end at, whether local work survived, whether a stash was created.
+    #[tokio::test]
+    async fn ff_only_never_stashes_or_resets() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut rows = vec![];
+        for case in ["clean", "modified", "staged", "diverged", "feature", "feature_diverged"] {
+            let dir = tmp.path().join(case);
+            tokio::fs::create_dir_all(&dir).await.unwrap();
+            let origin = dir.join("origin.git");
+            let clone = dir.join("clone");
+            setup_origin_and_clone(&origin, &clone).await;
+            match case {
+                "modified" => tokio::fs::write(clone.join("README.md"), "mine").await.unwrap(),
+                "staged" => {
+                    tokio::fs::write(clone.join("README.md"), "mine").await.unwrap();
+                    git_ok(&clone, &["add", "README.md"]).await;
+                }
+                "diverged" => {
+                    tokio::fs::write(clone.join("local.txt"), "l").await.unwrap();
+                    git_ok(&clone, &["add", "local.txt"]).await;
+                    git_ok(&clone, &["commit", "-m", "local"]).await;
+                }
+                "feature" => git_ok(&clone, &["checkout", "-b", "feature"]).await,
+                "feature_diverged" => {
+                    tokio::fs::write(clone.join("local.txt"), "l").await.unwrap();
+                    git_ok(&clone, &["add", "local.txt"]).await;
+                    git_ok(&clone, &["commit", "-m", "local"]).await;
+                    git_ok(&clone, &["checkout", "-b", "feature"]).await;
+                }
+                _ => {}
+            }
+            let head_before = git_rev_parse(&clone, "HEAD").await;
+            let main_before = git_rev_parse(&clone, "main").await;
+            push_new_commit_to_origin(&dir, &origin, "new.txt", "new").await;
+
+            checkout_all(&dir, &[ff_task("clone", ".")]).await.unwrap();
+
+            let origin_main = git_rev_parse(&clone, "origin/main").await;
+            let head = git_rev_parse(&clone, "HEAD").await;
+            let main = git_rev_parse(&clone, "main").await;
+            let at = |sha: &str| if sha == origin_main { "origin" } else if sha == head_before || sha == main_before { "before" } else { "other" };
+            rows.push(format!(
+                "{case}: head={} main={} readme={:?} local_txt={} stash={:?}",
+                at(&head),
+                at(&main),
+                tokio::fs::read_to_string(clone.join("README.md")).await.unwrap(),
+                clone.join("local.txt").exists(),
+                git_stash_list(&clone).await,
+            ));
+        }
+        assert_eq!(rows.join("\n"), [
+            r#"clean: head=origin main=origin readme="hello" local_txt=false stash="""#,
+            r#"modified: head=origin main=origin readme="mine" local_txt=false stash="""#,
+            r#"staged: head=origin main=origin readme="mine" local_txt=false stash="""#,
+            r#"diverged: head=before main=before readme="hello" local_txt=true stash="""#,
+            r#"feature: head=before main=origin readme="hello" local_txt=false stash="""#,
+            r#"feature_diverged: head=before main=before readme="hello" local_txt=true stash="""#,
+        ].join("\n"));
+    }
+
     #[tokio::test]
     async fn force_update_fast_forwards_when_clean_on_default_branch() {
         let tmp = tempfile::tempdir().unwrap();
@@ -530,6 +683,7 @@ mod tests {
             is_dirty: true,
             default_branch: "main".into(),
             fetch_pr_branches: false,
+            force_default_branch: true,
         };
         checkout_all(tmp.path(), &[task]).await.unwrap();
 
@@ -558,6 +712,7 @@ mod tests {
             is_dirty: true,
             default_branch: "main".into(),
             fetch_pr_branches: false,
+            force_default_branch: true,
         };
         checkout_all(tmp.path(), &[task]).await.unwrap();
 
@@ -590,6 +745,7 @@ mod tests {
             is_dirty: true,
             default_branch: "main".into(),
             fetch_pr_branches: false,
+            force_default_branch: true,
         };
         checkout_all(tmp.path(), &[task]).await.unwrap();
 
@@ -620,6 +776,7 @@ mod tests {
             is_dirty: true,
             default_branch: "main".into(),
             fetch_pr_branches: false,
+            force_default_branch: true,
         };
         checkout_all(tmp.path(), &[task]).await.unwrap();
 
@@ -649,6 +806,7 @@ mod tests {
             is_dirty: true,
             default_branch: "main".into(),
             fetch_pr_branches: false,
+            force_default_branch: true,
         };
         checkout_all(tmp.path(), &[task]).await.unwrap();
 
@@ -682,6 +840,7 @@ mod tests {
             is_dirty: false,
             default_branch: "main".into(),
             fetch_pr_branches: false,
+            force_default_branch: true,
         };
         checkout_all(tmp.path(), &[task]).await.unwrap();
 
@@ -710,6 +869,7 @@ mod tests {
             is_dirty: false,
             default_branch: "main".into(),
             fetch_pr_branches: false,
+            force_default_branch: true,
         };
         checkout_all(tmp.path(), &[task]).await.unwrap();
 
@@ -738,6 +898,7 @@ mod tests {
             is_dirty: false,
             default_branch: "main".into(),
             fetch_pr_branches: false,
+            force_default_branch: true,
         };
         checkout_all(tmp.path(), &[task]).await.unwrap();
 
@@ -764,6 +925,7 @@ mod tests {
             is_dirty: false,
             default_branch: "main".into(),
             fetch_pr_branches: true,
+            force_default_branch: true,
         };
         checkout_all(tmp.path(), &[task]).await.unwrap();
 
@@ -789,6 +951,7 @@ mod tests {
             is_dirty: false,
             default_branch: "main".into(),
             fetch_pr_branches: true,
+            force_default_branch: true,
         };
         checkout_all(tmp.path(), &[task]).await.unwrap();
         assert!(git_rev_parse_opt(&clone, "refs/remotes/pr/17/head").await.is_some());
@@ -801,6 +964,7 @@ mod tests {
             is_dirty: false,
             default_branch: "main".into(),
             fetch_pr_branches: true,
+            force_default_branch: true,
         };
         checkout_all(tmp.path(), &[task]).await.unwrap();
 
@@ -890,6 +1054,7 @@ mod tests {
                 is_dirty: false,
                 default_branch: "main".into(),
                 fetch_pr_branches: false,
+            force_default_branch: true,
             });
         }
 

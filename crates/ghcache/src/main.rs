@@ -103,9 +103,10 @@ enum Cmd {
         are re-fetched via GraphQL. Full-sweep PR queries are batched (up to 20 repos \
         per GraphQL call) to minimize API consumption. Most polls are free 304 responses.\n\n\
         Repos with checkout_on_sync or checkout_pr_branches = true update local clones after \
-        each sync pass. Checked-out default branches stash local changes and hard-reset to \
-        origin/default. Other checked-out branches are left alone while the local default branch \
-        ref is force-updated in the background. checkout_pr_branches also \
+        each sync pass. The default branch only fast-forwards (merge --ff-only when checked out, \
+        ref update in the background otherwise); a diverged or conflicting default branch is \
+        logged and left alone. checkout_force_default_branch = true stashes tracked changes and \
+        hard-resets instead. checkout_pr_branches also \
         mirrors `refs/pull/*/head` into local `refs/remotes/pr/*/head`.\n\n\
         Also starts the HTTP command server on 127.0.0.1:{cmd_port} (default 7748).\n\
         Endpoints: GET /events (SSE), POST /subscribe, POST /heartbeat, POST /pause, POST /resume.\n\n\

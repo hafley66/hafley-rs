@@ -17,7 +17,10 @@ pub async fn open(path: &Path) -> Result<SqlitePool> {
         .pragma("journal_mode", "WAL")
         .pragma("foreign_keys", "ON")
         .pragma("synchronous", "NORMAL")
-        .pragma("cache_size", "-8000");
+        .pragma("cache_size", "-8000")
+        // watch, the worktree scanner and CLI readers share the file; wait out
+        // a writer instead of failing with "database is locked".
+        .busy_timeout(std::time::Duration::from_secs(30));
     let pool = SqlitePool::connect_with(opts)
         .await
         .with_context(|| format!("opening database at {}", path.display()))?;

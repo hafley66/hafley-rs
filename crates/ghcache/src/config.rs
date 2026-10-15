@@ -74,6 +74,9 @@ pub struct RepoConfig {
     /// Also fetch the head_ref of every open PR into the local clone.
     /// Fork PRs whose head branch isn't on origin are silently skipped.
     pub checkout_pr_branches: Option<bool>,
+    /// Stash tracked changes and `reset --hard` the checked-out default branch, or
+    /// `branch -f` it in the background (default false: fast-forward only).
+    pub checkout_force_default_branch: Option<bool>,
     /// Short alias used as the owner directory name on disk instead of `owner`.
     pub fs_alias: Option<String>,
 }
@@ -90,6 +93,8 @@ pub struct OrgConfig {
     pub checkout_on_sync: Option<bool>,
     /// Also fetch the head_ref of every open PR into each repo's local clone.
     pub checkout_pr_branches: Option<bool>,
+    /// See RepoConfig::checkout_force_default_branch (default false: fast-forward only).
+    pub checkout_force_default_branch: Option<bool>,
     /// Repo names to skip (exact match)
     #[serde(default)]
     pub exclude: Vec<String>,
@@ -345,6 +350,7 @@ name = "backend"
             sync_branches: None,
             checkout_on_sync: None,
             checkout_pr_branches: None,
+            checkout_force_default_branch: None,
             fs_alias: None,
         };
         assert_eq!(r.slug(), "myorg/backend");

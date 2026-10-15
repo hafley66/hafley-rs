@@ -172,6 +172,7 @@ sync_events          = true
 sync_branches        = ["main"]
 checkout_on_sync     = false             # keep local default branch ref fresh after sync/watch passes
 checkout_pr_branches = false             # also mirror refs/pull/*/head into refs/remotes/pr/*/head
+checkout_force_default_branch = false    # true: stash + reset --hard instead of fast-forward only
 exclude              = ["archived-repo", "scratch"]   # repo names to skip
 
 # Or target specific repos explicitly.
@@ -185,6 +186,7 @@ sync_events          = true
 sync_branches        = ["main", "staging", "release/*"]  # glob trailing * supported
 checkout_on_sync     = false   # if true, watch updates local default branch refs
 checkout_pr_branches = false   # if true, watch mirrors GitHub PR heads via git transport
+checkout_force_default_branch = false  # true: stash + reset --hard instead of fast-forward only
 ```
 
 ### `fs_alias` -- shorter checkout paths
@@ -274,10 +276,8 @@ their PRs and branches re-fetched. Most polls are free 304 responses.
 Org repo discovery runs on watch startup, then uses `org_repo_discovery_interval_seconds`
 between API calls. The default is `3600` seconds.
 
-Each pass runs a checkout sweep over every `checkout_on_sync` repo, force-updating the
-default branch (clean reset on the default branch; `branch -f` in the background when a
-feature branch is checked out; untracked files are left in place, tracked edits are
-stashed first). The sweep caps concurrent git/`gh` subprocesses at `8` so a few-hundred-repo
+Each pass runs a checkout sweep over every `checkout_on_sync` repo, fast-forwarding the
+default branch (see the table below). The sweep caps concurrent git/`gh` subprocesses at `8` so a few-hundred-repo
 run does not thrash the machine; override with `GHCACHE_CHECKOUT_CONCURRENCY`.
 
 - `--full-sweep` forces a complete PR re-fetch on startup even if data is cached
@@ -286,10 +286,15 @@ run does not thrash the machine; override with `GHCACHE_CHECKOUT_CONCURRENCY`.
 - `--daemon` double-forks to background and redirects stdio to `/dev/null`
 
 For repos with `checkout_on_sync = true` or `checkout_pr_branches = true`: if the local clone
-is missing, `gh repo clone` runs once. Existing clones force-update the configured default branch.
-If the default branch is checked out, local changes are stashed and the worktree is reset to
-`origin/<default>`. If another branch is checked out, that branch is left alone while the local
-default branch ref is force-updated in the background. With `checkout_pr_branches = true`, watch also fetches:
+is missing, `gh repo clone` runs once. Existing clones fetch `origin/<default>` and update the
+local default branch:
+
+| `checkout_force_default_branch` | default branch checked out | another branch checked out |
+| --- | --- | --- |
+| `false` (default) | `git merge --ff-only origin/<default>`; diverged or conflicting with local edits: logged, left alone | `branch -f` only when local `<default>` is an ancestor of `origin/<default>`; diverged: logged, left alone |
+| `true` | tracked edits stashed, then `reset --hard origin/<default>` | `branch -f <default> origin/<default>` |
+
+Untracked files are never touched. With `checkout_pr_branches = true`, watch also fetches:
 
 ```sh
 git fetch --prune origin '+refs/pull/*/head:refs/remotes/pr/*/head'
@@ -479,7 +484,9 @@ All GitHub API access goes through the `gh` CLI binary (configurable via `gh_bin
 | Command | Purpose | Source Location |
 |---------|---------|-----------------|
 | `git -C <path> fetch origin +refs/heads/<branch>:refs/remotes/origin/<branch>` | Update default remote ref | `src/checkout.rs:188` |
-| `git -C <path> reset --hard origin/<branch>` | Reset checked-out default branch | `src/checkout.rs:195` |
+| `git -C <path> merge --ff-only origin/<branch>` | Fast-forward checked-out default branch | `src/checkout.rs` |
+| `git -C <path> merge-base --is-ancestor <branch> origin/<branch>` | Fast-forward check before `branch -f` in the background | `src/checkout.rs` |
+| `git -C <path> reset --hard origin/<branch>` | Reset checked-out default branch (`checkout_force_default_branch = true`) | `src/checkout.rs` |
 | `git -C <path> branch -f <branch> origin/<branch>` | Update local default branch while another branch is checked out | `src/checkout.rs:240` |
 | `git -C <path> fetch --all` | Fetch all refs (HTTP subscribe) | `src/cmd.rs:388` |
 
