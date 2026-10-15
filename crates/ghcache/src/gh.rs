@@ -251,10 +251,13 @@ impl GitHubClient for GhClient {
         }
         self.emit_rate_log(conn).await;
 
-        // A 304 keeps the stored validators: GitHub's 304 Etag drops the W/
-        // prefix of the weak etag it served with the 200.
+        // A 304 stores the validators that were sent: the 304 may carry no Etag,
+        // or one without the W/ prefix of the weak etag served with the 200.
+        let sent = |name: &str| req.headers.iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case(name))
+            .map(|(_, v)| *v);
         let (etag, last_modified) = if resp.is_not_modified() {
-            (None, None)
+            (sent("If-None-Match"), sent("If-Modified-Since"))
         } else {
             (resp.etag(), resp.last_modified())
         };
@@ -531,6 +534,30 @@ mod tests {
         let (status, _, body) = parse_response(raw).unwrap();
         assert_eq!(status, 200);
         assert_eq!(body, "{\"x\":2}");
+    }
+
+    /// A 304 with no Etag header keeps the etag that was sent, whether or not
+    /// poll_state already held it. `gh` is a script printing a bare 304.
+    #[tokio::test]
+    async fn not_modified_without_etag_keeps_sent_etag() {
+        use std::os::unix::fs::PermissionsExt;
+        let tmp = tempfile::tempdir().unwrap();
+        let fake = tmp.path().join("gh");
+        std::fs::write(&fake, "#!/bin/sh\nprintf 'HTTP/2.0 304 Not Modified\\r\\nX-Ratelimit-Remaining: 4000\\r\\n\\r\\n'\nexit 1\n").unwrap();
+        std::fs::set_permissions(&fake, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let gh = GhClient::new(fake.to_str().unwrap(), 0, 0, true, false);
+        let pool = crate::db::open_in_memory().await.unwrap();
+        let mut c = pool.acquire().await.unwrap();
+        crate::db::set_poll_state(&mut *c, "/stored", Some("W/\"e\""), None, None, true).await.unwrap();
+
+        let mut got = vec![];
+        for ep in ["/stored", "/unstored"] {
+            let resp = gh.call(&mut *c, &GhRequest::get(ep).paginated().with_etag("W/\"e\"")).await.unwrap();
+            let ps = crate::db::get_poll_state(&mut *c, ep).await.unwrap();
+            got.push((ep, resp.status, ps.etag));
+        }
+        let e = Some("W/\"e\"".to_owned());
+        assert_eq!(got, vec![("/stored", 304, e.clone()), ("/unstored", 304, e)]);
     }
 
     /// Shapes copied from `gh api --include --paginate` output (gh 2.x).

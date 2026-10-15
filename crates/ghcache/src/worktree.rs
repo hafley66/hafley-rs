@@ -177,7 +177,9 @@ pub async fn scan(roots: &[PathBuf], cap: usize) -> Vec<WorktreeRow> {
         let sem = sem.clone();
         handles.push(tokio::spawn(async move {
             let _permit = sem.acquire_owned().await.ok()?;
-            let dirty = git(Path::new(&p.worktree), &["status", "--porcelain"])
+            // --no-optional-locks: status would otherwise refresh and rewrite
+            // .git/index, an fs event that schedules the next scan.
+            let dirty = git(Path::new(&p.worktree), &["--no-optional-locks", "status", "--porcelain"])
                 .await
                 .map(|s| !s.is_empty())
                 .unwrap_or(false);
@@ -301,6 +303,35 @@ pub async fn sync_once(pool: &SqlitePool, roots: &[PathBuf], cap: usize) -> Resu
     Ok(deltas)
 }
 
+/// Inside a `.git` dir only HEAD, refs and the worktree registry change what a
+/// scan reports; index, index.lock, objects, logs and FETCH_HEAD churn under
+/// every git command, including the scan's own. Outside `.git`, events under
+/// SKIP dirs (target, node_modules, ...) are build output.
+fn rescan_worthy(ev: &notify::Event) -> bool {
+    if matches!(ev.kind, notify::EventKind::Access(_)) {
+        return false;
+    }
+    ev.paths.iter().any(|p| path_rescan_worthy(p))
+}
+
+fn path_rescan_worthy(p: &Path) -> bool {
+    let parts: Vec<&str> = p.components().filter_map(|c| c.as_os_str().to_str()).collect();
+    match parts.iter().position(|c| *c == ".git") {
+        Some(i) => {
+            let inner = &parts[i + 1..];
+            match inner {
+                [] => true,
+                ["HEAD"] | ["packed-refs"] => true,
+                ["refs", ..] => true,
+                ["worktrees"] | ["worktrees", _] => true,
+                ["worktrees", _, "HEAD"] => true,
+                _ => false,
+            }
+        }
+        None => !parts.iter().any(|c| *c != ".git" && SKIP.contains(c)),
+    }
+}
+
 /// Background loop: initial scan, then rescan on a debounced filesystem event or
 /// a periodic fallback tick, whichever comes first. Spawned once from `watch`.
 pub async fn watch_loop(pool: SqlitePool, roots: Vec<PathBuf>, interval: Duration, cap: usize) {
@@ -312,8 +343,10 @@ pub async fn watch_loop(pool: SqlitePool, roots: Vec<PathBuf>, interval: Duratio
     // a tokio channel so the async loop can debounce and rescan.
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<()>();
     let watcher = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
-        if res.is_ok() {
-            let _ = tx.send(());
+        if let Ok(ev) = res {
+            if rescan_worthy(&ev) {
+                let _ = tx.send(());
+            }
         }
     });
     let mut watcher = match watcher {
@@ -351,5 +384,50 @@ pub async fn watch_loop(pool: SqlitePool, roots: Vec<PathBuf>, interval: Duratio
         if let Err(e) = sync_once(&pool, &roots, cap).await {
             tracing::warn!(error = %e, "worktree: rescan failed");
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rescan_filter() {
+        let cases = [
+            "/p/r/.git/index",
+            "/p/r/.git/index.lock",
+            "/p/r/.git/objects/ab/cdef",
+            "/p/r/.git/logs/HEAD",
+            "/p/r/.git/FETCH_HEAD",
+            "/p/r/.git/worktrees/w/index",
+            "/p/r/target/debug/foo",
+            "/p/r/node_modules/x/index.js",
+            "/p/r/.git/HEAD",
+            "/p/r/.git/refs/heads/main",
+            "/p/r/.git/packed-refs",
+            "/p/r/.git/worktrees/w",
+            "/p/r/.git/worktrees/w/HEAD",
+            "/p/r/src/main.rs",
+            "/p/new-clone",
+        ];
+        let got: Vec<String> = cases.iter()
+            .map(|c| format!("{} {c}", if path_rescan_worthy(Path::new(c)) { "scan" } else { "skip" }))
+            .collect();
+        assert_eq!(got.join("\n"), "\
+skip /p/r/.git/index
+skip /p/r/.git/index.lock
+skip /p/r/.git/objects/ab/cdef
+skip /p/r/.git/logs/HEAD
+skip /p/r/.git/FETCH_HEAD
+skip /p/r/.git/worktrees/w/index
+skip /p/r/target/debug/foo
+skip /p/r/node_modules/x/index.js
+scan /p/r/.git/HEAD
+scan /p/r/.git/refs/heads/main
+scan /p/r/.git/packed-refs
+scan /p/r/.git/worktrees/w
+scan /p/r/.git/worktrees/w/HEAD
+scan /p/r/src/main.rs
+scan /p/new-clone");
     }
 }

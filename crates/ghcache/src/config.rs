@@ -77,6 +77,9 @@ pub struct RepoConfig {
     /// Stash tracked changes and `reset --hard` the checked-out default branch, or
     /// `branch -f` it in the background (default false: fast-forward only).
     pub checkout_force_default_branch: Option<bool>,
+    /// Fetch/update an existing clone only on passes where the repo had events or
+    /// PR changes (default false: every pass). Missing clones are always cloned.
+    pub checkout_only_on_activity: Option<bool>,
     /// Short alias used as the owner directory name on disk instead of `owner`.
     pub fs_alias: Option<String>,
 }
@@ -95,6 +98,8 @@ pub struct OrgConfig {
     pub checkout_pr_branches: Option<bool>,
     /// See RepoConfig::checkout_force_default_branch (default false: fast-forward only).
     pub checkout_force_default_branch: Option<bool>,
+    /// See RepoConfig::checkout_only_on_activity (default false: every pass).
+    pub checkout_only_on_activity: Option<bool>,
     /// Repo names to skip (exact match)
     #[serde(default)]
     pub exclude: Vec<String>,
@@ -351,6 +356,7 @@ name = "backend"
             checkout_on_sync: None,
             checkout_pr_branches: None,
             checkout_force_default_branch: None,
+            checkout_only_on_activity: None,
             fs_alias: None,
         };
         assert_eq!(r.slug(), "myorg/backend");

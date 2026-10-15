@@ -67,8 +67,10 @@ pub struct CheckoutTask {
     /// Directory name for owner on disk (may differ from `owner` when fs_alias is set).
     pub fs_owner: String,
     /// Some activity was observed for this repo this cycle (dirty PR or branch push).
-    /// Absent the dir, a clone happens regardless; otherwise this gates the fetch.
     pub is_dirty: bool,
+    /// `checkout_only_on_activity`: an existing clone is fetched/updated only when
+    /// `is_dirty`. A missing clone is cloned regardless.
+    pub only_on_activity: bool,
     /// The default branch for this repo as known by the DB (e.g. "main").
     pub default_branch: String,
     /// Mirror GitHub pull request heads into refs/remotes/pr/<number>/head.
@@ -128,6 +130,7 @@ pub async fn checkout_all(
         let default_branch = t.default_branch.clone();
         let fetch_pr_branches = t.fetch_pr_branches;
         let force_default_branch = t.force_default_branch;
+        let skip = t.only_on_activity && !t.is_dirty;
         let slug = format!("{owner}/{name}");
         let sem = sem.clone();
         handles.push(tokio::spawn(async move {
@@ -138,6 +141,10 @@ pub async fn checkout_all(
                 Err(_) => return (slug, Err(anyhow!("checkout semaphore closed"))),
             };
             let local_path = staging.join(&fs_owner).join(&name);
+            if skip && local_path.exists() {
+                tracing::debug!(%slug, path = %local_path.display(), "checkout: no activity this pass, skipped");
+                return (slug, Ok(()));
+            }
             tracing::info!(
                 %slug,
                 path = %local_path.display(),
@@ -598,7 +605,29 @@ mod tests {
             default_branch: "main".into(),
             fetch_pr_branches: false,
             force_default_branch: false,
+            only_on_activity: false,
         }
+    }
+
+    /// checkout_only_on_activity: an idle existing clone is not fetched, an active
+    /// one is, a missing one is cloned.
+    #[tokio::test]
+    async fn only_on_activity_gates_existing_clones() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut rows = vec![];
+        for (case, is_dirty) in [("idle", false), ("active", true)] {
+            let dir = tmp.path().join(case);
+            tokio::fs::create_dir_all(&dir).await.unwrap();
+            let origin = dir.join("origin.git");
+            let clone = dir.join("clone");
+            setup_origin_and_clone(&origin, &clone).await;
+            let before = git_rev_parse(&clone, "HEAD").await;
+            push_new_commit_to_origin(&dir, &origin, "new.txt", "new").await;
+            let task = CheckoutTask { is_dirty, only_on_activity: true, ..ff_task("clone", ".") };
+            checkout_all(&dir, &[task]).await.unwrap();
+            rows.push((case, git_rev_parse(&clone, "HEAD").await != before));
+        }
+        assert_eq!(rows, vec![("idle", false), ("active", true)]);
     }
 
     /// ff-only mode, one scratch repo per case. Each row: what HEAD / local main
@@ -684,6 +713,7 @@ mod tests {
             default_branch: "main".into(),
             fetch_pr_branches: false,
             force_default_branch: true,
+            only_on_activity: false,
         };
         checkout_all(tmp.path(), &[task]).await.unwrap();
 
@@ -713,6 +743,7 @@ mod tests {
             default_branch: "main".into(),
             fetch_pr_branches: false,
             force_default_branch: true,
+            only_on_activity: false,
         };
         checkout_all(tmp.path(), &[task]).await.unwrap();
 
@@ -746,6 +777,7 @@ mod tests {
             default_branch: "main".into(),
             fetch_pr_branches: false,
             force_default_branch: true,
+            only_on_activity: false,
         };
         checkout_all(tmp.path(), &[task]).await.unwrap();
 
@@ -777,6 +809,7 @@ mod tests {
             default_branch: "main".into(),
             fetch_pr_branches: false,
             force_default_branch: true,
+            only_on_activity: false,
         };
         checkout_all(tmp.path(), &[task]).await.unwrap();
 
@@ -807,6 +840,7 @@ mod tests {
             default_branch: "main".into(),
             fetch_pr_branches: false,
             force_default_branch: true,
+            only_on_activity: false,
         };
         checkout_all(tmp.path(), &[task]).await.unwrap();
 
@@ -841,6 +875,7 @@ mod tests {
             default_branch: "main".into(),
             fetch_pr_branches: false,
             force_default_branch: true,
+            only_on_activity: false,
         };
         checkout_all(tmp.path(), &[task]).await.unwrap();
 
@@ -870,6 +905,7 @@ mod tests {
             default_branch: "main".into(),
             fetch_pr_branches: false,
             force_default_branch: true,
+            only_on_activity: false,
         };
         checkout_all(tmp.path(), &[task]).await.unwrap();
 
@@ -899,6 +935,7 @@ mod tests {
             default_branch: "main".into(),
             fetch_pr_branches: false,
             force_default_branch: true,
+            only_on_activity: false,
         };
         checkout_all(tmp.path(), &[task]).await.unwrap();
 
@@ -926,6 +963,7 @@ mod tests {
             default_branch: "main".into(),
             fetch_pr_branches: true,
             force_default_branch: true,
+            only_on_activity: false,
         };
         checkout_all(tmp.path(), &[task]).await.unwrap();
 
@@ -952,6 +990,7 @@ mod tests {
             default_branch: "main".into(),
             fetch_pr_branches: true,
             force_default_branch: true,
+            only_on_activity: false,
         };
         checkout_all(tmp.path(), &[task]).await.unwrap();
         assert!(git_rev_parse_opt(&clone, "refs/remotes/pr/17/head").await.is_some());
@@ -965,6 +1004,7 @@ mod tests {
             default_branch: "main".into(),
             fetch_pr_branches: true,
             force_default_branch: true,
+            only_on_activity: false,
         };
         checkout_all(tmp.path(), &[task]).await.unwrap();
 
@@ -1055,6 +1095,7 @@ mod tests {
                 default_branch: "main".into(),
                 fetch_pr_branches: false,
             force_default_branch: true,
+            only_on_activity: false,
             });
         }
 

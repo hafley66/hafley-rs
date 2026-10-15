@@ -126,6 +126,7 @@ fn org_to_repos(org: &OrgConfig, repos: Vec<(String, Option<String>)>) -> Vec<Re
             checkout_on_sync:     org.checkout_on_sync,
             checkout_pr_branches: org.checkout_pr_branches,
             checkout_force_default_branch: org.checkout_force_default_branch,
+            checkout_only_on_activity: org.checkout_only_on_activity,
             fs_alias:             org.fs_alias.clone(),
         })
         .collect()
@@ -332,6 +333,7 @@ pub async fn build_checkout_tasks(
             default_branch,
             fetch_pr_branches: wants_pr_fetch,
             force_default_branch: r.checkout_force_default_branch.unwrap_or(false),
+            only_on_activity: r.checkout_only_on_activity.unwrap_or(false),
         });
     }
 
@@ -356,6 +358,7 @@ pub async fn build_checkout_tasks(
                 default_branch,
                 fetch_pr_branches: wants_pr_fetch,
                 force_default_branch: org.checkout_force_default_branch.unwrap_or(false),
+                only_on_activity: org.checkout_only_on_activity.unwrap_or(false),
             });
         }
     }
@@ -435,6 +438,7 @@ pub async fn watch(
                         checkout_on_sync:      None,
                         checkout_pr_branches:  None,
                         checkout_force_default_branch: None,
+                        checkout_only_on_activity: None,
                         fs_alias:              None,
                     })
                     .collect();
@@ -544,6 +548,7 @@ mod tests {
                 checkout_on_sync:     None,
                 checkout_pr_branches: None,
                 checkout_force_default_branch: None,
+                checkout_only_on_activity: None,
                 fs_alias:             None,
             }],
             orgs: vec![],
@@ -597,6 +602,7 @@ mod tests {
             checkout_on_sync: None,
             checkout_pr_branches: None,
             checkout_force_default_branch: None,
+            checkout_only_on_activity: None,
             fs_alias: None,
         });
 
@@ -638,6 +644,7 @@ mod tests {
                 checkout_on_sync:    None,
                 checkout_pr_branches: None,
                 checkout_force_default_branch: None,
+                checkout_only_on_activity: None,
                 exclude:             vec![],
                 fs_alias:            None,
             }],
@@ -872,6 +879,7 @@ mod tests {
                 checkout_on_sync: None,
                 checkout_pr_branches: None,
                 checkout_force_default_branch: None,
+                checkout_only_on_activity: None,
                 exclude: vec![],
                 fs_alias: None,
             }],
@@ -933,6 +941,7 @@ mod tests {
             checkout_on_sync: Some(true),
             checkout_pr_branches: None,
             checkout_force_default_branch: None,
+            checkout_only_on_activity: None,
             fs_alias: None,
         }];
         let mut conn = pool.acquire().await.unwrap();
@@ -970,6 +979,7 @@ mod tests {
                 checkout_on_sync: None,
                 checkout_pr_branches: None,
                 checkout_force_default_branch: None,
+                checkout_only_on_activity: None,
                 exclude: vec![],
                 fs_alias: None,
             }],
@@ -1077,6 +1087,7 @@ mod integration {
                 checkout_on_sync:     None,
                 checkout_pr_branches: None,
                 checkout_force_default_branch: None,
+                checkout_only_on_activity: None,
                 fs_alias:             None,
             }],
             orgs: vec![],

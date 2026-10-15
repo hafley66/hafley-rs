@@ -173,6 +173,7 @@ sync_branches        = ["main"]
 checkout_on_sync     = false             # keep local default branch ref fresh after sync/watch passes
 checkout_pr_branches = false             # also mirror refs/pull/*/head into refs/remotes/pr/*/head
 checkout_force_default_branch = false    # true: stash + reset --hard instead of fast-forward only
+checkout_only_on_activity = false    # true: fetch existing clones only on passes with events/PR changes
 exclude              = ["archived-repo", "scratch"]   # repo names to skip
 
 # Or target specific repos explicitly.
@@ -187,6 +188,7 @@ sync_branches        = ["main", "staging", "release/*"]  # glob trailing * suppo
 checkout_on_sync     = false   # if true, watch updates local default branch refs
 checkout_pr_branches = false   # if true, watch mirrors GitHub PR heads via git transport
 checkout_force_default_branch = false  # true: stash + reset --hard instead of fast-forward only
+checkout_only_on_activity = false  # true: fetch existing clones only on passes with events/PR changes
 ```
 
 ### `fs_alias` -- shorter checkout paths
@@ -294,7 +296,9 @@ local default branch:
 | `false` (default) | `git merge --ff-only origin/<default>`; diverged or conflicting with local edits: logged, left alone | `branch -f` only when local `<default>` is an ancestor of `origin/<default>`; diverged: logged, left alone |
 | `true` | tracked edits stashed, then `reset --hard origin/<default>` | `branch -f <default> origin/<default>` |
 
-Untracked files are never touched. With `checkout_pr_branches = true`, watch also fetches:
+Untracked files are never touched. With `checkout_only_on_activity = true`, an existing clone is
+fetched and updated only on passes where the repo had events or PR changes; missing clones are
+always cloned. With `checkout_pr_branches = true`, watch also fetches:
 
 ```sh
 git fetch --prune origin '+refs/pull/*/head:refs/remotes/pr/*/head'
