@@ -303,9 +303,10 @@ pub async fn sync_once(pool: &SqlitePool, roots: &[PathBuf], cap: usize) -> Resu
     Ok(deltas)
 }
 
-/// Inside a `.git` dir only HEAD, refs and the worktree registry change what a
-/// scan reports; index, index.lock, objects, logs and FETCH_HEAD churn under
-/// every git command, including the scan's own. Outside `.git`, events under
+/// Inside a `.git` dir only HEAD, refs/heads, packed-refs and the worktree
+/// registry change what a scan reports; index, index.lock, objects, logs,
+/// FETCH_HEAD, refs/remotes and refs/tags churn under every git command or fetch,
+/// including the scan's own. Outside `.git`, events under
 /// SKIP dirs (target, node_modules, ...) are build output.
 fn rescan_worthy(ev: &notify::Event) -> bool {
     if matches!(ev.kind, notify::EventKind::Access(_)) {
@@ -322,7 +323,7 @@ fn path_rescan_worthy(p: &Path) -> bool {
             match inner {
                 [] => true,
                 ["HEAD"] | ["packed-refs"] => true,
-                ["refs", ..] => true,
+                ["refs", "heads", ..] => true,
                 ["worktrees"] | ["worktrees", _] => true,
                 ["worktrees", _, "HEAD"] => true,
                 _ => false,
@@ -384,6 +385,9 @@ pub async fn watch_loop(pool: SqlitePool, roots: Vec<PathBuf>, interval: Duratio
         if let Err(e) = sync_once(&pool, &roots, cap).await {
             tracing::warn!(error = %e, "worktree: rescan failed");
         }
+        // Events raised during the scan (its own git calls) must not schedule
+        // an immediate rescan.
+        while rx.try_recv().is_ok() {}
     }
 }
 
@@ -402,6 +406,8 @@ mod tests {
             "/p/r/.git/worktrees/w/index",
             "/p/r/target/debug/foo",
             "/p/r/node_modules/x/index.js",
+            "/p/r/.git/refs/remotes/origin/main",
+            "/p/r/.git/refs/tags/v1",
             "/p/r/.git/HEAD",
             "/p/r/.git/refs/heads/main",
             "/p/r/.git/packed-refs",
@@ -422,6 +428,8 @@ skip /p/r/.git/FETCH_HEAD
 skip /p/r/.git/worktrees/w/index
 skip /p/r/target/debug/foo
 skip /p/r/node_modules/x/index.js
+skip /p/r/.git/refs/remotes/origin/main
+skip /p/r/.git/refs/tags/v1
 scan /p/r/.git/HEAD
 scan /p/r/.git/refs/heads/main
 scan /p/r/.git/packed-refs
