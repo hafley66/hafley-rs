@@ -1,7 +1,8 @@
 //! Any `record`-tagged row straight into its table's columnar buffer: no JSON
 //! round-trip, one prepared chunk statement per table, text in one arena.
 use std::borrow::Cow;
-use std::collections::HashMap;
+/// Column and record names are looked up per field of every row: Fx, not SipHash.
+type HashMap<K, V> = std::collections::HashMap<K, V, std::hash::BuildHasherDefault<FxHasher>>;
 use std::ffi::{CStr, CString};
 use std::fmt::Display;
 use std::hash::{Hash, Hasher};
@@ -463,7 +464,7 @@ impl Binder {
             .query_map([], |row| row.get::<_, String>(0))?
             .collect::<rusqlite::Result<_>>()?;
         let specs: Vec<TableSpec> = serde_json::from_str(FACTS)?;
-        let mut types = HashMap::new();
+        let mut types = HashMap::default();
         for spec in &specs {
             for column in &spec.columns {
                 let kind = COLUMN_KINDS
@@ -477,7 +478,7 @@ impl Binder {
         let mut columns = Vec::with_capacity(names.len());
         let mut json = Vec::with_capacity(names.len());
         let mut column_kinds = Vec::with_capacity(names.len());
-        let mut by_name = HashMap::new();
+        let mut by_name = HashMap::default();
         for (index, name) in names.into_iter().enumerate() {
             let column_names: Vec<String> = connection
                 .prepare(&format!("PRAGMA table_info(\"{name}\")"))?

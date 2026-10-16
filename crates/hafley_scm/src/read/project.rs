@@ -2099,7 +2099,7 @@ pub fn read_inputs_streamed<E>(
     let io_root = crate::read::request_io_root();
     let mut inputs = Vec::with_capacity(paths.len());
     let chunk_files = if matches!(planes, Planes::Fast) {
-        8
+        READ_CHUNK_FILES
     } else if paths.iter().all(|path| {
         path.to_str()
             .and_then(crate::read::lang::ts::source_type_for)
