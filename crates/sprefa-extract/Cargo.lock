@@ -3424,7 +3424,7 @@ checksum = "cf54715a573b99ac80df0bc206da022bcd442c974952c7b9720069370852e21f"
 
 [[package]]
 name = "ryi-proto"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "clap",
  "serde",
@@ -3760,7 +3760,7 @@ dependencies = [
 
 [[package]]
 name = "sprefa-extract"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "axum",
  "axum-extra",

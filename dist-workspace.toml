@@ -10,6 +10,6 @@ hosting = "github"
 installers = ["shell"]
 install-path = "CARGO_HOME"
 install-updater = false
-targets = ["aarch64-apple-darwin"]
+targets = ["aarch64-apple-darwin", "x86_64-apple-darwin"]
 # Only packages that opt in via [package.metadata.dist] dist = true.
 dist = false
