@@ -291,10 +291,13 @@ fn source_set_for_root_excluding(
     let walk = WalkBuilder::new(root)
         .follow_links(true)
         .hidden(false)
-        .ignore(false)
-        .git_ignore(false)
-        .git_global(false)
-        .git_exclude(false)
+        // Ignored files (logs, caches, ryii's own .agent/dl6.db) change between
+        // runs without changing what an indexer sees; hashing them made every
+        // run look stale and rebuild the index.
+        .ignore(true)
+        .git_ignore(true)
+        .git_global(true)
+        .git_exclude(true)
         .filter_entry(move |entry| {
             if cache_dir
                 .as_deref()
@@ -312,6 +315,7 @@ fn source_set_for_root_excluding(
             !matches!(
                 name.as_ref(),
                 ".git"
+                    | ".agent"
                     | ".dl"
                     | ".boop-worktrees"
                     | ".worktrees"
@@ -1175,5 +1179,44 @@ pub fn root_key(root: &Path) -> String {
     match crate::read::shape::ContentId::blake3(root.as_os_str().as_encoded_bytes()) {
         crate::read::shape::ContentId::Blake3(bytes) => hex_of(&bytes[..8]),
         crate::read::shape::ContentId::GitBlob(oid) => oid.0.to_string(),
+    }
+}
+
+#[cfg(test)]
+mod source_set_tests {
+    use super::source_set_for_root;
+
+    /// The freshness digest moves with sources only: ignored files and
+    /// ryii's own `.agent/dl6.db` change between runs without it moving.
+    #[test]
+    fn ignored_and_agent_files_do_not_move_the_digest() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        assert!(std::process::Command::new("git").arg("init").arg("-q").arg(root).status().unwrap().success());
+        std::fs::write(root.join(".gitignore"), "log.txt\ncache/\n").unwrap();
+        std::fs::write(root.join("lib.rs"), "fn a() {}").unwrap();
+        std::fs::create_dir_all(root.join("cache")).unwrap();
+        std::fs::create_dir_all(root.join(".agent")).unwrap();
+        let digest = || source_set_for_root(root).unwrap().digest().to_string();
+        let paths = || source_set_for_root(root).unwrap().paths().map(str::to_owned).collect::<Vec<_>>();
+
+        let base = digest();
+        let mut moved = vec![];
+        for (what, file, body) in [
+            ("ignored file", "log.txt", "1"),
+            ("ignored dir", "cache/blob", "2"),
+            ("agent db", ".agent/dl6.db", "3"),
+            ("source", "lib.rs", "fn b() {}"),
+        ] {
+            std::fs::write(root.join(file), body).unwrap();
+            moved.push((what, digest() != base));
+        }
+        assert_eq!(moved, vec![
+            ("ignored file", false),
+            ("ignored dir", false),
+            ("agent db", false),
+            ("source", true),
+        ]);
+        assert_eq!(paths(), vec![".gitignore", "lib.rs"]);
     }
 }
