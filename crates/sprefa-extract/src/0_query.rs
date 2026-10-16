@@ -85,17 +85,20 @@ pub fn run_to(cli: QueryArgs, writer: Box<dyn Write + Send>) -> Result<()> {
                     .map_err(|error| error.to_string())?;
                 for found in &matches {
                     for capture in &found.captures {
-                        let row = serde_json::json!({
-                            "record": "capture",
-                            "query": query,
-                            "capture": capture.label,
-                            "text": capture.text,
-                            "start": capture.start,
-                            "end": capture.end,
-                            "match_start": found.start,
-                            "match_end": found.end,
-                        });
-                        database.insert(row).map_err(|error| error.to_string())?;
+                        // Typed and `record`-first: the binder batches rows
+                        // across files instead of one insert per file.
+                        database
+                            .bind_row(&CaptureRow {
+                                record: "capture",
+                                query: &query,
+                                capture: &capture.label,
+                                text: &capture.text,
+                                start: capture.start,
+                                end: capture.end,
+                                match_start: found.start,
+                                match_end: found.end,
+                            })
+                            .map_err(|error| error.to_string())?;
                     }
                 }
                 continue;
@@ -138,6 +141,18 @@ pub fn run_to(cli: QueryArgs, writer: Box<dyn Write + Send>) -> Result<()> {
         ));
     }
     output.finish()
+}
+
+#[derive(serde::Serialize)]
+struct CaptureRow<'a> {
+    record: &'static str,
+    query: &'a str,
+    capture: &'a str,
+    text: &'a str,
+    start: u32,
+    end: u32,
+    match_start: u32,
+    match_end: u32,
 }
 
 fn source_bytes(path: &Path, digest: Option<&str>) -> Result<Vec<u8>, String> {

@@ -142,7 +142,7 @@ fn load_store(
         ) {
             continue;
         }
-        database.insert(serde_json::to_value(fact)?)?;
+        database.bind_row(fact)?;
     }
     database.flush()?;
     Ok(database)

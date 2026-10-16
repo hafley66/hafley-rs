@@ -306,6 +306,7 @@ impl Database {
     }
 
     /// Untrusted JSON: the typed writers validate every field before it lands.
+    #[cfg(test)]
     pub fn insert(&mut self, value: Value) -> Result<()> {
         let encoded = serde_json::to_vec(&value)?;
         self.insert_fact(serde_json::from_slice(&encoded)?, encoded.len())
