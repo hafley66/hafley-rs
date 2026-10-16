@@ -540,7 +540,9 @@ impl Binder {
         }
         let buffers = (0..meta.len()).map(Batch::empty).collect();
         let table_count = meta.len();
-        let profile_enabled = tracing::enabled!(tracing::Level::DEBUG);
+        // Opt-in: with the trail summary layer installed `enabled!(DEBUG)` is
+        // true in every run, and the profile clocks every column of every row.
+        let profile_enabled = std::env::var_os("RYI_SQLITE_PROFILE").is_some();
         Ok(Self {
             meta: Arc::new(meta),
             buffers,

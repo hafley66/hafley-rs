@@ -16,6 +16,34 @@ pub(crate) struct NamesCache {
     pub paths: HashMap<(PathBuf, Vec<String>, Option<u32>), Definitions>,
     pub written: HashMap<(PathBuf, u32, String), Definitions>,
     pub dependencies: HashMap<PathBuf, Vec<(String, ModulePlace)>>,
+    /// The VFS path of every file id, for queries that run on a database
+    /// snapshot with the workspace lock released. Reset with the rest of the
+    /// cache on every change, so the `Arc` identity is the change generation.
+    pub vfs_paths: Option<VfsPaths>,
+}
+
+pub(crate) type VfsPaths = std::sync::Arc<Vec<Option<PathBuf>>>;
+
+/// The current change generation's id -> path table, built once per change.
+pub(super) fn vfs_paths(workspace: &mut CheckerWorkspace) -> VfsPaths {
+    let vfs = &workspace.vfs;
+    workspace
+        .names
+        .vfs_paths
+        .get_or_insert_with(|| {
+            // Interned ids are dense; the last live one bounds the table.
+            let end = vfs.iter().map(|(id, _)| id.index() + 1).max().unwrap_or(0);
+            std::sync::Arc::new(
+                (0..end)
+                    .map(|index| {
+                        vfs.file_path(ra_ap_vfs::FileId::from_raw(index))
+                            .as_path()
+                            .map(|path| PathBuf::from(path.to_string()))
+                    })
+                    .collect(),
+            )
+        })
+        .clone()
 }
 
 /// One module graph query supplies the declaration index and the full inventory.

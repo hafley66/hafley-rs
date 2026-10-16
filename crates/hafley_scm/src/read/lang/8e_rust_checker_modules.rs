@@ -37,6 +37,9 @@ pub struct RustModuleTree {
     pub(super) crate_roots: std::collections::BTreeMap<PathBuf, u32>,
     /// Absolute path -> the text the host holds in place of the disk's.
     staged: Mutex<HashMap<PathBuf, String>>,
+    /// `host_path` answers for this workspace's lifetime: canonicalize is a
+    /// chain of stat syscalls, and resolution asks for the same files per site.
+    canonical: std::sync::RwLock<HashMap<PathBuf, PathBuf>>,
     pub(super) external_names: HashMap<PathBuf, std::collections::BTreeSet<String>>,
 }
 
@@ -134,6 +137,7 @@ pub fn module_tree_for_workspace_files(
         load,
         crate_roots,
         staged: Mutex::new(HashMap::new()),
+        canonical: Default::default(),
         external_names,
     })
 }
@@ -150,6 +154,21 @@ pub(super) fn host_path(path: &Path) -> PathBuf {
             _ => path.to_path_buf(),
         }
     })
+}
+
+impl RustModuleTree {
+    /// `host_path`, remembered per input path.
+    pub(super) fn host_path(&self, path: &Path) -> PathBuf {
+        if let Some(found) = self.canonical.read().unwrap().get(path) {
+            return found.clone();
+        }
+        let found = host_path(path);
+        self.canonical
+            .write()
+            .unwrap()
+            .insert(path.to_path_buf(), found.clone());
+        found
+    }
 }
 
 pub(super) fn vfs_path(path: &Path) -> VfsPath {

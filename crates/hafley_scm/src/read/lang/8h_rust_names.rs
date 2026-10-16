@@ -1,6 +1,6 @@
 //! The Names provider beside body_edges. Module def maps only, no inference.
 
-use super::modules::{ModulePlace, RustModuleTree, host_path, vfs_path};
+use super::modules::{ModulePlace, RustModuleTree, vfs_path};
 use super::*;
 use ra_ap_hir::{AsAssocItem, AssocItem, HasVisibility, Module, ScopeDef};
 
@@ -40,7 +40,7 @@ pub fn module_places(host: &NamesHost, file: &Path) -> Result<Vec<ModulePlace>, 
     let places = host.places(file);
     if places.is_empty() {
         let workspace = host.workspace.lock().unwrap();
-        let Some((id, _)) = workspace.vfs.file_id(&vfs_path(&host_path(file))) else {
+        let Some((id, _)) = workspace.vfs.file_id(&vfs_path(&host.host_path(file))) else {
             return Err(Abstain::OutsideWorkspace);
         };
         let db = workspace.host.raw_database();
@@ -78,16 +78,56 @@ pub fn resolve_path_at(
     path: &[String],
     offset: Option<u32>,
 ) -> Result<Vec<DefPlace>, Abstain> {
-    let mut workspace = host.workspace.lock().unwrap();
     let key = (file.to_path_buf(), path.to_vec(), offset);
-    if let Some(answer) = workspace.names.paths.get(&key) {
-        return answer.clone();
+    // The lock covers the cache probe and the snapshot only: the query runs on
+    // a database clone so resolver threads do not serialize on the workspace.
+    // A change applied meanwhile cancels the clone; drop it and take a fresh one.
+    // canonicalize is filesystem syscalls; it stays outside the lock.
+    let file_path = vfs_path(&host.host_path(file));
+    loop {
+        let (db, paths, id) = {
+            let mut workspace = host.workspace.lock().unwrap();
+            if let Some(answer) = workspace.names.paths.get(&key) {
+                return answer.clone();
+            }
+            let Some((id, _)) = workspace.vfs.file_id(&file_path) else {
+                return Err(Abstain::OutsideWorkspace);
+            };
+            let paths = super::names_cache::vfs_paths(&mut workspace);
+            (workspace.host.raw_database().clone(), paths, id)
+        };
+        let answered = ra_ap_ide_db::base_db::salsa::Cancelled::catch(
+            std::panic::AssertUnwindSafe(|| resolve_path_on(host, &db, &paths, id, path, offset)),
+        );
+        drop(db);
+        let Ok(answer) = answered else { continue };
+        let mut workspace = host.workspace.lock().unwrap();
+        // Retained only for the generation it was computed against.
+        if workspace
+            .names
+            .vfs_paths
+            .as_ref()
+            .is_some_and(|current| std::sync::Arc::ptr_eq(current, &paths))
+        {
+            workspace.names.paths.insert(key, answer.clone());
+        }
+        return answer;
     }
-    let Some((id, _)) = workspace.vfs.file_id(&vfs_path(&host_path(file))) else {
-        return Err(Abstain::OutsideWorkspace);
-    };
-    let db = workspace.host.raw_database();
-    let answer = attach_db(db, || {
+}
+
+fn path_at(paths: &[Option<PathBuf>], file: ra_ap_ide::FileId) -> Option<&PathBuf> {
+    paths.get(file.index() as usize).and_then(Option::as_ref)
+}
+
+fn resolve_path_on(
+    host: &NamesHost,
+    db: &RootDatabase,
+    paths: &[Option<PathBuf>],
+    id: ra_ap_vfs::FileId,
+    path: &[String],
+    offset: Option<u32>,
+) -> Result<Vec<DefPlace>, Abstain> {
+    attach_db(db, || {
         let sema = Semantics::new(db);
         let modules: Vec<_> = sema
             .file_to_module_defs(ra_ap_ide::FileId::from_raw(id.index()))
@@ -191,12 +231,10 @@ pub fn resolve_path_at(
             if path.len() == 1 && ambiguous_glob(db, &sema, module, &path[0]) {
                 return Err(Abstain::Ambiguous);
             }
-            let root = workspace.vfs.file_path(ra_ap_vfs::FileId::from_raw(
-                module.krate(db).root_file(db).index(),
-            ));
-            external |= root.as_path().is_some_and(|root| {
+            let root = path_at(paths, module.krate(db).root_file(db));
+            external |= root.is_some_and(|root| {
                 host.external_names
-                    .get(&PathBuf::from(root.to_string()))
+                    .get(root)
                     .is_some_and(|names| path.first().is_some_and(|name| names.contains(name)))
             });
             let mut definitions = if single && node.is_some() {
@@ -277,24 +315,16 @@ pub fn resolve_path_at(
                     }
                     _ => nav.file_id,
                 };
-                let file = workspace
-                    .vfs
-                    .file_path(ra_ap_vfs::FileId::from_raw(source.index()));
-                let Some(file) = file.as_path() else { continue };
-                let file = PathBuf::from(file.to_string());
+                let Some(file) = path_at(paths, source).cloned() else { continue };
                 let Some(krate) = (match def {
                     ModuleDef::Module(module) => Some(module.krate(db)),
                     _ => def.module(db).map(|module| module.krate(db)),
                 }) else {
                     continue;
                 };
-                let crate_file = workspace
-                    .vfs
-                    .file_path(ra_ap_vfs::FileId::from_raw(krate.root_file(db).index()));
-                if !crate_file.as_path().is_some_and(|path| {
-                    host.crate_roots
-                        .contains_key(&PathBuf::from(path.to_string()))
-                }) {
+                if !path_at(paths, krate.root_file(db))
+                    .is_some_and(|path| host.crate_roots.contains_key(path))
+                {
                     external = true;
                     continue;
                 }
@@ -319,9 +349,7 @@ pub fn resolve_path_at(
         } else {
             Ok(places)
         }
-    });
-    workspace.names.paths.insert(key, answer.clone());
-    answer
+    })
 }
 
 /// Compare RA answers for glob sources when its def map retained the first
@@ -538,7 +566,7 @@ pub fn scope_names_at(
     offset: Option<u32>,
 ) -> Result<Vec<String>, Abstain> {
     let workspace = host.workspace.lock().unwrap();
-    let Some((id, _)) = workspace.vfs.file_id(&vfs_path(&host_path(file))) else {
+    let Some((id, _)) = workspace.vfs.file_id(&vfs_path(&host.host_path(file))) else {
         return Err(Abstain::OutsideWorkspace);
     };
     let db = workspace.host.raw_database();
@@ -651,7 +679,7 @@ pub fn dependency_places(host: &NamesHost, file: &Path) -> Vec<(String, ModulePl
     if let Some(answer) = workspace.names.dependencies.get(&key) {
         return answer.clone();
     }
-    let Some((id, _)) = workspace.vfs.file_id(&vfs_path(&host_path(file))) else {
+    let Some((id, _)) = workspace.vfs.file_id(&vfs_path(&host.host_path(file))) else {
         return Vec::new();
     };
     let db = workspace.host.raw_database();

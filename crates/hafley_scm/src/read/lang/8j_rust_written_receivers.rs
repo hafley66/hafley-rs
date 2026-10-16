@@ -1,6 +1,6 @@
 //! Written receivers through published declaration lowering and method lookup.
 use super::declared_types::DeclaredScope;
-use super::modules::{host_path, vfs_path};
+use super::modules::vfs_path;
 use super::names::{Abstain, DefPlace, NamesHost};
 use ra_ap_hir::{Function, Name, Semantics, attach_db};
 use ra_ap_hir_def::{
@@ -42,7 +42,7 @@ pub fn resolve_written_method(
     let mut workspace = host.workspace.lock().unwrap();
     let (id, _) = workspace
         .vfs
-        .file_id(&vfs_path(&host_path(file)))
+        .file_id(&vfs_path(&host.host_path(file)))
         .ok_or(Abstain::NeedsTypes)?;
     let db = workspace.host.raw_database();
     let answer = attach_db(db, || {
