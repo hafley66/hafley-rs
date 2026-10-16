@@ -12,9 +12,10 @@ export function emitFacts(program, emitSQL, emitRusqliteTaggedRowWriter) {
     ordinalSourceField: "_row",
     sourceFields: [
       { property: "_row", rustName: "row" },
-      { property: "_input_path", rustName: "input_path" },
-      { property: "_content_id", rustName: "content_id" },
+      { property: "_source", rustName: "source" },
     ],
+    // The table name is the record; it is not stored per row.
+    storeDiscriminator: false,
     jsonScalars: ["Json"],
   });
 
@@ -61,13 +62,16 @@ export function emitFacts(program, emitSQL, emitRusqliteTaggedRowWriter) {
     });
   }
 
-  for (const [name, model] of [...ns.models]) {
+  const store = ns.namespaces.get("Store");
+  const tableModels = [...ns.models, ...(store ? store.models : [])];
+  for (const [name, model] of tableModels) {
     const record = model.properties.get("record")?.type;
     if (record?.kind !== "String") {
       ns.models.delete(name);
       continue;
     }
-    const columns = fields(model);
+    // `record` names the table; it stays the wire discriminator, not a column.
+    const columns = fields(model).filter(column => column.name !== "record");
     if (new Set(columns.map(c => c.name)).size !== columns.length) {
       throw new Error(`SQL column collision in ${name}`);
     }
@@ -90,7 +94,7 @@ export function emitFacts(program, emitSQL, emitRusqliteTaggedRowWriter) {
       model.properties.set(prop.name, prop);
     }
   }
-  for (const [, model] of [...ns.models]) {
+  for (const [, model] of tableModels) {
     model.name = quote(model.name);
     const properties = [...model.properties.values()];
     model.properties.clear();
@@ -108,7 +112,9 @@ export function emitFacts(program, emitSQL, emitRusqliteTaggedRowWriter) {
     }
   }
   return new Map([
-    ["4_facts.sql", "-- Generated from schema/1_facts.tsp by just gen.\n" + emitSQL(program)],
+    // The binder assigns `_row`; AUTOINCREMENT is SQLite-only and unused.
+    ["4_facts.sql", "-- Generated from schema/1_facts.tsp by just gen.\n"
+      + emitSQL(program).replaceAll(" PRIMARY KEY AUTOINCREMENT", " PRIMARY KEY")],
     ["5_facts.json", JSON.stringify(tables, null, 2) + "\n"],
     ["7_writers_auto.rs", writers],
   ]);

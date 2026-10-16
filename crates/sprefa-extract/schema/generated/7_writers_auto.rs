@@ -57,13 +57,11 @@ fn required_nullable<'de, D: serde::Deserializer<'de>, T: serde::Deserialize<'de
 
 #[derive(Clone, Copy)]
 
-pub struct Source<'a> {
+pub struct Source {
 
     pub row: i64,
 
-    pub input_path: Option<&'a str>,
-
-    pub content_id: Option<&'a str>,
+    pub source: Option<i64>,
 
 }
 
@@ -1367,7 +1365,7 @@ pub enum Fact {
 impl Fact {
 
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
 
         match self {
 
@@ -1565,11 +1563,11 @@ fn multi_row_sql(prefix: &str, tuple: &str, rows: usize) -> String {
 
 pub fn max_batch_rows(conn: &rusqlite::Connection) -> Result<usize, InsertError> {
 
-    statement_capacity(conn, 5, "INSERT INTO \"protocol\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"version\") VALUES ", "(?, ?, ?, ?, ?)")
+    statement_capacity(conn, 3, "INSERT INTO \"protocol\" (\"_row\", \"_source\", \"version\") VALUES ", "(?, ?, ?)")
 
 }
 
-pub fn insert_all(conn: &rusqlite::Connection, source: &Source<'_>, rows: &[Fact]) -> Result<usize, InsertError> {
+pub fn insert_all(conn: &rusqlite::Connection, source: &Source, rows: &[Fact]) -> Result<usize, InsertError> {
 
     if rows.is_empty() { return Ok(0); }
 
@@ -1889,991 +1887,991 @@ pub fn insert_all(conn: &rusqlite::Connection, source: &Source<'_>, rows: &[Fact
 
     }
 
-    let protocol_capacity = if protocol.is_empty() { 1 } else { statement_capacity(conn, 5, "INSERT INTO \"protocol\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"version\") VALUES ", "(?, ?, ?, ?, ?)")? };
+    let protocol_capacity = if protocol.is_empty() { 1 } else { statement_capacity(conn, 3, "INSERT INTO \"protocol\" (\"_row\", \"_source\", \"version\") VALUES ", "(?, ?, ?)")? };
 
-    let run_capacity = if run.is_empty() { 1 } else { statement_capacity(conn, 9, "INSERT INTO \"run\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"run\", \"mode\", \"tool\", \"version\", \"scope\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let run_capacity = if run.is_empty() { 1 } else { statement_capacity(conn, 7, "INSERT INTO \"run\" (\"_row\", \"_source\", \"run\", \"mode\", \"tool\", \"version\", \"scope\") VALUES ", "(?, ?, ?, ?, ?, ?, ?)")? };
 
-    let fact_capacity = if fact.is_empty() { 1 } else { statement_capacity(conn, 7, "INSERT INTO \"fact\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"relation\", \"args\") VALUES ", "(?, ?, ?, ?, ?, ?, ?)")? };
+    let fact_capacity = if fact.is_empty() { 1 } else { statement_capacity(conn, 5, "INSERT INTO \"fact\" (\"_row\", \"_source\", \"fact\", \"relation\", \"args\") VALUES ", "(?, ?, ?, ?, ?)")? };
 
-    let witness_capacity = if witness.is_empty() { 1 } else { statement_capacity(conn, 7, "INSERT INTO \"witness\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"run\", \"method\") VALUES ", "(?, ?, ?, ?, ?, ?, ?)")? };
+    let witness_capacity = if witness.is_empty() { 1 } else { statement_capacity(conn, 5, "INSERT INTO \"witness\" (\"_row\", \"_source\", \"fact\", \"run\", \"method\") VALUES ", "(?, ?, ?, ?, ?)")? };
 
-    let coverage_capacity = if coverage.is_empty() { 1 } else { statement_capacity(conn, 7, "INSERT INTO \"coverage\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"run\", \"relation\", \"coverage\") VALUES ", "(?, ?, ?, ?, ?, ?, ?)")? };
+    let coverage_capacity = if coverage.is_empty() { 1 } else { statement_capacity(conn, 5, "INSERT INTO \"coverage\" (\"_row\", \"_source\", \"run\", \"relation\", \"coverage\") VALUES ", "(?, ?, ?, ?, ?)")? };
 
-    let diagnostic_capacity = if diagnostic.is_empty() { 1 } else { statement_capacity(conn, 7, "INSERT INTO \"diagnostic\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"run\", \"relation\", \"detail\") VALUES ", "(?, ?, ?, ?, ?, ?, ?)")? };
+    let diagnostic_capacity = if diagnostic.is_empty() { 1 } else { statement_capacity(conn, 5, "INSERT INTO \"diagnostic\" (\"_row\", \"_source\", \"run\", \"relation\", \"detail\") VALUES ", "(?, ?, ?, ?, ?)")? };
 
-    let node_capacity = if node.is_empty() { 1 } else { statement_capacity(conn, 14, "INSERT INTO \"node\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"span__start\", \"span__end\", \"kind\", \"name\", \"function\", \"named\", \"is_async\", \"owner_kind\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let node_capacity = if node.is_empty() { 1 } else { statement_capacity(conn, 12, "INSERT INTO \"node\" (\"_row\", \"_source\", \"fact\", \"family\", \"span__start\", \"span__end\", \"kind\", \"name\", \"function\", \"named\", \"is_async\", \"owner_kind\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
 
-    let edge_capacity = if edge.is_empty() { 1 } else { statement_capacity(conn, 16, "INSERT INTO \"edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"kind\", \"from__start\", \"from__end\", \"from_kind\", \"to__start\", \"to__end\", \"to_kind\", \"field\", \"index\", \"named_index\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let edge_capacity = if edge.is_empty() { 1 } else { statement_capacity(conn, 14, "INSERT INTO \"edge\" (\"_row\", \"_source\", \"fact\", \"family\", \"kind\", \"from__start\", \"from__end\", \"from_kind\", \"to__start\", \"to__end\", \"to_kind\", \"field\", \"index\", \"named_index\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
 
-    let param_capacity = if param.is_empty() { 1 } else { statement_capacity(conn, 9, "INSERT INTO \"param\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"span__start\", \"span__end\", \"pos\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let param_capacity = if param.is_empty() { 1 } else { statement_capacity(conn, 7, "INSERT INTO \"param\" (\"_row\", \"_source\", \"fact\", \"family\", \"span__start\", \"span__end\", \"pos\") VALUES ", "(?, ?, ?, ?, ?, ?, ?)")? };
 
-    let arg_capacity = if arg.is_empty() { 1 } else { statement_capacity(conn, 11, "INSERT INTO \"arg\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"call__start\", \"call__end\", \"pos\", \"arg__start\", \"arg__end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let arg_capacity = if arg.is_empty() { 1 } else { statement_capacity(conn, 9, "INSERT INTO \"arg\" (\"_row\", \"_source\", \"fact\", \"family\", \"call__start\", \"call__end\", \"pos\", \"arg__start\", \"arg__end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
 
-    let df_field_capacity = if df_field.is_empty() { 1 } else { statement_capacity(conn, 11, "INSERT INTO \"df_field\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"owner__start\", \"owner__end\", \"name\", \"value__start\", \"value__end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let df_field_capacity = if df_field.is_empty() { 1 } else { statement_capacity(conn, 9, "INSERT INTO \"df_field\" (\"_row\", \"_source\", \"fact\", \"family\", \"owner__start\", \"owner__end\", \"name\", \"value__start\", \"value__end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
 
-    let df_lit_capacity = if df_lit.is_empty() { 1 } else { statement_capacity(conn, 10, "INSERT INTO \"df_lit\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"node__start\", \"node__end\", \"kind\", \"text\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let df_lit_capacity = if df_lit.is_empty() { 1 } else { statement_capacity(conn, 8, "INSERT INTO \"df_lit\" (\"_row\", \"_source\", \"fact\", \"family\", \"node__start\", \"node__end\", \"kind\", \"text\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?)")? };
 
-    let df_loop_capacity = if df_loop.is_empty() { 1 } else { statement_capacity(conn, 10, "INSERT INTO \"df_loop\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"span__start\", \"span__end\", \"var\", \"collection\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let df_loop_capacity = if df_loop.is_empty() { 1 } else { statement_capacity(conn, 8, "INSERT INTO \"df_loop\" (\"_row\", \"_source\", \"fact\", \"family\", \"span__start\", \"span__end\", \"var\", \"collection\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?)")? };
 
-    let df_nest_capacity = if df_nest.is_empty() { 1 } else { statement_capacity(conn, 12, "INSERT INTO \"df_nest\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"call__start\", \"call__end\", \"loop__start\", \"loop__end\", \"depth\", \"collection\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let df_nest_capacity = if df_nest.is_empty() { 1 } else { statement_capacity(conn, 10, "INSERT INTO \"df_nest\" (\"_row\", \"_source\", \"fact\", \"family\", \"call__start\", \"call__end\", \"loop__start\", \"loop__end\", \"depth\", \"collection\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
 
-    let df_allocates_capacity = if df_allocates.is_empty() { 1 } else { statement_capacity(conn, 8, "INSERT INTO \"df_allocates\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"owner__start\", \"owner__end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let df_allocates_capacity = if df_allocates.is_empty() { 1 } else { statement_capacity(conn, 6, "INSERT INTO \"df_allocates\" (\"_row\", \"_source\", \"fact\", \"family\", \"owner__start\", \"owner__end\") VALUES ", "(?, ?, ?, ?, ?, ?)")? };
 
-    let sig_capacity = if sig.is_empty() { 1 } else { statement_capacity(conn, 13, "INSERT INTO \"sig\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"owner__start\", \"owner__end\", \"owner_start\", \"owner_end\", \"slot\", \"pos\", \"ty\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let sig_capacity = if sig.is_empty() { 1 } else { statement_capacity(conn, 11, "INSERT INTO \"sig\" (\"_row\", \"_source\", \"fact\", \"family\", \"owner__start\", \"owner__end\", \"owner_start\", \"owner_end\", \"slot\", \"pos\", \"ty\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
 
-    let site_capacity = if site.is_empty() { 1 } else { statement_capacity(conn, 10, "INSERT INTO \"site\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"span__start\", \"span__end\", \"callee\", \"callee_path\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let site_capacity = if site.is_empty() { 1 } else { statement_capacity(conn, 8, "INSERT INTO \"site\" (\"_row\", \"_source\", \"fact\", \"family\", \"span__start\", \"span__end\", \"callee\", \"callee_path\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?)")? };
 
-    let r#const_capacity = if r#const.is_empty() { 1 } else { statement_capacity(conn, 11, "INSERT INTO \"const\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"owner__start\", \"owner__end\", \"field\", \"text\", \"kind\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let r#const_capacity = if r#const.is_empty() { 1 } else { statement_capacity(conn, 9, "INSERT INTO \"const\" (\"_row\", \"_source\", \"fact\", \"family\", \"owner__start\", \"owner__end\", \"field\", \"text\", \"kind\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
 
-    let doc_capacity = if doc.is_empty() { 1 } else { statement_capacity(conn, 10, "INSERT INTO \"doc\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"owner__start\", \"owner__end\", \"parent\", \"text\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let doc_capacity = if doc.is_empty() { 1 } else { statement_capacity(conn, 8, "INSERT INTO \"doc\" (\"_row\", \"_source\", \"fact\", \"family\", \"owner__start\", \"owner__end\", \"parent\", \"text\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?)")? };
 
-    let doc_tag_capacity = if doc_tag.is_empty() { 1 } else { statement_capacity(conn, 11, "INSERT INTO \"doc_tag\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"owner__start\", \"owner__end\", \"tag\", \"arg\", \"text\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let doc_tag_capacity = if doc_tag.is_empty() { 1 } else { statement_capacity(conn, 9, "INSERT INTO \"doc_tag\" (\"_row\", \"_source\", \"fact\", \"family\", \"owner__start\", \"owner__end\", \"tag\", \"arg\", \"text\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
 
-    let doc_node_capacity = if doc_node.is_empty() { 1 } else { statement_capacity(conn, 15, "INSERT INTO \"doc_node\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"span__start\", \"span__end\", \"kind\", \"name\", \"parent\", \"target\", \"title\", \"body__start\", \"body__end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let doc_node_capacity = if doc_node.is_empty() { 1 } else { statement_capacity(conn, 13, "INSERT INTO \"doc_node\" (\"_row\", \"_source\", \"fact\", \"family\", \"span__start\", \"span__end\", \"kind\", \"name\", \"parent\", \"target\", \"title\", \"body__start\", \"body__end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
 
-    let data_doc_capacity = if data_doc.is_empty() { 1 } else { statement_capacity(conn, 11, "INSERT INTO \"data_doc\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"ordinal\", \"span__start\", \"span__end\", \"format\", \"doc\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let data_doc_capacity = if data_doc.is_empty() { 1 } else { statement_capacity(conn, 9, "INSERT INTO \"data_doc\" (\"_row\", \"_source\", \"fact\", \"family\", \"ordinal\", \"span__start\", \"span__end\", \"format\", \"doc\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
 
-    let data_value_capacity = if data_value.is_empty() { 1 } else { statement_capacity(conn, 12, "INSERT INTO \"data_value\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"ordinal\", \"path\", \"kind\", \"text\", \"span__start\", \"span__end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let data_value_capacity = if data_value.is_empty() { 1 } else { statement_capacity(conn, 10, "INSERT INTO \"data_value\" (\"_row\", \"_source\", \"fact\", \"family\", \"ordinal\", \"path\", \"kind\", \"text\", \"span__start\", \"span__end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
 
-    let specifier_capacity = if specifier.is_empty() { 1 } else { statement_capacity(conn, 13, "INSERT INTO \"specifier\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"span__start\", \"span__end\", \"name\", \"kind\", \"module\", \"imported\", \"type_only\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let specifier_capacity = if specifier.is_empty() { 1 } else { statement_capacity(conn, 11, "INSERT INTO \"specifier\" (\"_row\", \"_source\", \"fact\", \"family\", \"span__start\", \"span__end\", \"name\", \"kind\", \"module\", \"imported\", \"type_only\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
 
-    let method_owner_capacity = if method_owner.is_empty() { 1 } else { statement_capacity(conn, 10, "INSERT INTO \"method_owner\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"owner__start\", \"owner__end\", \"self_type\", \"trait\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let method_owner_capacity = if method_owner.is_empty() { 1 } else { statement_capacity(conn, 8, "INSERT INTO \"method_owner\" (\"_row\", \"_source\", \"fact\", \"family\", \"owner__start\", \"owner__end\", \"self_type\", \"trait\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?)")? };
 
-    let macro_site_capacity = if macro_site.is_empty() { 1 } else { statement_capacity(conn, 9, "INSERT INTO \"macro_site\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"family\", \"span__start\", \"span__end\", \"macro_name\", \"source\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let macro_site_capacity = if macro_site.is_empty() { 1 } else { statement_capacity(conn, 7, "INSERT INTO \"macro_site\" (\"_row\", \"_source\", \"family\", \"span__start\", \"span__end\", \"macro_name\", \"source\") VALUES ", "(?, ?, ?, ?, ?, ?, ?)")? };
 
-    let reference_capacity = if reference.is_empty() { 1 } else { statement_capacity(conn, 10, "INSERT INTO \"reference\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"span__start\", \"span__end\", \"functor\", \"position\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let reference_capacity = if reference.is_empty() { 1 } else { statement_capacity(conn, 8, "INSERT INTO \"reference\" (\"_row\", \"_source\", \"fact\", \"family\", \"span__start\", \"span__end\", \"functor\", \"position\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?)")? };
 
-    let unresolved_capacity = if unresolved.is_empty() { 1 } else { statement_capacity(conn, 10, "INSERT INTO \"unresolved\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"family\", \"path\", \"span__start\", \"span__end\", \"reason\", \"detail\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let unresolved_capacity = if unresolved.is_empty() { 1 } else { statement_capacity(conn, 8, "INSERT INTO \"unresolved\" (\"_row\", \"_source\", \"family\", \"path\", \"span__start\", \"span__end\", \"reason\", \"detail\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?)")? };
 
-    let projectedge_capacity = if projectedge.is_empty() { 1 } else { statement_capacity(conn, 11, "INSERT INTO \"projectedge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"family\", \"kind\", \"from__start\", \"from__end\", \"to_blob\", \"to__start\", \"to__end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let projectedge_capacity = if projectedge.is_empty() { 1 } else { statement_capacity(conn, 9, "INSERT INTO \"projectedge\" (\"_row\", \"_source\", \"family\", \"kind\", \"from__start\", \"from__end\", \"to_blob\", \"to__start\", \"to__end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
 
-    let flow_edge_capacity = if flow_edge.is_empty() { 1 } else { statement_capacity(conn, 12, "INSERT INTO \"flow_edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"family\", \"kind\", \"from_blob\", \"from__start\", \"from__end\", \"to_blob\", \"to__start\", \"to__end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let flow_edge_capacity = if flow_edge.is_empty() { 1 } else { statement_capacity(conn, 10, "INSERT INTO \"flow_edge\" (\"_row\", \"_source\", \"family\", \"kind\", \"from_blob\", \"from__start\", \"from__end\", \"to_blob\", \"to__start\", \"to__end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
 
-    let resolved_edge_capacity = if resolved_edge.is_empty() { 1 } else { statement_capacity(conn, 15, "INSERT INTO \"resolved_edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"caller_path\", \"caller_name\", \"callee_path\", \"callee_name\", \"caller_site_start\", \"caller_site_end\", \"callee_start\", \"callee_end\", \"kind\", \"resolution_origin\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let resolved_edge_capacity = if resolved_edge.is_empty() { 1 } else { statement_capacity(conn, 13, "INSERT INTO \"resolved_edge\" (\"_row\", \"_source\", \"fact\", \"caller_path\", \"caller_name\", \"callee_path\", \"callee_name\", \"caller_site_start\", \"caller_site_end\", \"callee_start\", \"callee_end\", \"kind\", \"resolution_origin\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
 
-    let graph_node_capacity = if graph_node.is_empty() { 1 } else { statement_capacity(conn, 9, "INSERT INTO \"graph_node\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"name\", \"depth\", \"grade\", \"line\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let graph_node_capacity = if graph_node.is_empty() { 1 } else { statement_capacity(conn, 7, "INSERT INTO \"graph_node\" (\"_row\", \"_source\", \"path\", \"name\", \"depth\", \"grade\", \"line\") VALUES ", "(?, ?, ?, ?, ?, ?, ?)")? };
 
-    let seed_unmatched_capacity = if seed_unmatched.is_empty() { 1 } else { statement_capacity(conn, 6, "INSERT INTO \"seed_unmatched\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"seed\", \"reason\") VALUES ", "(?, ?, ?, ?, ?, ?)")? };
+    let seed_unmatched_capacity = if seed_unmatched.is_empty() { 1 } else { statement_capacity(conn, 4, "INSERT INTO \"seed_unmatched\" (\"_row\", \"_source\", \"seed\", \"reason\") VALUES ", "(?, ?, ?, ?)")? };
 
-    let graph_edge_capacity = if graph_edge.is_empty() { 1 } else { statement_capacity(conn, 12, "INSERT INTO \"graph_edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"from_path\", \"from_name\", \"to_path\", \"to_name\", \"kind\", \"grade\", \"from_line\", \"to_line\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let graph_edge_capacity = if graph_edge.is_empty() { 1 } else { statement_capacity(conn, 10, "INSERT INTO \"graph_edge\" (\"_row\", \"_source\", \"from_path\", \"from_name\", \"to_path\", \"to_name\", \"kind\", \"grade\", \"from_line\", \"to_line\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
 
-    let external_crate_decline_capacity = if external_crate_decline.is_empty() { 1 } else { statement_capacity(conn, 10, "INSERT INTO \"external_crate_decline\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"from_path\", \"from_name\", \"type_name\", \"crate_name\", \"reason\", \"kind\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let external_crate_decline_capacity = if external_crate_decline.is_empty() { 1 } else { statement_capacity(conn, 8, "INSERT INTO \"external_crate_decline\" (\"_row\", \"_source\", \"from_path\", \"from_name\", \"type_name\", \"crate_name\", \"reason\", \"kind\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?)")? };
 
-    let graph_decline_capacity = if graph_decline.is_empty() { 1 } else { statement_capacity(conn, 10, "INSERT INTO \"graph_decline\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"from_path\", \"from_name\", \"type_name\", \"crate_name\", \"reason\", \"kind\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let graph_decline_capacity = if graph_decline.is_empty() { 1 } else { statement_capacity(conn, 8, "INSERT INTO \"graph_decline\" (\"_row\", \"_source\", \"from_path\", \"from_name\", \"type_name\", \"crate_name\", \"reason\", \"kind\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?)")? };
 
-    let graph_path_capacity = if graph_path.is_empty() { 1 } else { statement_capacity(conn, 21, "INSERT INTO \"graph_path\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"plane\", \"from_path\", \"from_name\", \"to_path\", \"to_name\", \"depth\", \"witness\", \"from_file\", \"from_line\", \"from_col\", \"from_text\", \"from_reason\", \"to_file\", \"to_line\", \"to_col\", \"to_text\", \"to_reason\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let graph_path_capacity = if graph_path.is_empty() { 1 } else { statement_capacity(conn, 19, "INSERT INTO \"graph_path\" (\"_row\", \"_source\", \"plane\", \"from_path\", \"from_name\", \"to_path\", \"to_name\", \"depth\", \"witness\", \"from_file\", \"from_line\", \"from_col\", \"from_text\", \"from_reason\", \"to_file\", \"to_line\", \"to_col\", \"to_text\", \"to_reason\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
 
-    let graph_path_change_capacity = if graph_path_change.is_empty() { 1 } else { statement_capacity(conn, 12, "INSERT INTO \"graph_path_change\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"change\", \"revision\", \"plane\", \"from_path\", \"from_name\", \"to_path\", \"to_name\", \"depth\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let graph_path_change_capacity = if graph_path_change.is_empty() { 1 } else { statement_capacity(conn, 10, "INSERT INTO \"graph_path_change\" (\"_row\", \"_source\", \"change\", \"revision\", \"plane\", \"from_path\", \"from_name\", \"to_path\", \"to_name\", \"depth\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
 
-    let graph_root_capacity = if graph_root.is_empty() { 1 } else { statement_capacity(conn, 9, "INSERT INTO \"graph_root\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"name\", \"span__start\", \"span__end\", \"found\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let graph_root_capacity = if graph_root.is_empty() { 1 } else { statement_capacity(conn, 7, "INSERT INTO \"graph_root\" (\"_row\", \"_source\", \"path\", \"name\", \"span__start\", \"span__end\", \"found\") VALUES ", "(?, ?, ?, ?, ?, ?, ?)")? };
 
-    let resolved_type_edge_capacity = if resolved_type_edge.is_empty() { 1 } else { statement_capacity(conn, 13, "INSERT INTO \"resolved_type_edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"owner_path\", \"owner_name\", \"owner_start\", \"owner_end\", \"target_path\", \"target_name\", \"kind\", \"resolution_origin\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let resolved_type_edge_capacity = if resolved_type_edge.is_empty() { 1 } else { statement_capacity(conn, 11, "INSERT INTO \"resolved_type_edge\" (\"_row\", \"_source\", \"fact\", \"owner_path\", \"owner_name\", \"owner_start\", \"owner_end\", \"target_path\", \"target_name\", \"kind\", \"resolution_origin\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
 
-    let resolved_import_capacity = if resolved_import.is_empty() { 1 } else { statement_capacity(conn, 11, "INSERT INTO \"resolved_import\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"src_path\", \"name\", \"local\", \"target_path\", \"target_name\", \"kind\", \"hops\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let resolved_import_capacity = if resolved_import.is_empty() { 1 } else { statement_capacity(conn, 9, "INSERT INTO \"resolved_import\" (\"_row\", \"_source\", \"src_path\", \"name\", \"local\", \"target_path\", \"target_name\", \"kind\", \"hops\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
 
-    let file_edge_capacity = if file_edge.is_empty() { 1 } else { statement_capacity(conn, 8, "INSERT INTO \"file_edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"src_path\", \"dst_path\", \"kind\", \"symbols\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let file_edge_capacity = if file_edge.is_empty() { 1 } else { statement_capacity(conn, 6, "INSERT INTO \"file_edge\" (\"_row\", \"_source\", \"src_path\", \"dst_path\", \"kind\", \"symbols\") VALUES ", "(?, ?, ?, ?, ?, ?)")? };
 
-    let file_unresolved_capacity = if file_unresolved.is_empty() { 1 } else { statement_capacity(conn, 7, "INSERT INTO \"file_unresolved\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"src_path\", \"module\", \"reason\") VALUES ", "(?, ?, ?, ?, ?, ?, ?)")? };
+    let file_unresolved_capacity = if file_unresolved.is_empty() { 1 } else { statement_capacity(conn, 5, "INSERT INTO \"file_unresolved\" (\"_row\", \"_source\", \"src_path\", \"module\", \"reason\") VALUES ", "(?, ?, ?, ?, ?)")? };
 
-    let package_edge_capacity = if package_edge.is_empty() { 1 } else { statement_capacity(conn, 7, "INSERT INTO \"package_edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"src_manifest\", \"dst_manifest\", \"kind\") VALUES ", "(?, ?, ?, ?, ?, ?, ?)")? };
+    let package_edge_capacity = if package_edge.is_empty() { 1 } else { statement_capacity(conn, 5, "INSERT INTO \"package_edge\" (\"_row\", \"_source\", \"src_manifest\", \"dst_manifest\", \"kind\") VALUES ", "(?, ?, ?, ?, ?)")? };
 
-    let file_capacity = if file.is_empty() { 1 } else { statement_capacity(conn, 8, "INSERT INTO \"file\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"digest\", \"bytes\", \"lines\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let file_capacity = if file.is_empty() { 1 } else { statement_capacity(conn, 6, "INSERT INTO \"file\" (\"_row\", \"_source\", \"path\", \"digest\", \"bytes\", \"lines\") VALUES ", "(?, ?, ?, ?, ?, ?)")? };
 
-    let line_start_capacity = if line_start.is_empty() { 1 } else { statement_capacity(conn, 7, "INSERT INTO \"line_start\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"digest\", \"offsets\") VALUES ", "(?, ?, ?, ?, ?, ?, ?)")? };
+    let line_start_capacity = if line_start.is_empty() { 1 } else { statement_capacity(conn, 5, "INSERT INTO \"line_start\" (\"_row\", \"_source\", \"path\", \"digest\", \"offsets\") VALUES ", "(?, ?, ?, ?, ?)")? };
 
-    let size_skip_capacity = if size_skip.is_empty() { 1 } else { statement_capacity(conn, 8, "INSERT INTO \"size_skip\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"bytes\", \"limit\", \"reason\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let size_skip_capacity = if size_skip.is_empty() { 1 } else { statement_capacity(conn, 6, "INSERT INTO \"size_skip\" (\"_row\", \"_source\", \"path\", \"bytes\", \"limit\", \"reason\") VALUES ", "(?, ?, ?, ?, ?, ?)")? };
 
-    let capture_capacity = if capture.is_empty() { 1 } else { statement_capacity(conn, 14, "INSERT INTO \"capture\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"query\", \"capture\", \"text\", \"start\", \"end\", \"match_start\", \"match_end\", \"pattern\", \"match\", \"kind\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let capture_capacity = if capture.is_empty() { 1 } else { statement_capacity(conn, 12, "INSERT INTO \"capture\" (\"_row\", \"_source\", \"query\", \"capture\", \"text\", \"start\", \"end\", \"match_start\", \"match_end\", \"pattern\", \"match\", \"kind\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
 
-    let symbol_capacity = if symbol.is_empty() { 1 } else { statement_capacity(conn, 7, "INSERT INTO \"symbol\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"symbol\", \"path\", \"kind\") VALUES ", "(?, ?, ?, ?, ?, ?, ?)")? };
+    let symbol_capacity = if symbol.is_empty() { 1 } else { statement_capacity(conn, 5, "INSERT INTO \"symbol\" (\"_row\", \"_source\", \"symbol\", \"path\", \"kind\") VALUES ", "(?, ?, ?, ?, ?)")? };
 
-    let occurrence_capacity = if occurrence.is_empty() { 1 } else { statement_capacity(conn, 12, "INSERT INTO \"occurrence\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"symbol\", \"path\", \"start\", \"end\", \"role\", \"exported\", \"decl_start\", \"decl_end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let occurrence_capacity = if occurrence.is_empty() { 1 } else { statement_capacity(conn, 10, "INSERT INTO \"occurrence\" (\"_row\", \"_source\", \"symbol\", \"path\", \"start\", \"end\", \"role\", \"exported\", \"decl_start\", \"decl_end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
 
-    let free_name_capacity = if free_name.is_empty() { 1 } else { statement_capacity(conn, 10, "INSERT INTO \"free_name\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"owner_start\", \"owner_end\", \"name\", \"start\", \"end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let free_name_capacity = if free_name.is_empty() { 1 } else { statement_capacity(conn, 8, "INSERT INTO \"free_name\" (\"_row\", \"_source\", \"path\", \"owner_start\", \"owner_end\", \"name\", \"start\", \"end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?)")? };
 
-    let call_site_capacity = if call_site.is_empty() { 1 } else { statement_capacity(conn, 10, "INSERT INTO \"call_site\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"callee\", \"path\", \"line\", \"fn\", \"start\", \"end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let call_site_capacity = if call_site.is_empty() { 1 } else { statement_capacity(conn, 8, "INSERT INTO \"call_site\" (\"_row\", \"_source\", \"callee\", \"path\", \"line\", \"fn\", \"start\", \"end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?)")? };
 
-    let jsx_element_capacity = if jsx_element.is_empty() { 1 } else { statement_capacity(conn, 11, "INSERT INTO \"jsx_element\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"name\", \"path\", \"line\", \"fn\", \"start\", \"end\", \"parent_start\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let jsx_element_capacity = if jsx_element.is_empty() { 1 } else { statement_capacity(conn, 9, "INSERT INTO \"jsx_element\" (\"_row\", \"_source\", \"name\", \"path\", \"line\", \"fn\", \"start\", \"end\", \"parent_start\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
 
-    let jsx_attribute_capacity = if jsx_attribute.is_empty() { 1 } else { statement_capacity(conn, 10, "INSERT INTO \"jsx_attribute\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"element_start\", \"name\", \"value\", \"start\", \"end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let jsx_attribute_capacity = if jsx_attribute.is_empty() { 1 } else { statement_capacity(conn, 8, "INSERT INTO \"jsx_attribute\" (\"_row\", \"_source\", \"path\", \"element_start\", \"name\", \"value\", \"start\", \"end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?)")? };
 
-    let local_capacity = if local.is_empty() { 1 } else { statement_capacity(conn, 9, "INSERT INTO \"local\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fn\", \"name\", \"path\", \"start\", \"end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let local_capacity = if local.is_empty() { 1 } else { statement_capacity(conn, 7, "INSERT INTO \"local\" (\"_row\", \"_source\", \"fn\", \"name\", \"path\", \"start\", \"end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?)")? };
 
-    let scip_def_capacity = if scip_def.is_empty() { 1 } else { statement_capacity(conn, 7, "INSERT INTO \"scip_def\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"symbol\", \"file\", \"repo\") VALUES ", "(?, ?, ?, ?, ?, ?, ?)")? };
+    let scip_def_capacity = if scip_def.is_empty() { 1 } else { statement_capacity(conn, 5, "INSERT INTO \"scip_def\" (\"_row\", \"_source\", \"symbol\", \"file\", \"repo\") VALUES ", "(?, ?, ?, ?, ?)")? };
 
-    let scip_name_capacity = if scip_name.is_empty() { 1 } else { statement_capacity(conn, 6, "INSERT INTO \"scip_name\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"symbol\", \"name\") VALUES ", "(?, ?, ?, ?, ?, ?)")? };
+    let scip_name_capacity = if scip_name.is_empty() { 1 } else { statement_capacity(conn, 4, "INSERT INTO \"scip_name\" (\"_row\", \"_source\", \"symbol\", \"name\") VALUES ", "(?, ?, ?, ?)")? };
 
-    let scip_ref_capacity = if scip_ref.is_empty() { 1 } else { statement_capacity(conn, 8, "INSERT INTO \"scip_ref\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"file\", \"symbol\", \"def_file\", \"repo\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let scip_ref_capacity = if scip_ref.is_empty() { 1 } else { statement_capacity(conn, 6, "INSERT INTO \"scip_ref\" (\"_row\", \"_source\", \"file\", \"symbol\", \"def_file\", \"repo\") VALUES ", "(?, ?, ?, ?, ?, ?)")? };
 
-    let scip_external_ref_capacity = if scip_external_ref.is_empty() { 1 } else { statement_capacity(conn, 8, "INSERT INTO \"scip_external_ref\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"file\", \"symbol\", \"origin\", \"repo\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let scip_external_ref_capacity = if scip_external_ref.is_empty() { 1 } else { statement_capacity(conn, 6, "INSERT INTO \"scip_external_ref\" (\"_row\", \"_source\", \"file\", \"symbol\", \"origin\", \"repo\") VALUES ", "(?, ?, ?, ?, ?, ?)")? };
 
-    let scip_edge_capacity = if scip_edge.is_empty() { 1 } else { statement_capacity(conn, 7, "INSERT INTO \"scip_edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"src\", \"dst\", \"repo\") VALUES ", "(?, ?, ?, ?, ?, ?, ?)")? };
+    let scip_edge_capacity = if scip_edge.is_empty() { 1 } else { statement_capacity(conn, 5, "INSERT INTO \"scip_edge\" (\"_row\", \"_source\", \"src\", \"dst\", \"repo\") VALUES ", "(?, ?, ?, ?, ?)")? };
 
-    let scip_fn_edge_capacity = if scip_fn_edge.is_empty() { 1 } else { statement_capacity(conn, 6, "INSERT INTO \"scip_fn_edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"caller\", \"callee\") VALUES ", "(?, ?, ?, ?, ?, ?)")? };
+    let scip_fn_edge_capacity = if scip_fn_edge.is_empty() { 1 } else { statement_capacity(conn, 4, "INSERT INTO \"scip_fn_edge\" (\"_row\", \"_source\", \"caller\", \"callee\") VALUES ", "(?, ?, ?, ?)")? };
 
-    let scip_callee_type_capacity = if scip_callee_type.is_empty() { 1 } else { statement_capacity(conn, 6, "INSERT INTO \"scip_callee_type\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"sym\", \"type\") VALUES ", "(?, ?, ?, ?, ?, ?)")? };
+    let scip_callee_type_capacity = if scip_callee_type.is_empty() { 1 } else { statement_capacity(conn, 4, "INSERT INTO \"scip_callee_type\" (\"_row\", \"_source\", \"sym\", \"type\") VALUES ", "(?, ?, ?, ?)")? };
 
-    let scip_local_capacity = if scip_local.is_empty() { 1 } else { statement_capacity(conn, 6, "INSERT INTO \"scip_local\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fn\", \"name\") VALUES ", "(?, ?, ?, ?, ?, ?)")? };
+    let scip_local_capacity = if scip_local.is_empty() { 1 } else { statement_capacity(conn, 4, "INSERT INTO \"scip_local\" (\"_row\", \"_source\", \"fn\", \"name\") VALUES ", "(?, ?, ?, ?)")? };
 
-    let scip_impl_capacity = if scip_impl.is_empty() { 1 } else { statement_capacity(conn, 6, "INSERT INTO \"scip_impl\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"impl\", \"iface\") VALUES ", "(?, ?, ?, ?, ?, ?)")? };
+    let scip_impl_capacity = if scip_impl.is_empty() { 1 } else { statement_capacity(conn, 4, "INSERT INTO \"scip_impl\" (\"_row\", \"_source\", \"impl\", \"iface\") VALUES ", "(?, ?, ?, ?)")? };
 
-    let scip_index_capacity = if scip_index.is_empty() { 1 } else { statement_capacity(conn, 10, "INSERT INTO \"scip_index\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"reused\", \"tool_name\", \"tool_version\", \"documents\", \"index_mtime_unix_ms\", \"staleness\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let scip_index_capacity = if scip_index.is_empty() { 1 } else { statement_capacity(conn, 8, "INSERT INTO \"scip_index\" (\"_row\", \"_source\", \"reused\", \"tool_name\", \"tool_version\", \"documents\", \"index_mtime_unix_ms\", \"staleness\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?)")? };
 
-    let scip_skip_capacity = if scip_skip.is_empty() { 1 } else { statement_capacity(conn, 8, "INSERT INTO \"scip_skip\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"lang\", \"bin\", \"reason\", \"detail\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let scip_skip_capacity = if scip_skip.is_empty() { 1 } else { statement_capacity(conn, 6, "INSERT INTO \"scip_skip\" (\"_row\", \"_source\", \"lang\", \"bin\", \"reason\", \"detail\") VALUES ", "(?, ?, ?, ?, ?, ?)")? };
 
-    let scip_occurrence_capacity = if scip_occurrence.is_empty() { 1 } else { statement_capacity(conn, 20, "INSERT INTO \"scip_occurrence\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"symbol\", \"start\", \"end\", \"roles\", \"definition\", \"import\", \"write_access\", \"read_access\", \"generated\", \"test\", \"forward_definition\", \"syntax_kind\", \"enclosing_start\", \"enclosing_end\", \"text\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let scip_occurrence_capacity = if scip_occurrence.is_empty() { 1 } else { statement_capacity(conn, 18, "INSERT INTO \"scip_occurrence\" (\"_row\", \"_source\", \"path\", \"symbol\", \"start\", \"end\", \"roles\", \"definition\", \"import\", \"write_access\", \"read_access\", \"generated\", \"test\", \"forward_definition\", \"syntax_kind\", \"enclosing_start\", \"enclosing_end\", \"text\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
 
-    let scip_occurrence_doc_capacity = if scip_occurrence_doc.is_empty() { 1 } else { statement_capacity(conn, 9, "INSERT INTO \"scip_occurrence_doc\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"start\", \"end\", \"pos\", \"text\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let scip_occurrence_doc_capacity = if scip_occurrence_doc.is_empty() { 1 } else { statement_capacity(conn, 7, "INSERT INTO \"scip_occurrence_doc\" (\"_row\", \"_source\", \"path\", \"start\", \"end\", \"pos\", \"text\") VALUES ", "(?, ?, ?, ?, ?, ?, ?)")? };
 
-    let scip_diagnostic_capacity = if scip_diagnostic.is_empty() { 1 } else { statement_capacity(conn, 12, "INSERT INTO \"scip_diagnostic\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"start\", \"end\", \"severity\", \"code\", \"message\", \"source\", \"tags\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let scip_diagnostic_capacity = if scip_diagnostic.is_empty() { 1 } else { statement_capacity(conn, 10, "INSERT INTO \"scip_diagnostic\" (\"_row\", \"_source\", \"path\", \"start\", \"end\", \"severity\", \"code\", \"message\", \"source\", \"tags\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
 
-    let scip_symbol_capacity = if scip_symbol.is_empty() { 1 } else { statement_capacity(conn, 9, "INSERT INTO \"scip_symbol\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"symbol\", \"display_name\", \"kind\", \"enclosing_symbol\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let scip_symbol_capacity = if scip_symbol.is_empty() { 1 } else { statement_capacity(conn, 7, "INSERT INTO \"scip_symbol\" (\"_row\", \"_source\", \"path\", \"symbol\", \"display_name\", \"kind\", \"enclosing_symbol\") VALUES ", "(?, ?, ?, ?, ?, ?, ?)")? };
 
-    let scip_documentation_capacity = if scip_documentation.is_empty() { 1 } else { statement_capacity(conn, 7, "INSERT INTO \"scip_documentation\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"symbol\", \"pos\", \"text\") VALUES ", "(?, ?, ?, ?, ?, ?, ?)")? };
+    let scip_documentation_capacity = if scip_documentation.is_empty() { 1 } else { statement_capacity(conn, 5, "INSERT INTO \"scip_documentation\" (\"_row\", \"_source\", \"symbol\", \"pos\", \"text\") VALUES ", "(?, ?, ?, ?, ?)")? };
 
-    let scip_signature_capacity = if scip_signature.is_empty() { 1 } else { statement_capacity(conn, 7, "INSERT INTO \"scip_signature\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"symbol\", \"language\", \"text\") VALUES ", "(?, ?, ?, ?, ?, ?, ?)")? };
+    let scip_signature_capacity = if scip_signature.is_empty() { 1 } else { statement_capacity(conn, 5, "INSERT INTO \"scip_signature\" (\"_row\", \"_source\", \"symbol\", \"language\", \"text\") VALUES ", "(?, ?, ?, ?, ?)")? };
 
-    let scip_signature_occurrence_capacity = if scip_signature_occurrence.is_empty() { 1 } else { statement_capacity(conn, 9, "INSERT INTO \"scip_signature_occurrence\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"symbol\", \"ref_symbol\", \"start\", \"end\", \"roles\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let scip_signature_occurrence_capacity = if scip_signature_occurrence.is_empty() { 1 } else { statement_capacity(conn, 7, "INSERT INTO \"scip_signature_occurrence\" (\"_row\", \"_source\", \"symbol\", \"ref_symbol\", \"start\", \"end\", \"roles\") VALUES ", "(?, ?, ?, ?, ?, ?, ?)")? };
 
-    let scip_metadata_capacity = if scip_metadata.is_empty() { 1 } else { statement_capacity(conn, 10, "INSERT INTO \"scip_metadata\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"version\", \"tool_name\", \"tool_version\", \"tool_arguments\", \"project_root\", \"text_document_encoding\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let scip_metadata_capacity = if scip_metadata.is_empty() { 1 } else { statement_capacity(conn, 8, "INSERT INTO \"scip_metadata\" (\"_row\", \"_source\", \"version\", \"tool_name\", \"tool_version\", \"tool_arguments\", \"project_root\", \"text_document_encoding\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?)")? };
 
-    let scip_document_capacity = if scip_document.is_empty() { 1 } else { statement_capacity(conn, 8, "INSERT INTO \"scip_document\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"language\", \"position_encoding\", \"text\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let scip_document_capacity = if scip_document.is_empty() { 1 } else { statement_capacity(conn, 6, "INSERT INTO \"scip_document\" (\"_row\", \"_source\", \"path\", \"language\", \"position_encoding\", \"text\") VALUES ", "(?, ?, ?, ?, ?, ?)")? };
 
-    let scip_relationship_capacity = if scip_relationship.is_empty() { 1 } else { statement_capacity(conn, 10, "INSERT INTO \"scip_relationship\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"symbol\", \"related_symbol\", \"is_reference\", \"is_implementation\", \"is_type_definition\", \"is_definition\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let scip_relationship_capacity = if scip_relationship.is_empty() { 1 } else { statement_capacity(conn, 8, "INSERT INTO \"scip_relationship\" (\"_row\", \"_source\", \"symbol\", \"related_symbol\", \"is_reference\", \"is_implementation\", \"is_type_definition\", \"is_definition\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?)")? };
 
     let mut inserted = 0;
 
     for chunk in protocol.chunks(protocol_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"protocol\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"version\") VALUES ", "(?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"protocol\" (\"_row\", \"_source\", \"version\") VALUES ", "(?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in run.chunks(run_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"run\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"run\", \"mode\", \"tool\", \"version\", \"scope\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"run\" (\"_row\", \"_source\", \"run\", \"mode\", \"tool\", \"version\", \"scope\") VALUES ", "(?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in fact.chunks(fact_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"fact\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"relation\", \"args\") VALUES ", "(?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"fact\" (\"_row\", \"_source\", \"fact\", \"relation\", \"args\") VALUES ", "(?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in witness.chunks(witness_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"witness\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"run\", \"method\") VALUES ", "(?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"witness\" (\"_row\", \"_source\", \"fact\", \"run\", \"method\") VALUES ", "(?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in coverage.chunks(coverage_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"coverage\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"run\", \"relation\", \"coverage\") VALUES ", "(?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"coverage\" (\"_row\", \"_source\", \"run\", \"relation\", \"coverage\") VALUES ", "(?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in diagnostic.chunks(diagnostic_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"diagnostic\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"run\", \"relation\", \"detail\") VALUES ", "(?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"diagnostic\" (\"_row\", \"_source\", \"run\", \"relation\", \"detail\") VALUES ", "(?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in node.chunks(node_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"node\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"span__start\", \"span__end\", \"kind\", \"name\", \"function\", \"named\", \"is_async\", \"owner_kind\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"node\" (\"_row\", \"_source\", \"fact\", \"family\", \"span__start\", \"span__end\", \"kind\", \"name\", \"function\", \"named\", \"is_async\", \"owner_kind\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in edge.chunks(edge_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"kind\", \"from__start\", \"from__end\", \"from_kind\", \"to__start\", \"to__end\", \"to_kind\", \"field\", \"index\", \"named_index\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"edge\" (\"_row\", \"_source\", \"fact\", \"family\", \"kind\", \"from__start\", \"from__end\", \"from_kind\", \"to__start\", \"to__end\", \"to_kind\", \"field\", \"index\", \"named_index\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in param.chunks(param_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"param\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"span__start\", \"span__end\", \"pos\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"param\" (\"_row\", \"_source\", \"fact\", \"family\", \"span__start\", \"span__end\", \"pos\") VALUES ", "(?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in arg.chunks(arg_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"arg\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"call__start\", \"call__end\", \"pos\", \"arg__start\", \"arg__end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"arg\" (\"_row\", \"_source\", \"fact\", \"family\", \"call__start\", \"call__end\", \"pos\", \"arg__start\", \"arg__end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in df_field.chunks(df_field_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"df_field\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"owner__start\", \"owner__end\", \"name\", \"value__start\", \"value__end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"df_field\" (\"_row\", \"_source\", \"fact\", \"family\", \"owner__start\", \"owner__end\", \"name\", \"value__start\", \"value__end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in df_lit.chunks(df_lit_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"df_lit\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"node__start\", \"node__end\", \"kind\", \"text\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"df_lit\" (\"_row\", \"_source\", \"fact\", \"family\", \"node__start\", \"node__end\", \"kind\", \"text\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in df_loop.chunks(df_loop_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"df_loop\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"span__start\", \"span__end\", \"var\", \"collection\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"df_loop\" (\"_row\", \"_source\", \"fact\", \"family\", \"span__start\", \"span__end\", \"var\", \"collection\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in df_nest.chunks(df_nest_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"df_nest\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"call__start\", \"call__end\", \"loop__start\", \"loop__end\", \"depth\", \"collection\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"df_nest\" (\"_row\", \"_source\", \"fact\", \"family\", \"call__start\", \"call__end\", \"loop__start\", \"loop__end\", \"depth\", \"collection\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in df_allocates.chunks(df_allocates_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"df_allocates\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"owner__start\", \"owner__end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"df_allocates\" (\"_row\", \"_source\", \"fact\", \"family\", \"owner__start\", \"owner__end\") VALUES ", "(?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in sig.chunks(sig_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"sig\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"owner__start\", \"owner__end\", \"owner_start\", \"owner_end\", \"slot\", \"pos\", \"ty\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"sig\" (\"_row\", \"_source\", \"fact\", \"family\", \"owner__start\", \"owner__end\", \"owner_start\", \"owner_end\", \"slot\", \"pos\", \"ty\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in site.chunks(site_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"site\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"span__start\", \"span__end\", \"callee\", \"callee_path\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"site\" (\"_row\", \"_source\", \"fact\", \"family\", \"span__start\", \"span__end\", \"callee\", \"callee_path\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in r#const.chunks(r#const_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"const\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"owner__start\", \"owner__end\", \"field\", \"text\", \"kind\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"const\" (\"_row\", \"_source\", \"fact\", \"family\", \"owner__start\", \"owner__end\", \"field\", \"text\", \"kind\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in doc.chunks(doc_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"doc\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"owner__start\", \"owner__end\", \"parent\", \"text\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"doc\" (\"_row\", \"_source\", \"fact\", \"family\", \"owner__start\", \"owner__end\", \"parent\", \"text\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in doc_tag.chunks(doc_tag_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"doc_tag\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"owner__start\", \"owner__end\", \"tag\", \"arg\", \"text\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"doc_tag\" (\"_row\", \"_source\", \"fact\", \"family\", \"owner__start\", \"owner__end\", \"tag\", \"arg\", \"text\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in doc_node.chunks(doc_node_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"doc_node\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"span__start\", \"span__end\", \"kind\", \"name\", \"parent\", \"target\", \"title\", \"body__start\", \"body__end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"doc_node\" (\"_row\", \"_source\", \"fact\", \"family\", \"span__start\", \"span__end\", \"kind\", \"name\", \"parent\", \"target\", \"title\", \"body__start\", \"body__end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in data_doc.chunks(data_doc_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"data_doc\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"ordinal\", \"span__start\", \"span__end\", \"format\", \"doc\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"data_doc\" (\"_row\", \"_source\", \"fact\", \"family\", \"ordinal\", \"span__start\", \"span__end\", \"format\", \"doc\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in data_value.chunks(data_value_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"data_value\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"ordinal\", \"path\", \"kind\", \"text\", \"span__start\", \"span__end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"data_value\" (\"_row\", \"_source\", \"fact\", \"family\", \"ordinal\", \"path\", \"kind\", \"text\", \"span__start\", \"span__end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in specifier.chunks(specifier_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"specifier\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"span__start\", \"span__end\", \"name\", \"kind\", \"module\", \"imported\", \"type_only\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"specifier\" (\"_row\", \"_source\", \"fact\", \"family\", \"span__start\", \"span__end\", \"name\", \"kind\", \"module\", \"imported\", \"type_only\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in method_owner.chunks(method_owner_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"method_owner\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"owner__start\", \"owner__end\", \"self_type\", \"trait\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"method_owner\" (\"_row\", \"_source\", \"fact\", \"family\", \"owner__start\", \"owner__end\", \"self_type\", \"trait\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in macro_site.chunks(macro_site_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"macro_site\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"family\", \"span__start\", \"span__end\", \"macro_name\", \"source\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"macro_site\" (\"_row\", \"_source\", \"family\", \"span__start\", \"span__end\", \"macro_name\", \"source\") VALUES ", "(?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in reference.chunks(reference_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"reference\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"span__start\", \"span__end\", \"functor\", \"position\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"reference\" (\"_row\", \"_source\", \"fact\", \"family\", \"span__start\", \"span__end\", \"functor\", \"position\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in unresolved.chunks(unresolved_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"unresolved\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"family\", \"path\", \"span__start\", \"span__end\", \"reason\", \"detail\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"unresolved\" (\"_row\", \"_source\", \"family\", \"path\", \"span__start\", \"span__end\", \"reason\", \"detail\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in projectedge.chunks(projectedge_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"projectedge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"family\", \"kind\", \"from__start\", \"from__end\", \"to_blob\", \"to__start\", \"to__end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"projectedge\" (\"_row\", \"_source\", \"family\", \"kind\", \"from__start\", \"from__end\", \"to_blob\", \"to__start\", \"to__end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in flow_edge.chunks(flow_edge_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"flow_edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"family\", \"kind\", \"from_blob\", \"from__start\", \"from__end\", \"to_blob\", \"to__start\", \"to__end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"flow_edge\" (\"_row\", \"_source\", \"family\", \"kind\", \"from_blob\", \"from__start\", \"from__end\", \"to_blob\", \"to__start\", \"to__end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in resolved_edge.chunks(resolved_edge_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"resolved_edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"caller_path\", \"caller_name\", \"callee_path\", \"callee_name\", \"caller_site_start\", \"caller_site_end\", \"callee_start\", \"callee_end\", \"kind\", \"resolution_origin\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"resolved_edge\" (\"_row\", \"_source\", \"fact\", \"caller_path\", \"caller_name\", \"callee_path\", \"callee_name\", \"caller_site_start\", \"caller_site_end\", \"callee_start\", \"callee_end\", \"kind\", \"resolution_origin\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in graph_node.chunks(graph_node_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"graph_node\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"name\", \"depth\", \"grade\", \"line\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"graph_node\" (\"_row\", \"_source\", \"path\", \"name\", \"depth\", \"grade\", \"line\") VALUES ", "(?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in seed_unmatched.chunks(seed_unmatched_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"seed_unmatched\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"seed\", \"reason\") VALUES ", "(?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"seed_unmatched\" (\"_row\", \"_source\", \"seed\", \"reason\") VALUES ", "(?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in graph_edge.chunks(graph_edge_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"graph_edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"from_path\", \"from_name\", \"to_path\", \"to_name\", \"kind\", \"grade\", \"from_line\", \"to_line\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"graph_edge\" (\"_row\", \"_source\", \"from_path\", \"from_name\", \"to_path\", \"to_name\", \"kind\", \"grade\", \"from_line\", \"to_line\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in external_crate_decline.chunks(external_crate_decline_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"external_crate_decline\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"from_path\", \"from_name\", \"type_name\", \"crate_name\", \"reason\", \"kind\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"external_crate_decline\" (\"_row\", \"_source\", \"from_path\", \"from_name\", \"type_name\", \"crate_name\", \"reason\", \"kind\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in graph_decline.chunks(graph_decline_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"graph_decline\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"from_path\", \"from_name\", \"type_name\", \"crate_name\", \"reason\", \"kind\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"graph_decline\" (\"_row\", \"_source\", \"from_path\", \"from_name\", \"type_name\", \"crate_name\", \"reason\", \"kind\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in graph_path.chunks(graph_path_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"graph_path\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"plane\", \"from_path\", \"from_name\", \"to_path\", \"to_name\", \"depth\", \"witness\", \"from_file\", \"from_line\", \"from_col\", \"from_text\", \"from_reason\", \"to_file\", \"to_line\", \"to_col\", \"to_text\", \"to_reason\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"graph_path\" (\"_row\", \"_source\", \"plane\", \"from_path\", \"from_name\", \"to_path\", \"to_name\", \"depth\", \"witness\", \"from_file\", \"from_line\", \"from_col\", \"from_text\", \"from_reason\", \"to_file\", \"to_line\", \"to_col\", \"to_text\", \"to_reason\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in graph_path_change.chunks(graph_path_change_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"graph_path_change\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"change\", \"revision\", \"plane\", \"from_path\", \"from_name\", \"to_path\", \"to_name\", \"depth\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"graph_path_change\" (\"_row\", \"_source\", \"change\", \"revision\", \"plane\", \"from_path\", \"from_name\", \"to_path\", \"to_name\", \"depth\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in graph_root.chunks(graph_root_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"graph_root\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"name\", \"span__start\", \"span__end\", \"found\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"graph_root\" (\"_row\", \"_source\", \"path\", \"name\", \"span__start\", \"span__end\", \"found\") VALUES ", "(?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in resolved_type_edge.chunks(resolved_type_edge_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"resolved_type_edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"owner_path\", \"owner_name\", \"owner_start\", \"owner_end\", \"target_path\", \"target_name\", \"kind\", \"resolution_origin\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"resolved_type_edge\" (\"_row\", \"_source\", \"fact\", \"owner_path\", \"owner_name\", \"owner_start\", \"owner_end\", \"target_path\", \"target_name\", \"kind\", \"resolution_origin\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in resolved_import.chunks(resolved_import_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"resolved_import\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"src_path\", \"name\", \"local\", \"target_path\", \"target_name\", \"kind\", \"hops\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"resolved_import\" (\"_row\", \"_source\", \"src_path\", \"name\", \"local\", \"target_path\", \"target_name\", \"kind\", \"hops\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in file_edge.chunks(file_edge_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"file_edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"src_path\", \"dst_path\", \"kind\", \"symbols\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"file_edge\" (\"_row\", \"_source\", \"src_path\", \"dst_path\", \"kind\", \"symbols\") VALUES ", "(?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in file_unresolved.chunks(file_unresolved_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"file_unresolved\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"src_path\", \"module\", \"reason\") VALUES ", "(?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"file_unresolved\" (\"_row\", \"_source\", \"src_path\", \"module\", \"reason\") VALUES ", "(?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in package_edge.chunks(package_edge_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"package_edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"src_manifest\", \"dst_manifest\", \"kind\") VALUES ", "(?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"package_edge\" (\"_row\", \"_source\", \"src_manifest\", \"dst_manifest\", \"kind\") VALUES ", "(?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in file.chunks(file_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"file\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"digest\", \"bytes\", \"lines\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"file\" (\"_row\", \"_source\", \"path\", \"digest\", \"bytes\", \"lines\") VALUES ", "(?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in line_start.chunks(line_start_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"line_start\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"digest\", \"offsets\") VALUES ", "(?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"line_start\" (\"_row\", \"_source\", \"path\", \"digest\", \"offsets\") VALUES ", "(?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in size_skip.chunks(size_skip_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"size_skip\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"bytes\", \"limit\", \"reason\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"size_skip\" (\"_row\", \"_source\", \"path\", \"bytes\", \"limit\", \"reason\") VALUES ", "(?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in capture.chunks(capture_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"capture\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"query\", \"capture\", \"text\", \"start\", \"end\", \"match_start\", \"match_end\", \"pattern\", \"match\", \"kind\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"capture\" (\"_row\", \"_source\", \"query\", \"capture\", \"text\", \"start\", \"end\", \"match_start\", \"match_end\", \"pattern\", \"match\", \"kind\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in symbol.chunks(symbol_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"symbol\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"symbol\", \"path\", \"kind\") VALUES ", "(?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"symbol\" (\"_row\", \"_source\", \"symbol\", \"path\", \"kind\") VALUES ", "(?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in occurrence.chunks(occurrence_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"occurrence\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"symbol\", \"path\", \"start\", \"end\", \"role\", \"exported\", \"decl_start\", \"decl_end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"occurrence\" (\"_row\", \"_source\", \"symbol\", \"path\", \"start\", \"end\", \"role\", \"exported\", \"decl_start\", \"decl_end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in free_name.chunks(free_name_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"free_name\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"owner_start\", \"owner_end\", \"name\", \"start\", \"end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"free_name\" (\"_row\", \"_source\", \"path\", \"owner_start\", \"owner_end\", \"name\", \"start\", \"end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in call_site.chunks(call_site_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"call_site\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"callee\", \"path\", \"line\", \"fn\", \"start\", \"end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"call_site\" (\"_row\", \"_source\", \"callee\", \"path\", \"line\", \"fn\", \"start\", \"end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in jsx_element.chunks(jsx_element_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"jsx_element\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"name\", \"path\", \"line\", \"fn\", \"start\", \"end\", \"parent_start\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"jsx_element\" (\"_row\", \"_source\", \"name\", \"path\", \"line\", \"fn\", \"start\", \"end\", \"parent_start\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in jsx_attribute.chunks(jsx_attribute_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"jsx_attribute\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"element_start\", \"name\", \"value\", \"start\", \"end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"jsx_attribute\" (\"_row\", \"_source\", \"path\", \"element_start\", \"name\", \"value\", \"start\", \"end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in local.chunks(local_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"local\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fn\", \"name\", \"path\", \"start\", \"end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"local\" (\"_row\", \"_source\", \"fn\", \"name\", \"path\", \"start\", \"end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in scip_def.chunks(scip_def_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"scip_def\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"symbol\", \"file\", \"repo\") VALUES ", "(?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"scip_def\" (\"_row\", \"_source\", \"symbol\", \"file\", \"repo\") VALUES ", "(?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in scip_name.chunks(scip_name_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"scip_name\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"symbol\", \"name\") VALUES ", "(?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"scip_name\" (\"_row\", \"_source\", \"symbol\", \"name\") VALUES ", "(?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in scip_ref.chunks(scip_ref_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"scip_ref\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"file\", \"symbol\", \"def_file\", \"repo\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"scip_ref\" (\"_row\", \"_source\", \"file\", \"symbol\", \"def_file\", \"repo\") VALUES ", "(?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in scip_external_ref.chunks(scip_external_ref_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"scip_external_ref\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"file\", \"symbol\", \"origin\", \"repo\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"scip_external_ref\" (\"_row\", \"_source\", \"file\", \"symbol\", \"origin\", \"repo\") VALUES ", "(?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in scip_edge.chunks(scip_edge_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"scip_edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"src\", \"dst\", \"repo\") VALUES ", "(?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"scip_edge\" (\"_row\", \"_source\", \"src\", \"dst\", \"repo\") VALUES ", "(?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in scip_fn_edge.chunks(scip_fn_edge_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"scip_fn_edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"caller\", \"callee\") VALUES ", "(?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"scip_fn_edge\" (\"_row\", \"_source\", \"caller\", \"callee\") VALUES ", "(?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in scip_callee_type.chunks(scip_callee_type_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"scip_callee_type\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"sym\", \"type\") VALUES ", "(?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"scip_callee_type\" (\"_row\", \"_source\", \"sym\", \"type\") VALUES ", "(?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in scip_local.chunks(scip_local_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"scip_local\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fn\", \"name\") VALUES ", "(?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"scip_local\" (\"_row\", \"_source\", \"fn\", \"name\") VALUES ", "(?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in scip_impl.chunks(scip_impl_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"scip_impl\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"impl\", \"iface\") VALUES ", "(?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"scip_impl\" (\"_row\", \"_source\", \"impl\", \"iface\") VALUES ", "(?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in scip_index.chunks(scip_index_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"scip_index\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"reused\", \"tool_name\", \"tool_version\", \"documents\", \"index_mtime_unix_ms\", \"staleness\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"scip_index\" (\"_row\", \"_source\", \"reused\", \"tool_name\", \"tool_version\", \"documents\", \"index_mtime_unix_ms\", \"staleness\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in scip_skip.chunks(scip_skip_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"scip_skip\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"lang\", \"bin\", \"reason\", \"detail\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"scip_skip\" (\"_row\", \"_source\", \"lang\", \"bin\", \"reason\", \"detail\") VALUES ", "(?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in scip_occurrence.chunks(scip_occurrence_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"scip_occurrence\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"symbol\", \"start\", \"end\", \"roles\", \"definition\", \"import\", \"write_access\", \"read_access\", \"generated\", \"test\", \"forward_definition\", \"syntax_kind\", \"enclosing_start\", \"enclosing_end\", \"text\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"scip_occurrence\" (\"_row\", \"_source\", \"path\", \"symbol\", \"start\", \"end\", \"roles\", \"definition\", \"import\", \"write_access\", \"read_access\", \"generated\", \"test\", \"forward_definition\", \"syntax_kind\", \"enclosing_start\", \"enclosing_end\", \"text\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in scip_occurrence_doc.chunks(scip_occurrence_doc_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"scip_occurrence_doc\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"start\", \"end\", \"pos\", \"text\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"scip_occurrence_doc\" (\"_row\", \"_source\", \"path\", \"start\", \"end\", \"pos\", \"text\") VALUES ", "(?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in scip_diagnostic.chunks(scip_diagnostic_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"scip_diagnostic\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"start\", \"end\", \"severity\", \"code\", \"message\", \"source\", \"tags\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"scip_diagnostic\" (\"_row\", \"_source\", \"path\", \"start\", \"end\", \"severity\", \"code\", \"message\", \"source\", \"tags\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in scip_symbol.chunks(scip_symbol_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"scip_symbol\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"symbol\", \"display_name\", \"kind\", \"enclosing_symbol\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"scip_symbol\" (\"_row\", \"_source\", \"path\", \"symbol\", \"display_name\", \"kind\", \"enclosing_symbol\") VALUES ", "(?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in scip_documentation.chunks(scip_documentation_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"scip_documentation\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"symbol\", \"pos\", \"text\") VALUES ", "(?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"scip_documentation\" (\"_row\", \"_source\", \"symbol\", \"pos\", \"text\") VALUES ", "(?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in scip_signature.chunks(scip_signature_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"scip_signature\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"symbol\", \"language\", \"text\") VALUES ", "(?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"scip_signature\" (\"_row\", \"_source\", \"symbol\", \"language\", \"text\") VALUES ", "(?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in scip_signature_occurrence.chunks(scip_signature_occurrence_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"scip_signature_occurrence\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"symbol\", \"ref_symbol\", \"start\", \"end\", \"roles\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"scip_signature_occurrence\" (\"_row\", \"_source\", \"symbol\", \"ref_symbol\", \"start\", \"end\", \"roles\") VALUES ", "(?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in scip_metadata.chunks(scip_metadata_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"scip_metadata\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"version\", \"tool_name\", \"tool_version\", \"tool_arguments\", \"project_root\", \"text_document_encoding\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"scip_metadata\" (\"_row\", \"_source\", \"version\", \"tool_name\", \"tool_version\", \"tool_arguments\", \"project_root\", \"text_document_encoding\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in scip_document.chunks(scip_document_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"scip_document\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"language\", \"position_encoding\", \"text\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"scip_document\" (\"_row\", \"_source\", \"path\", \"language\", \"position_encoding\", \"text\") VALUES ", "(?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
     }
 
     for chunk in scip_relationship.chunks(scip_relationship_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"scip_relationship\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"symbol\", \"related_symbol\", \"is_reference\", \"is_implementation\", \"is_type_definition\", \"is_definition\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"scip_relationship\" (\"_row\", \"_source\", \"symbol\", \"related_symbol\", \"is_reference\", \"is_implementation\", \"is_type_definition\", \"is_definition\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            let row_source = Source { row: source.row + *index as i64, source: source.source };
             parameter = row.bind(&mut statement, parameter, &row_source)?;
         }
         inserted += statement.raw_execute()?;
@@ -2884,37 +2882,29 @@ pub fn insert_all(conn: &rusqlite::Connection, source: &Source<'_>, rows: &[Fact
 }
 
 impl models::Protocol {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "protocol")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.version)?;
         parameter += 1;
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"protocol\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"version\") VALUES (?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"protocol\" (\"_row\", \"_source\", \"version\") VALUES (?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::Run {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         let scope_json = serde_json::to_string(&self.scope)?;
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "run")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.run)?;
         parameter += 1;
@@ -2929,23 +2919,19 @@ impl models::Run {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"run\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"run\", \"mode\", \"tool\", \"version\", \"scope\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"run\" (\"_row\", \"_source\", \"run\", \"mode\", \"tool\", \"version\", \"scope\") VALUES (?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::Fact {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         let args_json = serde_json::to_string(&self.args)?;
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "fact")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.fact)?;
         parameter += 1;
@@ -2956,22 +2942,18 @@ impl models::Fact {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"fact\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"relation\", \"args\") VALUES (?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"fact\" (\"_row\", \"_source\", \"fact\", \"relation\", \"args\") VALUES (?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::Witness {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "witness")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.fact)?;
         parameter += 1;
@@ -2982,22 +2964,18 @@ impl models::Witness {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"witness\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"run\", \"method\") VALUES (?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"witness\" (\"_row\", \"_source\", \"fact\", \"run\", \"method\") VALUES (?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::Coverage {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "coverage")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.run)?;
         parameter += 1;
@@ -3008,22 +2986,18 @@ impl models::Coverage {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"coverage\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"run\", \"relation\", \"coverage\") VALUES (?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"coverage\" (\"_row\", \"_source\", \"run\", \"relation\", \"coverage\") VALUES (?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::Diagnostic {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "diagnostic")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.run)?;
         parameter += 1;
@@ -3034,22 +3008,18 @@ impl models::Diagnostic {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"diagnostic\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"run\", \"relation\", \"detail\") VALUES (?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"diagnostic\" (\"_row\", \"_source\", \"run\", \"relation\", \"detail\") VALUES (?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::Node {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "node")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.fact)?;
         parameter += 1;
@@ -3074,22 +3044,18 @@ impl models::Node {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"node\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"span__start\", \"span__end\", \"kind\", \"name\", \"function\", \"named\", \"is_async\", \"owner_kind\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"node\" (\"_row\", \"_source\", \"fact\", \"family\", \"span__start\", \"span__end\", \"kind\", \"name\", \"function\", \"named\", \"is_async\", \"owner_kind\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::Edge {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "edge")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.fact)?;
         parameter += 1;
@@ -3118,22 +3084,18 @@ impl models::Edge {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"kind\", \"from__start\", \"from__end\", \"from_kind\", \"to__start\", \"to__end\", \"to_kind\", \"field\", \"index\", \"named_index\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"edge\" (\"_row\", \"_source\", \"fact\", \"family\", \"kind\", \"from__start\", \"from__end\", \"from_kind\", \"to__start\", \"to__end\", \"to_kind\", \"field\", \"index\", \"named_index\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::Param {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "param")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.fact)?;
         parameter += 1;
@@ -3148,22 +3110,18 @@ impl models::Param {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"param\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"span__start\", \"span__end\", \"pos\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"param\" (\"_row\", \"_source\", \"fact\", \"family\", \"span__start\", \"span__end\", \"pos\") VALUES (?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::Arg {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "arg")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.fact)?;
         parameter += 1;
@@ -3182,22 +3140,18 @@ impl models::Arg {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"arg\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"call__start\", \"call__end\", \"pos\", \"arg__start\", \"arg__end\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"arg\" (\"_row\", \"_source\", \"fact\", \"family\", \"call__start\", \"call__end\", \"pos\", \"arg__start\", \"arg__end\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::DfField {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "df_field")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.fact)?;
         parameter += 1;
@@ -3216,22 +3170,18 @@ impl models::DfField {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"df_field\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"owner__start\", \"owner__end\", \"name\", \"value__start\", \"value__end\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"df_field\" (\"_row\", \"_source\", \"fact\", \"family\", \"owner__start\", \"owner__end\", \"name\", \"value__start\", \"value__end\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::DfLit {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "df_lit")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.fact)?;
         parameter += 1;
@@ -3248,22 +3198,18 @@ impl models::DfLit {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"df_lit\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"node__start\", \"node__end\", \"kind\", \"text\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"df_lit\" (\"_row\", \"_source\", \"fact\", \"family\", \"node__start\", \"node__end\", \"kind\", \"text\") VALUES (?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::DfLoop {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "df_loop")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.fact)?;
         parameter += 1;
@@ -3280,22 +3226,18 @@ impl models::DfLoop {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"df_loop\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"span__start\", \"span__end\", \"var\", \"collection\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"df_loop\" (\"_row\", \"_source\", \"fact\", \"family\", \"span__start\", \"span__end\", \"var\", \"collection\") VALUES (?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::DfNest {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "df_nest")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.fact)?;
         parameter += 1;
@@ -3316,22 +3258,18 @@ impl models::DfNest {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"df_nest\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"call__start\", \"call__end\", \"loop__start\", \"loop__end\", \"depth\", \"collection\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"df_nest\" (\"_row\", \"_source\", \"fact\", \"family\", \"call__start\", \"call__end\", \"loop__start\", \"loop__end\", \"depth\", \"collection\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::DfAllocates {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "df_allocates")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.fact)?;
         parameter += 1;
@@ -3344,22 +3282,18 @@ impl models::DfAllocates {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"df_allocates\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"owner__start\", \"owner__end\") VALUES (?, ?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"df_allocates\" (\"_row\", \"_source\", \"fact\", \"family\", \"owner__start\", \"owner__end\") VALUES (?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::Sig {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "sig")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.fact)?;
         parameter += 1;
@@ -3382,22 +3316,18 @@ impl models::Sig {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"sig\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"owner__start\", \"owner__end\", \"owner_start\", \"owner_end\", \"slot\", \"pos\", \"ty\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"sig\" (\"_row\", \"_source\", \"fact\", \"family\", \"owner__start\", \"owner__end\", \"owner_start\", \"owner_end\", \"slot\", \"pos\", \"ty\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::Site {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "site")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.fact)?;
         parameter += 1;
@@ -3414,22 +3344,18 @@ impl models::Site {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"site\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"span__start\", \"span__end\", \"callee\", \"callee_path\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"site\" (\"_row\", \"_source\", \"fact\", \"family\", \"span__start\", \"span__end\", \"callee\", \"callee_path\") VALUES (?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::Const {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "const")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.fact)?;
         parameter += 1;
@@ -3448,22 +3374,18 @@ impl models::Const {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"const\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"owner__start\", \"owner__end\", \"field\", \"text\", \"kind\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"const\" (\"_row\", \"_source\", \"fact\", \"family\", \"owner__start\", \"owner__end\", \"field\", \"text\", \"kind\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::Doc {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "doc")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.fact)?;
         parameter += 1;
@@ -3480,22 +3402,18 @@ impl models::Doc {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"doc\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"owner__start\", \"owner__end\", \"parent\", \"text\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"doc\" (\"_row\", \"_source\", \"fact\", \"family\", \"owner__start\", \"owner__end\", \"parent\", \"text\") VALUES (?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::DocTag {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "doc_tag")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.fact)?;
         parameter += 1;
@@ -3514,22 +3432,18 @@ impl models::DocTag {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"doc_tag\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"owner__start\", \"owner__end\", \"tag\", \"arg\", \"text\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"doc_tag\" (\"_row\", \"_source\", \"fact\", \"family\", \"owner__start\", \"owner__end\", \"tag\", \"arg\", \"text\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::DocNode {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "doc_node")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.fact)?;
         parameter += 1;
@@ -3556,23 +3470,19 @@ impl models::DocNode {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"doc_node\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"span__start\", \"span__end\", \"kind\", \"name\", \"parent\", \"target\", \"title\", \"body__start\", \"body__end\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"doc_node\" (\"_row\", \"_source\", \"fact\", \"family\", \"span__start\", \"span__end\", \"kind\", \"name\", \"parent\", \"target\", \"title\", \"body__start\", \"body__end\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::DataDoc {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         let doc_json = serde_json::to_string(&self.doc)?;
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "data_doc")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.fact)?;
         parameter += 1;
@@ -3591,22 +3501,18 @@ impl models::DataDoc {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"data_doc\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"ordinal\", \"span__start\", \"span__end\", \"format\", \"doc\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"data_doc\" (\"_row\", \"_source\", \"fact\", \"family\", \"ordinal\", \"span__start\", \"span__end\", \"format\", \"doc\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::DataValue {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "data_value")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.fact)?;
         parameter += 1;
@@ -3627,22 +3533,18 @@ impl models::DataValue {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"data_value\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"ordinal\", \"path\", \"kind\", \"text\", \"span__start\", \"span__end\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"data_value\" (\"_row\", \"_source\", \"fact\", \"family\", \"ordinal\", \"path\", \"kind\", \"text\", \"span__start\", \"span__end\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::Specifier {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "specifier")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.fact)?;
         parameter += 1;
@@ -3665,22 +3567,18 @@ impl models::Specifier {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"specifier\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"span__start\", \"span__end\", \"name\", \"kind\", \"module\", \"imported\", \"type_only\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"specifier\" (\"_row\", \"_source\", \"fact\", \"family\", \"span__start\", \"span__end\", \"name\", \"kind\", \"module\", \"imported\", \"type_only\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::MethodOwner {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "method_owner")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.fact)?;
         parameter += 1;
@@ -3697,22 +3595,18 @@ impl models::MethodOwner {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"method_owner\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"owner__start\", \"owner__end\", \"self_type\", \"trait\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"method_owner\" (\"_row\", \"_source\", \"fact\", \"family\", \"owner__start\", \"owner__end\", \"self_type\", \"trait\") VALUES (?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::MacroSite {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "macro_site")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.family.as_str())?;
         parameter += 1;
@@ -3727,22 +3621,18 @@ impl models::MacroSite {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"macro_site\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"family\", \"span__start\", \"span__end\", \"macro_name\", \"source\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"macro_site\" (\"_row\", \"_source\", \"family\", \"span__start\", \"span__end\", \"macro_name\", \"source\") VALUES (?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::Reference {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "reference")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.fact)?;
         parameter += 1;
@@ -3759,22 +3649,18 @@ impl models::Reference {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"reference\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"span__start\", \"span__end\", \"functor\", \"position\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"reference\" (\"_row\", \"_source\", \"fact\", \"family\", \"span__start\", \"span__end\", \"functor\", \"position\") VALUES (?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::Unresolved {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "unresolved")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.family.as_str())?;
         parameter += 1;
@@ -3791,22 +3677,18 @@ impl models::Unresolved {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"unresolved\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"family\", \"path\", \"span__start\", \"span__end\", \"reason\", \"detail\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"unresolved\" (\"_row\", \"_source\", \"family\", \"path\", \"span__start\", \"span__end\", \"reason\", \"detail\") VALUES (?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::Projectedge {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "projectedge")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.family.as_str())?;
         parameter += 1;
@@ -3825,22 +3707,18 @@ impl models::Projectedge {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"projectedge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"family\", \"kind\", \"from__start\", \"from__end\", \"to_blob\", \"to__start\", \"to__end\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"projectedge\" (\"_row\", \"_source\", \"family\", \"kind\", \"from__start\", \"from__end\", \"to_blob\", \"to__start\", \"to__end\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::FlowEdge {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "flow_edge")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.family.as_str())?;
         parameter += 1;
@@ -3861,22 +3739,18 @@ impl models::FlowEdge {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"flow_edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"family\", \"kind\", \"from_blob\", \"from__start\", \"from__end\", \"to_blob\", \"to__start\", \"to__end\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"flow_edge\" (\"_row\", \"_source\", \"family\", \"kind\", \"from_blob\", \"from__start\", \"from__end\", \"to_blob\", \"to__start\", \"to__end\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::ResolvedEdge {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "resolved_edge")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.fact)?;
         parameter += 1;
@@ -3903,22 +3777,18 @@ impl models::ResolvedEdge {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"resolved_edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"caller_path\", \"caller_name\", \"callee_path\", \"callee_name\", \"caller_site_start\", \"caller_site_end\", \"callee_start\", \"callee_end\", \"kind\", \"resolution_origin\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"resolved_edge\" (\"_row\", \"_source\", \"fact\", \"caller_path\", \"caller_name\", \"callee_path\", \"callee_name\", \"caller_site_start\", \"caller_site_end\", \"callee_start\", \"callee_end\", \"kind\", \"resolution_origin\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::GraphNode {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "graph_node")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.path.as_str())?;
         parameter += 1;
@@ -3933,22 +3803,18 @@ impl models::GraphNode {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"graph_node\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"name\", \"depth\", \"grade\", \"line\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"graph_node\" (\"_row\", \"_source\", \"path\", \"name\", \"depth\", \"grade\", \"line\") VALUES (?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::SeedUnmatched {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "seed_unmatched")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.seed.as_str())?;
         parameter += 1;
@@ -3957,22 +3823,18 @@ impl models::SeedUnmatched {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"seed_unmatched\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"seed\", \"reason\") VALUES (?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"seed_unmatched\" (\"_row\", \"_source\", \"seed\", \"reason\") VALUES (?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::GraphEdge {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "graph_edge")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.from_path.as_str())?;
         parameter += 1;
@@ -3993,22 +3855,18 @@ impl models::GraphEdge {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"graph_edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"from_path\", \"from_name\", \"to_path\", \"to_name\", \"kind\", \"grade\", \"from_line\", \"to_line\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"graph_edge\" (\"_row\", \"_source\", \"from_path\", \"from_name\", \"to_path\", \"to_name\", \"kind\", \"grade\", \"from_line\", \"to_line\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::ExternalCrateDecline {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "external_crate_decline")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.from_path.as_str())?;
         parameter += 1;
@@ -4025,22 +3883,18 @@ impl models::ExternalCrateDecline {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"external_crate_decline\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"from_path\", \"from_name\", \"type_name\", \"crate_name\", \"reason\", \"kind\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"external_crate_decline\" (\"_row\", \"_source\", \"from_path\", \"from_name\", \"type_name\", \"crate_name\", \"reason\", \"kind\") VALUES (?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::GraphDecline {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "graph_decline")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.from_path.as_str())?;
         parameter += 1;
@@ -4057,23 +3911,19 @@ impl models::GraphDecline {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"graph_decline\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"from_path\", \"from_name\", \"type_name\", \"crate_name\", \"reason\", \"kind\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"graph_decline\" (\"_row\", \"_source\", \"from_path\", \"from_name\", \"type_name\", \"crate_name\", \"reason\", \"kind\") VALUES (?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::GraphPath {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         let witness_json = serde_json::to_string(&self.witness)?;
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "graph_path")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.plane.as_str())?;
         parameter += 1;
@@ -4112,22 +3962,18 @@ impl models::GraphPath {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"graph_path\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"plane\", \"from_path\", \"from_name\", \"to_path\", \"to_name\", \"depth\", \"witness\", \"from_file\", \"from_line\", \"from_col\", \"from_text\", \"from_reason\", \"to_file\", \"to_line\", \"to_col\", \"to_text\", \"to_reason\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"graph_path\" (\"_row\", \"_source\", \"plane\", \"from_path\", \"from_name\", \"to_path\", \"to_name\", \"depth\", \"witness\", \"from_file\", \"from_line\", \"from_col\", \"from_text\", \"from_reason\", \"to_file\", \"to_line\", \"to_col\", \"to_text\", \"to_reason\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::GraphPathChange {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "graph_path_change")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.change.as_str())?;
         parameter += 1;
@@ -4148,22 +3994,18 @@ impl models::GraphPathChange {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"graph_path_change\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"change\", \"revision\", \"plane\", \"from_path\", \"from_name\", \"to_path\", \"to_name\", \"depth\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"graph_path_change\" (\"_row\", \"_source\", \"change\", \"revision\", \"plane\", \"from_path\", \"from_name\", \"to_path\", \"to_name\", \"depth\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::GraphRoot {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "graph_root")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.path.as_str())?;
         parameter += 1;
@@ -4178,22 +4020,18 @@ impl models::GraphRoot {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"graph_root\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"name\", \"span__start\", \"span__end\", \"found\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"graph_root\" (\"_row\", \"_source\", \"path\", \"name\", \"span__start\", \"span__end\", \"found\") VALUES (?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::ResolvedTypeEdge {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "resolved_type_edge")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.fact)?;
         parameter += 1;
@@ -4216,22 +4054,18 @@ impl models::ResolvedTypeEdge {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"resolved_type_edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"owner_path\", \"owner_name\", \"owner_start\", \"owner_end\", \"target_path\", \"target_name\", \"kind\", \"resolution_origin\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"resolved_type_edge\" (\"_row\", \"_source\", \"fact\", \"owner_path\", \"owner_name\", \"owner_start\", \"owner_end\", \"target_path\", \"target_name\", \"kind\", \"resolution_origin\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::ResolvedImport {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "resolved_import")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.src_path.as_str())?;
         parameter += 1;
@@ -4250,22 +4084,18 @@ impl models::ResolvedImport {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"resolved_import\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"src_path\", \"name\", \"local\", \"target_path\", \"target_name\", \"kind\", \"hops\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"resolved_import\" (\"_row\", \"_source\", \"src_path\", \"name\", \"local\", \"target_path\", \"target_name\", \"kind\", \"hops\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::FileEdge {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "file_edge")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.src_path.as_str())?;
         parameter += 1;
@@ -4278,22 +4108,18 @@ impl models::FileEdge {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"file_edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"src_path\", \"dst_path\", \"kind\", \"symbols\") VALUES (?, ?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"file_edge\" (\"_row\", \"_source\", \"src_path\", \"dst_path\", \"kind\", \"symbols\") VALUES (?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::FileUnresolved {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "file_unresolved")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.src_path.as_str())?;
         parameter += 1;
@@ -4304,22 +4130,18 @@ impl models::FileUnresolved {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"file_unresolved\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"src_path\", \"module\", \"reason\") VALUES (?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"file_unresolved\" (\"_row\", \"_source\", \"src_path\", \"module\", \"reason\") VALUES (?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::PackageEdge {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "package_edge")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.src_manifest.as_str())?;
         parameter += 1;
@@ -4330,22 +4152,18 @@ impl models::PackageEdge {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"package_edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"src_manifest\", \"dst_manifest\", \"kind\") VALUES (?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"package_edge\" (\"_row\", \"_source\", \"src_manifest\", \"dst_manifest\", \"kind\") VALUES (?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::File {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "file")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.path.as_str())?;
         parameter += 1;
@@ -4358,23 +4176,19 @@ impl models::File {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"file\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"digest\", \"bytes\", \"lines\") VALUES (?, ?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"file\" (\"_row\", \"_source\", \"path\", \"digest\", \"bytes\", \"lines\") VALUES (?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::LineStart {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         let offsets_json = serde_json::to_string(&self.offsets)?;
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "line_start")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.path.as_str())?;
         parameter += 1;
@@ -4385,22 +4199,18 @@ impl models::LineStart {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"line_start\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"digest\", \"offsets\") VALUES (?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"line_start\" (\"_row\", \"_source\", \"path\", \"digest\", \"offsets\") VALUES (?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::SizeSkip {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "size_skip")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.path.as_str())?;
         parameter += 1;
@@ -4413,22 +4223,18 @@ impl models::SizeSkip {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"size_skip\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"bytes\", \"limit\", \"reason\") VALUES (?, ?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"size_skip\" (\"_row\", \"_source\", \"path\", \"bytes\", \"limit\", \"reason\") VALUES (?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::Capture {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "capture")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.query.as_str())?;
         parameter += 1;
@@ -4453,22 +4259,18 @@ impl models::Capture {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"capture\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"query\", \"capture\", \"text\", \"start\", \"end\", \"match_start\", \"match_end\", \"pattern\", \"match\", \"kind\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"capture\" (\"_row\", \"_source\", \"query\", \"capture\", \"text\", \"start\", \"end\", \"match_start\", \"match_end\", \"pattern\", \"match\", \"kind\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::Symbol {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "symbol")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.symbol.as_str())?;
         parameter += 1;
@@ -4479,22 +4281,18 @@ impl models::Symbol {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"symbol\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"symbol\", \"path\", \"kind\") VALUES (?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"symbol\" (\"_row\", \"_source\", \"symbol\", \"path\", \"kind\") VALUES (?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::Occurrence {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "occurrence")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.symbol.as_str())?;
         parameter += 1;
@@ -4515,22 +4313,18 @@ impl models::Occurrence {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"occurrence\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"symbol\", \"path\", \"start\", \"end\", \"role\", \"exported\", \"decl_start\", \"decl_end\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"occurrence\" (\"_row\", \"_source\", \"symbol\", \"path\", \"start\", \"end\", \"role\", \"exported\", \"decl_start\", \"decl_end\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::FreeName {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "free_name")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.path.as_str())?;
         parameter += 1;
@@ -4547,22 +4341,18 @@ impl models::FreeName {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"free_name\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"owner_start\", \"owner_end\", \"name\", \"start\", \"end\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"free_name\" (\"_row\", \"_source\", \"path\", \"owner_start\", \"owner_end\", \"name\", \"start\", \"end\") VALUES (?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::CallSite {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "call_site")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.callee.as_str())?;
         parameter += 1;
@@ -4579,22 +4369,18 @@ impl models::CallSite {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"call_site\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"callee\", \"path\", \"line\", \"fn\", \"start\", \"end\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"call_site\" (\"_row\", \"_source\", \"callee\", \"path\", \"line\", \"fn\", \"start\", \"end\") VALUES (?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::JsxElement {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "jsx_element")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.name.as_str())?;
         parameter += 1;
@@ -4613,22 +4399,18 @@ impl models::JsxElement {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"jsx_element\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"name\", \"path\", \"line\", \"fn\", \"start\", \"end\", \"parent_start\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"jsx_element\" (\"_row\", \"_source\", \"name\", \"path\", \"line\", \"fn\", \"start\", \"end\", \"parent_start\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::JsxAttribute {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "jsx_attribute")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.path.as_str())?;
         parameter += 1;
@@ -4645,22 +4427,18 @@ impl models::JsxAttribute {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"jsx_attribute\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"element_start\", \"name\", \"value\", \"start\", \"end\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"jsx_attribute\" (\"_row\", \"_source\", \"path\", \"element_start\", \"name\", \"value\", \"start\", \"end\") VALUES (?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::Local {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "local")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.r#fn.as_str())?;
         parameter += 1;
@@ -4675,22 +4453,18 @@ impl models::Local {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"local\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fn\", \"name\", \"path\", \"start\", \"end\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"local\" (\"_row\", \"_source\", \"fn\", \"name\", \"path\", \"start\", \"end\") VALUES (?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::ScipDef {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "scip_def")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.symbol.as_str())?;
         parameter += 1;
@@ -4701,22 +4475,18 @@ impl models::ScipDef {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"scip_def\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"symbol\", \"file\", \"repo\") VALUES (?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"scip_def\" (\"_row\", \"_source\", \"symbol\", \"file\", \"repo\") VALUES (?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::ScipName {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "scip_name")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.symbol.as_str())?;
         parameter += 1;
@@ -4725,22 +4495,18 @@ impl models::ScipName {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"scip_name\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"symbol\", \"name\") VALUES (?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"scip_name\" (\"_row\", \"_source\", \"symbol\", \"name\") VALUES (?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::ScipRef {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "scip_ref")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.file.as_str())?;
         parameter += 1;
@@ -4753,22 +4519,18 @@ impl models::ScipRef {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"scip_ref\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"file\", \"symbol\", \"def_file\", \"repo\") VALUES (?, ?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"scip_ref\" (\"_row\", \"_source\", \"file\", \"symbol\", \"def_file\", \"repo\") VALUES (?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::ScipExternalRef {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "scip_external_ref")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.file.as_str())?;
         parameter += 1;
@@ -4781,22 +4543,18 @@ impl models::ScipExternalRef {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"scip_external_ref\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"file\", \"symbol\", \"origin\", \"repo\") VALUES (?, ?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"scip_external_ref\" (\"_row\", \"_source\", \"file\", \"symbol\", \"origin\", \"repo\") VALUES (?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::ScipEdge {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "scip_edge")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.src.as_str())?;
         parameter += 1;
@@ -4807,22 +4565,18 @@ impl models::ScipEdge {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"scip_edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"src\", \"dst\", \"repo\") VALUES (?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"scip_edge\" (\"_row\", \"_source\", \"src\", \"dst\", \"repo\") VALUES (?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::ScipFnEdge {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "scip_fn_edge")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.caller.as_str())?;
         parameter += 1;
@@ -4831,22 +4585,18 @@ impl models::ScipFnEdge {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"scip_fn_edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"caller\", \"callee\") VALUES (?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"scip_fn_edge\" (\"_row\", \"_source\", \"caller\", \"callee\") VALUES (?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::ScipCalleeType {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "scip_callee_type")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.sym.as_str())?;
         parameter += 1;
@@ -4855,22 +4605,18 @@ impl models::ScipCalleeType {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"scip_callee_type\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"sym\", \"type\") VALUES (?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"scip_callee_type\" (\"_row\", \"_source\", \"sym\", \"type\") VALUES (?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::ScipLocal {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "scip_local")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.r#fn.as_str())?;
         parameter += 1;
@@ -4879,22 +4625,18 @@ impl models::ScipLocal {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"scip_local\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fn\", \"name\") VALUES (?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"scip_local\" (\"_row\", \"_source\", \"fn\", \"name\") VALUES (?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::ScipImpl {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "scip_impl")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.r#impl.as_str())?;
         parameter += 1;
@@ -4903,22 +4645,18 @@ impl models::ScipImpl {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"scip_impl\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"impl\", \"iface\") VALUES (?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"scip_impl\" (\"_row\", \"_source\", \"impl\", \"iface\") VALUES (?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::ScipIndex {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "scip_index")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.reused)?;
         parameter += 1;
@@ -4935,22 +4673,18 @@ impl models::ScipIndex {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"scip_index\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"reused\", \"tool_name\", \"tool_version\", \"documents\", \"index_mtime_unix_ms\", \"staleness\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"scip_index\" (\"_row\", \"_source\", \"reused\", \"tool_name\", \"tool_version\", \"documents\", \"index_mtime_unix_ms\", \"staleness\") VALUES (?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::ScipSkip {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "scip_skip")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.lang.as_str())?;
         parameter += 1;
@@ -4963,22 +4697,18 @@ impl models::ScipSkip {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"scip_skip\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"lang\", \"bin\", \"reason\", \"detail\") VALUES (?, ?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"scip_skip\" (\"_row\", \"_source\", \"lang\", \"bin\", \"reason\", \"detail\") VALUES (?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::ScipOccurrence {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "scip_occurrence")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.path.as_str())?;
         parameter += 1;
@@ -5015,22 +4745,18 @@ impl models::ScipOccurrence {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"scip_occurrence\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"symbol\", \"start\", \"end\", \"roles\", \"definition\", \"import\", \"write_access\", \"read_access\", \"generated\", \"test\", \"forward_definition\", \"syntax_kind\", \"enclosing_start\", \"enclosing_end\", \"text\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"scip_occurrence\" (\"_row\", \"_source\", \"path\", \"symbol\", \"start\", \"end\", \"roles\", \"definition\", \"import\", \"write_access\", \"read_access\", \"generated\", \"test\", \"forward_definition\", \"syntax_kind\", \"enclosing_start\", \"enclosing_end\", \"text\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::ScipOccurrenceDoc {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "scip_occurrence_doc")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.path.as_str())?;
         parameter += 1;
@@ -5045,23 +4771,19 @@ impl models::ScipOccurrenceDoc {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"scip_occurrence_doc\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"start\", \"end\", \"pos\", \"text\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"scip_occurrence_doc\" (\"_row\", \"_source\", \"path\", \"start\", \"end\", \"pos\", \"text\") VALUES (?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::ScipDiagnostic {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         let tags_json = serde_json::to_string(&self.tags)?;
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "scip_diagnostic")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.path.as_str())?;
         parameter += 1;
@@ -5082,22 +4804,18 @@ impl models::ScipDiagnostic {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"scip_diagnostic\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"start\", \"end\", \"severity\", \"code\", \"message\", \"source\", \"tags\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"scip_diagnostic\" (\"_row\", \"_source\", \"path\", \"start\", \"end\", \"severity\", \"code\", \"message\", \"source\", \"tags\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::ScipSymbol {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "scip_symbol")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.path.as_deref())?;
         parameter += 1;
@@ -5112,22 +4830,18 @@ impl models::ScipSymbol {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"scip_symbol\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"symbol\", \"display_name\", \"kind\", \"enclosing_symbol\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"scip_symbol\" (\"_row\", \"_source\", \"path\", \"symbol\", \"display_name\", \"kind\", \"enclosing_symbol\") VALUES (?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::ScipDocumentation {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "scip_documentation")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.symbol.as_str())?;
         parameter += 1;
@@ -5138,22 +4852,18 @@ impl models::ScipDocumentation {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"scip_documentation\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"symbol\", \"pos\", \"text\") VALUES (?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"scip_documentation\" (\"_row\", \"_source\", \"symbol\", \"pos\", \"text\") VALUES (?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::ScipSignature {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "scip_signature")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.symbol.as_str())?;
         parameter += 1;
@@ -5164,22 +4874,18 @@ impl models::ScipSignature {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"scip_signature\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"symbol\", \"language\", \"text\") VALUES (?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"scip_signature\" (\"_row\", \"_source\", \"symbol\", \"language\", \"text\") VALUES (?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::ScipSignatureOccurrence {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "scip_signature_occurrence")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.symbol.as_str())?;
         parameter += 1;
@@ -5194,23 +4900,19 @@ impl models::ScipSignatureOccurrence {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"scip_signature_occurrence\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"symbol\", \"ref_symbol\", \"start\", \"end\", \"roles\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"scip_signature_occurrence\" (\"_row\", \"_source\", \"symbol\", \"ref_symbol\", \"start\", \"end\", \"roles\") VALUES (?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::ScipMetadata {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         let tool_arguments_json = serde_json::to_string(&self.tool_arguments)?;
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "scip_metadata")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.version)?;
         parameter += 1;
@@ -5227,22 +4929,18 @@ impl models::ScipMetadata {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"scip_metadata\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"version\", \"tool_name\", \"tool_version\", \"tool_arguments\", \"project_root\", \"text_document_encoding\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"scip_metadata\" (\"_row\", \"_source\", \"version\", \"tool_name\", \"tool_version\", \"tool_arguments\", \"project_root\", \"text_document_encoding\") VALUES (?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::ScipDocument {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "scip_document")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.path.as_str())?;
         parameter += 1;
@@ -5255,22 +4953,18 @@ impl models::ScipDocument {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"scip_document\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"language\", \"position_encoding\", \"text\") VALUES (?, ?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"scip_document\" (\"_row\", \"_source\", \"path\", \"language\", \"position_encoding\", \"text\") VALUES (?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
 }
 
 impl models::ScipRelationship {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
         parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "scip_relationship")?;
+        statement.raw_bind_parameter(parameter, source.source)?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.symbol.as_str())?;
         parameter += 1;
@@ -5287,8 +4981,8 @@ impl models::ScipRelationship {
         Ok(parameter)
     }
     #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"scip_relationship\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"symbol\", \"related_symbol\", \"is_reference\", \"is_implementation\", \"is_type_definition\", \"is_definition\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"scip_relationship\" (\"_row\", \"_source\", \"symbol\", \"related_symbol\", \"is_reference\", \"is_implementation\", \"is_type_definition\", \"is_definition\") VALUES (?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }

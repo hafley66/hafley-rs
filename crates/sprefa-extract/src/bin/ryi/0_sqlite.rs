@@ -36,8 +36,10 @@ pub struct Database {
     temporary: Option<tempfile::NamedTempFile>,
     destination: Option<PathBuf>,
     pub rows: i64,
-    input_path: Option<String>,
-    content_id: Option<String>,
+    /// `source.id` per (path, content_id) this export has written, in first-seen order.
+    sources: HashMap<(String, String), i64>,
+    /// The current input file: its path and `source.id`; `None` for project-wide rows.
+    source: Option<(String, i64)>,
     pending: Vec<writers::Fact>,
     pending_bytes: usize,
     max_batch_rows: usize,
@@ -49,14 +51,23 @@ pub struct Database {
     _export_guard: tracing::span::EnteredSpan,
 }
 
+/// The `source` table's row, `record`-first for the binder.
+#[derive(serde::Serialize)]
+struct SourceRow<'a> {
+    record: &'static str,
+    id: i64,
+    path: &'a str,
+    content_id: &'a str,
+}
+
 const BATCH_BYTES: usize = 8 * 1024 * 1024;
 
 fn shell_quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', "'\"'\"'"))
 }
 
-/// Every `<x>__start`/`<x>__end` pair on a table with `_content_id`, joined
-/// to `line_start` by digest. No `col` column: only offsets are stored.
+/// Every `<x>__start`/`<x>__end` pair on a table with `_source`, joined to
+/// `line_start` by the source's content id. No `col` column: only offsets are stored.
 fn span_lines_view_sql(connection: &Connection) -> Result<String> {
     let mut tables: Vec<String> = connection
         .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")?
@@ -72,7 +83,7 @@ fn span_lines_view_sql(connection: &Connection) -> Result<String> {
             .prepare(&format!("PRAGMA table_info(\"{table}\")"))?
             .query_map([], |row| row.get::<_, String>(1))?
             .collect::<rusqlite::Result<Vec<_>>>()?;
-        if !columns.iter().any(|column| column == "_content_id") {
+        if !columns.iter().any(|column| column == "_source") {
             continue;
         }
         for start_column in columns.iter().filter(|column| column.ends_with("__start")) {
@@ -83,8 +94,9 @@ fn span_lines_view_sql(connection: &Connection) -> Result<String> {
             }
             arms.push(format!(
                 "SELECT '{table}' AS _table, '{prefix}' AS _span, t.\"_row\" AS _row, \
-                 t.\"_content_id\" AS _content_id, t.\"{start_column}\" AS start, \
-                 t.\"{end_column}\" AS end FROM \"{table}\" AS t"
+                 src.\"content_id\" AS _content_id, t.\"{start_column}\" AS start, \
+                 t.\"{end_column}\" AS end FROM \"{table}\" AS t \
+                 JOIN \"source\" AS src ON src.\"id\" = t.\"_source\""
             ));
         }
     }
@@ -249,8 +261,8 @@ impl Database {
             temporary,
             destination,
             rows: 0,
-            input_path: None,
-            content_id: None,
+            sources: HashMap::new(),
+            source: None,
             pending: Vec::with_capacity(max_batch_rows),
             pending_bytes: 0,
             max_batch_rows,
@@ -286,22 +298,29 @@ impl Database {
     }
 
     pub fn source(&mut self, path: &str, digest: String) -> Result<()> {
-        if self.input_path.as_deref() == Some(path) && self.content_id.as_deref() == Some(&digest) {
+        let key = (path.to_owned(), digest);
+        let known = self.sources.get(&key).copied();
+        let id = known.unwrap_or(self.sources.len() as i64 + 1);
+        if self.source.as_ref().is_some_and(|(_, current)| *current == id) {
             return Ok(());
         }
         self.flush_pending()?;
-        self.input_path = Some(path.to_owned());
-        self.content_id = Some(digest);
+        if known.is_none() {
+            // One `source` row per (path, content_id); it takes no `_row`.
+            let row = SourceRow { record: "source", id, path: &key.0, content_id: &key.1 };
+            self.binder.push(&mut self.slot, 0, None, &row)?;
+            self.sources.insert(key, id);
+        }
+        self.source = Some((path.to_owned(), id));
         Ok(())
     }
 
     pub fn clear_source(&mut self) -> Result<()> {
-        if self.input_path.is_none() && self.content_id.is_none() {
+        if self.source.is_none() {
             return Ok(());
         }
         self.flush_pending()?;
-        self.input_path = None;
-        self.content_id = None;
+        self.source = None;
         Ok(())
     }
 
@@ -324,8 +343,7 @@ impl Database {
         let result = self.binder.push(
             &mut self.slot,
             self.rows,
-            self.input_path.as_deref(),
-            self.content_id.as_deref(),
+            self.source.as_ref().map(|(_, id)| *id),
             row,
         );
         if let Some(started) = started {
@@ -368,8 +386,7 @@ impl Database {
             self.slot.local()?,
             &writers::Source {
                 row: first_row,
-                input_path: self.input_path.as_deref(),
-                content_id: self.content_id.as_deref(),
+                source: self.source.as_ref().map(|(_, id)| *id),
             },
             &self.pending,
         )?;
@@ -392,7 +409,7 @@ impl Database {
         writeln!(out, "Wrote {} ({rows} rows)", destination.display())?;
         writeln!(out, "Tables: sqlite3 {path} '.tables'")?;
         writeln!(out, "Schema: sqlite3 {path} '.schema'")?;
-        writeln!(out, "Query:  sqlite3 -header -column {path} 'SELECT _input_path, family, kind, name FROM node LIMIT 20;'")?;
+        writeln!(out, "Query:  sqlite3 -header -column {path} 'SELECT s.path, n.family, n.kind, n.name FROM node AS n JOIN source AS s ON s.id = n._source LIMIT 20;'")?;
         writeln!(out, "Lines:  sqlite3 -header -column {path} 'SELECT _table, _row, start, line FROM span_lines LIMIT 20;' (needs --lines for non-empty line_start)")?;
         Ok(())
     }
@@ -506,7 +523,7 @@ impl Output {
             .database
             .as_mut()
             .ok_or("source facts require a SQLite output")?;
-        if db.input_path.as_deref() != Some(path) {
+        if db.source.as_ref().map(|(current, _)| current.as_str()) != Some(path) {
             db.source(path, content_id.to_string())?;
         }
         db.bind_row(fact)

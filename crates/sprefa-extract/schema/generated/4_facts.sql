@@ -1,17 +1,13 @@
 -- Generated from schema/1_facts.tsp by just gen.
 CREATE TABLE IF NOT EXISTS "protocol" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "version" INTEGER NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS "run" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "run" INTEGER NOT NULL,
     "mode" TEXT NOT NULL,
     "tool" TEXT NOT NULL,
@@ -20,50 +16,40 @@ CREATE TABLE IF NOT EXISTS "run" (
 );
 
 CREATE TABLE IF NOT EXISTS "fact" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "fact" INTEGER NOT NULL,
     "relation" TEXT NOT NULL,
     "args" TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS "witness" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "fact" INTEGER NOT NULL,
     "run" INTEGER NOT NULL,
     "method" TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS "coverage" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "run" INTEGER NOT NULL,
     "relation" TEXT NOT NULL,
     "coverage" TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS "diagnostic" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "run" INTEGER NOT NULL,
     "relation" TEXT NOT NULL,
     "detail" TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS "node" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "fact" INTEGER,
     "family" TEXT NOT NULL,
     "span__start" INTEGER NOT NULL,
@@ -77,10 +63,8 @@ CREATE TABLE IF NOT EXISTS "node" (
 );
 
 CREATE TABLE IF NOT EXISTS "edge" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "fact" INTEGER,
     "family" TEXT NOT NULL,
     "kind" TEXT NOT NULL,
@@ -96,10 +80,8 @@ CREATE TABLE IF NOT EXISTS "edge" (
 );
 
 CREATE TABLE IF NOT EXISTS "param" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "fact" INTEGER,
     "family" TEXT NOT NULL,
     "span__start" INTEGER NOT NULL,
@@ -108,10 +90,8 @@ CREATE TABLE IF NOT EXISTS "param" (
 );
 
 CREATE TABLE IF NOT EXISTS "arg" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "fact" INTEGER,
     "family" TEXT NOT NULL,
     "call__start" INTEGER NOT NULL,
@@ -122,10 +102,8 @@ CREATE TABLE IF NOT EXISTS "arg" (
 );
 
 CREATE TABLE IF NOT EXISTS "df_field" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "fact" INTEGER,
     "family" TEXT NOT NULL,
     "owner__start" INTEGER NOT NULL,
@@ -136,10 +114,8 @@ CREATE TABLE IF NOT EXISTS "df_field" (
 );
 
 CREATE TABLE IF NOT EXISTS "df_lit" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "fact" INTEGER,
     "family" TEXT NOT NULL,
     "node__start" INTEGER NOT NULL,
@@ -149,10 +125,8 @@ CREATE TABLE IF NOT EXISTS "df_lit" (
 );
 
 CREATE TABLE IF NOT EXISTS "df_loop" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "fact" INTEGER,
     "family" TEXT NOT NULL,
     "span__start" INTEGER NOT NULL,
@@ -162,10 +136,8 @@ CREATE TABLE IF NOT EXISTS "df_loop" (
 );
 
 CREATE TABLE IF NOT EXISTS "df_nest" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "fact" INTEGER,
     "family" TEXT NOT NULL,
     "call__start" INTEGER NOT NULL,
@@ -177,10 +149,8 @@ CREATE TABLE IF NOT EXISTS "df_nest" (
 );
 
 CREATE TABLE IF NOT EXISTS "df_allocates" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "fact" INTEGER,
     "family" TEXT NOT NULL,
     "owner__start" INTEGER NOT NULL,
@@ -188,10 +158,8 @@ CREATE TABLE IF NOT EXISTS "df_allocates" (
 );
 
 CREATE TABLE IF NOT EXISTS "sig" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "fact" INTEGER,
     "family" TEXT NOT NULL,
     "owner__start" INTEGER NOT NULL,
@@ -204,10 +172,8 @@ CREATE TABLE IF NOT EXISTS "sig" (
 );
 
 CREATE TABLE IF NOT EXISTS "site" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "fact" INTEGER,
     "family" TEXT NOT NULL,
     "span__start" INTEGER NOT NULL,
@@ -217,10 +183,8 @@ CREATE TABLE IF NOT EXISTS "site" (
 );
 
 CREATE TABLE IF NOT EXISTS "const" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "fact" INTEGER,
     "family" TEXT NOT NULL,
     "owner__start" INTEGER NOT NULL,
@@ -231,10 +195,8 @@ CREATE TABLE IF NOT EXISTS "const" (
 );
 
 CREATE TABLE IF NOT EXISTS "doc" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "fact" INTEGER,
     "family" TEXT NOT NULL,
     "owner__start" INTEGER NOT NULL,
@@ -244,10 +206,8 @@ CREATE TABLE IF NOT EXISTS "doc" (
 );
 
 CREATE TABLE IF NOT EXISTS "doc_tag" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "fact" INTEGER,
     "family" TEXT NOT NULL,
     "owner__start" INTEGER NOT NULL,
@@ -258,10 +218,8 @@ CREATE TABLE IF NOT EXISTS "doc_tag" (
 );
 
 CREATE TABLE IF NOT EXISTS "doc_node" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "fact" INTEGER,
     "family" TEXT NOT NULL,
     "span__start" INTEGER NOT NULL,
@@ -276,10 +234,8 @@ CREATE TABLE IF NOT EXISTS "doc_node" (
 );
 
 CREATE TABLE IF NOT EXISTS "data_doc" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "fact" INTEGER,
     "family" TEXT NOT NULL,
     "ordinal" INTEGER NOT NULL,
@@ -290,10 +246,8 @@ CREATE TABLE IF NOT EXISTS "data_doc" (
 );
 
 CREATE TABLE IF NOT EXISTS "data_value" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "fact" INTEGER,
     "family" TEXT NOT NULL,
     "ordinal" INTEGER NOT NULL,
@@ -305,10 +259,8 @@ CREATE TABLE IF NOT EXISTS "data_value" (
 );
 
 CREATE TABLE IF NOT EXISTS "specifier" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "fact" INTEGER,
     "family" TEXT NOT NULL,
     "span__start" INTEGER NOT NULL,
@@ -321,10 +273,8 @@ CREATE TABLE IF NOT EXISTS "specifier" (
 );
 
 CREATE TABLE IF NOT EXISTS "method_owner" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "fact" INTEGER,
     "family" TEXT NOT NULL,
     "owner__start" INTEGER NOT NULL,
@@ -334,10 +284,8 @@ CREATE TABLE IF NOT EXISTS "method_owner" (
 );
 
 CREATE TABLE IF NOT EXISTS "macro_site" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "family" TEXT NOT NULL,
     "span__start" INTEGER NOT NULL,
     "span__end" INTEGER NOT NULL,
@@ -346,10 +294,8 @@ CREATE TABLE IF NOT EXISTS "macro_site" (
 );
 
 CREATE TABLE IF NOT EXISTS "reference" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "fact" INTEGER,
     "family" TEXT NOT NULL,
     "span__start" INTEGER NOT NULL,
@@ -359,10 +305,8 @@ CREATE TABLE IF NOT EXISTS "reference" (
 );
 
 CREATE TABLE IF NOT EXISTS "unresolved" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "family" TEXT NOT NULL,
     "path" TEXT,
     "span__start" INTEGER NOT NULL,
@@ -372,10 +316,8 @@ CREATE TABLE IF NOT EXISTS "unresolved" (
 );
 
 CREATE TABLE IF NOT EXISTS "projectedge" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "family" TEXT NOT NULL,
     "kind" TEXT NOT NULL,
     "from__start" INTEGER NOT NULL,
@@ -386,10 +328,8 @@ CREATE TABLE IF NOT EXISTS "projectedge" (
 );
 
 CREATE TABLE IF NOT EXISTS "flow_edge" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "family" TEXT NOT NULL,
     "kind" TEXT NOT NULL,
     "from_blob" TEXT NOT NULL,
@@ -401,10 +341,8 @@ CREATE TABLE IF NOT EXISTS "flow_edge" (
 );
 
 CREATE TABLE IF NOT EXISTS "resolved_edge" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "fact" INTEGER,
     "caller_path" TEXT NOT NULL,
     "caller_name" TEXT,
@@ -419,10 +357,8 @@ CREATE TABLE IF NOT EXISTS "resolved_edge" (
 );
 
 CREATE TABLE IF NOT EXISTS "graph_node" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "path" TEXT NOT NULL,
     "name" TEXT,
     "depth" INTEGER NOT NULL,
@@ -431,19 +367,15 @@ CREATE TABLE IF NOT EXISTS "graph_node" (
 );
 
 CREATE TABLE IF NOT EXISTS "seed_unmatched" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "seed" TEXT NOT NULL,
     "reason" TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS "graph_edge" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "from_path" TEXT NOT NULL,
     "from_name" TEXT,
     "to_path" TEXT NOT NULL,
@@ -455,10 +387,8 @@ CREATE TABLE IF NOT EXISTS "graph_edge" (
 );
 
 CREATE TABLE IF NOT EXISTS "external_crate_decline" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "from_path" TEXT NOT NULL,
     "from_name" TEXT,
     "type_name" TEXT NOT NULL,
@@ -468,10 +398,8 @@ CREATE TABLE IF NOT EXISTS "external_crate_decline" (
 );
 
 CREATE TABLE IF NOT EXISTS "graph_decline" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "from_path" TEXT NOT NULL,
     "from_name" TEXT,
     "type_name" TEXT NOT NULL,
@@ -481,10 +409,8 @@ CREATE TABLE IF NOT EXISTS "graph_decline" (
 );
 
 CREATE TABLE IF NOT EXISTS "graph_path" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "plane" TEXT NOT NULL,
     "from_path" TEXT NOT NULL,
     "from_name" TEXT,
@@ -505,10 +431,8 @@ CREATE TABLE IF NOT EXISTS "graph_path" (
 );
 
 CREATE TABLE IF NOT EXISTS "graph_path_change" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "change" TEXT NOT NULL,
     "revision" TEXT NOT NULL,
     "plane" TEXT NOT NULL,
@@ -520,10 +444,8 @@ CREATE TABLE IF NOT EXISTS "graph_path_change" (
 );
 
 CREATE TABLE IF NOT EXISTS "graph_root" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "path" TEXT NOT NULL,
     "name" TEXT,
     "span__start" INTEGER,
@@ -532,10 +454,8 @@ CREATE TABLE IF NOT EXISTS "graph_root" (
 );
 
 CREATE TABLE IF NOT EXISTS "resolved_type_edge" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "fact" INTEGER,
     "owner_path" TEXT NOT NULL,
     "owner_name" TEXT,
@@ -548,10 +468,8 @@ CREATE TABLE IF NOT EXISTS "resolved_type_edge" (
 );
 
 CREATE TABLE IF NOT EXISTS "resolved_import" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "src_path" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "local" TEXT NOT NULL,
@@ -562,10 +480,8 @@ CREATE TABLE IF NOT EXISTS "resolved_import" (
 );
 
 CREATE TABLE IF NOT EXISTS "file_edge" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "src_path" TEXT NOT NULL,
     "dst_path" TEXT NOT NULL,
     "kind" TEXT NOT NULL,
@@ -573,30 +489,24 @@ CREATE TABLE IF NOT EXISTS "file_edge" (
 );
 
 CREATE TABLE IF NOT EXISTS "file_unresolved" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "src_path" TEXT NOT NULL,
     "module" TEXT NOT NULL,
     "reason" TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS "package_edge" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "src_manifest" TEXT NOT NULL,
     "dst_manifest" TEXT NOT NULL,
     "kind" TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS "file" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "path" TEXT NOT NULL,
     "digest" TEXT NOT NULL,
     "bytes" INTEGER NOT NULL,
@@ -604,20 +514,16 @@ CREATE TABLE IF NOT EXISTS "file" (
 );
 
 CREATE TABLE IF NOT EXISTS "line_start" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "path" TEXT NOT NULL,
     "digest" TEXT NOT NULL,
     "offsets" TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS "size_skip" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "path" TEXT NOT NULL,
     "bytes" BLOB NOT NULL,
     "limit" BLOB NOT NULL,
@@ -625,10 +531,8 @@ CREATE TABLE IF NOT EXISTS "size_skip" (
 );
 
 CREATE TABLE IF NOT EXISTS "capture" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "query" TEXT NOT NULL,
     "capture" TEXT NOT NULL,
     "text" TEXT NOT NULL,
@@ -642,20 +546,16 @@ CREATE TABLE IF NOT EXISTS "capture" (
 );
 
 CREATE TABLE IF NOT EXISTS "symbol" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "symbol" TEXT NOT NULL,
     "path" TEXT NOT NULL,
     "kind" TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS "occurrence" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "symbol" TEXT NOT NULL,
     "path" TEXT NOT NULL,
     "start" INTEGER NOT NULL,
@@ -667,10 +567,8 @@ CREATE TABLE IF NOT EXISTS "occurrence" (
 );
 
 CREATE TABLE IF NOT EXISTS "free_name" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "path" TEXT NOT NULL,
     "owner_start" INTEGER NOT NULL,
     "owner_end" INTEGER NOT NULL,
@@ -680,10 +578,8 @@ CREATE TABLE IF NOT EXISTS "free_name" (
 );
 
 CREATE TABLE IF NOT EXISTS "call_site" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "callee" TEXT NOT NULL,
     "path" TEXT NOT NULL,
     "line" INTEGER NOT NULL,
@@ -693,10 +589,8 @@ CREATE TABLE IF NOT EXISTS "call_site" (
 );
 
 CREATE TABLE IF NOT EXISTS "jsx_element" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "name" TEXT NOT NULL,
     "path" TEXT NOT NULL,
     "line" INTEGER NOT NULL,
@@ -707,10 +601,8 @@ CREATE TABLE IF NOT EXISTS "jsx_element" (
 );
 
 CREATE TABLE IF NOT EXISTS "jsx_attribute" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "path" TEXT NOT NULL,
     "element_start" INTEGER NOT NULL,
     "name" TEXT NOT NULL,
@@ -720,10 +612,8 @@ CREATE TABLE IF NOT EXISTS "jsx_attribute" (
 );
 
 CREATE TABLE IF NOT EXISTS "local" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "fn" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "path" TEXT NOT NULL,
@@ -732,29 +622,23 @@ CREATE TABLE IF NOT EXISTS "local" (
 );
 
 CREATE TABLE IF NOT EXISTS "scip_def" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "symbol" TEXT NOT NULL,
     "file" TEXT NOT NULL,
     "repo" TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS "scip_name" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "symbol" TEXT NOT NULL,
     "name" TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS "scip_ref" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "file" TEXT NOT NULL,
     "symbol" TEXT NOT NULL,
     "def_file" TEXT NOT NULL,
@@ -762,10 +646,8 @@ CREATE TABLE IF NOT EXISTS "scip_ref" (
 );
 
 CREATE TABLE IF NOT EXISTS "scip_external_ref" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "file" TEXT NOT NULL,
     "symbol" TEXT NOT NULL,
     "origin" TEXT NOT NULL,
@@ -773,56 +655,44 @@ CREATE TABLE IF NOT EXISTS "scip_external_ref" (
 );
 
 CREATE TABLE IF NOT EXISTS "scip_edge" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "src" TEXT NOT NULL,
     "dst" TEXT NOT NULL,
     "repo" TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS "scip_fn_edge" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "caller" TEXT NOT NULL,
     "callee" TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS "scip_callee_type" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "sym" TEXT NOT NULL,
     "type" TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS "scip_local" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "fn" TEXT NOT NULL,
     "name" TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS "scip_impl" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "impl" TEXT NOT NULL,
     "iface" TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS "scip_index" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "reused" INTEGER NOT NULL,
     "tool_name" TEXT NOT NULL,
     "tool_version" TEXT NOT NULL,
@@ -832,10 +702,8 @@ CREATE TABLE IF NOT EXISTS "scip_index" (
 );
 
 CREATE TABLE IF NOT EXISTS "scip_skip" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "lang" TEXT NOT NULL,
     "bin" TEXT NOT NULL,
     "reason" TEXT NOT NULL,
@@ -843,10 +711,8 @@ CREATE TABLE IF NOT EXISTS "scip_skip" (
 );
 
 CREATE TABLE IF NOT EXISTS "scip_occurrence" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "path" TEXT NOT NULL,
     "symbol" TEXT NOT NULL,
     "start" INTEGER NOT NULL,
@@ -866,10 +732,8 @@ CREATE TABLE IF NOT EXISTS "scip_occurrence" (
 );
 
 CREATE TABLE IF NOT EXISTS "scip_occurrence_doc" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "path" TEXT NOT NULL,
     "start" INTEGER NOT NULL,
     "end" INTEGER NOT NULL,
@@ -878,10 +742,8 @@ CREATE TABLE IF NOT EXISTS "scip_occurrence_doc" (
 );
 
 CREATE TABLE IF NOT EXISTS "scip_diagnostic" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "path" TEXT NOT NULL,
     "start" INTEGER NOT NULL,
     "end" INTEGER NOT NULL,
@@ -893,10 +755,8 @@ CREATE TABLE IF NOT EXISTS "scip_diagnostic" (
 );
 
 CREATE TABLE IF NOT EXISTS "scip_symbol" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "path" TEXT,
     "symbol" TEXT NOT NULL,
     "display_name" TEXT NOT NULL,
@@ -905,30 +765,24 @@ CREATE TABLE IF NOT EXISTS "scip_symbol" (
 );
 
 CREATE TABLE IF NOT EXISTS "scip_documentation" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "symbol" TEXT NOT NULL,
     "pos" INTEGER NOT NULL,
     "text" TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS "scip_signature" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "symbol" TEXT NOT NULL,
     "language" TEXT NOT NULL,
     "text" TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS "scip_signature_occurrence" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "symbol" TEXT NOT NULL,
     "ref_symbol" TEXT NOT NULL,
     "start" INTEGER NOT NULL,
@@ -937,10 +791,8 @@ CREATE TABLE IF NOT EXISTS "scip_signature_occurrence" (
 );
 
 CREATE TABLE IF NOT EXISTS "scip_metadata" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "version" INTEGER NOT NULL,
     "tool_name" TEXT NOT NULL,
     "tool_version" TEXT NOT NULL,
@@ -950,10 +802,8 @@ CREATE TABLE IF NOT EXISTS "scip_metadata" (
 );
 
 CREATE TABLE IF NOT EXISTS "scip_document" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "path" TEXT NOT NULL,
     "language" TEXT NOT NULL,
     "position_encoding" INTEGER NOT NULL,
@@ -961,15 +811,19 @@ CREATE TABLE IF NOT EXISTS "scip_document" (
 );
 
 CREATE TABLE IF NOT EXISTS "scip_relationship" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
+    "_row" INTEGER PRIMARY KEY,
+    "_source" INTEGER,
     "symbol" TEXT NOT NULL,
     "related_symbol" TEXT NOT NULL,
     "is_reference" INTEGER NOT NULL,
     "is_implementation" INTEGER NOT NULL,
     "is_type_definition" INTEGER NOT NULL,
     "is_definition" INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS "source" (
+    "id" INTEGER PRIMARY KEY,
+    "path" TEXT NOT NULL,
+    "content_id" TEXT NOT NULL
 );
 

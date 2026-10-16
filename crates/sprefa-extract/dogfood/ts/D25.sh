@@ -11,8 +11,8 @@ rg -q 'END exclusive' "$scratch/help"
 blob=$(sqlite3 "$scratch/facts.db" "SELECT digest FROM file WHERE path='$path';")
 [ -n "$blob" ]
 # Facts for the plan's children parameter and its direct local consumers.
-[ "$(sqlite3 "$scratch/facts.db" "SELECT count(*) FROM node WHERE _input_path='$path' AND family='df' AND kind='param' AND name='children' AND span__start=3621 AND span__end=3640;")" -eq 1 ]
-[ "$(sqlite3 "$scratch/facts.db" "SELECT count(*) FROM edge WHERE _input_path='$path' AND family='df' AND from__start=3621 AND from__end=3640;")" -gt 0 ]
+[ "$(sqlite3 "$scratch/facts.db" "SELECT count(*) FROM node JOIN source ON source.id = node._source WHERE source.path='$path' AND family='df' AND kind='param' AND name='children' AND span__start=3621 AND span__end=3640;")" -eq 1 ]
+[ "$(sqlite3 "$scratch/facts.db" "SELECT count(*) FROM edge JOIN source ON source.id = edge._source WHERE source.path='$path' AND family='df' AND from__start=3621 AND from__end=3640;")" -gt 0 ]
 "$RYII" graph --flow-path "$path@3621:3640" packages/md > "$scratch/path.jsonl" 2> "$scratch/path.err"
 "$RYII" graph --flow-path "$blob@3621:3640" packages/md > "$scratch/blob.jsonl" 2> "$scratch/blob.err"
 cmp "$scratch/path.jsonl" "$scratch/blob.jsonl"

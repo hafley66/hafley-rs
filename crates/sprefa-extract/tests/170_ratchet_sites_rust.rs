@@ -40,7 +40,7 @@ impl Counts {
 /// reason `local` / `external` are the other two. A site slow has no row for
 /// is `no_occurrence`.
 const GRADE: &str = "
-with s as (select _input_path path, span__start st from site),
+with s as (select src.path path, site.span__start st from site join source src on src.id = site._source),
 oracle as (
   select caller_path path, caller_site_start st, 'corpus' class,
          callee_path def_path, callee_start def_start

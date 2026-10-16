@@ -8,8 +8,13 @@ namespace ExtractSql;
 scalar Json extends string;
 model ExportRow {
   @Entity.pk _row: int64;
-  _input_path: string | null;
-  _content_id: string | null;
+  /** `source.id` of the input file the row came from; null for project-wide rows. */
+  _source: int64 | null;
+}
+
+/** One row per (path, content_id) an export read. Fact rows point here by `_source`. */
+namespace Store {
+  model Source { record: "source"; @Entity.pk id: int64; path: string; content_id: string; }
 }
 model LocatedFact { fact?: uint32; family: Extract.FamilyTag; }
 

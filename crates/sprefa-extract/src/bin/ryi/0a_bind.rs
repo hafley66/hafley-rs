@@ -1,25 +1,23 @@
 //! Any `record`-tagged row straight into its table's columnar buffer: no JSON
-//! round-trip, one prepared chunk statement per table, text in one arena.
-use std::borrow::Cow;
-/// Column and record names are looked up per field of every row: Fx, not SipHash.
-type HashMap<K, V> = std::collections::HashMap<K, V, std::hash::BuildHasherDefault<FxHasher>>;
-use std::ffi::{CStr, CString};
+//! round-trip, multi-row `INSERT ... VALUES` per table, text in one arena.
 use std::fmt::Display;
 use std::hash::{Hash, Hasher};
 use std::sync::atomic::Ordering;
-use std::sync::atomic::{AtomicPtr, AtomicU64};
+use std::sync::atomic::AtomicU64;
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
 use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::Instant;
 
 use hashbrown::HashTable;
-use rusqlite::vtab::{Context, Filters, IndexInfo, Module, VTab, VTabConnection, VTabCursor};
 use rusqlite::Connection;
 use rustc_hash::FxHasher;
 use serde::ser::{self, Impossible, Serialize};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+
+/// Column and record names are looked up per field of every row: Fx, not SipHash.
+type HashMap<K, V> = std::collections::HashMap<K, V, std::hash::BuildHasherDefault<FxHasher>>;
 
 /// Rows per chunk statement, before the variable cap divides it down.
 const CHUNK_ROWS: usize = 64;
@@ -79,115 +77,11 @@ struct Meta {
     name: String,
     width: usize,
     row_column: Option<usize>,
-    path_column: Option<usize>,
-    content_column: Option<usize>,
-    record_column: Option<usize>,
+    source_column: Option<usize>,
     chunk_rows: usize,
     chunk_sql: String,
     one_sql: String,
-    select_sql: String,
-    active: Arc<AtomicPtr<Batch>>,
 }
-
-#[repr(C)]
-struct BatchTable {
-    base: rusqlite::vtab::sqlite3_vtab,
-    width: usize,
-    active: Arc<AtomicPtr<Batch>>,
-}
-
-// Module's static only stores callbacks; table instances are owned by SQLite.
-unsafe impl Sync for BatchTable {}
-
-unsafe impl<'vtab> VTab<'vtab> for BatchTable {
-    type Aux = (usize, Arc<AtomicPtr<Batch>>);
-    type Cursor = BatchCursor;
-
-    fn connect(
-        _: &mut VTabConnection,
-        aux: Option<&Self::Aux>,
-        _: &[u8],
-        _: &[u8],
-        _: &[u8],
-        _: &[&[u8]],
-    ) -> rusqlite::Result<(Cow<'static, CStr>, Self)> {
-        let (width, active) =
-            aux.ok_or_else(|| rusqlite::Error::ModuleError("missing batch table".into()))?;
-        let columns = (0..*width)
-            .map(|index| format!("c{index}"))
-            .collect::<Vec<_>>()
-            .join(",");
-        let ddl = CString::new(format!("CREATE TABLE x({columns})")).unwrap();
-        Ok((
-            Cow::Owned(ddl),
-            Self {
-                base: Default::default(),
-                width: *width,
-                active: Arc::clone(active),
-            },
-        ))
-    }
-
-    fn best_index(&self, info: &mut IndexInfo) -> rusqlite::Result<bool> {
-        info.set_estimated_cost(1.0);
-        Ok(true)
-    }
-
-    fn open(&mut self) -> rusqlite::Result<Self::Cursor> {
-        Ok(BatchCursor {
-            base: Default::default(),
-            active: Arc::clone(&self.active),
-            row: 0,
-            width: self.width,
-        })
-    }
-}
-
-#[repr(C)]
-struct BatchCursor {
-    base: rusqlite::vtab::sqlite3_vtab_cursor,
-    active: Arc<AtomicPtr<Batch>>,
-    row: usize,
-    width: usize,
-}
-
-unsafe impl VTabCursor for BatchCursor {
-    fn filter(&mut self, _: i32, _: Option<&str>, _: &Filters<'_>) -> rusqlite::Result<()> {
-        self.row = 0;
-        Ok(())
-    }
-    fn next(&mut self) -> rusqlite::Result<()> {
-        self.row += 1;
-        Ok(())
-    }
-    fn eof(&self) -> bool {
-        let batch = self.active.load(Ordering::Relaxed);
-        batch.is_null() || self.row >= unsafe { (*batch).rows }
-    }
-    fn column(&self, ctx: &mut Context, i: i32) -> rusqlite::Result<()> {
-        let batch = self.active.load(Ordering::Relaxed);
-        let batch = unsafe { &*batch };
-        match batch.vals[self.row * self.width + i as usize] {
-            Val::Null => ctx.set_result(&rusqlite::types::Null),
-            Val::Int(value) => ctx.set_result(&value),
-            Val::Real(value) => ctx.set_result(&value),
-            Val::Text(_, _) => {
-                // Every span came from a str or serde_json's UTF-8 writer.
-                let value = unsafe {
-                    std::str::from_utf8_unchecked(
-                        batch.bytes(batch.vals[self.row * self.width + i as usize]),
-                    )
-                };
-                ctx.set_result(&value)
-            }
-        }
-    }
-    fn rowid(&self) -> rusqlite::Result<i64> {
-        Ok(self.row as i64 + 1)
-    }
-}
-
-static BATCH_MODULE: Module<'static, BatchTable> = Module::eponymous_only_module();
 
 /// One table's rows, `width` values per row, plus the text they point into.
 /// Handed whole to the writer thread and handed back cleared.
@@ -292,17 +186,6 @@ impl Batch {
     }
 
     fn drain_inner(&mut self, meta: &Meta, connection: &Connection) -> rusqlite::Result<()> {
-        if std::env::var_os("RYI_SQLITE_VALUES").is_none() {
-            // This connection is exclusive to the writer thread. SQLite reads
-            // the batch only during execute; clear the pointer before the
-            // buffer can be recycled or mutated again.
-            meta.active.store(self as *mut Batch, Ordering::Relaxed);
-            let result = connection.execute(&meta.select_sql, []);
-            meta.active.store(std::ptr::null_mut(), Ordering::Relaxed);
-            result?;
-            self.clear();
-            return Ok(());
-        }
         let mut row = 0;
         if self.rows >= meta.chunk_rows {
             let mut statement = connection.prepare_cached(&meta.chunk_sql)?;
@@ -493,31 +376,14 @@ impl Binder {
                 .join(", ");
             let tuple = format!("({})", vec!["?"; width].join(", "));
             let prefix = format!("INSERT INTO \"{name}\" ({list}) VALUES ");
-            let active = Arc::new(AtomicPtr::new(std::ptr::null_mut()));
-            let module_name = format!("ryi_batch_{index}");
-            connection.create_module(
-                module_name.as_str(),
-                &BATCH_MODULE,
-                Some((width, Arc::clone(&active))),
-            )?;
-            let select_cols = (0..width)
-                .map(|index| format!("c{index}"))
-                .collect::<Vec<_>>()
-                .join(", ");
             meta.push(Meta {
                 name: name.clone(),
                 width,
                 row_column: column_names.iter().position(|c| c == "_row"),
-                path_column: column_names.iter().position(|c| c == "_input_path"),
-                content_column: column_names.iter().position(|c| c == "_content_id"),
-                record_column: column_names.iter().position(|c| c == "record"),
+                source_column: column_names.iter().position(|c| c == "_source"),
                 chunk_rows,
                 chunk_sql: format!("{prefix}{}", vec![tuple.as_str(); chunk_rows].join(", ")),
                 one_sql: format!("{prefix}{tuple}"),
-                select_sql: format!(
-                    "INSERT INTO \"{name}\" ({list}) SELECT {select_cols} FROM {module_name}"
-                ),
-                active,
             });
             let kinds = column_names
                 .iter()
@@ -572,8 +438,7 @@ impl Binder {
         &mut self,
         slot: &mut Slot,
         row: i64,
-        input_path: Option<&str>,
-        content_id: Option<&str>,
+        source: Option<i64>,
         value: &impl Serialize,
     ) -> Result<()> {
         let started = self.profile_enabled.then(Instant::now);
@@ -582,7 +447,7 @@ impl Binder {
             binder: self,
             table: None,
             prefix_len: 0,
-            meta: (row, input_path, content_id),
+            meta: (row, source),
         };
         let written = value.serialize(&mut writer);
         let opened = writer.table;
@@ -735,14 +600,14 @@ struct RowWriter<'b> {
     binder: &'b mut Binder,
     table: Option<usize>,
     prefix_len: usize,
-    meta: (i64, Option<&'b str>, Option<&'b str>),
+    meta: (i64, Option<i64>),
 }
 
 impl RowWriter<'_> {
     #[inline(always)]
     fn open(&mut self, index: usize) -> std::result::Result<(), Error> {
         self.table = Some(index);
-        let (row, input_path, content_id) = self.meta;
+        let (row, source) = self.meta;
         let width = self.binder.meta[index].width;
         let meta = &self.binder.meta[index];
         let table = &mut self.binder.buffers[index];
@@ -754,18 +619,7 @@ impl RowWriter<'_> {
             }
         };
         set(table, meta.row_column, Val::Int(row));
-        if meta.path_column.is_some() {
-            let v = input_path.map_or(Val::Null, |p| table.intern(p));
-            set(table, meta.path_column, v);
-        }
-        if meta.content_column.is_some() {
-            let v = content_id.map_or(Val::Null, |c| table.intern(c));
-            set(table, meta.content_column, v);
-        }
-        if meta.record_column.is_some() {
-            let v = table.intern(&meta.name);
-            set(table, meta.record_column, v);
-        }
+        set(table, meta.source_column, source.map_or(Val::Null, Val::Int));
         Ok(())
     }
 

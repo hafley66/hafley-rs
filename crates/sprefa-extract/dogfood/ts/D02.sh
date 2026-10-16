@@ -3,7 +3,7 @@ set -euo pipefail
 rm -f .dogfood/D02.db
 "$RYII" fast packages "$CORPUS.tsp/packages/rust" > .dogfood/D02.fast.jsonl
 "$RYII" --resolve --sqlite .dogfood/D02.db --pattern '**/*.ts' --pattern '**/*.tsx' packages "$CORPUS.tsp/packages/rust" > .dogfood/D02.resolve.jsonl
-sqlite3 -json .dogfood/D02.db "select distinct _input_path as path, coalesce(module,name) as module from specifier where coalesce(module,name) like '@hafley66/%' order by 1,2" > .dogfood/D02.pairs.json
+sqlite3 -json .dogfood/D02.db "select distinct src.path as path, coalesce(sp.module,sp.name) as module from specifier sp join source src on src.id = sp._source where coalesce(sp.module,sp.name) like '@hafley66/%' order by 1,2" > .dogfood/D02.pairs.json
 sqlite3 -json .dogfood/D02.db "select distinct src_path, name from resolved_import where kind='module' and name like '@hafley66/%' order by 1,2" > .dogfood/D02.sqlite.json
 node <<'JS'
 const fs = require('fs');

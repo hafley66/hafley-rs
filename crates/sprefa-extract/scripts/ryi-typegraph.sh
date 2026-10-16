@@ -47,7 +47,7 @@ q "select 'slow' tier, * from (select distinct owner_path, owner_start, kind, ta
      except select distinct owner_path, owner_start, kind, target_name, target_path from resolved_type_edge) limit 15"
 
 h "call sites graded against slow (tests/170_ratchet_sites_rust.rs GRADE)"
-q "with s as (select _input_path path, span__start st from site),
+q "with s as (select src.path path, site.span__start st from site join source src on src.id = site._source),
 oracle as (
   select caller_path path, caller_site_start st, 'corpus' class, callee_path def_path, callee_start def_start
   from slow.resolved_edge where resolution_origin = 'scip'

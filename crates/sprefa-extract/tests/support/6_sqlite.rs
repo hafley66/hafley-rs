@@ -120,8 +120,10 @@ struct Table {
     columns: Vec<Column>,
 }
 
+/// The fact tables: every catalog table except `source`, which `_source` points into.
 fn tables() -> Vec<Table> {
-    serde_json::from_str(CATALOG).unwrap()
+    let all: Vec<Table> = serde_json::from_str(CATALOG).unwrap();
+    all.into_iter().filter(|table| table.table != "source").collect()
 }
 fn quote(s: &str) -> String {
     format!("\"{}\"", s.replace('"', "\"\""))
@@ -227,7 +229,7 @@ fn uncoordinated(connection: &Connection, expected: &[Value], redact: &[String])
             .filter(|column| !column.name.starts_with('_'))
             .collect();
         let sql = format!(
-            "SELECT {} FROM {} WHERE _input_path IS NULL AND _content_id IS NULL ORDER BY _row",
+            "SELECT {} FROM {} WHERE _source IS NULL ORDER BY _row",
             columns
                 .iter()
                 .map(|column| quote(&column.name))
@@ -501,7 +503,7 @@ fn jsonl_matches(step: &Value) -> Value {
                     connection
                         .query_row(
                             &format!(
-                                "SELECT count(*) FROM {} WHERE _row < ? AND _input_path IS NOT NULL AND _content_id IS NOT NULL",
+                                "SELECT count(*) FROM {} WHERE _row < ? AND _source IS NOT NULL",
                                 quote(&table.table)
                             ),
                             [first_resolved],
@@ -517,7 +519,7 @@ fn jsonl_matches(step: &Value) -> Value {
                     connection
                         .query_row(
                             &format!(
-                                "SELECT count(*) FROM {} WHERE _row >= ? AND (_input_path IS NOT NULL OR _content_id IS NOT NULL)",
+                                "SELECT count(*) FROM {} WHERE _row >= ? AND _source IS NOT NULL",
                                 quote(&table.table)
                             ),
                             [first_resolved],
@@ -619,7 +621,7 @@ fn batch_boundaries(step: &Value) -> Value {
         };
         let got: (i64, String, String) = connection
             .query_row(
-                "SELECT _row, _input_path, _content_id FROM protocol WHERE _row = ?",
+                "SELECT p._row, s.path, s.content_id FROM protocol AS p JOIN source AS s ON s.id = p._source WHERE p._row = ?",
                 [row],
                 |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
             )
@@ -631,7 +633,7 @@ fn batch_boundaries(step: &Value) -> Value {
                 Value::Number(past) => past.to_string(),
                 _ => unreachable!(),
             },
-            json!({"input_path":got.1,"content_id":got.2}),
+            json!({"path":got.1,"content_id":got.2}),
         );
     }
     let mut evidence = serde_json::Map::new();

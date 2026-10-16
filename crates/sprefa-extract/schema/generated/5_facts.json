@@ -13,32 +13,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "protocol"
       },
       {
         "name": "version",
@@ -65,32 +46,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "run"
       },
       {
         "name": "run",
@@ -165,32 +127,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "fact"
       },
       {
         "name": "fact",
@@ -311,32 +254,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "witness"
       },
       {
         "name": "fact",
@@ -401,32 +325,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "coverage"
       },
       {
         "name": "run",
@@ -475,32 +380,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "diagnostic"
       },
       {
         "name": "run",
@@ -545,32 +431,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "node"
       },
       {
         "name": "fact",
@@ -690,32 +557,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "edge"
       },
       {
         "name": "fact",
@@ -855,32 +703,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "param"
       },
       {
         "name": "fact",
@@ -955,32 +784,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "arg"
       },
       {
         "name": "fact",
@@ -1075,32 +885,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "df_field"
       },
       {
         "name": "fact",
@@ -1195,32 +986,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "df_lit"
       },
       {
         "name": "fact",
@@ -1304,32 +1076,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "df_loop"
       },
       {
         "name": "fact",
@@ -1413,32 +1166,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "df_nest"
       },
       {
         "name": "fact",
@@ -1542,32 +1276,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "df_allocates"
       },
       {
         "name": "fact",
@@ -1633,32 +1348,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "sig"
       },
       {
         "name": "fact",
@@ -1769,32 +1465,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "site"
       },
       {
         "name": "fact",
@@ -1878,32 +1555,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "const"
       },
       {
         "name": "fact",
@@ -1996,32 +1654,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "doc"
       },
       {
         "name": "fact",
@@ -2105,32 +1744,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "doc_tag"
       },
       {
         "name": "fact",
@@ -2223,32 +1843,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "doc_node"
       },
       {
         "name": "fact",
@@ -2379,32 +1980,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "data_doc"
       },
       {
         "name": "fact",
@@ -2497,32 +2079,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "data_value"
       },
       {
         "name": "fact",
@@ -2624,32 +2187,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "specifier"
       },
       {
         "name": "fact",
@@ -2760,32 +2304,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "method_owner"
       },
       {
         "name": "fact",
@@ -2869,32 +2394,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "macro_site"
       },
       {
         "name": "family",
@@ -2969,32 +2475,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "reference"
       },
       {
         "name": "fact",
@@ -3078,32 +2565,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "unresolved"
       },
       {
         "name": "family",
@@ -3187,32 +2655,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "projectedge"
       },
       {
         "name": "family",
@@ -3307,32 +2756,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "flow_edge"
       },
       {
         "name": "family",
@@ -3436,32 +2866,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "resolved_edge"
       },
       {
         "name": "fact",
@@ -3578,32 +2989,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "graph_node"
       },
       {
         "name": "path",
@@ -3666,32 +3058,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "seed_unmatched"
       },
       {
         "name": "seed",
@@ -3727,32 +3100,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "graph_edge"
       },
       {
         "name": "from_path",
@@ -3842,32 +3196,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "external_crate_decline"
       },
       {
         "name": "from_path",
@@ -3939,32 +3274,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "graph_decline"
       },
       {
         "name": "from_path",
@@ -4036,32 +3352,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "graph_path"
       },
       {
         "name": "plane",
@@ -4240,32 +3537,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "graph_path_change"
       },
       {
         "name": "change",
@@ -4355,32 +3633,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "graph_root"
       },
       {
         "name": "path",
@@ -4445,32 +3704,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "resolved_type_edge"
       },
       {
         "name": "fact",
@@ -4569,32 +3809,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "resolved_import"
       },
       {
         "name": "src_path",
@@ -4675,32 +3896,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "file_edge"
       },
       {
         "name": "src_path",
@@ -4754,32 +3956,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "file_unresolved"
       },
       {
         "name": "src_path",
@@ -4824,32 +4007,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "package_edge"
       },
       {
         "name": "src_manifest",
@@ -4894,32 +4058,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "file"
       },
       {
         "name": "path",
@@ -4973,32 +4118,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "line_start"
       },
       {
         "name": "path",
@@ -5051,32 +4177,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "size_skip"
       },
       {
         "name": "path",
@@ -5130,32 +4237,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "capture"
       },
       {
         "name": "query",
@@ -5263,32 +4351,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "symbol"
       },
       {
         "name": "symbol",
@@ -5333,32 +4402,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "occurrence"
       },
       {
         "name": "symbol",
@@ -5448,32 +4498,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "free_name"
       },
       {
         "name": "path",
@@ -5545,32 +4576,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "call_site"
       },
       {
         "name": "callee",
@@ -5642,32 +4654,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "jsx_element"
       },
       {
         "name": "name",
@@ -5748,32 +4741,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "jsx_attribute"
       },
       {
         "name": "path",
@@ -5845,32 +4819,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "local"
       },
       {
         "name": "fn",
@@ -5933,32 +4888,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "scip_def"
       },
       {
         "name": "symbol",
@@ -6003,32 +4939,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "scip_name"
       },
       {
         "name": "symbol",
@@ -6064,32 +4981,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "scip_ref"
       },
       {
         "name": "file",
@@ -6143,32 +5041,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "scip_external_ref"
       },
       {
         "name": "file",
@@ -6222,32 +5101,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "scip_edge"
       },
       {
         "name": "src",
@@ -6292,32 +5152,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "scip_fn_edge"
       },
       {
         "name": "caller",
@@ -6353,32 +5194,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "scip_callee_type"
       },
       {
         "name": "sym",
@@ -6414,32 +5236,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "scip_local"
       },
       {
         "name": "fn",
@@ -6475,32 +5278,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "scip_impl"
       },
       {
         "name": "impl",
@@ -6536,32 +5320,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "scip_index"
       },
       {
         "name": "reused",
@@ -6633,32 +5398,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "scip_skip"
       },
       {
         "name": "lang",
@@ -6712,32 +5458,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "scip_occurrence"
       },
       {
         "name": "path",
@@ -6899,32 +5626,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "scip_occurrence_doc"
       },
       {
         "name": "path",
@@ -6987,32 +5695,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "scip_diagnostic"
       },
       {
         "name": "path",
@@ -7110,32 +5799,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "scip_symbol"
       },
       {
         "name": "path",
@@ -7198,32 +5868,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "scip_documentation"
       },
       {
         "name": "symbol",
@@ -7268,32 +5919,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "scip_signature"
       },
       {
         "name": "symbol",
@@ -7338,32 +5970,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "scip_signature_occurrence"
       },
       {
         "name": "symbol",
@@ -7426,32 +6039,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "scip_metadata"
       },
       {
         "name": "version",
@@ -7531,32 +6125,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "scip_document"
       },
       {
         "name": "path",
@@ -7610,32 +6185,13 @@
         "nullable": false
       },
       {
-        "name": "_input_path",
+        "name": "_source",
         "path": [
-          "_input_path"
+          "_source"
         ],
-        "kind": "string",
+        "kind": "int64",
         "optional": false,
         "nullable": true
-      },
-      {
-        "name": "_content_id",
-        "path": [
-          "_content_id"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": true
-      },
-      {
-        "name": "record",
-        "path": [
-          "record"
-        ],
-        "kind": "string",
-        "optional": false,
-        "nullable": false,
-        "literal": "scip_relationship"
       },
       {
         "name": "symbol",
@@ -7688,6 +6244,39 @@
           "is_definition"
         ],
         "kind": "boolean",
+        "optional": false,
+        "nullable": false
+      }
+    ]
+  },
+  {
+    "record": "source",
+    "table": "source",
+    "columns": [
+      {
+        "name": "id",
+        "path": [
+          "id"
+        ],
+        "kind": "int64",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "path",
+        "path": [
+          "path"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "content_id",
+        "path": [
+          "content_id"
+        ],
+        "kind": "string",
         "optional": false,
         "nullable": false
       }

@@ -7,7 +7,7 @@ cargo run -p sprefa-extract --features cli --bin ryi -- \
   --sqlite facts.db crates/sprefa-extract/src/wire.rs
 sqlite3 facts.db '.tables'
 sqlite3 facts.db '.schema'
-sqlite3 -header -column facts.db 'SELECT _input_path, family, kind, name FROM node LIMIT 20;'
+sqlite3 -header -column facts.db 'SELECT s.path, n.family, n.kind, n.name FROM node AS n JOIN source AS s ON s.id = n._source LIMIT 20;'
 ```
 
 `--sqlite PATH` requires a new database path. It also works with existing
@@ -81,10 +81,14 @@ error; no runtime schema guessing or silent dropping occurs.
   This preserves the separate existing `sig.owner_start` wire field too.
 - `_row` is the export-wide emission ordinal. Duplicate facts are retained.
   It is an export coordinate, not a graph node ID.
-- `_input_path` and `_content_id` qualify per-file rows. The latter comes from
-  extract's existing content hashing. These columns do not redefine soopy
-  repository, revision, worktree or source identities. They are NULL for
+- `_source` qualifies per-file rows: it is `source.id`, and `source` holds one
+  row per (`path`, `content_id`) the export read. `content_id` comes from
+  extract's existing content hashing. These do not redefine soopy repository,
+  revision, worktree or source identities. `_source` is NULL for
   resolved/foreign rows, whose existing payload paths/digests remain.
+- Tables carry no `record` column: the table name is the record. Schemas use
+  plain `INTEGER PRIMARY KEY` and multi-row `INSERT ... VALUES`, no SQLite-only
+  table features.
 - Per-file exports include a `file` row from the same input bytes. Witness
   counters remain scoped to their original run/file; `_row` is independent.
 - `fast` and `--resolve` SQLite exports prepend the file and raw syntax facts

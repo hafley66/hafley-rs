@@ -54,9 +54,9 @@ fn syntax_rows(jsonl: &str) -> Vec<Value> {
 fn database_rows(db: &Connection) -> Vec<Value> {
     let mut rows = Vec::new();
     for sql in [
-        "SELECT json_object('record',record,'callee',callee,'path',path,'line',line,'fn',\"fn\",'start',start,'end',end) FROM call_site",
-        "SELECT json_object('record',record,'name',name,'path',path,'line',line,'fn',\"fn\",'start',start,'end',end,'parent_start',parent_start) FROM jsx_element",
-        "SELECT json_object('record',record,'path',path,'element_start',element_start,'name',name,'value',value,'start',start,'end',end) FROM jsx_attribute",
+        "SELECT json_object('record','call_site','callee',callee,'path',path,'line',line,'fn',\"fn\",'start',start,'end',end) FROM call_site",
+        "SELECT json_object('record','jsx_element','name',name,'path',path,'line',line,'fn',\"fn\",'start',start,'end',end,'parent_start',parent_start) FROM jsx_element",
+        "SELECT json_object('record','jsx_attribute','path',path,'element_start',element_start,'name',name,'value',value,'start',start,'end',end) FROM jsx_attribute",
     ] {
         rows.extend(db.prepare(sql).unwrap()
             .query_map([], |row| row.get::<_, String>(0)).unwrap()

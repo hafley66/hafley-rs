@@ -1,7 +1,7 @@
 //! `unresolved` names its file in ONE column. Before the fix, `path` (phase-2,
-//! `call_drop_facts`) and `_input_path` (every SQLite row, phase-1 included)
+//! `call_drop_facts`) and `_source` (every SQLite row, phase-1 included)
 //! were complementary: a phase-1 miss (`tests/fixtures/ts_unresolved/unresolved.ts`
-//! has four) left `path` NULL and only `_input_path` named the file, so
+//! has four) left `path` NULL and only `_source` named the file, so
 //! `WHERE path = ...` silently dropped a row that knew its own file.
 //!
 //! The fix stamps `path` at the flatten site in `src/project.rs`
@@ -85,7 +85,7 @@ fn no_unresolved_row_leaves_its_file_column_null() {
 }
 
 /// Today the stdout `--resolve` stream and the SQLite table differ by however
-/// many phase-1 rows the input set carries, and nothing catches it. `_input_path`
+/// many phase-1 rows the input set carries, and nothing catches it. `_source`
 /// stays the phase-2 discriminator (only `source_fact`, the phase-1 sink, ever
 /// sets it) even after the `path` stamp, so it isolates the same rows stdout
 /// carries.
@@ -102,7 +102,7 @@ fn stream_and_table_agree_on_phase_two_unresolved_rows() {
     let conn = Connection::open(&db).unwrap();
     let table_count: i64 = conn
         .query_row(
-            "SELECT count(*) FROM unresolved WHERE _input_path IS NULL",
+            "SELECT count(*) FROM unresolved WHERE _source IS NULL",
             [],
             |r| r.get(0),
         )

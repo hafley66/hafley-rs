@@ -89,7 +89,7 @@ test("generated Rust compiles, preserves u32 values, and executes native writers
         conn.set_prepared_statement_cache_capacity(writers::TABLE_COUNT);
         conn.execute_batch(include_str!("4_facts.sql")).unwrap();
         let tx = conn.transaction().unwrap();
-        let source = writers::Source { row: 1, input_path: None, content_id: None };
+        let source = writers::Source { row: 1, source: None };
         let protocol = writers::models::Protocol { version: u32::MAX };
         assert_eq!(protocol.insert(&tx, &source).unwrap(), 1);
         assert_eq!(tx.query_row("SELECT version FROM protocol", [], |r| r.get::<_, u32>(0)).unwrap(), u32::MAX);
@@ -107,21 +107,21 @@ test("generated Rust compiles, preserves u32 values, and executes native writers
         let size: writers::Fact = serde_json::from_value(serde_json::json!({
           "record":"size_skip", "path":"p", "bytes":u64::MAX, "limit":9223372036854775808u64, "reason":"large"
         })).unwrap();
-        size.insert(&conn, &writers::Source { row: 1, input_path: Some("p"), content_id: Some("d") }).unwrap();
+        size.insert(&conn, &writers::Source { row: 1, source: Some(1) }).unwrap();
         assert_eq!(conn.query_row("SELECT typeof(bytes), bytes, typeof(\\\"limit\\\"), \\\"limit\\\" FROM size_skip", [], |r| Ok((r.get::<_,String>(0)?,r.get::<_,String>(1)?,r.get::<_,String>(2)?,r.get::<_,String>(3)?))).unwrap(),
           ("text".into(), u64::MAX.to_string(), "text".into(), "9223372036854775808".into()));
 
         let json_null: writers::Fact = serde_json::from_value(serde_json::json!({
           "record":"data_doc", "family":"data", "ordinal":0, "span":{"start":2,"end":3}, "format":"json", "doc":null
         })).unwrap();
-        json_null.insert(&conn, &writers::Source { row: 2, input_path: None, content_id: None }).unwrap();
+        json_null.insert(&conn, &writers::Source { row: 2, source: None }).unwrap();
         assert_eq!(conn.query_row("SELECT doc FROM data_doc", [], |r| r.get::<_,String>(0)).unwrap(), "null");
 
         let nullable: writers::Fact = serde_json::from_value(serde_json::json!({
           "record":"scip_index", "reused":false, "tool_name":"x", "tool_version":"1", "documents":0,
           "index_mtime_unix_ms":null, "staleness":"fresh"
         })).unwrap();
-        nullable.insert(&conn, &writers::Source { row: 3, input_path: None, content_id: None }).unwrap();
+        nullable.insert(&conn, &writers::Source { row: 3, source: None }).unwrap();
         assert!(serde_json::from_value::<writers::Fact>(serde_json::json!({
           "record":"scip_index", "reused":false, "tool_name":"x", "tool_version":"1", "documents":0, "staleness":"fresh"
         })).is_err());
@@ -145,55 +145,57 @@ test("generated Rust compiles, preserves u32 values, and executes native writers
           serde_json::from_value(serde_json::json!({"record":"size_skip","path":"b","bytes":3,"limit":4,"reason":"r"})).unwrap(),
         ];
         conn.set_limit(rusqlite::limits::Limit::SQLITE_LIMIT_VARIABLE_NUMBER, 10).unwrap();
-        assert_eq!(writers::max_batch_rows(&conn).unwrap(), 2);
+        // protocol is the narrowest table: _row, _source, version.
+        assert_eq!(writers::max_batch_rows(&conn).unwrap(), 3);
         INSERT_STATEMENTS.store(0, Ordering::Relaxed);
         conn.trace(Some(count_inserts));
-        assert_eq!(writers::insert_all(&conn, &writers::Source { row: 10, input_path: None, content_id: None }, &mixed).unwrap(), 5);
+        assert_eq!(writers::insert_all(&conn, &writers::Source { row: 10, source: None }, &mixed).unwrap(), 5);
         conn.trace(None);
-        assert_eq!(INSERT_STATEMENTS.load(Ordering::Relaxed), 4);
+        // protocol 10,12,13 in one statement; size_skip is 6 wide, one row each.
+        assert_eq!(INSERT_STATEMENTS.load(Ordering::Relaxed), 3);
         assert_eq!(conn.query_row("SELECT group_concat(_row, ',') FROM protocol WHERE _row >= 10", [], |r| r.get::<_,String>(0)).unwrap(), "10,12,13");
         assert_eq!(conn.query_row("SELECT group_concat(_row, ',') FROM size_skip WHERE _row >= 10", [], |r| r.get::<_,String>(0)).unwrap(), "11,14");
 
-        const PROTOCOL_PREFIX: &str = "INSERT INTO \\"protocol\\" (\\"_row\\", \\"_input_path\\", \\"_content_id\\", \\"record\\", \\"version\\") VALUES ";
-        const PROTOCOL_TUPLE: &str = "(?, ?, ?, ?, ?)";
+        const PROTOCOL_PREFIX: &str = "INSERT INTO \\"protocol\\" (\\"_row\\", \\"_source\\", \\"version\\") VALUES ";
+        const PROTOCOL_TUPLE: &str = "(?, ?, ?)";
         let protocol_one = PROTOCOL_PREFIX.len() + PROTOCOL_TUPLE.len();
         let protocol_two = protocol_one + 2 + PROTOCOL_TUPLE.len();
         let old_sql_limit = conn.set_limit(rusqlite::limits::Limit::SQLITE_LIMIT_SQL_LENGTH, i32::try_from(protocol_one).unwrap()).unwrap();
         assert_eq!(writers::max_batch_rows(&conn).unwrap(), 1);
-        assert_eq!(writers::insert_all(&conn, &writers::Source { row: 30, input_path: None, content_id: None }, &mixed[..1]).unwrap(), 1);
+        assert_eq!(writers::insert_all(&conn, &writers::Source { row: 30, source: None }, &mixed[..1]).unwrap(), 1);
 
         conn.set_limit(rusqlite::limits::Limit::SQLITE_LIMIT_SQL_LENGTH, i32::try_from(protocol_two).unwrap()).unwrap();
         assert_eq!(writers::max_batch_rows(&conn).unwrap(), 2);
         INSERT_STATEMENTS.store(0, Ordering::Relaxed);
         conn.trace(Some(count_inserts));
-        assert_eq!(writers::insert_all(&conn, &writers::Source { row: 31, input_path: None, content_id: None }, &[mixed[0].clone(), mixed[2].clone(), mixed[3].clone()]).unwrap(), 3);
+        assert_eq!(writers::insert_all(&conn, &writers::Source { row: 31, source: None }, &[mixed[0].clone(), mixed[2].clone(), mixed[3].clone()]).unwrap(), 3);
         conn.trace(None);
         assert_eq!(INSERT_STATEMENTS.load(Ordering::Relaxed), 2);
 
         conn.set_limit(rusqlite::limits::Limit::SQLITE_LIMIT_SQL_LENGTH, i32::try_from(protocol_one - 1).unwrap()).unwrap();
         let before = conn.total_changes();
-        assert!(matches!(writers::insert_all(&conn, &writers::Source { row: 40, input_path: None, content_id: None }, &mixed[..1]), Err(writers::InsertError::SQLiteLimit(_))));
+        assert!(matches!(writers::insert_all(&conn, &writers::Source { row: 40, source: None }, &mixed[..1]), Err(writers::InsertError::SQLiteLimit(_))));
         assert_eq!(conn.total_changes(), before);
 
         conn.set_limit(rusqlite::limits::Limit::SQLITE_LIMIT_SQL_LENGTH, i32::try_from(protocol_one).unwrap()).unwrap();
         let before = conn.total_changes();
-        assert!(matches!(writers::insert_all(&conn, &writers::Source { row: 40, input_path: None, content_id: None }, &mixed[..2]), Err(writers::InsertError::SQLiteLimit(_))));
+        assert!(matches!(writers::insert_all(&conn, &writers::Source { row: 40, source: None }, &mixed[..2]), Err(writers::InsertError::SQLiteLimit(_))));
         assert_eq!(conn.total_changes(), before);
         assert_eq!(conn.query_row("SELECT count(*) FROM protocol WHERE _row = 40", [], |r| r.get::<_,i64>(0)).unwrap(), 0);
         conn.set_limit(rusqlite::limits::Limit::SQLITE_LIMIT_SQL_LENGTH, old_sql_limit).unwrap();
 
-        writers::models::Protocol { version: 1 }.insert(&conn, &writers::Source { row: 22, input_path: None, content_id: None }).unwrap();
+        writers::models::Protocol { version: 1 }.insert(&conn, &writers::Source { row: 22, source: None }).unwrap();
         let batch = [
           serde_json::from_value(serde_json::json!({"record":"protocol","version":2})).unwrap(),
           serde_json::from_value(serde_json::json!({"record":"protocol","version":3})).unwrap(),
           serde_json::from_value(serde_json::json!({"record":"protocol","version":4})).unwrap(),
         ];
         let tx = conn.transaction().unwrap();
-        assert!(writers::insert_all(&tx, &writers::Source { row: 20, input_path: None, content_id: None }, &batch).is_err());
+        assert!(writers::insert_all(&tx, &writers::Source { row: 20, source: None }, &batch).is_err());
         tx.rollback().unwrap();
         assert_eq!(conn.query_row("SELECT count(*) FROM protocol WHERE _row IN (20, 21)", [], |r| r.get::<_,i64>(0)).unwrap(), 0);
         let before = conn.total_changes();
-        assert!(matches!(writers::insert_all(&conn, &writers::Source { row: i64::MAX, input_path: None, content_id: None }, &batch), Err(writers::InsertError::OrdinalOverflow)));
+        assert!(matches!(writers::insert_all(&conn, &writers::Source { row: i64::MAX, source: None }, &batch), Err(writers::InsertError::OrdinalOverflow)));
         assert_eq!(conn.total_changes(), before);
       }
     `);

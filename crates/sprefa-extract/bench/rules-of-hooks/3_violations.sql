@@ -53,13 +53,14 @@ raw_hooks AS (
       ORDER BY f.depth DESC LIMIT 1) AS frame,
     d.function AS raw_owner, d.is_async, d.owner_kind,
     q.callee__text = 'use' AS is_use,
-    EXISTS (SELECT 1 FROM facts.site s
-      WHERE s._input_path = q.path AND s.family = 'call'
+    EXISTS (SELECT 1 FROM facts.site s JOIN facts.source src ON src.id = s._source
+      WHERE src.path = q.path AND s.family = 'call'
         AND s.span__start = q.invoked__start AND s.span__end = q.invoked__end) AS has_site
   FROM scmpp_row q JOIN scmpp_dict_path p ON p.text = q.path
   JOIN cst n ON n.file = p.id AND n.start = q.hook__start
     AND n."end" = q.hook__end AND n.kind_name = 'call_expression'
-  LEFT JOIN facts.node d ON d._input_path = q.path AND d.family = 'df' AND d.kind = 'call_res'
+  LEFT JOIN (SELECT n.*, src.path FROM facts.node n JOIN facts.source src ON src.id = n._source
+    WHERE n.family = 'df' AND n.kind = 'call_res') d ON d.path = q.path
     AND d.span__start = q.hook__start AND d.span__end = q.hook__end
   WHERE EXISTS (SELECT 1 FROM cst callee WHERE callee.file = n.file AND callee.parent = n.pre
     AND callee.field_name = 'function' AND (callee.kind_name = 'identifier' OR
@@ -129,9 +130,10 @@ returns AS (
 ),
 looped AS (
   SELECT DISTINCT h.path, h.start, h."end", h.hook, h.owner
-  FROM ordered_hooks h JOIN facts.df_nest nest ON nest._input_path = h.path
+  FROM ordered_hooks h JOIN facts.source src ON src.path = h.path
+  JOIN facts.df_nest nest ON nest._source = src.id
     AND nest.call__start = h.start AND nest.call__end = h."end"
-  JOIN facts.df_loop loop ON loop._input_path = nest._input_path
+  JOIN facts.df_loop loop ON loop._source = nest._source
     AND loop.span__start = nest.loop__start AND loop.span__end = nest.loop__end
   JOIN cst l ON l.file = h.file AND l.start = loop.span__start
     AND l."end" = loop.span__end AND l.pre > h.frame

@@ -28,33 +28,33 @@ say "   $(sqlite3 "$DB" 'SELECT COUNT(*) FROM node')' nodes"
 # ---------------------------------------------------------------- 3. tiers
 say "3. sqlite: declarations, edges, longest-path tiers"
 sqlite3 "$DB" <<'SQL'
-CREATE INDEX IF NOT EXISTS ix_node_k ON node(kind,_input_path,span__start,span__end);
+CREATE INDEX IF NOT EXISTS ix_node_k ON node(kind,_source,span__start,span__end);
 
 -- every `mod test` / `mod tests` span. Anything inside one is invisible.
 DROP TABLE IF EXISTS test_span;
 CREATE TABLE test_span AS
-  SELECT _input_path AS path, span__start AS s, span__end AS e
+  SELECT _source AS source, span__start AS s, span__end AS e
   FROM node WHERE kind='mod_item' AND lower(name) IN ('test','tests');
 
 DROP TABLE IF EXISTS ty_decl;
 CREATE TABLE ty_decl AS
-  SELECT n.name AS ty, n.kind AS kind, n._input_path AS path,
+  SELECT n.name AS ty, n.kind AS kind, src.path AS path, n._source AS source,
          n.span__start AS s, n.span__end AS e
-  FROM node n
+  FROM node n JOIN source src ON src.id = n._source
   WHERE n.kind IN ('struct_item','enum_item','type_item','union_item','trait_item')
     AND NOT EXISTS (SELECT 1 FROM test_span t
-                    WHERE t.path=n._input_path AND n.span__start>=t.s AND n.span__end<=t.e);
+                    WHERE t.source=n._source AND n.span__start>=t.s AND n.span__end<=t.e);
 CREATE INDEX ix_decl ON ty_decl(ty);
 
 DROP TABLE IF EXISTS ty_edge;
 CREATE TABLE ty_edge AS
   SELECT DISTINCT d.ty AS src, r.name AS dst
   FROM ty_decl d
-  JOIN node r ON r.kind='type_identifier' AND r._input_path=d.path
+  JOIN node r ON r.kind='type_identifier' AND r._source=d.source
              AND r.span__start>=d.s AND r.span__end<=d.e AND r.name<>d.ty
   WHERE r.name IN (SELECT ty FROM ty_decl)
     AND NOT EXISTS (SELECT 1 FROM test_span t
-                    WHERE t.path=r._input_path AND r.span__start>=t.s AND r.span__end<=t.e);
+                    WHERE t.source=r._source AND r.span__start>=t.s AND r.span__end<=t.e);
 CREATE INDEX ix_edge ON ty_edge(src,dst);
 
 -- tier = longest path to a sink. A leaf is tier 0; a type sits one above its

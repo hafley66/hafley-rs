@@ -8,9 +8,9 @@ pub(super) const SQL: &str = "SELECT \"_row\", \
     CASE WHEN \"kind\" = 'ret_to_call_res' THEN printf('%d:%d', \"from__start\", \"from__end\") ELSE printf('%d:%d', \"to__start\", \"to__end\") END, '~', NULL \
     FROM \"flow_edge\" \
     UNION ALL \
-    SELECT \"_row\", \"_content_id\", printf('%d:%d', \"from__start\", \"from__end\"), \
-    \"_content_id\", printf('%d:%d', \"to__start\", \"to__end\"), '~', NULL \
-    FROM \"edge\" WHERE \"family\" = 'df' AND \"_content_id\" IS NOT NULL";
+    SELECT e.\"_row\", s.\"content_id\", printf('%d:%d', e.\"from__start\", e.\"from__end\"), \
+    s.\"content_id\", printf('%d:%d', e.\"to__start\", e.\"to__end\"), '~', NULL \
+    FROM \"edge\" AS e JOIN \"source\" AS s ON s.\"id\" = e.\"_source\" WHERE e.\"family\" = 'df'";
 
 /// Normalize path seeds to content identity; digest seeds already name it.
 pub(super) fn flow_seed(

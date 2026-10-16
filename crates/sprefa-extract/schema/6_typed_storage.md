@@ -30,15 +30,16 @@ resolver and TypeSpec writer emitter. The result was 54,701 rows in
 rerun after edits before using its byte offsets.
 
 ```sql
-SELECT DISTINCT s._input_path, s.callee, s.span__start, n.depth
+SELECT DISTINCT src.path, s.callee, s.span__start, n.depth
 FROM site AS s
 JOIN df_nest AS n
-  ON n._input_path = s._input_path
+  ON n._source = s._source
  AND s.span__start >= n.call__start
  AND s.span__end <= n.call__end
+JOIN source AS src ON src.id = s._source
 WHERE s.callee IN
   ('read_many', 'read', 'prepare_cached', 'execute', 'insert', 'insert_all')
-ORDER BY s._input_path, s.span__start;
+ORDER BY src.path, s.span__start;
 ```
 
 The query identifies review candidates. A call named `insert` can target an
