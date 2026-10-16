@@ -95,7 +95,7 @@ pub use lang::RustSource;
 pub use lang::{
     dl6_db_path, find_owned_region, open_dl6_readonly, open_readonly, owned_region_markers,
     propose_owned_region, query_source, query_source_facts, query_tree_sitter,
-    query_tree_sitter_spans, scm_edges, scm_facts, source_for, sources, ByteRange, FactError,
+    build_tree_sitter_query, query_tree_sitter_spans, query_tree_sitter_spans_with, scm_edges, scm_facts, source_for, sources, ByteRange, FactError,
     FactSet, GitBlobFact, OwnedRegion, OwnedRegionError, OwnedRegionProposal, RyiLang, ScmEdge,
     SourceCaptureFact, SourceMatchFact, SourcePlace, SourceQuery, SourceQueryError,
     SourceQueryFact, SourceQueryFacts, SourceQueryOutput, SourceReplacementFact,

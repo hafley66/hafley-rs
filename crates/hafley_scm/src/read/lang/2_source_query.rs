@@ -111,29 +111,50 @@ pub fn query_tree_sitter(
 
 /// Run a native tree-sitter query through the shared `hafley_scm` engine,
 /// retaining the spans and ordering that the shared source-fact projection
-/// needs. One `QueryExt` per request, one `MatchArena` per run.
+/// needs. Builds the query on every call; a caller running one query over many
+/// files builds once with `build_tree_sitter_query` and calls
+/// `query_tree_sitter_spans_with`.
 pub fn query_tree_sitter_spans(
     content: &[u8],
     request: &TreeSitterQuery,
 ) -> Result<Vec<TreeSitterSpannedMatch>, String> {
+    let (language, query) = build_tree_sitter_query(request)?;
+    let mut parser = TreeParser::new();
+    query_tree_sitter_spans_with(content, &language, &query, &mut parser)
+}
+
+/// The grammar and compiled `QueryExt` for one request, built once per language.
+pub fn build_tree_sitter_query(
+    request: &TreeSitterQuery,
+) -> Result<(tree_sitter::Language, hafley_scm::QueryExt), String> {
     let language = query_language(&request.language)?;
+    let query = hafley_scm::build(&language, &request.query)
+        .map_err(|error| one_line_text(query_error_text(&error)))?;
+    Ok((language, query))
+}
+
+/// `query_tree_sitter_spans` over a prebuilt query and a caller-owned parser
+/// (one per thread). `set_language` is a pointer swap, so it runs every call.
+pub fn query_tree_sitter_spans_with(
+    content: &[u8],
+    language: &tree_sitter::Language,
+    query: &hafley_scm::QueryExt,
+    parser: &mut TreeParser,
+) -> Result<Vec<TreeSitterSpannedMatch>, String> {
     std::str::from_utf8(content)
         .map_err(|error| format!("query input is not valid UTF-8: {error}"))?;
-    let mut parser = TreeParser::new();
     parser
-        .set_language(&language)
-        .map_err(|error| format!("invalid language '{}': {error:?}", request.language))?;
+        .set_language(language)
+        .map_err(|error| format!("invalid language: {error:?}"))?;
     let tree = parser
         .parse(content, None)
         .ok_or_else(|| "query parse failed: source tree was not produced".to_string())?;
-    let query = hafley_scm::build(&language, &request.query)
-        .map_err(|error| one_line_text(query_error_text(&error)))?;
     let mut arena = hafley_scm::MatchArena::default();
     // The fresh-cursor default this facade always ran with; the engine's
     // limit check cannot fire at u32::MAX.
-    hafley_scm::run(&query, "", content, &tree, u32::MAX, &mut arena)
+    hafley_scm::run(query, "", content, &tree, u32::MAX, &mut arena)
         .map_err(|error| one_line_text(query_error_text(&error)))?;
-    project_match_arena(&query, &arena, content)
+    project_match_arena(query, &arena, content)
 }
 
 /// Every language the `Source` roster can parse, through the one name table

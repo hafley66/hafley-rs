@@ -2,7 +2,8 @@ use crate::cli::QueryArgs;
 use std::io::Write;
 use std::path::Path;
 
-use sprefa_extract::{content_id_of, query_tree_sitter_spans, RyiLang, TreeSitterQuery};
+use rayon::prelude::*;
+use sprefa_extract::{content_id_of, extract_pool, query_tree_sitter_spans_with, RyiLang};
 
 type Result<T, E = Box<dyn std::error::Error>> = std::result::Result<T, E>;
 
@@ -28,8 +29,12 @@ pub fn run_to(cli: QueryArgs, writer: Box<dyn Write + Send>) -> Result<()> {
     };
     let mut output = crate::sqlite::Output::with_writer(cli.store.sqlite.as_deref(), writer, true)
         .map_err(|error| error.to_string())?;
-    let mut compatible = std::collections::HashMap::<String, bool>::new();
+    // One compiled query per language, built once; `None` marks a grammar that
+    // lacks one of the query's node types.
+    let mut compiled =
+        std::collections::HashMap::<String, Option<(tree_sitter::Language, hafley_scm::QueryExt)>>::new();
     let mut skipped = std::collections::BTreeMap::<String, usize>::new();
+    let mut jobs = Vec::<(&std::path::PathBuf, String)>::with_capacity(paths.len());
     for path in &paths {
         let name = path.to_string_lossy();
         let language = match &cli.lang {
@@ -38,75 +43,90 @@ pub fn run_to(cli: QueryArgs, writer: Box<dyn Write + Send>) -> Result<()> {
                 .map(|lang| lang.name().to_string())
                 .ok_or_else(|| format!("{name}: no language for this extension; pass --lang"))?,
         };
-        if !compatible.contains_key(&language) {
+        if !compiled.contains_key(&language) {
             let grammar = RyiLang::parse_name(&language)
                 .ok_or_else(|| format!("unknown lang '{language}'"))?
                 .tree_sitter_language();
-            let supported = match hafley_scm::build(&grammar, &query) {
-                Ok(_) => true,
+            let entry = match hafley_scm::build(&grammar, &query) {
+                Ok(built) => Some((grammar, built)),
                 Err(hafley_scm::QueryExtError::Parse(error))
-                    if error.kind == tree_sitter::QueryErrorKind::NodeType => false,
+                    if error.kind == tree_sitter::QueryErrorKind::NodeType => None,
                 Err(error) => return Err(format!("query ({language}): {error}").into()),
             };
-            compatible.insert(language.clone(), supported);
+            compiled.insert(language.clone(), entry);
         }
-        if !compatible[&language] {
+        if compiled[&language].is_none() {
             *skipped.entry(language).or_default() += 1;
             continue;
         }
-        let bytes = source_bytes(path, cli.digest.as_deref())?;
-        let request = TreeSitterQuery {
-            language,
-            query: query.clone(),
-        };
-        let matches = query_tree_sitter_spans(&bytes, &request)?;
-        if let Some(database) = &mut output.database {
-            database
-                .source(&name, content_id_of(&bytes).to_string())
-                .map_err(|error| error.to_string())?;
-            for found in &matches {
-                for capture in &found.captures {
-                    let row = serde_json::json!({
-                        "record": "capture",
-                        "query": query,
-                        "capture": capture.label,
-                        "text": capture.text,
-                        "start": capture.start,
-                        "end": capture.end,
-                        "match_start": found.start,
-                        "match_end": found.end,
-                    });
-                    database.insert(row).map_err(|error| error.to_string())?;
+        jobs.push((path, language));
+    }
+    // Read, parse and match fan out on the extraction pool, one parser per
+    // worker; rows are written in input order, a chunk at a time.
+    for chunk in jobs.chunks(1024) {
+        let results: Vec<Result<(String, Vec<sprefa_extract::TreeSitterSpannedMatch>), String>> =
+            extract_pool().install(|| {
+                chunk
+                    .par_iter()
+                    .map_init(tree_sitter::Parser::new, |parser, (path, language)| {
+                        let (grammar, built) = compiled[language].as_ref().expect("compiled language");
+                        let bytes = source_bytes(path, cli.digest.as_deref())?;
+                        let matches = query_tree_sitter_spans_with(&bytes, grammar, built, parser)?;
+                        Ok((content_id_of(&bytes).to_string(), matches))
+                    })
+                    .collect()
+            });
+        for ((path, _), result) in chunk.iter().zip(results) {
+            let name = path.to_string_lossy();
+            let (content_id, matches) = result?;
+            if let Some(database) = &mut output.database {
+                database
+                    .source(&name, content_id)
+                    .map_err(|error| error.to_string())?;
+                for found in &matches {
+                    for capture in &found.captures {
+                        let row = serde_json::json!({
+                            "record": "capture",
+                            "query": query,
+                            "capture": capture.label,
+                            "text": capture.text,
+                            "start": capture.start,
+                            "end": capture.end,
+                            "match_start": found.start,
+                            "match_end": found.end,
+                        });
+                        database.insert(row).map_err(|error| error.to_string())?;
+                    }
                 }
+                continue;
             }
-            continue;
-        }
-        for found in matches {
-            let mut row = std::collections::BTreeMap::<String, serde_json::Value>::new();
-            row.insert("path".into(), name.as_ref().into());
-            // A capture with one node is its text; a capture bound to several nodes
-            // (`*`, `+`, or a repeated name) is an array of their texts in document order.
-            let mut nodes = std::collections::BTreeMap::<String, Vec<(u32, String)>>::new();
-            for capture in found.captures {
-                nodes.entry(capture.label).or_default().push((capture.start, capture.text));
+            for found in matches {
+                let mut row = std::collections::BTreeMap::<String, serde_json::Value>::new();
+                row.insert("path".into(), name.as_ref().into());
+                // A capture with one node is its text; a capture bound to several nodes
+                // (`*`, `+`, or a repeated name) is an array of their texts in document order.
+                let mut nodes = std::collections::BTreeMap::<String, Vec<(u32, String)>>::new();
+                for capture in found.captures {
+                    nodes.entry(capture.label).or_default().push((capture.start, capture.text));
+                }
+                for (label, mut texts) in nodes {
+                    let value = if texts.len() == 1 {
+                        texts.pop().expect("one node").1.into()
+                    } else {
+                        texts.sort_by_key(|(start, _)| *start);
+                        texts.into_iter().map(|(_, text)| text).collect::<Vec<_>>().into()
+                    };
+                    row.insert(label, value);
+                }
+                row.insert("line".into(), found.line.into());
+                row.insert("end_line".into(), found.end_line.into());
+                output
+                    .line(
+                        &serde_json::to_string(&row)
+                            .map_err(|error| format!("query output: {error}"))?,
+                    )
+                    .map_err(|error| error.to_string())?;
             }
-            for (label, mut texts) in nodes {
-                let value = if texts.len() == 1 {
-                    texts.pop().expect("one node").1.into()
-                } else {
-                    texts.sort_by_key(|(start, _)| *start);
-                    texts.into_iter().map(|(_, text)| text).collect::<Vec<_>>().into()
-                };
-                row.insert(label, value);
-            }
-            row.insert("line".into(), found.line.into());
-            row.insert("end_line".into(), found.end_line.into());
-            output
-                .line(
-                    &serde_json::to_string(&row)
-                        .map_err(|error| format!("query output: {error}"))?,
-                )
-                .map_err(|error| error.to_string())?;
         }
     }
     if !skipped.is_empty() {
