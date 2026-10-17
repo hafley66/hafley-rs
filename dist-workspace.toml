@@ -1,9 +1,8 @@
 [workspace]
 members = ["cargo:."]
 
-# Config for 'dist'. Local-only: no CI backend, because .github/workflows/release.yml
-# belongs to crates/sprefa-extract's own dist workspace. Releases are built on an
-# arm64 Mac with `dist build --tag=<pkg>-vX.Y.Z` and uploaded with `gh release`.
+# Config for 'dist'. Local-only: scripts/release.sh <crate-dir> builds on this Mac
+# and uploads with gh. crates/sprefa-extract and crates/ghcache have their own.
 [dist]
 cargo-dist-version = "0.32.0"
 hosting = "github"

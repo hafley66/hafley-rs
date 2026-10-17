@@ -11,10 +11,8 @@ repository = "https://github.com/hafley66/hafley-rs"
 homepage = "https://github.com/hafley66/hafley-rs"
 
 # publish=false keeps crates.io out; dist=true opts into cargo-dist releases
-# (tag sprefa-extract-vX.Y.Z), same shell-installer flow as sprefa-dl. The
-# config is crates/sprefa-extract/dist-workspace.toml and the flow is the
-# repository-root .github/workflows/release.yml (hand-patched: this crate is
-# excluded from the root workspace, so every CI step runs in this directory).
+# (tag sprefa-extract-vX.Y.Z). The config is crates/sprefa-extract/dist-workspace.toml;
+# scripts/release.sh crates/sprefa-extract builds and publishes locally.
 [package.metadata.dist]
 dist = true
 features = ["cli"]

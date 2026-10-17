@@ -1,14 +1,13 @@
 [workspace]
 members = ["cargo:."]
 
-# Config for 'dist'. Local-only: no CI backend, because .github/workflows/release.yml
-# belongs to crates/sprefa-extract. ghcache is its own workspace root (excluded from
-# the parent), so its dist workspace lives here. Releases are built on an arm64 Mac
-# with `dist build --tag=ghcache-vX.Y.Z --artifacts=all` and uploaded with `gh release`.
+# Config for 'dist'. Local-only: scripts/release.sh crates/ghcache builds on this Mac
+# and uploads with gh. ghcache is its own workspace root (excluded from the parent),
+# so its dist workspace lives here.
 [dist]
 cargo-dist-version = "0.32.0"
 hosting = "github"
 installers = ["shell"]
 install-path = "CARGO_HOME"
 install-updater = false
-targets = ["aarch64-apple-darwin"]
+targets = ["aarch64-apple-darwin", "x86_64-apple-darwin"]
