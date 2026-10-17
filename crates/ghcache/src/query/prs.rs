@@ -31,16 +31,16 @@ pub async fn query(
     mine: bool,
     format: Format,
 ) -> Result<()> {
-    let mut conditions = vec![format!("pr.state = '{}'", state.replace('\'', "''"))];
+    // Fixed SQL text, values bound in order: no user text reaches the SQL string.
+    let mut conditions = vec!["pr.state = ?".to_string()];
+    let mut binds: Vec<String> = vec![state.to_string()];
 
     if let Some(slug) = repo {
         let parts: Vec<&str> = slug.splitn(2, '/').collect();
         if parts.len() == 2 {
-            conditions.push(format!(
-                "r.owner = '{}' AND r.name = '{}'",
-                parts[0].replace('\'', "''"),
-                parts[1].replace('\'', "''")
-            ));
+            conditions.push("r.owner = ? AND r.name = ?".into());
+            binds.push(parts[0].to_string());
+            binds.push(parts[1].to_string());
         }
     }
 
@@ -60,7 +60,8 @@ pub async fn query(
             Ok(out) if out.status.success() => {
                 let login = String::from_utf8_lossy(&out.stdout).trim().to_string();
                 if !login.is_empty() {
-                    conditions.push(format!("pr.author = '{}'", login.replace('\'', "''")));
+                    conditions.push("pr.author = ?".into());
+                    binds.push(login);
                 }
             }
             _ => tracing::warn!("--mine: could not resolve gh user; ignoring filter"),
@@ -84,7 +85,12 @@ pub async fn query(
          ORDER BY pr.updated_at DESC"
     );
 
-    let rows: Vec<PrRow> = sqlx::query(&sql)
+    // The text is assembled from the fixed condition strings above only.
+    let mut statement = sqlx::query(sqlx::AssertSqlSafe(sql));
+    for value in &binds {
+        statement = statement.bind(value);
+    }
+    let rows: Vec<PrRow> = statement
         .fetch_all(pool)
         .await?
         .iter()

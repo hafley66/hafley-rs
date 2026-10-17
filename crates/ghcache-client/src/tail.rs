@@ -182,7 +182,7 @@ mod tests {
             .connect("sqlite::memory:")
             .await
             .unwrap();
-        sqlx::raw_sql(include_str!("../../src/schema.sql"))
+        sqlx::raw_sql(include_str!("../../ghcache/src/schema.sql"))
             .execute(&pool)
             .await
             .unwrap();

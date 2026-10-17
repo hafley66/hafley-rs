@@ -26,15 +26,17 @@ impl Client {
     // ---- Pull Requests --------------------------------------------------
 
     pub async fn prs(&self, filter: &PrFilter<'_>) -> Result<Vec<PullRequest>> {
-        let mut conditions = vec![];
-        let state = filter.state.unwrap_or("open");
-        conditions.push(format!("pr.state = '{}'", esc(state)));
+        // Fixed SQL text, values bound in order.
+        let mut conditions = vec!["pr.state = ?".to_owned()];
+        let mut binds: Vec<&str> = vec![filter.state.unwrap_or("open")];
         if let Some(repo) = filter.repo {
             let (owner, name) = split_slug(repo)?;
-            conditions.push(format!("r.owner = '{}' AND r.name = '{}'", esc(owner), esc(name)));
+            conditions.push("r.owner = ? AND r.name = ?".into());
+            binds.extend([owner, name]);
         }
         if let Some(author) = filter.author {
-            conditions.push(format!("pr.author = '{}'", esc(author)));
+            conditions.push("pr.author = ?".into());
+            binds.push(author);
         }
         if filter.needs_review {
             conditions.push(
@@ -53,7 +55,7 @@ impl Client {
              ORDER BY pr.updated_at DESC",
             conditions.join(" AND ")
         );
-        let rows = sqlx::query(&sql).fetch_all(&self.pool).await?;
+        let rows = bound(&sql, &binds).fetch_all(&self.pool).await?;
         rows.iter().map(|r| Ok(PullRequest {
             id:            r.try_get(0)?,
             repo_slug:     r.try_get(1)?,
@@ -166,7 +168,7 @@ impl Client {
              {filter}
              ORDER BY n.updated_at DESC"
         );
-        let rows = sqlx::query(&sql).fetch_all(&self.pool).await?;
+        let rows = bound(&sql, &[]).fetch_all(&self.pool).await?;
         rows.iter().map(|r| Ok(Notification {
             id:             r.try_get(0)?,
             gh_id:          r.try_get(1)?,
@@ -185,12 +187,12 @@ impl Client {
     // ---- Branches -------------------------------------------------------
 
     pub async fn branches(&self, repo: Option<&str>) -> Result<Vec<Branch>> {
-        let where_clause = match repo {
+        let (where_clause, binds) = match repo {
             Some(r) => {
                 let (owner, name) = split_slug(r)?;
-                format!("WHERE r.owner = '{}' AND r.name = '{}'", esc(owner), esc(name))
+                ("WHERE r.owner = ? AND r.name = ?", vec![owner, name])
             }
-            None => String::new(),
+            None => ("", vec![]),
         };
         let sql = format!(
             "SELECT b.id, r.owner || '/' || r.name, b.name, b.sha,
@@ -199,7 +201,7 @@ impl Client {
              {where_clause}
              ORDER BY r.owner, r.name, b.name"
         );
-        let rows = sqlx::query(&sql).fetch_all(&self.pool).await?;
+        let rows = bound(&sql, &binds).fetch_all(&self.pool).await?;
         rows.iter().map(|r| Ok(Branch {
             id:             r.try_get(0)?,
             repo_slug:      r.try_get(1)?,
@@ -220,12 +222,15 @@ impl Client {
         limit: usize,
     ) -> Result<Vec<RepoEvent>> {
         let mut conditions = vec!["1=1".to_owned()];
+        let mut binds: Vec<&str> = vec![];
         if let Some(r) = repo {
             let (owner, name) = split_slug(r)?;
-            conditions.push(format!("r.owner = '{}' AND r.name = '{}'", esc(owner), esc(name)));
+            conditions.push("r.owner = ? AND r.name = ?".into());
+            binds.extend([owner, name]);
         }
         if let Some(t) = event_type {
-            conditions.push(format!("e.type = '{}'", esc(t)));
+            conditions.push("e.type = ?".into());
+            binds.push(t);
         }
         let sql = format!(
             "SELECT e.id, r.owner || '/' || r.name, e.gh_id, e.type, e.actor,
@@ -236,7 +241,7 @@ impl Client {
             conditions.join(" AND "),
             limit
         );
-        let rows = sqlx::query(&sql).fetch_all(&self.pool).await?;
+        let rows = bound(&sql, &binds).fetch_all(&self.pool).await?;
         rows.iter().map(|r| {
             let payload_str: Option<String> = r.try_get(5)?;
             Ok(RepoEvent {
@@ -257,12 +262,12 @@ impl Client {
     // ---- Checkouts ------------------------------------------------------
 
     pub async fn checkouts(&self, repo: Option<&str>) -> Result<Vec<Checkout>> {
-        let where_clause = match repo {
+        let (where_clause, binds) = match repo {
             Some(r) => {
                 let (owner, name) = split_slug(r)?;
-                format!("WHERE r.owner = '{}' AND r.name = '{}'", esc(owner), esc(name))
+                ("WHERE r.owner = ? AND r.name = ?", vec![owner, name])
             }
-            None => String::new(),
+            None => ("", vec![]),
         };
         let sql = format!(
             "SELECT r.owner || '/' || r.name, c.branch, c.local_path, c.sha, c.checked_out_at
@@ -270,7 +275,7 @@ impl Client {
              {where_clause}
              ORDER BY r.owner, r.name, c.branch"
         );
-        let rows = sqlx::query(&sql).fetch_all(&self.pool).await?;
+        let rows = bound(&sql, &binds).fetch_all(&self.pool).await?;
         rows.iter().map(|r| Ok(Checkout {
             repo_slug:      r.try_get(0)?,
             branch:         r.try_get(1)?,
@@ -317,8 +322,17 @@ impl Client {
     }
 }
 
-fn esc(s: &str) -> String {
-    s.replace('\'', "''")
+/// The statement text comes only from the fixed fragments in this file; every
+/// caller-supplied value is a bound parameter.
+fn bound<'q>(
+    sql: &str,
+    binds: &[&'q str],
+) -> sqlx::query::Query<'q, sqlx::Sqlite, sqlx::sqlite::SqliteArguments> {
+    let mut query = sqlx::query(sqlx::AssertSqlSafe(sql.to_owned()));
+    for value in binds {
+        query = query.bind(*value);
+    }
+    query
 }
 
 fn split_slug(slug: &str) -> Result<(&str, &str)> {
@@ -339,7 +353,7 @@ mod tests {
             .connect("sqlite::memory:")
             .await
             .unwrap();
-        sqlx::raw_sql(include_str!("../../src/schema.sql"))
+        sqlx::raw_sql(include_str!("../../ghcache/src/schema.sql"))
             .execute(&pool)
             .await
             .unwrap();
@@ -416,8 +430,23 @@ mod tests {
         assert!(empty.is_empty());
     }
 
-    #[test]
-    fn esc_quotes() {
-        assert_eq!(esc("O'Brien"), "O''Brien");
+    /// Filter values are bound, so a quote in a slug matches its row as written.
+    #[tokio::test]
+    async fn quoted_slug_filters_by_binding() {
+        let client = setup().await;
+        sqlx::query("INSERT INTO repo (owner, name, default_branch) VALUES ('o''brien', 'backend', 'main')")
+            .execute(&client.pool)
+            .await
+            .unwrap();
+        sqlx::query(
+            "INSERT INTO checkout (repo_id, branch, local_path, sha, checked_out_at)
+             VALUES (1, 'main', '/tmp/o/main', 'abc123', '2026-03-26T00:00:00Z')"
+        )
+            .execute(&client.pool)
+            .await
+            .unwrap();
+        let rows = client.checkouts(Some("o'brien/backend")).await.unwrap();
+        assert_eq!(rows.iter().map(|c| c.repo_slug.as_str()).collect::<Vec<_>>(), ["o'brien/backend"]);
+        assert!(client.checkouts(Some("o'brien' OR '1'='1/backend")).await.unwrap().is_empty());
     }
 }

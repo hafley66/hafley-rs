@@ -5,7 +5,8 @@ use std::io::{self, Write};
 use crate::output::Format;
 
 pub async fn query_raw(pool: &SqlitePool, sql: &str, format: Format) -> Result<()> {
-    let rows: Vec<sqlx::sqlite::SqliteRow> = sqlx::query(sql)
+    // `ghcache sql` runs the caller's own SQL by design.
+    let rows: Vec<sqlx::sqlite::SqliteRow> = sqlx::query(sqlx::AssertSqlSafe(sql.to_owned()))
         .fetch_all(pool)
         .await?;
 
