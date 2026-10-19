@@ -35,13 +35,20 @@ pub fn run_to(cli: QueryArgs, writer: Box<dyn Write + Send>) -> Result<()> {
         std::collections::HashMap::<String, Option<(tree_sitter::Language, hafley_scm::QueryExt)>>::new();
     let mut skipped = std::collections::BTreeMap::<String, usize>::new();
     let mut jobs = Vec::<(&std::path::PathBuf, String)>::with_capacity(paths.len());
+    // A file with no language ends the stream where it sits: the files before
+    // it still answer, then the error.
+    let mut late_error = None;
     for path in &paths {
         let name = path.to_string_lossy();
         let language = match &cli.lang {
             Some(language) => language.clone(),
-            None => RyiLang::from_path(&name)
-                .map(|lang| lang.name().to_string())
-                .ok_or_else(|| format!("{name}: no language for this extension; pass --lang"))?,
+            None => match RyiLang::from_path(&name) {
+                Some(lang) => lang.name().to_string(),
+                None => {
+                    late_error = Some(format!("{name}: no language for this extension; pass --lang"));
+                    break;
+                }
+            },
         };
         if !compiled.contains_key(&language) {
             let grammar = RyiLang::parse_name(&language)
@@ -62,7 +69,9 @@ pub fn run_to(cli: QueryArgs, writer: Box<dyn Write + Send>) -> Result<()> {
         jobs.push((path, language));
     }
     // Read, parse and match fan out on the extraction pool, one parser per
-    // worker; rows are written in input order, a chunk at a time.
+    // worker; rows are written in input order, a chunk at a time. The request
+    // root is thread-local, so each worker reads through the caller's root.
+    let io_root = sprefa_extract::request_io_root();
     for chunk in jobs.chunks(1024) {
         let results: Vec<Result<(String, Vec<sprefa_extract::TreeSitterSpannedMatch>), String>> =
             extract_pool().install(|| {
@@ -70,7 +79,11 @@ pub fn run_to(cli: QueryArgs, writer: Box<dyn Write + Send>) -> Result<()> {
                     .par_iter()
                     .map_init(tree_sitter::Parser::new, |parser, (path, language)| {
                         let (grammar, built) = compiled[language].as_ref().expect("compiled language");
-                        let bytes = source_bytes(path, cli.digest.as_deref())?;
+                        let read = || source_bytes(path, cli.digest.as_deref());
+                        let bytes = match &io_root {
+                            Some(root) => sprefa_extract::with_io_root(root.clone(), read),
+                            None => read(),
+                        }?;
                         let matches = query_tree_sitter_spans_with(&bytes, grammar, built, parser)?;
                         Ok((content_id_of(&bytes).to_string(), matches))
                     })
@@ -131,6 +144,9 @@ pub fn run_to(cli: QueryArgs, writer: Box<dyn Write + Send>) -> Result<()> {
                     .map_err(|error| error.to_string())?;
             }
         }
+    }
+    if let Some(error) = late_error {
+        return Err(error.into());
     }
     if !skipped.is_empty() {
         crate::ops::print_diagnostic(format_args!(

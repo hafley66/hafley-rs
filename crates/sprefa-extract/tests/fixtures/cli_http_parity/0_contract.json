@@ -386,6 +386,42 @@
     {
       "action": "api",
       "api": "parity",
+      "name": "query_relative",
+      "op": "query",
+      "args": {
+        "paths": [
+          "tests/fixtures/type_ladder/src/_1_none.rs"
+        ],
+        "query": "(function_item name: (identifier) @name)"
+      },
+      "slot": "main",
+      "root": "$manifest",
+      "scratch": "$work",
+      "cli": {
+        "action": "command",
+        "program": "$work/ryii",
+        "arguments": [
+          "query",
+          "tests/fixtures/type_ladder/src/_1_none.rs",
+          "--query",
+          "(function_item name: (identifier) @name)"
+        ],
+        "cwd": "$manifest",
+        "environment": {
+          "RUST_LOG": "off",
+          "DL_TRAIL": "0",
+          "HOME": "$work/home"
+        }
+      },
+      "reset_state": null,
+      "expect_table": [
+        "query   cli       3 32a13c47137c",
+        "query   router    3 32a13c47137c"
+      ]
+    },
+    {
+      "action": "api",
+      "api": "parity",
       "name": "region",
       "op": "region",
       "args": {

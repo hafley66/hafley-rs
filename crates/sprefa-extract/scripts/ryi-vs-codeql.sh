@@ -6,12 +6,17 @@ if [ "$#" -ne 2 ]; then
   echo "usage: $0 <root> <rust|ts>" >&2
   exit 2
 fi
+# The manifest reads need tomllib (Python 3.11+); macOS /usr/bin/python3 is 3.9.
+python=$(for candidate in python3.14 python3.13 python3.12 python3.11 python3; do
+  command -v "$candidate" >/dev/null && "$candidate" -c 'import tomllib' 2>/dev/null && { command -v "$candidate"; break; }
+done)
+[ -n "$python" ] || { echo "ryi-vs-codeql: no python with tomllib (3.11+) on PATH" >&2; exit 2; }
 # One CodeQL run per machine: every caller queues on one flock. The lock fd is
 # made inheritable so it survives the exec back into this script.
 if [ -z "${RYI_CODEQL_CSV:-}" ] && [ -z "${RYI_CODEQL_LOCKED:-}" ]; then
   lock=${XDG_CACHE_HOME:-$HOME/.cache}/ryi-vs-codeql.lock
   mkdir -p "$(dirname "$lock")"
-  exec env RYI_CODEQL_LOCKED=1 python3 -c '
+  exec env RYI_CODEQL_LOCKED=1 "$python" -c '
 import fcntl, os, sys
 f = open(sys.argv[1], "a")
 try:
@@ -54,7 +59,7 @@ if [ "${RYI_CODEQL_STAGE:-1}" = 0 ]; then
   root=$source_root
 elif [ "${RYI_CODEQL_REUSE:-0}" != 1 ] || [ ! -f "$out/source/.baseline-complete" ]; then
   rm -rf "$out/source"
-  python3 - "$source_root" "$out/source" "$language" <<'PY'
+  "$python" - "$source_root" "$out/source" "$language" <<'PY'
 import pathlib
 import shutil
 import subprocess
@@ -170,7 +175,7 @@ if [ -z "${RYI_CODEQL_CSV:-}" ] && { [ "$query_ran" = 1 ] || [ ! -f "$out/codeql
   echo "$(( $(date +%s) - start ))" >"$out/codeql-query-seconds"
 fi
 
-python3 - "$root" "$out" "$language" <<'PY'
+"$python" - "$root" "$out" "$language" <<'PY'
 import csv
 import pathlib
 import sqlite3

@@ -12,7 +12,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(facts))"
     "run": 0,
     "mode": "syntax",
     "tool": "ryi",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "scope": [
       "blake3:5bb3ce0722005ae43f3a40f0817fe3b0649672c779530978f6e3dd374b666195"
     ]

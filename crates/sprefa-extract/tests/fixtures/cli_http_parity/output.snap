@@ -63,6 +63,14 @@ source: tests/support/2_fixture_runner.rs
       "cli_success": true,
       "http_success": true
     },
+    "query_relative": {
+      "table": [
+        "query   cli       3 32a13c47137c",
+        "query   router    3 32a13c47137c"
+      ],
+      "cli_success": true,
+      "http_success": true
+    },
     "region": {
       "table": [
         "region  cli       1 6e64be8bc173",
