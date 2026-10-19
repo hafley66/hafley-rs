@@ -8,7 +8,7 @@ use ra_ap_ide::{AnalysisHost, RootDatabase};
 use ra_ap_ide_db::ChangeWithProcMacros;
 use ra_ap_load_cargo::{LoadCargoConfig, ProcMacroServerChoice, ProjectFolders, SourceRootConfig};
 use ra_ap_project_model::{
-    CargoConfig, CargoFeatures, ProjectWorkspace, RustLibSource,
+    CargoConfig, CargoFeatures, ProjectJson, ProjectWorkspace, ProjectWorkspaceKind, RustLibSource,
 };
 use ra_ap_vfs::{Change as VfsChange, Vfs, VfsPath};
 
@@ -414,6 +414,39 @@ mod warm_bound_tests {
     }
 }
 
+/// The toolchain a directory resolves to: the nearest `rust-toolchain` file
+/// and its text, and `RUSTUP_TOOLCHAIN`.
+type ToolchainKey = (Option<(PathBuf, String)>, Option<std::ffi::OsString>);
+
+/// One Names workspace per toolchain, its `kind` swapped per load. A Names
+/// project carries no sysroot (`names_project`), so `load_inline` differs per
+/// workspace only in `kind`; the rest is four `rustc` spawns (cfg, target data,
+/// target tuple, version) that every fixture crate of a tree repeated.
+static NAMES_TEMPLATES: OnceLock<Mutex<HashMap<ToolchainKey, ProjectWorkspace>>> = OnceLock::new();
+
+fn toolchain_key(root: &Path) -> ToolchainKey {
+    let file = root.ancestors().find_map(|directory| {
+        ["rust-toolchain.toml", "rust-toolchain"].iter().find_map(|name| {
+            let path = directory.join(name);
+            std::fs::read_to_string(&path).ok().map(|text| (path, text))
+        })
+    });
+    (file, std::env::var_os("RUSTUP_TOOLCHAIN"))
+}
+
+fn names_workspace(project: ProjectJson, root: &Path) -> ProjectWorkspace {
+    let key = toolchain_key(root);
+    let templates = NAMES_TEMPLATES.get_or_init(|| Mutex::new(HashMap::new()));
+    if let Some(template) = templates.lock().unwrap().get(&key) {
+        let mut workspace = template.clone();
+        workspace.kind = ProjectWorkspaceKind::Json(project);
+        return workspace;
+    }
+    let workspace = ProjectWorkspace::load_inline(project, &CargoConfig::default(), &|_| {});
+    templates.lock().unwrap().insert(key, workspace.clone());
+    workspace
+}
+
 fn load_checker_workspace(
     root: &Path,
     tier: LoadMode,
@@ -437,7 +470,7 @@ fn load_checker_workspace(
     let workspace = match tier {
         LoadMode::Names => {
             let project = super::rust_checker_project::names_project(root, metadata)?;
-            ProjectWorkspace::load_inline(project, &CargoConfig::default(), &|_| {})
+            names_workspace(project, root)
         }
         // `set_test` puts `#[cfg(test)]` bodies in the tree; every feature keeps
         // `cfg`-gated modules in the crate graph.
