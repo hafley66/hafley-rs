@@ -27,7 +27,7 @@ source: tests/support/2_fixture_runner.rs
   "3_sqlite_lines": {
     "export": {
       "exit_code": 0,
-      "stdout": "Wrote $work/facts.db (24 rows)\nTables: sqlite3 '$work/facts.db' '.tables'\nSchema: sqlite3 '$work/facts.db' '.schema'\nQuery:  sqlite3 -header -column '$work/facts.db' 'SELECT _input_path, family, kind, name FROM node LIMIT 20;'\nLines:  sqlite3 -header -column '$work/facts.db' 'SELECT _table, _row, start, line FROM span_lines LIMIT 20;' (needs --lines for non-empty line_start)\n"
+      "stdout": "Wrote $work/facts.db (24 rows)\nTables: sqlite3 '$work/facts.db' '.tables'\nSchema: sqlite3 '$work/facts.db' '.schema'\nQuery:  sqlite3 -header -column '$work/facts.db' 'SELECT s.path, n.family, n.kind, n.name FROM node AS n JOIN source AS s ON s.id = n._source LIMIT 20;'\nLines:  sqlite3 -header -column '$work/facts.db' 'SELECT _table, _row, start, line FROM span_lines LIMIT 20;' (needs --lines for non-empty line_start)\n"
     },
     "line_start": {
       "rows": [
@@ -66,7 +66,7 @@ source: tests/support/2_fixture_runner.rs
     },
     "export": {
       "exit_code": 0,
-      "stdout": "Wrote $work/root/facts.db (116 rows)\nTables: sqlite3 '$work/root/facts.db' '.tables'\nSchema: sqlite3 '$work/root/facts.db' '.schema'\nQuery:  sqlite3 -header -column '$work/root/facts.db' 'SELECT _input_path, family, kind, name FROM node LIMIT 20;'\nLines:  sqlite3 -header -column '$work/root/facts.db' 'SELECT _table, _row, start, line FROM span_lines LIMIT 20;' (needs --lines for non-empty line_start)\n"
+      "stdout": "Wrote $work/root/facts.db (116 rows)\nTables: sqlite3 '$work/root/facts.db' '.tables'\nSchema: sqlite3 '$work/root/facts.db' '.schema'\nQuery:  sqlite3 -header -column '$work/root/facts.db' 'SELECT s.path, n.family, n.kind, n.name FROM node AS n JOIN source AS s ON s.id = n._source LIMIT 20;'\nLines:  sqlite3 -header -column '$work/root/facts.db' 'SELECT _table, _row, start, line FROM span_lines LIMIT 20;' (needs --lines for non-empty line_start)\n"
     },
     "max_line": {
       "rows": [
@@ -94,7 +94,7 @@ source: tests/support/2_fixture_runner.rs
     },
     "export": {
       "exit_code": 0,
-      "stdout": "Wrote $work/facts.db (23 rows)\nTables: sqlite3 '$work/facts.db' '.tables'\nSchema: sqlite3 '$work/facts.db' '.schema'\nQuery:  sqlite3 -header -column '$work/facts.db' 'SELECT _input_path, family, kind, name FROM node LIMIT 20;'\nLines:  sqlite3 -header -column '$work/facts.db' 'SELECT _table, _row, start, line FROM span_lines LIMIT 20;' (needs --lines for non-empty line_start)\n"
+      "stdout": "Wrote $work/facts.db (23 rows)\nTables: sqlite3 '$work/facts.db' '.tables'\nSchema: sqlite3 '$work/facts.db' '.schema'\nQuery:  sqlite3 -header -column '$work/facts.db' 'SELECT s.path, n.family, n.kind, n.name FROM node AS n JOIN source AS s ON s.id = n._source LIMIT 20;'\nLines:  sqlite3 -header -column '$work/facts.db' 'SELECT _table, _row, start, line FROM span_lines LIMIT 20;' (needs --lines for non-empty line_start)\n"
     }
   },
   "6_resolve": {
