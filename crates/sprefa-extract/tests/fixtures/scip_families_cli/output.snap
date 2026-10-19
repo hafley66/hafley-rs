@@ -2368,6 +2368,24 @@ source: tests/support/2_fixture_runner.rs
       "exit_code": 0,
       "stdout": [
         {
+          "record": "file_unresolved",
+          "src_path": "$work/root/scip/alpha.rs",
+          "module": "$work/root/Cargo.toml",
+          "reason": "not_in_module_tree"
+        },
+        {
+          "record": "file_unresolved",
+          "src_path": "$work/root/scip/beta.rs",
+          "module": "$work/root/Cargo.toml",
+          "reason": "not_in_module_tree"
+        },
+        {
+          "record": "file_unresolved",
+          "src_path": "$work/root/scip/gamma.rs",
+          "module": "$work/root/Cargo.toml",
+          "reason": "not_in_module_tree"
+        },
+        {
           "record": "free_name",
           "path": "$work/root/scip/gamma.rs",
           "owner_start": 112,
@@ -2421,29 +2439,6 @@ source: tests/support/2_fixture_runner.rs
           "decl_end": 227
         },
         {
-          "record": "resolved_edge",
-          "caller_path": "$work/root/scip/gamma.rs",
-          "caller_name": "run",
-          "callee_path": "$work/root/scip/alpha.rs",
-          "callee_name": "helper",
-          "caller_site_start": 217,
-          "caller_site_end": 223,
-          "callee_start": 158,
-          "callee_end": 183,
-          "kind": "import_resolve",
-          "resolution_origin": "module_plane"
-        },
-        {
-          "record": "resolved_import",
-          "src_path": "$work/root/scip/gamma.rs",
-          "name": "helper",
-          "local": "helper",
-          "target_path": "$work/root/scip/alpha.rs",
-          "target_name": "helper",
-          "kind": "local",
-          "hops": 0
-        },
-        {
           "record": "symbol",
           "symbol": "scm . . `$work/root/scip/alpha.rs`/helper().",
           "path": "$work/root/scip/alpha.rs",
@@ -2466,6 +2461,17 @@ source: tests/support/2_fixture_runner.rs
           "symbol": "scm . . `$work/root/scip/gamma.rs`/run().",
           "path": "$work/root/scip/gamma.rs",
           "kind": "function"
+        },
+        {
+          "record": "unresolved",
+          "family": "call",
+          "path": "$work/root/scip/gamma.rs",
+          "span": {
+            "start": 217,
+            "end": 223
+          },
+          "reason": "no_corpus_def",
+          "detail": "helper"
         }
       ],
       "stderr": ""
