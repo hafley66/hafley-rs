@@ -18,7 +18,7 @@ crates/hafley_scm/src/read/scip_ensure.rs	fn::record_index_set	1
 crates/hafley_scm/src/read/scip_ensure.rs	fn::recorded_digest	1
 crates/hafley_scm/src/read/scip_ensure.rs	fn::source_set_for_root_excluding	1
 crates/hafley_scm/src/read/scip_v5_rels.rs	fn::v5_rel_rows	1
-crates/sprefa-extract/src/0_graph.rs	fn::line	2
+crates/sprefa-extract/src/0_graph.rs	fn::line	1
 crates/sprefa-extract/src/0_graph.rs	fn::slice_at	1
 crates/sprefa-extract/src/0_query.rs	fn::source_bytes	1
 crates/sprefa-extract/src/0_stratify.rs	fn::line_count	2
