@@ -15,7 +15,7 @@ source: tests/support/2_fixture_runner.rs
           "run": 0,
           "mode": "syntax",
           "tool": "ryi",
-          "version": "0.2.0",
+          "version": "0.2.1",
           "scope": [
             "blake3:6b959157a9cdf2c45f12d3c3d0a4ccbb13d678544f3aae29b25b654feabda8e9"
           ]
