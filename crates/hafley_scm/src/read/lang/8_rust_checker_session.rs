@@ -8,7 +8,7 @@ use ra_ap_ide::{AnalysisHost, RootDatabase};
 use ra_ap_ide_db::ChangeWithProcMacros;
 use ra_ap_load_cargo::{LoadCargoConfig, ProcMacroServerChoice, ProjectFolders, SourceRootConfig};
 use ra_ap_project_model::{
-    CargoConfig, CargoFeatures, ProjectWorkspace, RustLibSource,
+    CargoConfig, CargoFeatures, ProjectJson, ProjectWorkspace, ProjectWorkspaceKind, RustLibSource,
 };
 use ra_ap_vfs::{Change as VfsChange, Vfs, VfsPath};
 
@@ -44,12 +44,36 @@ type SessionKey = (PathBuf, LoadMode, ManifestKey);
 static CHECKER_WORKSPACES: OnceLock<Mutex<HashMap<SessionKey, Arc<Mutex<CheckerWorkspace>>>>> =
     OnceLock::new();
 
-/// One loaded workspace holds a whole crate graph plus the sysroot, about a
-/// gigabyte; a second root evicts the first instead of stacking beside it.
-const WARM_WORKSPACES: usize = 1;
+/// Hosts kept warm per load mode, least recently used evicted first. A Types
+/// host holds a whole crate graph plus the sysroot, about a gigabyte. A Names
+/// host is light (35 of them, sprefa-extract's fixture crates plus two cargo
+/// workspaces, measured about 100 MB), and one request over a tree with fixture
+/// crates opens one per nearest manifest. `RYI_WARM_WORKSPACES` overrides both.
+const WARM_TYPES: usize = 1;
+const WARM_NAMES: usize = 64;
 
 /// A workspace no request touched for this long is dropped by the reaper.
+/// `RYI_WARM_IDLE_SECS` overrides it.
 const WARM_IDLE: Duration = Duration::from_secs(60);
+
+fn warm_workspaces(tier: LoadMode) -> usize {
+    std::env::var("RYI_WARM_WORKSPACES")
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(match tier {
+            LoadMode::Types => WARM_TYPES,
+            LoadMode::Names => WARM_NAMES,
+        })
+}
+
+fn warm_idle() -> Duration {
+    std::env::var("RYI_WARM_IDLE_SECS")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .filter(|value| *value > 0)
+        .map_or(WARM_IDLE, Duration::from_secs)
+}
 const REAP_EVERY: Duration = Duration::from_secs(15);
 
 /// Loads still running on their own thread, including ones past their budget:
@@ -80,7 +104,7 @@ fn evict(
     }
 }
 
-/// Wakes every `REAP_EVERY` and drops workspaces idle past `WARM_IDLE`; the
+/// Wakes every `REAP_EVERY` and drops workspaces idle past `warm_idle()`; the
 /// thread ends once the map is empty, so an idle process holds no host.
 fn start_reaper() {
     if REAPER_RUNNING.swap(true, Ordering::AcqRel) {
@@ -95,7 +119,7 @@ fn start_reaper() {
                 return;
             };
             let mut all = workspaces.lock().unwrap();
-            evict(&mut all, |_, workspace| workspace.used.elapsed() < WARM_IDLE);
+            evict(&mut all, |_, workspace| workspace.used.elapsed() < warm_idle());
             if all.is_empty() {
                 REAPER_RUNNING.store(false, Ordering::Release);
                 return;
@@ -161,9 +185,22 @@ pub(super) fn checker_workspace_loaded(
     let mut load = Duration::ZERO;
     let fresh = !all.contains_key(&key);
     if fresh {
-        let room = WARM_WORKSPACES.saturating_sub(1);
-        if all.len() > room {
-            evict(&mut all, |_, _| false);
+        // Least recently used first, one at a time, until the new load fits;
+        // a host another request holds is never a candidate.
+        let cap = warm_workspaces(tier);
+        while all.keys().filter(|(_, mode, _)| *mode == tier).count() >= cap {
+            let Some(oldest) = all
+                .iter()
+                .filter(|((_, mode, _), workspace)| *mode == tier && Arc::strong_count(workspace) == 1)
+                .filter_map(|(key, workspace)| {
+                    workspace.try_lock().ok().map(|workspace| (key.clone(), workspace.used))
+                })
+                .min_by_key(|(_, used)| *used)
+                .map(|(key, _)| key)
+            else {
+                break;
+            };
+            evict(&mut all, |key, _| key != &oldest);
         }
         let (db, vfs, roots, elapsed) =
             load_checker_workspace(&root, tier, budget, &discovered.metadata, files)?;
@@ -377,6 +414,39 @@ mod warm_bound_tests {
     }
 }
 
+/// The toolchain a directory resolves to: the nearest `rust-toolchain` file
+/// and its text, and `RUSTUP_TOOLCHAIN`.
+type ToolchainKey = (Option<(PathBuf, String)>, Option<std::ffi::OsString>);
+
+/// One Names workspace per toolchain, its `kind` swapped per load. A Names
+/// project carries no sysroot (`names_project`), so `load_inline` differs per
+/// workspace only in `kind`; the rest is four `rustc` spawns (cfg, target data,
+/// target tuple, version) that every fixture crate of a tree repeated.
+static NAMES_TEMPLATES: OnceLock<Mutex<HashMap<ToolchainKey, ProjectWorkspace>>> = OnceLock::new();
+
+fn toolchain_key(root: &Path) -> ToolchainKey {
+    let file = root.ancestors().find_map(|directory| {
+        ["rust-toolchain.toml", "rust-toolchain"].iter().find_map(|name| {
+            let path = directory.join(name);
+            std::fs::read_to_string(&path).ok().map(|text| (path, text))
+        })
+    });
+    (file, std::env::var_os("RUSTUP_TOOLCHAIN"))
+}
+
+fn names_workspace(project: ProjectJson, root: &Path) -> ProjectWorkspace {
+    let key = toolchain_key(root);
+    let templates = NAMES_TEMPLATES.get_or_init(|| Mutex::new(HashMap::new()));
+    if let Some(template) = templates.lock().unwrap().get(&key) {
+        let mut workspace = template.clone();
+        workspace.kind = ProjectWorkspaceKind::Json(project);
+        return workspace;
+    }
+    let workspace = ProjectWorkspace::load_inline(project, &CargoConfig::default(), &|_| {});
+    templates.lock().unwrap().insert(key, workspace.clone());
+    workspace
+}
+
 fn load_checker_workspace(
     root: &Path,
     tier: LoadMode,
@@ -400,7 +470,7 @@ fn load_checker_workspace(
     let workspace = match tier {
         LoadMode::Names => {
             let project = super::rust_checker_project::names_project(root, metadata)?;
-            ProjectWorkspace::load_inline(project, &CargoConfig::default(), &|_| {})
+            names_workspace(project, root)
         }
         // `set_test` puts `#[cfg(test)]` bodies in the tree; every feature keeps
         // `cfg`-gated modules in the crate graph.
