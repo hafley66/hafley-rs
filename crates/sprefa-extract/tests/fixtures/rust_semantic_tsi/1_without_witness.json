@@ -17,7 +17,8 @@
       "raw_stdout": true,
       "unasserted_stderr": true,
       "environment": {
-        "RUSTUP_TOOLCHAIN": "stable"
+        "RUSTUP_TOOLCHAIN": "stable",
+        "PATH": "$rustup_bin:$path"
       },
       "stdout_redactions": [
         {

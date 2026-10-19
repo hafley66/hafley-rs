@@ -19,7 +19,8 @@
       "unasserted_stderr": true,
       "stdout_to": "$work/stream.jsonl",
       "environment": {
-        "RUSTUP_TOOLCHAIN": "stable"
+        "RUSTUP_TOOLCHAIN": "stable",
+        "PATH": "$rustup_bin:$path"
       },
       "stdout_redactions": [
         {
@@ -41,7 +42,8 @@
       "unasserted_stderr": true,
       "stdout_to": "$work/once.jsonl",
       "environment": {
-        "RUSTUP_TOOLCHAIN": "stable"
+        "RUSTUP_TOOLCHAIN": "stable",
+        "PATH": "$rustup_bin:$path"
       },
       "stdout_redactions": [
         {
@@ -62,7 +64,8 @@
       "raw_stdout": true,
       "unasserted_stderr": true,
       "environment": {
-        "RUSTUP_TOOLCHAIN": "stable"
+        "RUSTUP_TOOLCHAIN": "stable",
+        "PATH": "$rustup_bin:$path"
       },
       "stdout_redactions": [
         {

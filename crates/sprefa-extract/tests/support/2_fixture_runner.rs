@@ -995,7 +995,16 @@ pub fn re_aim_path_deps(source: &Path, manifest: &Path) {
 }
 
 pub fn expand_text(text: &str, work: &str) -> String {
-        text.replace("$work", work)
+        // rustup's proxies, which honor RUSTUP_TOOLCHAIN: a bare `rustc` may
+        // resolve elsewhere (a Homebrew rustc ahead of rustup on PATH).
+        let rustup_bin = option_env!("CARGO_HOME")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| std::path::Path::new(env!("HOME")).join(".cargo"))
+            .join("bin")
+            .to_string_lossy()
+            .into_owned();
+        text.replace("$rustup_bin", &rustup_bin)
+            .replace("$work", work)
             .replace(
                 "$fixtures",
                 concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures"),
