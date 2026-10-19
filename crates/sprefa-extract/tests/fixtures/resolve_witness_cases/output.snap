@@ -14,7 +14,7 @@ source: tests/support/2_fixture_runner.rs
         "run": 0,
         "mode": "syntax",
         "tool": "ryi",
-        "version": "0.2.0",
+        "version": "0.2.1",
         "scope": [
           "blake3:0eb8341b0b12d08ba613e69d4151453e401554b9dfe8cbf74601709bba08156f",
           "blake3:29d135b60df6eafe312bfb23d54b16090edf97c9d673eee3a83abc2c28b0318d"
@@ -31,7 +31,7 @@ source: tests/support/2_fixture_runner.rs
         "run": 0,
         "mode": "syntax",
         "tool": "ryi",
-        "version": "0.2.0",
+        "version": "0.2.1",
         "scope": [
           "blake3:0eb8341b0b12d08ba613e69d4151453e401554b9dfe8cbf74601709bba08156f",
           "blake3:29d135b60df6eafe312bfb23d54b16090edf97c9d673eee3a83abc2c28b0318d"
@@ -89,7 +89,7 @@ source: tests/support/2_fixture_runner.rs
         "run": 0,
         "mode": "syntax",
         "tool": "ryi",
-        "version": "0.2.0",
+        "version": "0.2.1",
         "scope": [
           "blake3:fffe734c0904ac463f9ae8a215a7bac318c4bdfa9001c43d99e77a301ba70387",
           "blake3:f5893e9ff4e080e4a0bfa8e116f64c8d2fda633b6f314f53707325cfd3bd6b88"
@@ -2346,7 +2346,7 @@ source: tests/support/2_fixture_runner.rs
         "run": 0,
         "mode": "syntax",
         "tool": "ryi",
-        "version": "0.2.0",
+        "version": "0.2.1",
         "scope": [
           "blake3:7c8c132fc92dfb71bd6b2bfd1b039dcfbdfa3ad6fc625c4638293df6fb8704d7",
           "blake3:3c6d30a6d0dbccfbbe4ad37879d15a8db7e5f7f7f5a1eec810fc4f89d209a5a5"
