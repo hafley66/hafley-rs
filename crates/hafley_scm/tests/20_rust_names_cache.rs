@@ -6,17 +6,28 @@ use std::time::Duration;
 #[test]
 fn names_answers_follow_workspace_content() {
     let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/rust_names_cache");
-    let scratch = tempfile::tempdir().unwrap();
-    let root = scratch.path().canonicalize().unwrap();
-    std::fs::copy(fixture.join("Cargo.toml"), root.join("Cargo.toml")).unwrap();
-    let source = root.join("0_root.rs");
+    // Two cargo workspaces: a request alternating between them keeps both warm.
+    let scratches = [tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap()];
+    let roots: Vec<_> = scratches
+        .iter()
+        .map(|scratch| {
+            let root = scratch.path().canonicalize().unwrap();
+            std::fs::copy(fixture.join("Cargo.toml"), root.join("Cargo.toml")).unwrap();
+            root
+        })
+        .collect();
     let mut rows = Vec::new();
-    for (state, file, expected) in [
-        ("cold", "0_root.rs", "One"),
-        ("warm", "0_root.rs", "One"),
-        ("edited", "1_edited.rs", "Two"),
-        ("edited warm", "1_edited.rs", "Two"),
+    for (state, workspace, file, expected) in [
+        ("cold", 0, "0_root.rs", "One"),
+        ("warm", 0, "0_root.rs", "One"),
+        ("edited", 0, "1_edited.rs", "Two"),
+        ("edited warm", 0, "1_edited.rs", "Two"),
+        ("other cold", 1, "0_root.rs", "One"),
+        ("back warm", 0, "1_edited.rs", "Two"),
+        ("other warm", 1, "0_root.rs", "One"),
     ] {
+        let root = &roots[workspace];
+        let source = root.join("0_root.rs");
         let text = std::fs::read_to_string(fixture.join(file)).unwrap();
         std::fs::write(&source, &text).unwrap();
         let host = module_tree(&source, Duration::from_secs(120)).unwrap();
@@ -51,6 +62,9 @@ fn names_answers_follow_workspace_content() {
             ("warm", true, vec![(true, "hit".to_string(), true)], 1),
             ("edited", true, vec![(true, "hit".to_string(), true)], 1),
             ("edited warm", true, vec![(true, "hit".to_string(), true)], 1),
+            ("other cold", false, vec![(true, "hit".to_string(), true)], 1),
+            ("back warm", true, vec![(true, "hit".to_string(), true)], 1),
+            ("other warm", true, vec![(true, "hit".to_string(), true)], 1),
         ]
     );
 }

@@ -44,12 +44,36 @@ type SessionKey = (PathBuf, LoadMode, ManifestKey);
 static CHECKER_WORKSPACES: OnceLock<Mutex<HashMap<SessionKey, Arc<Mutex<CheckerWorkspace>>>>> =
     OnceLock::new();
 
-/// One loaded workspace holds a whole crate graph plus the sysroot, about a
-/// gigabyte; a second root evicts the first instead of stacking beside it.
-const WARM_WORKSPACES: usize = 1;
+/// Hosts kept warm per load mode, least recently used evicted first. A Types
+/// host holds a whole crate graph plus the sysroot, about a gigabyte. A Names
+/// host is light (35 of them, sprefa-extract's fixture crates plus two cargo
+/// workspaces, measured about 100 MB), and one request over a tree with fixture
+/// crates opens one per nearest manifest. `RYI_WARM_WORKSPACES` overrides both.
+const WARM_TYPES: usize = 1;
+const WARM_NAMES: usize = 64;
 
 /// A workspace no request touched for this long is dropped by the reaper.
+/// `RYI_WARM_IDLE_SECS` overrides it.
 const WARM_IDLE: Duration = Duration::from_secs(60);
+
+fn warm_workspaces(tier: LoadMode) -> usize {
+    std::env::var("RYI_WARM_WORKSPACES")
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(match tier {
+            LoadMode::Types => WARM_TYPES,
+            LoadMode::Names => WARM_NAMES,
+        })
+}
+
+fn warm_idle() -> Duration {
+    std::env::var("RYI_WARM_IDLE_SECS")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .filter(|value| *value > 0)
+        .map_or(WARM_IDLE, Duration::from_secs)
+}
 const REAP_EVERY: Duration = Duration::from_secs(15);
 
 /// Loads still running on their own thread, including ones past their budget:
@@ -80,7 +104,7 @@ fn evict(
     }
 }
 
-/// Wakes every `REAP_EVERY` and drops workspaces idle past `WARM_IDLE`; the
+/// Wakes every `REAP_EVERY` and drops workspaces idle past `warm_idle()`; the
 /// thread ends once the map is empty, so an idle process holds no host.
 fn start_reaper() {
     if REAPER_RUNNING.swap(true, Ordering::AcqRel) {
@@ -95,7 +119,7 @@ fn start_reaper() {
                 return;
             };
             let mut all = workspaces.lock().unwrap();
-            evict(&mut all, |_, workspace| workspace.used.elapsed() < WARM_IDLE);
+            evict(&mut all, |_, workspace| workspace.used.elapsed() < warm_idle());
             if all.is_empty() {
                 REAPER_RUNNING.store(false, Ordering::Release);
                 return;
@@ -161,9 +185,22 @@ pub(super) fn checker_workspace_loaded(
     let mut load = Duration::ZERO;
     let fresh = !all.contains_key(&key);
     if fresh {
-        let room = WARM_WORKSPACES.saturating_sub(1);
-        if all.len() > room {
-            evict(&mut all, |_, _| false);
+        // Least recently used first, one at a time, until the new load fits;
+        // a host another request holds is never a candidate.
+        let cap = warm_workspaces(tier);
+        while all.keys().filter(|(_, mode, _)| *mode == tier).count() >= cap {
+            let Some(oldest) = all
+                .iter()
+                .filter(|((_, mode, _), workspace)| *mode == tier && Arc::strong_count(workspace) == 1)
+                .filter_map(|(key, workspace)| {
+                    workspace.try_lock().ok().map(|workspace| (key.clone(), workspace.used))
+                })
+                .min_by_key(|(_, used)| *used)
+                .map(|(key, _)| key)
+            else {
+                break;
+            };
+            evict(&mut all, |key, _| key != &oldest);
         }
         let (db, vfs, roots, elapsed) =
             load_checker_workspace(&root, tier, budget, &discovered.metadata, files)?;
