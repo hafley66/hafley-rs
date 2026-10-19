@@ -12,6 +12,8 @@ pub(super) type Definitions = Result<Vec<DefPlace>, Abstain>;
 pub(crate) struct NamesCache {
     pub all_places: Option<Vec<ModulePlace>>,
     pub places: HashMap<PathBuf, Vec<ModulePlace>>,
+    /// Out-of-line child modules by the file whose `mod` items declare them,
+    /// filled per asked file.
     pub declared: HashMap<PathBuf, Vec<ModulePlace>>,
     pub paths: HashMap<(PathBuf, Vec<String>, Option<u32>), Definitions>,
     pub written: HashMap<(PathBuf, u32, String), Definitions>,
@@ -46,42 +48,37 @@ pub(super) fn vfs_paths(workspace: &mut CheckerWorkspace) -> VfsPaths {
         .clone()
 }
 
-/// One module graph query supplies the declaration index and the full inventory.
+/// Every module of every crate, dependencies and sysroot included.
 pub(super) fn ensure_all_places(host: &RustModuleTree, workspace: &mut CheckerWorkspace) {
     if workspace.names.all_places.is_some() {
         return;
     }
     let db = workspace.host.raw_database();
-    let places = attach_db(db, || {
-        let mut pending = Crate::all(db)
-            .into_iter()
-            .map(|krate| krate.root_module(db))
-            .collect::<Vec<_>>();
-        let mut places = Vec::new();
-        while let Some(module) = pending.pop() {
-            let Some(place) = host.place_of(workspace, db, module) else {
-                continue;
-            };
-            places.push(place);
-            pending.extend(module.children(db));
-        }
-        places.sort();
-        places.dedup();
-        places
-    });
-    for place in &places {
-        if let Some((parent, _, _)) = &place.decl {
-            if parent != &place.file {
-                workspace
-                    .names
-                    .declared
-                    .entry(parent.clone())
-                    .or_default()
-                    .push(place.clone());
-            }
-        }
-    }
+    let places = attach_db(db, || module_places(host, workspace, db, Crate::all(db)));
     workspace.names.all_places = Some(places);
+}
+
+fn module_places(
+    host: &RustModuleTree,
+    workspace: &CheckerWorkspace,
+    db: &ra_ap_ide::RootDatabase,
+    crates: Vec<Crate>,
+) -> Vec<ModulePlace> {
+    let mut pending = crates
+        .into_iter()
+        .map(|krate| krate.root_module(db))
+        .collect::<Vec<_>>();
+    let mut places = Vec::new();
+    while let Some(module) = pending.pop() {
+        let Some(place) = host.place_of(workspace, db, module) else {
+            continue;
+        };
+        places.push(place);
+        pending.extend(module.children(db));
+    }
+    places.sort();
+    places.dedup();
+    places
 }
 
 impl RustModuleTree {
@@ -117,14 +114,42 @@ impl RustModuleTree {
             .collect()
     }
 
+    /// The modules whose `mod` item sits in `file` and whose body lives in
+    /// another file. Walks only the modules defined in `file`, inline ones
+    /// included, never the crate graph.
     pub fn declared_places(&self, file: &std::path::Path) -> Vec<ModulePlace> {
+        let file = host_path(file);
         let mut workspace = self.workspace.lock().unwrap();
-        ensure_all_places(self, &mut workspace);
-        workspace
-            .names
-            .declared
-            .get(&host_path(file))
-            .cloned()
-            .unwrap_or_default()
+        if let Some(places) = workspace.names.declared.get(&file) {
+            return places.clone();
+        }
+        let db = workspace.host.raw_database();
+        let places = attach_db(db, || {
+            let Some((id, _)) = workspace.vfs.file_id(&super::modules::vfs_path(&file)) else {
+                return Vec::new();
+            };
+            let sema = Semantics::new(db);
+            let mut pending: Vec<_> = sema
+                .file_to_module_defs(ra_ap_ide::FileId::from_raw(id.index()))
+                .collect();
+            let mut places = Vec::new();
+            while let Some(module) = pending.pop() {
+                for child in module.children(db) {
+                    let Some(place) = self.place_of(&workspace, db, child) else {
+                        continue;
+                    };
+                    if place.file == file {
+                        pending.push(child);
+                    } else if place.decl.as_ref().is_some_and(|(parent, _, _)| parent == &file) {
+                        places.push(place);
+                    }
+                }
+            }
+            places.sort();
+            places.dedup();
+            places
+        });
+        workspace.names.declared.insert(file, places.clone());
+        places
     }
 }
