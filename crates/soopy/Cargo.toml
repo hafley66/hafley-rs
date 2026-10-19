@@ -31,6 +31,9 @@ hafley-observe = { path = "../hafley-observe" }
 
 [dev-dependencies]
 
+[package.metadata.dist]
+dist = true
+
 [[bin]]
 name = "soopy"
 path = "src/main.rs"
