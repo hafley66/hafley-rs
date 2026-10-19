@@ -35,13 +35,20 @@ pub fn run_to(cli: QueryArgs, writer: Box<dyn Write + Send>) -> Result<()> {
         std::collections::HashMap::<String, Option<(tree_sitter::Language, hafley_scm::QueryExt)>>::new();
     let mut skipped = std::collections::BTreeMap::<String, usize>::new();
     let mut jobs = Vec::<(&std::path::PathBuf, String)>::with_capacity(paths.len());
+    // A file with no language ends the stream where it sits: the files before
+    // it still answer, then the error.
+    let mut late_error = None;
     for path in &paths {
         let name = path.to_string_lossy();
         let language = match &cli.lang {
             Some(language) => language.clone(),
-            None => RyiLang::from_path(&name)
-                .map(|lang| lang.name().to_string())
-                .ok_or_else(|| format!("{name}: no language for this extension; pass --lang"))?,
+            None => match RyiLang::from_path(&name) {
+                Some(lang) => lang.name().to_string(),
+                None => {
+                    late_error = Some(format!("{name}: no language for this extension; pass --lang"));
+                    break;
+                }
+            },
         };
         if !compiled.contains_key(&language) {
             let grammar = RyiLang::parse_name(&language)
@@ -131,6 +138,9 @@ pub fn run_to(cli: QueryArgs, writer: Box<dyn Write + Send>) -> Result<()> {
                     .map_err(|error| error.to_string())?;
             }
         }
+    }
+    if let Some(error) = late_error {
+        return Err(error.into());
     }
     if !skipped.is_empty() {
         crate::ops::print_diagnostic(format_args!(
