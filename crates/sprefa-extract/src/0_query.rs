@@ -69,7 +69,9 @@ pub fn run_to(cli: QueryArgs, writer: Box<dyn Write + Send>) -> Result<()> {
         jobs.push((path, language));
     }
     // Read, parse and match fan out on the extraction pool, one parser per
-    // worker; rows are written in input order, a chunk at a time.
+    // worker; rows are written in input order, a chunk at a time. The request
+    // root is thread-local, so each worker reads through the caller's root.
+    let io_root = sprefa_extract::request_io_root();
     for chunk in jobs.chunks(1024) {
         let results: Vec<Result<(String, Vec<sprefa_extract::TreeSitterSpannedMatch>), String>> =
             extract_pool().install(|| {
@@ -77,7 +79,11 @@ pub fn run_to(cli: QueryArgs, writer: Box<dyn Write + Send>) -> Result<()> {
                     .par_iter()
                     .map_init(tree_sitter::Parser::new, |parser, (path, language)| {
                         let (grammar, built) = compiled[language].as_ref().expect("compiled language");
-                        let bytes = source_bytes(path, cli.digest.as_deref())?;
+                        let read = || source_bytes(path, cli.digest.as_deref());
+                        let bytes = match &io_root {
+                            Some(root) => sprefa_extract::with_io_root(root.clone(), read),
+                            None => read(),
+                        }?;
                         let matches = query_tree_sitter_spans_with(&bytes, grammar, built, parser)?;
                         Ok((content_id_of(&bytes).to_string(), matches))
                     })
