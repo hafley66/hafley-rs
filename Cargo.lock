@@ -391,7 +391,7 @@ dependencies = [
 
 [[package]]
 name = "boop"
-version = "0.0.10"
+version = "0.0.11"
 dependencies = [
  "anyhow",
  "blake3",
