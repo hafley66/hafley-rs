@@ -1278,6 +1278,8 @@ fn tsi_rows(
     }
     sink.aux.tsi = names.into_facts();
     super::scope_products::append(RyiLang::TypeScript, src.as_bytes(), &mut sink.aux.tsi);
+    // The rows live in the daemon's blob cache; drop the push growth.
+    sink.aux.tsi.shrink_to_fit();
     trace::record_phase(&span, 0, sink.aux.tsi.len() as u64, 1);
 }
 

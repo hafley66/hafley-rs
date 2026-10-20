@@ -153,3 +153,39 @@ fn wire_bytes(output: &RyiOutput) -> Vec<u8> {
         .flat_map(|fact| serde_json::to_vec(fact).expect("fact serializes"))
         .collect()
 }
+
+/// The weight must cover what an output holds. TSI rows were ~80% of a
+/// TypeScript output's heap and sat outside the estimate, and their vector kept
+/// the in-place collect's `FlatFact` allocation (6.5x the rows); a 512 MiB cap
+/// held ~1.5 GiB in the daemon.
+#[test]
+fn weight_covers_tsi_rows_and_they_hold_no_spare_capacity() {
+    // `dispatch_uncached` bumps `EXTRACTIONS`, which the counter tests read.
+    let _guard = lock();
+    let source: String = (0..200)
+        .map(|index| {
+            format!("export function f{index}(a: Map<string, number[]>, b: Set<T{index}>): Promise<U{index}> {{ return g(a, b); }}\n")
+        })
+        .collect();
+    let output = sprefa_extract::dispatch::dispatch_uncached(
+        "weight_tsi.ts",
+        source.as_bytes(),
+        FamilyMask { types: true, call: true, ..FamilyMask::NONE },
+    )
+    .expect("TypeScript source");
+    let tsi = &output.types.as_ref().expect("type plane").aux.tsi;
+    let row_floor = tsi.len() * size_of::<sprefa_extract::tsi::FactOut>();
+    assert_eq!(
+        (
+            tsi.len() > 1000,
+            tsi.capacity() == tsi.len(),
+            cache::estimate_bytes(&output) > row_floor + source.len(),
+        ),
+        (true, true, true),
+        "rows {} capacity {} estimate {} floor {}",
+        tsi.len(),
+        tsi.capacity(),
+        cache::estimate_bytes(&output),
+        row_floor + source.len()
+    );
+}

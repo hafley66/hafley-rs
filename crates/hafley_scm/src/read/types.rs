@@ -418,15 +418,22 @@ impl TsiNames {
 
     /// The sink's witness and coverage rows are dropped: the wire mints its own
     /// over the whole stream, so a second copy would double every witness.
+    ///
+    /// The collect runs in place and keeps the `FlatFact` allocation, which
+    /// measured 6.5x the `FactOut` rows it holds; the rows sit in the daemon's
+    /// blob cache, so the excess is released here.
     pub fn into_facts(self) -> Vec<crate::read::tsi::FactOut> {
-        self.sink
+        let mut facts: Vec<crate::read::tsi::FactOut> = self
+            .sink
             .rows()
             .into_iter()
             .filter_map(|row| match row {
                 FlatFact::Fact(fact) => Some(fact),
                 _ => None,
             })
-            .collect()
+            .collect();
+        facts.shrink_to_fit();
+        facts
     }
 }
 

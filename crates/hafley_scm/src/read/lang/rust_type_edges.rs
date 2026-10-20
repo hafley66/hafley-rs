@@ -117,6 +117,8 @@ fn emit_tsi_syntax_rows(
         })
         .collect();
     super::scope_products::append(super::extract_lang::RyiLang::Rust, source, &mut sink.aux.tsi);
+    // The rows live in the daemon's blob cache; drop the push growth.
+    sink.aux.tsi.shrink_to_fit();
     crate::read::trace::record_phase(&span, 0, sink.aux.tsi.len() as u64, 1);
 }
 

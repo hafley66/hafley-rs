@@ -66,6 +66,20 @@ pub struct ScmCaptures {
 }
 
 impl ScmCaptures {
+    /// Heap bytes held, the retained source copy included; the blob cache
+    /// weighs an output by this.
+    pub fn heap_bytes(&self) -> usize {
+        self.source.len()
+            + self
+                .labels
+                .iter()
+                .map(|label| label.capacity() + size_of::<String>())
+                .sum::<usize>()
+            + self.label_ids.capacity() * size_of::<u16>()
+            + (self.starts.capacity() + self.ends.capacity()) * size_of::<u32>()
+            + self.calls.capacity() * size_of::<(u32, u32, u32, u32)>()
+    }
+
     pub fn from_arena(
         query: &hafley_scm::QueryExt,
         arena: &hafley_scm::MatchArena,

@@ -119,6 +119,70 @@
       "kind": "text_equals",
       "cell": "required_3.stdout",
       "text": ""
+    },
+    {
+      "action": "run",
+      "name": "required_4",
+      "arguments": [
+        "graph",
+        "--ts-checker",
+        "--root",
+        "tests/fixtures/graph_ts",
+        "--callers",
+        "chainD",
+        "tests/fixtures/graph_ts"
+      ],
+      "cwd": "$manifest",
+      "unasserted_exit": true,
+      "assert_success": false,
+      "raw_stdout": true,
+      "unasserted_stderr": true
+    },
+    {
+      "action": "claim",
+      "name": "feature_named_4",
+      "kind": "contains",
+      "cell": "required_4.stderr",
+      "text": "ts-checker"
+    },
+    {
+      "action": "claim",
+      "name": "no_output_4",
+      "kind": "text_equals",
+      "cell": "required_4.stdout",
+      "text": ""
+    },
+    {
+      "action": "run",
+      "name": "required_5",
+      "arguments": [
+        "graph",
+        "--go-checker",
+        "--root",
+        "tests/fixtures/graph_ts",
+        "--callers",
+        "chainD",
+        "tests/fixtures/graph_ts"
+      ],
+      "cwd": "$manifest",
+      "unasserted_exit": true,
+      "assert_success": false,
+      "raw_stdout": true,
+      "unasserted_stderr": true
+    },
+    {
+      "action": "claim",
+      "name": "feature_named_5",
+      "kind": "contains",
+      "cell": "required_5.stderr",
+      "text": "go-checker"
+    },
+    {
+      "action": "claim",
+      "name": "no_output_5",
+      "kind": "text_equals",
+      "cell": "required_5.stdout",
+      "text": ""
     }
   ]
 }

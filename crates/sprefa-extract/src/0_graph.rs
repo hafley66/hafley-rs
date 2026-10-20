@@ -773,6 +773,12 @@ pub fn run_to(
     cli: GraphArgs,
     output: &mut dyn std::io::Write,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    sprefa_extract::slow::require_checker_flags(
+        "ryi graph",
+        cli.rust_checker,
+        cli.ts_checker,
+        cli.go_checker,
+    )?;
     for (flag, anchor) in [
         ("--callers", &cli.callers),
         ("--uses", &cli.uses),
