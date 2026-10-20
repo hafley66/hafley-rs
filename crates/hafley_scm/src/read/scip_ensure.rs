@@ -492,7 +492,18 @@ fn ensure_index_picked_impl(
     recheck_root: bool,
 ) -> EnsureReport {
     let family_cache = cache_dir;
+    let picked_dir = pick_cache_dir(family_cache, pick);
+    let pick = canonical_pick(root, pick);
     let cache_dir = &pick_cache_dir(cache_dir, pick);
+    if picked_dir != *cache_dir {
+        // A pick naming the root's only detected row builds the whole-root
+        // index; a copy left under `indexer-<lang>/` by an earlier run is the
+        // same bytes a second time.
+        let stale = picked_dir.join("index.scip");
+        let _ = std::fs::remove_file(sidecar_path(&stale));
+        let _ = std::fs::remove_file(&stale);
+        let _ = std::fs::remove_dir(&picked_dir);
+    }
     let want = set.map(IndexSet::digest);
     let reuse = match pick {
         None => index_path_for_set(root, cache_dir, want),
@@ -1055,6 +1066,16 @@ pub fn detect_picked(root: &Path, pick: IndexerPick) -> Vec<&'static Indexer> {
             .iter()
             .filter(|indexer| indexer.lang == lang)
             .collect(),
+    }
+}
+
+/// A pick that names the root's ONLY detected roster row selects the same
+/// indexer set an unpicked ask runs, so it shares the whole-root index
+/// instead of writing an identical copy under `indexer-<lang>/`.
+pub fn canonical_pick<'a>(root: &Path, pick: IndexerPick<'a>) -> IndexerPick<'a> {
+    match (pick, detect(root).as_slice()) {
+        (Some(lang), [only]) if only.lang == lang => None,
+        _ => pick,
     }
 }
 

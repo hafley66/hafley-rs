@@ -15,7 +15,9 @@
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use sprefa_extract::{detect, detect_picked, ensure_index_picked, pick_cache_dir, IndexBudget};
+use sprefa_extract::{
+    canonical_pick, detect, detect_picked, ensure_index_picked, pick_cache_dir, IndexBudget,
+};
 
 // PATH is a process global; every test here that moves it holds this lock.
 static ENVIRONMENT: Mutex<()> = Mutex::new(());
@@ -173,4 +175,33 @@ fn a_pick_runs_only_the_named_indexer() {
         "scip-typescript must not be started at all"
     );
     crate::wall_bench::check("tests/scip_indexer_pick.rs:a_pick_runs_only_the_named_indexer", (waited.as_secs()) as f64, (10) as f64, false);
+}
+
+#[test]
+fn a_pick_of_the_only_detected_row_shares_the_whole_root_index() {
+    let root = temp_root("single");
+    std::fs::write(root.join("package.json"), b"{\"name\":\"fake\"}\n").expect("package.json");
+    let polyglot = polyglot_root("canonical");
+    assert_eq!(
+        (
+            canonical_pick(&root, Some("typescript")),
+            canonical_pick(&root, Some("go")),
+            canonical_pick(&polyglot, Some("go")),
+        ),
+        (None, Some("go"), Some("go"))
+    );
+
+    let cache = root.join(".dl").join(".state");
+    let shared = cache.join("index.scip");
+    let stale = pick_cache_dir(&cache, Some("typescript")).join("index.scip");
+    std::fs::create_dir_all(stale.parent().unwrap()).expect("pick dir");
+    std::fs::write(&shared, b"shared").expect("shared index");
+    std::fs::write(&stale, b"copy").expect("stale copy");
+
+    let report = ensure_index_picked(&root, &cache, IndexBudget { secs: 1 }, None, Some("typescript"));
+    assert_eq!(
+        (report.index.as_deref(), report.reused, stale.exists(), stale.parent().unwrap().exists()),
+        (Some(shared.as_path()), true, false, false),
+        "one index.scip per root: the picked ask reuses the shared one and the duplicate is removed"
+    );
 }
