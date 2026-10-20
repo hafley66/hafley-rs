@@ -60,16 +60,13 @@ pub struct SlowArgs {
   #[command(flatten)]
   #[serde(flatten)]
   pub spans: Spans,
-  #[doc = "Load this index.scip instead of finding or building one"]
+  #[doc = "Also project this saved index.scip; slow never builds one"]
   #[arg(long, value_name = "FILE")]
   pub scip_index: Option<PathBuf>,
-  #[doc = "Skip the compiler checkers"]
+  #[doc = "Skip the compiler checkers; needs --scip-index"]
   #[arg(long)]
   #[serde(default)]
   pub no_checker: bool,
-  #[doc = "Seconds allowed for one indexer run"]
-  #[arg(long, value_name = "SECS")]
-  pub scip_timeout: Option<u64>,
 }
 
 #[derive(clap::Args, Debug, Clone, serde::Serialize, serde::Deserialize)]

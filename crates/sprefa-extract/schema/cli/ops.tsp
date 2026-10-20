@@ -36,7 +36,7 @@ op fast(
   ...Spans,
 ): JsonlStream<jsonValue>;
 
-/** The SCIP oracle written as fast's tables */
+/** Compiler checker answers written as fast's tables */
 op slow(
   ...Inputs,
   @bodyRoot input: RawByteStream,
@@ -44,14 +44,11 @@ op slow(
   ...Store,
   ...Spans,
 
-  /** Load this index.scip instead of finding or building one */
+  /** Also project this saved index.scip; slow never builds one */
   @valueName("FILE") scip_index?: path,
 
-  /** Skip the compiler checkers */
+  /** Skip the compiler checkers; needs --scip-index */
   no_checker?: boolean,
-
-  /** Seconds allowed for one indexer run */
-  @valueName("SECS") scip_timeout?: uint64,
 ): JsonlStream<jsonValue>;
 
 /** Raw SCIP index rows */

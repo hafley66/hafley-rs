@@ -124,15 +124,11 @@ enum Tier {
     Fast,
 }
 
-/// `ryi slow`: the SCIP oracle over the inputs, written as fast's tables.
+/// `ryi slow`: the compiler checkers over the inputs, written as fast's tables.
 fn run_slow(
     slow: SlowArgs,
     writer: Option<Box<dyn Write + Send>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    if slow.scip_timeout == Some(0) {
-        return Err("--scip-timeout must be a positive number of seconds".into());
-    }
-    let _budget = IndexBudget::scoped_override(slow.scip_timeout);
     let root = inputs::root(&slow.inputs);
     let mut wanted = slow.inputs.clone();
     if wanted.paths.is_empty() && wanted.entry.is_empty() {

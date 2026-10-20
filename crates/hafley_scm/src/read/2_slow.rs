@@ -1,5 +1,5 @@
-//! `ryi slow`: a SCIP index projected onto the tables `ryi fast` writes. Every
-//! edge comes from the index; the parse only supplies the keying spans.
+//! `ryi slow`: the compiler checkers' answers on the tables `ryi fast` writes,
+//! plus a supplied `--scip-index` projected onto the same tables. No indexer runs.
 
 use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
@@ -9,14 +9,14 @@ use crate::read::project::{
     ResolveWithRawError,
 };
 use crate::read::scip::{byte_range_at, join_documents, LineTable};
-use crate::read::scip_ensure::{default_cache_dir, ensure_index_picked_for_root, IndexBudget};
 use crate::read::scip_v5_rels::descriptor_name;
 use crate::read::seams::{FileSet, IndexBag, ManifestMap, ProjectCx, ProjectDigest};
 use crate::read::shape::{ContentId, FamilyTag, Span};
 use crate::read::types::{covering_def, OccurrenceRole, ResolutionOrigin, ScipIndex, SymbolId};
 use crate::read::wire::{FlatFact, SpanOut};
 
-/// The oracle rows for `files`, with SCIP document paths relative to `root`.
+/// The oracle rows for `files`: checker rows, and with `index` its projection
+/// (SCIP document paths relative to `root`).
 pub fn slow_project(
     files: &[PathBuf],
     root: &Path,
@@ -42,6 +42,12 @@ pub fn slow_project_with_raw<E>(
     if checkers {
         require_ts_checker(files).map_err(ResolveWithRawError::Project)?;
     }
+    if index.is_none() && !checkers {
+        return Err(ResolveWithRawError::Project(ProjectError::CheckerUnavailable(
+            "ryi slow: --no-checker needs --scip-index FILE; without one slow answers from the checkers"
+                .to_string(),
+        )));
+    }
     let io_root = crate::read::io_path(root);
     let inputs = crate::read::project::read_inputs_streamed(
         files,
@@ -49,50 +55,24 @@ pub fn slow_project_with_raw<E>(
         crate::read::project::Planes::All,
         &mut |input, content| push_phase_one(input, content, push_raw),
     )?;
-    // Written JSX/call syntax shares the retained parse with fast and resolve;
-    // retain it even when SCIP discovery has no index to return.
+    // Written JSX/call syntax shares the retained parse with fast and resolve.
     let mut facts = crate::read::project::syntax_facts(&inputs);
-    let _scip_span = crate::read::trace::tracked(tracing::info_span!("slow.scip.load_build")).entered();
-    let index = match index {
-        Some(path) => crate::read::scip_decode::load_index(&crate::read::io_path(path))
-            .map_err(|error| ResolveWithRawError::Project(ProjectError::Scip(error)))?,
-        None => {
-            let report = ensure_index_picked_for_root(
-                &io_root,
-                &default_cache_dir(&io_root),
-                IndexBudget::from_env(),
-                None,
-            );
-            facts.extend(report.skips.iter().map(|skip| FlatFact::ScipSkipRow {
-                lang: skip.lang.to_string(),
-                bin: skip.bin.to_string(),
-                reason: skip.reason.slug().to_string(),
-                detail: skip.reason.detail(),
-            }));
-            let Some(path) = report.index else {
-                if checkers {
-                    facts.extend(
-                        checker_facts(files, &io_root).map_err(ResolveWithRawError::Project)?,
-                    );
-                }
-                return Ok(facts);
-            };
-            crate::read::scip_decode::load_index(&path)
-                .map_err(|error| ResolveWithRawError::Project(ProjectError::Scip(error)))?
-        }
-    };
-    drop(_scip_span);
-    let _project_span = crate::read::trace::tracked(tracing::info_span!("slow.project_index")).entered();
-    facts.extend(project_index(&inputs, &io_root, index));
-    drop(_project_span);
+    if let Some(path) = index {
+        let _scip_span = crate::read::trace::tracked(tracing::info_span!("slow.scip.load")).entered();
+        let index = crate::read::scip_decode::load_index(&crate::read::io_path(path))
+            .map_err(|error| ResolveWithRawError::Project(ProjectError::Scip(error)))?;
+        drop(_scip_span);
+        let _project_span = crate::read::trace::tracked(tracing::info_span!("slow.project_index")).entered();
+        facts.extend(project_index(&inputs, &io_root, index));
+    }
     if checkers {
-        facts.extend(checker_facts(files, &io_root).map_err(ResolveWithRawError::Project)?);
+        let imports = index.is_none();
+        facts.extend(checker_facts(files, &io_root, imports).map_err(ResolveWithRawError::Project)?);
     }
     Ok(facts)
 }
 
-/// Check before SCIP discovery: an unavailable index must not hide a missing
-/// TypeScript checker behind a successful empty slow result.
+/// A missing TypeScript checker is an error, never an empty slow result.
 pub fn require_ts_checker(files: &[PathBuf]) -> Result<(), ProjectError> {
     if !cfg!(feature = "ts-checker")
         && files.iter().any(|path| {
@@ -687,7 +667,9 @@ fn import_rows(index: &ScipIndex, doc: &Doc<'_>, defs: &Defs) -> Vec<FlatFact> {
 
 /// Rows of origin `checker` from the checkers compiled in, for the languages in
 /// `files`; a present language without its checker is one stderr line.
-fn checker_facts(files: &[PathBuf], root: &Path) -> Result<Vec<FlatFact>, ProjectError> {
+/// `imports` keeps the resolve's `resolved_import` rows, the one module resolver
+/// fast and the checkers share, for a run with no index to supply them.
+fn checker_facts(files: &[PathBuf], root: &Path, imports: bool) -> Result<Vec<FlatFact>, ProjectError> {
     let present: BTreeSet<&str> = files
         .iter()
         .filter_map(|path| {
@@ -789,6 +771,7 @@ fn checker_facts(files: &[PathBuf], root: &Path) -> Result<Vec<FlatFact>, Projec
             | FlatFact::ResolvedTypeEdge {
                 resolution_origin, ..
             } => resolution_origin == checker,
+            FlatFact::ResolvedImportRow { .. } => imports,
             _ => false,
         })
         .collect())

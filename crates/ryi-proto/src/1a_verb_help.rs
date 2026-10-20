@@ -4,7 +4,7 @@ pub const EXAMPLES: &[(&str, &[&str])] = &[
     ("capabilities", &["ryi capabilities"]),
     ("schema", &["ryi schema"]),
     ("fast", &["ryi fast src/"]),
-    ("slow", &["ryi slow --scip-index index.scip src/a.ts"]),
+    ("slow", &["ryi slow --root . src/"]),
     ("scip", &["ryi scip --root . --raw"]),
     ("ingest", &["ryi ingest rows.jsonl"]),
     ("query", &["ryi query --query '(function_item name: (identifier) @n)' src/"]),

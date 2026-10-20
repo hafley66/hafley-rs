@@ -335,13 +335,24 @@ pub fn slow_project_with_raw<E>(
     push_raw: &mut impl FnMut(RawProjectFact<'_>) -> Result<(), E>,
 ) -> Result<Vec<FlatFact>, ResolveWithRawError<E>> {
     let mut references = References::default();
+    let mut sites = Vec::new();
     let mut facts = crate::slow_project_with_raw(files, root, index, checkers, &mut |raw| {
         if checkers { references.capture(&raw); }
+        if let FlatFact::Site { family: FamilyTag::Call, span, callee, .. } = &raw.fact {
+            sites.push((raw.path.to_string(), span.start, span.end, callee.clone()));
+        }
         push_raw(raw)
     })?;
     if checkers {
         references.append(root, true, &mut facts)
             .map_err(|error| ResolveWithRawError::Project(checker_error(error)))?;
+    }
+    // Without an index the checkers are the only answer: SCIP's symbol,
+    // occurrence and unresolved rows come from their edges.
+    if index.is_none() {
+        let mut lifted = crate::checker_occurrences(&facts);
+        lifted.extend(crate::checker_unresolved(&sites, &facts));
+        facts.extend(lifted);
     }
     Ok(facts)
 }

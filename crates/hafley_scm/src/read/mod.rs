@@ -34,6 +34,9 @@ pub mod project;
 #[path = "1_reach.rs"]
 #[cfg(feature = "read")]
 pub mod reach;
+#[path = "1a_checker_occurrences.rs"]
+#[cfg(feature = "read")]
+pub mod checker_occurrences;
 pub mod rows;
 pub mod schema;
 pub mod scip;
@@ -145,6 +148,8 @@ pub use seams::{
 pub use shape::{
     content_id_of, ContentId, FamilyTag, NameId, NodeRef, Span, Strings, ZERO_CONTENT_ID,
 };
+#[cfg(feature = "read")]
+pub use checker_occurrences::{checker_occurrences, checker_unresolved};
 #[cfg(feature = "read")]
 pub use slow::{slow_project, slow_project_with_raw};
 pub use soopy::{

@@ -8,7 +8,7 @@ ryi <PATH>...                            per-file facts from files, directories 
 ryi capabilities                         declared languages, checkers and edit support
 ryi schema                               JSONL record contract
 ryi fast <PATH>...                       written cross-file call and type facts
-ryi slow <PATH>...                       compiler and saved SCIP evidence
+ryi slow <PATH>...                       compiler checker evidence
 ryi scip <ROOT>                          raw SCIP facts or index records
 ryi ingest <PATH>...                     validated foreign TSI rows
 ryi query --query <SCM> <PATH>...        captured syntax rows
@@ -46,10 +46,10 @@ stderr:
 === slow (exit 0) ===
 stdout:
 Usage: ryi slow [OPTIONS] [PATH]...
-The SCIP oracle written as fast's tables
-e.g. ryi slow --scip-index index.scip src/a.ts
+Compiler checker answers written as fast's tables
+e.g. ryi slow --root . src/
 Input: --entry <FILE> --depth <N> --root <DIR> --lines
-Flags: --pattern <GLOB> --sqlite <PATH> --scip-index <FILE> --scip-timeout <SECS>
+Flags: --pattern <GLOB> --sqlite <PATH> --scip-index <FILE>
 Switches: --no-checker
 stderr:
 === scip (exit 0) ===
