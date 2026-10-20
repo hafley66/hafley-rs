@@ -2,7 +2,7 @@
   "steps": [
     {
       "action": "copy",
-      "source": "$target/debug/ryi",
+      "source": "$ryi_client",
       "path": "$work/bin/ryi"
     },
     {
