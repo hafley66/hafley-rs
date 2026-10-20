@@ -57,10 +57,23 @@ impl CacheKey {
     }
 }
 
-/// Byte estimate of one output: the interner's heap plus, per present family,
-/// `nodes.len() * size_of::<Node<F>>()` and the same for edges, not exact.
+/// Byte estimate of one output: the interner's heap, per present family
+/// `nodes.len() * size_of::<Node<F>>()` and the same for edges, the type
+/// plane's TSI rows, and the retained scm captures (which hold the source).
+/// Not exact. Measured over 400 TypeScript files the TSI rows are ~80% of the
+/// output heap; without them the weight read ~1/35 of the live bytes.
 pub fn estimate_bytes(out: &RyiOutput) -> usize {
     let mut bytes = out.strings.heap_bytes();
+    if let Some(bundle) = &out.types {
+        let aux = &bundle.aux;
+        bytes += aux.sigs.capacity() * size_of::<crate::read::types::TypeSig>()
+            + aux.candidates.capacity() * size_of::<crate::read::types::TypeEdgeCandidate>()
+            + aux.docs.capacity() * size_of::<crate::read::types::DocFact>();
+        bytes += tsi_heap_bytes(&aux.tsi);
+    }
+    if let Some(captures) = &out.scm_captures {
+        bytes += captures.heap_bytes();
+    }
     if let Some(bundle) = &out.cst {
         bytes += bundle.nodes.len() * size_of::<Node<CstF>>();
         bytes += bundle.edges.len() * size_of::<Edge<CstF>>();
@@ -78,6 +91,28 @@ pub fn estimate_bytes(out: &RyiOutput) -> usize {
         bytes += bundle.edges.len() * size_of::<Edge<DfF>>();
     }
     bytes
+}
+
+fn tsi_heap_bytes(facts: &[crate::read::tsi::FactOut]) -> usize {
+    use crate::read::tsi::{Arg, FactOut};
+    facts
+        .iter()
+        .map(|fact| {
+            size_of::<FactOut>()
+                + fact.relation.capacity()
+                + fact.args.capacity() * size_of::<Arg>()
+                + fact
+                    .args
+                    .iter()
+                    .map(|arg| match arg {
+                        Arg::Span(text, _, _) | Arg::Text(text) | Arg::Atom(text) => {
+                            text.capacity()
+                        }
+                        Arg::Id(_) | Arg::Int(_) => 0,
+                    })
+                    .sum::<usize>()
+        })
+        .sum()
 }
 
 /// The weight rule: an output's byte estimate.
