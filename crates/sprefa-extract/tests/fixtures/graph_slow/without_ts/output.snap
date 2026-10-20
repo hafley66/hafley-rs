@@ -30,10 +30,14 @@ source: tests/support/2_fixture_runner.rs
     "feature_named_1": true,
     "feature_named_2": true,
     "feature_named_3": true,
+    "feature_named_4": true,
+    "feature_named_5": true,
     "no_output_0": "",
     "no_output_1": "",
     "no_output_2": "",
     "no_output_3": "",
+    "no_output_4": "",
+    "no_output_5": "",
     "required_0": {
       "success": false,
       "stdout": ""
@@ -47,6 +51,14 @@ source: tests/support/2_fixture_runner.rs
       "stdout": ""
     },
     "required_3": {
+      "success": false,
+      "stdout": ""
+    },
+    "required_4": {
+      "success": false,
+      "stdout": ""
+    },
+    "required_5": {
       "success": false,
       "stdout": ""
     }

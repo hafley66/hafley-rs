@@ -107,6 +107,35 @@ pub fn require_ts_checker(files: &[PathBuf]) -> Result<(), ProjectError> {
     Ok(())
 }
 
+/// A checker flag whose tier this build does not compile is an error: the
+/// resolve would otherwise answer from the syntax tier and exit 0.
+pub fn require_checker_flags(
+    verb: &str,
+    rust_checker: bool,
+    ts_checker: bool,
+    go_checker: bool,
+) -> Result<(), ProjectError> {
+    let missing: Vec<&str> = [
+        ("rust", rust_checker, cfg!(feature = "rust-checker")),
+        ("ts", ts_checker, cfg!(feature = "ts-checker")),
+        ("go", go_checker, cfg!(feature = "go-checker")),
+    ]
+    .into_iter()
+    .filter(|(_, asked, compiled)| *asked && !*compiled)
+    .map(|(lang, _, _)| lang)
+    .collect();
+    match missing.as_slice() {
+        [] => Ok(()),
+        langs => Err(ProjectError::CheckerUnavailable(
+            langs
+                .iter()
+                .map(|lang| format!("{verb}: --{lang}-checker requires cargo feature {lang}-checker"))
+                .collect::<Vec<_>>()
+                .join("\n"),
+        )),
+    }
+}
+
 fn push_phase_one<E>(
     input: &mut ProjectInput,
     content: &[u8],
