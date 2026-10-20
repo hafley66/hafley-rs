@@ -42,6 +42,14 @@ pub fn run(directory: &str, case: impl Fn(&Value) -> Value) {
             command.env(key, value);
         }
     }
+    // rcargo runs this binary without `CARGO` and with the remote host's
+    // compile-time PATH; the worker needs a cargo on this machine.
+    let home = std::env::var_os("HOME");
+    let cargo = std::env::var_os("CARGO")
+        .or_else(|| home.as_ref().map(|home| Path::new(home).join(".cargo/bin/cargo").into()));
+    if let (Some(cargo), Some(home)) = (cargo, home) {
+        command.env("CARGO", cargo).env("SPREFA_TEST_HOST_HOME", home);
+    }
     if crate::wall_bench::enabled() { command.env("SPREFA_WALL_BENCH", "1"); }
     let output = command.output().expect("isolated fixture test runs");
     if crate::wall_bench::enabled() { for line in String::from_utf8_lossy(&output.stdout).lines().filter_map(|line| line.find("wall bench ").map(|start| &line[start..])) { println!("{line}"); } }
@@ -1003,6 +1011,11 @@ pub fn expand_text(text: &str, work: &str) -> String {
             .join("bin")
             .to_string_lossy()
             .into_owned();
+        let text = if text.contains("$ryi_client") {
+            text.replace("$ryi_client", ryi_client())
+        } else {
+            text.to_string()
+        };
         text.replace("$rustup_bin", &rustup_bin)
             .replace("$work", work)
             .replace(
@@ -1013,5 +1026,34 @@ pub fn expand_text(text: &str, work: &str) -> String {
             .replace("$ryii", env!("CARGO_BIN_EXE_ryii"))
             .replace("$cargo", env!("CARGO"))
             .replace("$path", env!("PATH"))
-            .replace("$target", option_env!("CARGO_TARGET_DIR").unwrap_or(concat!(env!("HOME"), "/.cache/lanes/shared/target")))
+}
+
+/// The `ryi` client lives in its own crate; cargo reports where it put the
+/// binary, whatever target dir (shared, worktree, rcargo) this build used.
+fn ryi_client() -> &'static str {
+    static PATH: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    PATH.get_or_init(|| {
+        let manifest = concat!(env!("CARGO_MANIFEST_DIR"), "/../ryi/Cargo.toml");
+        // Runtime cargo: under rcargo, compile-time `env!("CARGO")` names the
+        // remote host's cargo, and the binary must land on this machine.
+        let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
+        let host_home = std::env::var("SPREFA_TEST_HOST_HOME").unwrap_or_else(|_| env!("HOME").to_string());
+        let out = std::process::Command::new(&cargo)
+            .env("RCARGO_OFF", "1")
+            .env("HOME", host_home)
+            .env_remove("RUSTUP_HOME")
+            .env_remove("CARGO_HOME")
+            .env_remove("CARGO_TARGET_DIR")
+            .args(["build", "--quiet", "--message-format=json", "--manifest-path", manifest])
+            .output()
+            .unwrap_or_else(|error| panic!("spawn {cargo}: {error}"));
+        assert!(out.status.success(), "build ryi: {}", String::from_utf8_lossy(&out.stderr));
+        String::from_utf8(out.stdout)
+            .unwrap()
+            .lines()
+            .filter_map(|line| serde_json::from_str::<Value>(line).ok())
+            .filter(|message| message["target"]["name"] == "ryi")
+            .find_map(|message| message["executable"].as_str().map(str::to_string))
+            .expect("cargo reported no ryi executable")
+    })
 }
