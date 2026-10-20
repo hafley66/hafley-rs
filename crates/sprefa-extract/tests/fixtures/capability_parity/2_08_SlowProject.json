@@ -48,6 +48,69 @@
         "\"record\":\"resolved_edge\"",
         "\"resolution_origin\":\"scip\""
       ]
+    },
+    {
+      "action": "run",
+      "name": "checker",
+      "arguments": [
+        "slow",
+        "tests/fixtures/call_ladder/src/_6_local.rs",
+        "--root",
+        "tests/fixtures/call_ladder"
+      ],
+      "expect_exit_code": 0,
+      "raw_stdout": true,
+      "unasserted_stdout": true,
+      "unasserted_stderr": true
+    },
+    {
+      "action": "claim",
+      "name": "checker_edge",
+      "kind": "line_matches",
+      "cell": "checker",
+      "texts": [
+        "\"record\":\"resolved_edge\"",
+        "\"resolution_origin\":\"checker\""
+      ]
+    },
+    {
+      "action": "claim",
+      "name": "checker_occurrence",
+      "kind": "line_matches",
+      "cell": "checker",
+      "texts": [
+        "\"record\":\"occurrence\"",
+        "\"symbol\":\"checker "
+      ]
+    },
+    {
+      "action": "claim",
+      "name": "checker_no_scip",
+      "kind": "no_line_matches",
+      "cell": "checker",
+      "texts": [
+        "\"resolution_origin\":\"scip\""
+      ]
+    },
+    {
+      "action": "exists",
+      "name": "no_index_written",
+      "path": "tests/fixtures/call_ladder/.dl",
+      "expected": false
+    },
+    {
+      "action": "run",
+      "name": "no_checker_needs_index",
+      "arguments": [
+        "slow",
+        "--no-checker",
+        "tests/fixtures/call_ladder/src/_6_local.rs",
+        "--root",
+        "tests/fixtures/call_ladder"
+      ],
+      "expect_exit_code": 1,
+      "raw_stdout": true,
+      "unasserted_stdout": true
     }
   ]
 }

@@ -42,7 +42,7 @@ enum LibraryCapability {
     DietFileUnresolved,
     /// `manifests::fold_package_edges`: workspace-internal manifest edges.
     PackageEdges,
-    /// `slow::slow_project`: a SCIP index projected onto fast's tables.
+    /// `slow::slow_project`: checker answers, and a supplied SCIP index, on fast's tables.
     SlowProject,
 }
 

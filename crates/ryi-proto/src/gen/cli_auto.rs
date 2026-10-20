@@ -28,7 +28,7 @@ pub enum Cmd {
   Capabilities,
   #[doc = "Syntax-only whole-project facts (no compiler)"]
   Fast(FastArgs),
-  #[doc = "The SCIP oracle written as fast's tables"]
+  #[doc = "Compiler checker answers written as fast's tables"]
   Slow(SlowArgs),
   #[doc = "Raw SCIP index rows"]
   Scip(ScipArgs),

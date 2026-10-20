@@ -826,10 +826,23 @@ source: tests/support/2_fixture_runner.rs
     }
   },
   "2_08_SlowProject": {
+    "checker": {
+      "exit_code": 0
+    },
+    "checker_edge": true,
+    "checker_no_scip": false,
+    "checker_occurrence": true,
     "cli": {
       "exit_code": 0
     },
     "flag_required": false,
+    "no_checker_needs_index": {
+      "exit_code": 1,
+      "stderr": "ryi slow: --no-checker needs --scip-index FILE; without one slow answers from the checkers\n"
+    },
+    "no_index_written": {
+      "exists": false
+    },
     "reach": true,
     "without": {
       "exit_code": 0

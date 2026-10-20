@@ -5,7 +5,7 @@ const TOP: &str = "ryi <PATH>...                            per-file facts from 
 ryi capabilities                         declared languages, checkers and edit support
 ryi schema                               JSONL record contract
 ryi fast <PATH>...                       written cross-file call and type facts
-ryi slow <PATH>...                       compiler and saved SCIP evidence
+ryi slow <PATH>...                       compiler checker evidence
 ryi scip <ROOT>                          raw SCIP facts or index records
 ryi ingest <PATH>...                     validated foreign TSI rows
 ryi query --query <SCM> <PATH>...        captured syntax rows
