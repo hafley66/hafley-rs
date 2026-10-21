@@ -17,7 +17,8 @@
       "cell": "directory.stdout",
       "kind": "json_all",
       "pointer": "family",
-      "value": "cst"
+      "value": "cst",
+      "skip_record": "file"
     },
     {
       "action": "claim",
@@ -51,7 +52,8 @@
       "cell": "files.stdout",
       "kind": "json_all",
       "pointer": "family",
-      "value": "cst"
+      "value": "cst",
+      "skip_record": "file"
     },
     {
       "action": "claim",

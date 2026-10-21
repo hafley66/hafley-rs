@@ -655,7 +655,7 @@ fn claim(
     let value = cell("cell");
     if kind == "not_equals" { assert_ne!(value, step["value"], "{step}"); return Value::Bool(true); }
     if kind == "json_all" {
-        let rows: Vec<Value> = value.as_str().unwrap().lines().map(|line| serde_json::from_str(line).unwrap()).collect();
+        let rows: Vec<Value> = value.as_str().unwrap().lines().map(|line| serde_json::from_str(line).unwrap()).filter(|row: &Value| step.get("skip_record").is_none_or(|skip| &row["record"] != skip)).collect();
         assert!(rows.iter().all(|row| { let value = row.pointer(&format!("/{}", step["pointer"].as_str().unwrap())); if step.get("not_value").is_some() { value != Some(&step["not_value"]) } else { value == Some(&step["value"]) } }), "{step}");
         return Value::Bool(true);
     }
