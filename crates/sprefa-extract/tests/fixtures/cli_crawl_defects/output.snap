@@ -65,6 +65,13 @@ source: tests/support/2_fixture_runner.rs
       "exit_code": 0,
       "stdout": [
         {
+          "record": "file",
+          "path": "<fixture>/tests/fixtures/graph_rust/0_widget.rs",
+          "digest": "blake3:5a0226c41d1b5535d20fa2abdce42c95ef4c3d70f1dc0c182541e3371093bb16",
+          "bytes": 41,
+          "lines": 3
+        },
+        {
           "record": "node",
           "family": "cst",
           "span": {
@@ -257,6 +264,13 @@ source: tests/support/2_fixture_runner.rs
             "start": 35,
             "end": 37
           }
+        },
+        {
+          "record": "file",
+          "path": "<fixture>/tests/fixtures/graph_rust/1_reader.rs",
+          "digest": "blake3:bf51851c64dc4ecc88bb5062369a8d73e4ceaab180957ef21d97dd8cd1ede372",
+          "bytes": 323,
+          "lines": 23
         },
         {
           "record": "node",
@@ -1635,6 +1649,13 @@ source: tests/support/2_fixture_runner.rs
       "exit_code": 0,
       "stdout": [
         {
+          "record": "file",
+          "path": "<fixture>/tests/fixtures/graph_rust/0_widget.rs",
+          "digest": "blake3:5a0226c41d1b5535d20fa2abdce42c95ef4c3d70f1dc0c182541e3371093bb16",
+          "bytes": 41,
+          "lines": 3
+        },
+        {
           "record": "node",
           "family": "cst",
           "span": {
@@ -1827,6 +1848,13 @@ source: tests/support/2_fixture_runner.rs
             "start": 35,
             "end": 37
           }
+        },
+        {
+          "record": "file",
+          "path": "<fixture>/tests/fixtures/graph_rust/1_reader.rs",
+          "digest": "blake3:bf51851c64dc4ecc88bb5062369a8d73e4ceaab180957ef21d97dd8cd1ede372",
+          "bytes": 323,
+          "lines": 23
         },
         {
           "record": "node",

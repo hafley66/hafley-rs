@@ -832,8 +832,11 @@ fn extract_to(
         return Ok(());
     }
 
+    // Rows carry no path; with more than one input file the `file` row before each
+    // file's rows says which file they belong to.
+    let headed = cli.file_fact || cli.paths.len() > 1;
     for path in &cli.paths {
-        extract_file(cli, path, output)?;
+        extract_file(cli, path, headed, output)?;
     }
     Ok(())
 }
@@ -841,6 +844,7 @@ fn extract_to(
 fn extract_file(
     cli: &FileArgs,
     path: &std::path::Path,
+    headed: bool,
     output: &mut sqlite::Output,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let content = std::fs::read(sprefa_extract::io_path(path))?;
@@ -852,7 +856,7 @@ fn extract_file(
     // cost a second pass over the file, let alone a second subprocess. `--lines`
     // rides it too: one hash feeds both rows, and the stdout decoration takes
     // the same file's newline offsets.
-    let want_file_row = cli.file_fact || output.database.is_some();
+    let want_file_row = headed || output.database.is_some();
     let want_line_row = cli.lines && output.database.is_some();
     if want_file_row || want_line_row {
         let content_id = content_id_of(&content);
