@@ -66,6 +66,8 @@ pub enum Rows {
 pub struct CapRef {
     pub level: u8,
     pub name: Box<str>,
+    /// The split child pattern that owns the capture now; the level at `level` no longer captures it.
+    pub pin: Option<u16>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -77,8 +79,6 @@ pub enum Cond {
     Same(CapRef, CapRef),
     /// Two split sibling levels, by pattern id: the first's root comes earlier among its siblings (`sib`).
     SiblingOrder(u16, u16),
-    /// Text equality of two captures named by `(pattern id, capture)`: captures of split sibling levels.
-    PinnedTextEq((u16, Box<str>), (u16, Box<str>)),
     Not(Box<Cond>),
 }
 

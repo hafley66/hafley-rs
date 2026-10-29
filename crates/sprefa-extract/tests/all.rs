@@ -579,6 +579,9 @@ mod v5_parity {
     #[cfg(feature = "cli")]
     #[path = "224_scmpp_growth_bench.rs"]
     mod scmpp_growth_bench;
+    #[cfg(feature = "cli")]
+    #[path = "225_scmpp_split_relations.rs"]
+    mod scmpp_split_relations;
 }
 
 #[test]

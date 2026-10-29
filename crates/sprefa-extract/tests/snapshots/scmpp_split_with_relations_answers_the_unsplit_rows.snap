@@ -1,0 +1,48 @@
+---
+source: tests/225_scmpp_split_relations.rs
+expression: table
+---
+[
+  {
+    "case": "ancestor_eq_sibling",
+    "split": true,
+    "same_rows": true,
+    "rows": 5
+  },
+  {
+    "case": "ancestor_eq_sibling_each",
+    "split": true,
+    "same_rows": true,
+    "rows": 5
+  },
+  {
+    "case": "descendant_from_child_each",
+    "split": true,
+    "same_rows": true,
+    "rows": 3
+  },
+  {
+    "case": "not_has_on_child",
+    "split": true,
+    "same_rows": true,
+    "rows": 7
+  },
+  {
+    "case": "root_capture_relation",
+    "split": true,
+    "same_rows": true,
+    "rows": 1
+  },
+  {
+    "case": "contains_on_child",
+    "split": true,
+    "same_rows": true,
+    "rows": 5
+  },
+  {
+    "case": "match_and_ancestor",
+    "split": true,
+    "same_rows": true,
+    "rows": 2
+  }
+]

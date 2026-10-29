@@ -426,12 +426,12 @@ FROM scmpp_capture AS "r0"
   JOIN scmpp_capture AS "c0_s" ON "c0_s".file = "r0".file AND "c0_s".pattern = 0 AND "c0_s"."match" = "r0"."match" AND "c0_s".capture = 2
 WHERE "r0".pattern = 0
   AND "r0".capture = 1
-  AND "c0_s".text IN (SELECT t.id FROM scmpp_dict_text AS t WHERE instr(t.text, 'seed') > 0)
   AND EXISTS (SELECT 1 FROM scmpp_capture AS "r1"
   JOIN scmpp_node AS "a0" ON "a0".file = "r1".file AND "a0".pre = "r1".node AND "r1".node < "c0_s".node AND "c0_s".node <= "a0".last
   WHERE "r1".pattern = 1
   AND "r1".capture = 1
   AND "r1".file = "r0".file)
+  AND "c0_s".text IN (SELECT t.id FROM scmpp_dict_text AS t WHERE instr(t.text, 'seed') > 0)
 ORDER BY path, "r0".start, "r0"."match""#
     );
 }
@@ -486,7 +486,6 @@ FROM scmpp_capture AS "r0"
   JOIN scmpp_capture AS "c0_args" ON "c0_args".file = "r0".file AND "c0_args".pattern = 0 AND "c0_args"."match" = "r0"."match" AND "c0_args".capture = 3
 WHERE "r0".pattern = 0
   AND "r0".capture = 1
-  AND NOT COALESCE(("c0_n".text IN (SELECT t.id FROM scmpp_dict_text AS t WHERE instr(t.text, '9') > 0)), 0)
   AND EXISTS (SELECT 1 FROM scmpp_capture AS "r1"
   JOIN scmpp_capture AS "c1_f" ON "c1_f".file = "r1".file AND "c1_f".pattern = 1 AND "c1_f"."match" = "r1"."match" AND "c1_f".capture = 4
   JOIN scmpp_node AS "e0" ON "e0".file = "c0_args".file AND "e0".pre = "c0_args".node AND "e0".parent = "r1".node
@@ -494,6 +493,7 @@ WHERE "r0".pattern = 0
   AND "r1".capture = 1
   AND "r1".file = "r0".file
   AND NOT COALESCE(("c1_f".text = "c0_n".text), 0))
+  AND NOT COALESCE(("c0_n".text IN (SELECT t.id FROM scmpp_dict_text AS t WHERE instr(t.text, '9') > 0)), 0)
 ORDER BY path, "r0".start, "r0"."match""#
     );
 }

@@ -12,10 +12,16 @@ fn object(n: usize, value: impl Fn(usize) -> usize) -> String {
     format!("export const big = {{\n{keys}}};\n")
 }
 
+type Compile = fn(&tree_sitter::Language, &str) -> Result<hafley_scm::scmpp::Compiled, hafley_scm::scmpp::ScmppError>;
+
 /// Compile, store and query one source in-process; the count every run reports the same.
 fn scmpp_work(program: &str, src: &str) -> u64 {
+    scmpp_work_with(hafley_scm::scmpp::compile, program, src)
+}
+
+fn scmpp_work_with(compile: Compile, program: &str, src: &str) -> u64 {
     let grammar = sprefa_extract::RyiLang::parse_name("tsx").unwrap().tree_sitter_language();
-    let compiled = hafley_scm::scmpp::compile(&grammar, program).unwrap();
+    let compiled = compile(&grammar, program).unwrap();
     let tree = hafley_scm::cst::parse(&grammar, src.as_bytes()).unwrap();
     let mut db = sqlite::Database::memory().unwrap();
     let mut store = scmpp::open(&mut db).unwrap();
@@ -101,4 +107,20 @@ fn growth_bench_nth_child_of_is_linear() {
     let samples = sample_growth(&[500, 1000, 2000], RUNS, |n| scmpp_work(program, &object(n, |key| key)));
     eprintln!("{}", growth_table("nth_child_of", &samples));
     assert_growth_exponent("nth_child_of", &samples, 1.2, 1.5);
+}
+
+/// The bug report's query shape: 3 siblings on a level that also holds `has-ancestor?`, whose inner
+/// `#eq?` reads a sibling's capture. Split: C(n-1, 2) result rows, nothing above the output. Unsplit
+/// (the 0.2.3 behavior): tree-sitter's walk over the siblings, timed for the receipt.
+#[test]
+fn growth_bench_split_with_relation_is_output_bound() {
+    let program = r#"((object (pair key: (property_identifier) @k) (pair) @b (pair) @c) (#has-ancestor? @b ((variable_declarator name: (identifier) @name) (#eq? @name @k))))"#;
+    let source = |n: usize| object(n, |key| key).replacen("k0: 0", "big: 0", 1);
+    let split = sample_growth(&[20, 40, 80], RUNS, |n| scmpp_work(program, &source(n)));
+    let whole = sample_growth(&[20, 40, 80], RUNS, |n| scmpp_work_with(hafley_scm::scmpp::compile_unsplit, program, &source(n)));
+    eprintln!("{}", growth_table("split_with_relation", &split));
+    eprintln!("{}", growth_table("unsplit_with_relation", &whole));
+    assert_growth_exponent("split_with_relation", &split, 2.2, 2.6);
+    let (_, _, _, unsplit_time) = *hafley_observe::growth_bench::exponents(&whole).last().unwrap();
+    assert!(unsplit_time >= 3.0, "the unsplit shape is the combinatorial one: time exponent {unsplit_time:.2}");
 }

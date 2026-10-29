@@ -110,6 +110,8 @@ fn id_of(list: &[Box<str>], name: &str) -> usize {
 
 struct Join {
     left: bool,
+    /// `CROSS JOIN`: SQLite keeps every table before it in an outer loop.
+    cross: bool,
     table: String,
     alias: String,
     on: Vec<String>,
@@ -119,6 +121,7 @@ impl Join {
     fn node(alias: &str, on: Vec<String>) -> Self {
         Join {
             left: false,
+            cross: false,
             table: NODE.into(),
             alias: alias.into(),
             on,
@@ -147,7 +150,11 @@ impl Body {
             } else {
                 join.on.join(" AND ")
             };
-            let kind = if join.left { "LEFT JOIN" } else { "JOIN" };
+            let kind = match (join.left, join.cross) {
+                (true, _) => "LEFT JOIN",
+                (false, true) => "CROSS JOIN",
+                (false, false) => "JOIN",
+            };
             from.push_str(&format!(
                 "\n  {kind} {} AS {} ON {on}",
                 join.table, join.alias
@@ -176,7 +183,7 @@ fn referenced(level: &Level, depth: u8, out: &mut Vec<Box<str>>) {
             Cond::TextEq(a, b) | Cond::Same(a, b) => out.extend([a, b]),
             Cond::TextMatch(a, _) | Cond::Contains(a, _) => out.push(a),
             Cond::Not(inner) => cond_refs(inner, out),
-            Cond::SiblingOrder(..) | Cond::PinnedTextEq(..) => {}
+            Cond::SiblingOrder(..) => {}
         }
     }
     fn level_refs<'c>(level: &'c Level, out: &mut Vec<&'c CapRef>) {
@@ -191,8 +198,8 @@ fn referenced(level: &Level, depth: u8, out: &mut Vec<Box<str>>) {
     let mut refs = Vec::new();
     level_refs(level, &mut refs);
     for at in refs {
-        // `@__root` is the level's own root row, joined already.
-        if at.level == depth && at.name.as_ref() != ROOT && !out.contains(&at.name) {
+        // `@__root` is the level's own root row, joined already; a pinned capture joins at its owner.
+        if at.level == depth && at.pin.is_none() && at.name.as_ref() != ROOT && !out.contains(&at.name) {
             out.push(at.name.clone());
         }
     }
@@ -213,10 +220,14 @@ struct Lower<'a> {
     select: Vec<Col>,
     /// Root aliases of the exported levels, outermost first: the row order.
     order: Vec<String>,
-    /// Captures a `PinnedTextEq` names, joined by whichever level owns their pattern.
+    /// Pinned captures (`CapRef.pin`), joined by whichever level owns their pattern.
     pinned: Vec<(u16, Box<str>)>,
     /// `WITH` entries the statement opens with.
     ctes: Vec<String>,
+    /// `(child root alias, node-row alias)` of each one-step parent edge, for `sib` order.
+    edges: Vec<(String, String)>,
+    /// The next level root joins `CROSS`: split children loop in the order compile chose.
+    cross_next: bool,
 }
 
 /// One statement over `scmpp_capture` / `scmpp_node`: integer joins and preorder ranges
@@ -237,6 +248,8 @@ pub fn lower(
         order: Vec::new(),
         pinned: Vec::new(),
         ctes: Vec::new(),
+        edges: Vec::new(),
+        cross_next: false,
     };
     let mut body = Body::default();
     lower.level(plan, &mut Vec::new(), &mut body, true);
@@ -262,9 +275,10 @@ pub fn lower(
 
 impl Lower<'_> {
     fn alias(&self, at: &CapRef, chain: &[u16]) -> String {
+        let pattern = at.pin.unwrap_or_else(|| chain[at.level as usize]);
         match at.name.as_ref() {
-            ROOT => root(chain[at.level as usize]),
-            name => cap(chain[at.level as usize], name),
+            ROOT => root(pattern),
+            name => cap(pattern, name),
         }
     }
 
@@ -281,6 +295,7 @@ impl Lower<'_> {
         }
         body.from.push(Join {
             left: false,
+            cross: std::mem::take(&mut self.cross_next),
             table: CAPTURE.into(),
             alias: r.clone(),
             on,
@@ -295,14 +310,30 @@ impl Lower<'_> {
             names.extend(self.patterns[pattern as usize].captures.iter().cloned());
         }
         referenced(level, depth, &mut names);
-        fn pins(cond: &Cond, out: &mut Vec<(u16, Box<str>)>) {
-            match cond {
-                Cond::PinnedTextEq(a, b) => out.extend([a.clone(), b.clone()]),
-                Cond::Not(inner) => pins(inner, out),
-                _ => {}
+        fn pin(at: &CapRef, out: &mut Vec<(u16, Box<str>)>) {
+            if let Some(owner) = at.pin {
+                out.push((owner, at.name.clone()));
             }
         }
-        level.conds.iter().for_each(|cond| pins(cond, &mut self.pinned));
+        fn cond_pins(cond: &Cond, out: &mut Vec<(u16, Box<str>)>) {
+            match cond {
+                Cond::TextEq(a, b) | Cond::Same(a, b) => {
+                    pin(a, out);
+                    pin(b, out);
+                }
+                Cond::TextMatch(a, _) | Cond::Contains(a, _) => pin(a, out),
+                Cond::Not(inner) => cond_pins(inner, out),
+                Cond::SiblingOrder(..) => {}
+            }
+        }
+        fn level_pins(level: &Level, out: &mut Vec<(u16, Box<str>)>) {
+            level.conds.iter().for_each(|cond| cond_pins(cond, out));
+            for rel in &level.rels {
+                pin(&rel.from, out);
+                rel.target.iter().chain(rel.stop.iter()).for_each(|inner| level_pins(inner, out));
+            }
+        }
+        level_pins(level, &mut self.pinned);
         for (owner, name) in &self.pinned {
             if *owner == pattern && !names.contains(name) {
                 names.push(name.clone());
@@ -312,11 +343,12 @@ impl Lower<'_> {
             let joined = level.conds.iter().any(|cond| matches!(cond, Cond::Same(inner, _) if inner.level == depth && inner.name == *name));
             self.capture(pattern, name, body, export && !joined, false);
         }
-        for cond in &level.conds {
-            body.wh.push(self.cond(cond, chain));
-        }
+        // Relations first: a sibling order reads the parent-edge rows their joins open.
         for rel in &level.rels {
             self.rel(rel, chain, body, export);
+        }
+        for cond in &level.conds {
+            body.wh.push(self.cond(cond, chain));
         }
         chain.pop();
     }
@@ -342,6 +374,7 @@ impl Lower<'_> {
         let left = absent || self.patterns[pattern as usize].optional.iter().any(|seen| seen.as_ref() == name);
         body.from.push(Join {
             left,
+            cross: false,
             table: CAPTURE.into(),
             on: vec![
                 format!("{alias}.file = {r}.file"),
@@ -380,11 +413,15 @@ impl Lower<'_> {
                 let (a, b) = (self.alias(a, chain), self.alias(b, chain));
                 format!("{a}.file = {b}.file AND {a}.node = {b}.node")
             }
-            Cond::PinnedTextEq((pa, a), (pb, b)) => format!("{}.text = {}.text", cap(*pa, a), cap(*pb, b)),
+            // The split children's parent-edge rows carry `sib`; `(file, parent, sib)` is indexed,
+            // so the order is a range the planner can drive a loop with.
             Cond::SiblingOrder(before, after) => {
                 let sib = |pattern: u16| {
                     let r = root(pattern);
-                    format!("(SELECT n.sib FROM {NODE} AS n WHERE n.file = {r}.file AND n.pre = {r}.node)")
+                    match self.edges.iter().find(|(child, _)| *child == r) {
+                        Some((_, edge)) => format!("{edge}.sib"),
+                        None => format!("(SELECT n.sib FROM {NODE} AS n WHERE n.file = {r}.file AND n.pre = {r}.node)"),
+                    }
                 };
                 format!("{} < {}", sib(*before), sib(*after))
             }
@@ -466,6 +503,8 @@ impl Lower<'_> {
         let each = rel.rows == Rows::Each && !rel.negated;
         let mut inner = Body::default();
         let sink = if each { &mut *body } else { &mut inner };
+        // A split child (the only relation from `@__root`) loops where compile ordered it.
+        self.cross_next = each && rel.neighbor && rel.from.name.as_ref() == ROOT;
         self.level(target, chain, sink, export && each);
         self.step(rel, &from, &root(target.pattern), sink);
         if !each {
@@ -517,6 +556,7 @@ impl Lower<'_> {
         let parent = root(*chain.last().expect("a relation sits inside a level"));
         body.from.push(Join {
             left: true,
+            cross: false,
             table: CAPTURE.into(),
             alias: r.clone(),
             on: vec![
@@ -560,6 +600,7 @@ impl Lower<'_> {
                 ];
                 on.extend(field_is(&edge));
                 body.from.push(Join::node(&edge, on));
+                self.edges.push((child.to_string(), edge));
             }
             (Walk::Ancestor, false) => {
                 // The target encloses `from`; a stop node strictly between them ends the walk.
