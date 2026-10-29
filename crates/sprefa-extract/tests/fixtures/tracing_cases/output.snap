@@ -10,7 +10,7 @@ source: tests/support/2_fixture_runner.rs
     "json_format": {
       "service": [
         "sprefa-extract",
-        "0.2.1",
+        "0.2.2",
         "json"
       ],
       "event_count": 10
