@@ -370,7 +370,7 @@ impl From<String> for RyiExit {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    if ryi_proto::build_identity::startup("ryii") || ryi_proto::help::local_help() {
+    if ryi_proto::build_identity::startup("ryii", env!("CARGO_PKG_VERSION")) || ryi_proto::help::local_help() {
         return Ok(());
     }
     hafley_observe::memcap::spawn("ryii");

@@ -1,6 +1,8 @@
 use std::path::{Path, PathBuf};
 
 pub struct Build<'a> {
+    /// The calling binary's package version: `ryi` and `ryii` ship from different crates.
+    pub version: &'a str,
     pub hash: &'a str,
     pub date: &'a str,
     pub root: &'a Path,
@@ -53,12 +55,13 @@ impl Build<'_> {
             Some(main) => format!("stale (main {main})"),
             None => "unknown (main unreadable)".to_owned(),
         };
-        format!("{binary} {}\ngit hash: {}\nbuild date: {}\nrepo root: {}\nstale verdict: {verdict}\n", env!("CARGO_PKG_VERSION"), self.hash, self.date, self.root.display())
+        format!("{binary} {}\ngit hash: {}\nbuild date: {}\nrepo root: {}\nstale verdict: {verdict}\n", self.version, self.hash, self.date, self.root.display())
     }
 }
 
-pub fn startup(binary: &str) -> bool {
+pub fn startup(binary: &str, version: &str) -> bool {
     let build = Build {
+        version,
         hash: env!("SPREFA_BUILD_GIT_HASH"),
         date: env!("SPREFA_BUILD_DATETIME"),
         root: Path::new(env!("SPREFA_BUILD_REPO_ROOT")),

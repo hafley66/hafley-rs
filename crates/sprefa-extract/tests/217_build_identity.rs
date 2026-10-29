@@ -22,7 +22,7 @@ fn build_identity_fixture_table() {
             std::fs::create_dir_all(path.parent().unwrap()).unwrap();
             std::fs::write(path, body).unwrap();
         }
-        let build = Build { hash: "aaaa", date: "2026-09-27T00:00:00Z", root: &root };
+        let build = Build { version: "0.0.0", hash: "aaaa", date: "2026-09-27T00:00:00Z", root: &root };
         for binary in ["ryi", "ryii"] {
             output.push_str(&format!("{name} {binary}\n{}", build.warning(binary, enabled).replace(&root.display().to_string(), "<root>")));
         }
