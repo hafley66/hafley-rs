@@ -1,6 +1,11 @@
 use crate::cli::QueryArgs;
+
+#[path = "0a_query_split.rs"]
+mod split;
 use std::io::Write;
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 use rayon::prelude::*;
 use sprefa_extract::{content_id_of, extract_pool, query_tree_sitter_spans_with, RyiLang};
@@ -8,10 +13,15 @@ use sprefa_extract::{content_id_of, extract_pool, query_tree_sitter_spans_with, 
 type Result<T, E = Box<dyn std::error::Error>> = std::result::Result<T, E>;
 
 pub fn run(cli: QueryArgs) -> Result<()> {
-    run_to(cli, Box::new(std::io::stdout()))
+    run_to(cli, Box::new(std::io::stdout()), None)
 }
 
-pub fn run_to(cli: QueryArgs, writer: Box<dyn Write + Send>) -> Result<()> {
+/// `cancel` is the daemon request's flag: set, the run stops and exits 3.
+pub fn run_to(
+    cli: QueryArgs,
+    writer: Box<dyn Write + Send>,
+    cancel: Option<Arc<AtomicBool>>,
+) -> Result<()> {
     // A digest names a blob, so its path need not exist in the worktree.
     let paths = match &cli.digest {
         Some(_) if cli.inputs.paths.len() == 1 => vec![cli.inputs.paths[0].clone()],
@@ -23,10 +33,26 @@ pub fn run_to(cli: QueryArgs, writer: Box<dyn Write + Send>) -> Result<()> {
     }
     let query = match (&cli.query, &cli.scmpp) {
         (Some(query), None) => query.clone(),
-        (None, Some(file)) => return run_scmpp(&cli, file, &paths, writer),
+        (None, Some(file)) => {
+            let text = std::fs::read_to_string(sprefa_extract::io_path(file))
+                .map_err(|error| format!("--scmpp '{}': {error}", file.display()))?;
+            return run_scmpp(&cli, &text, &paths, writer, cancel, false);
+        }
         (Some(_), Some(_)) => return Err("query: pass --query or --scmpp, not both".into()),
         (None, None) => return Err("query: pass --query TEXT or --scmpp FILE".into()),
     };
+    // 3+ unanchored siblings: the scm++ split answers the same rows without tree-sitter's
+    // combinatorial walk; `--sqlite` keeps the capture-row store, so it stays on the flat engine.
+    if cli.store.sqlite.is_none() {
+        let first = paths.first().map(|path| language_for(cli.lang.as_deref(), &path.to_string_lossy()));
+        if let Some(Ok(language)) = first {
+            if let Some(grammar) = RyiLang::parse_name(&language) {
+                if split::splits(&query, &grammar.tree_sitter_language()) {
+                    return run_scmpp(&cli, &query, &paths, writer, cancel, true);
+                }
+            }
+        }
+    }
     let mut output = crate::sqlite::Output::with_writer(cli.store.sqlite.as_deref(), writer, true)
         .map_err(|error| error.to_string())?;
     // One compiled query per language, built once; `None` marks a grammar that
@@ -40,15 +66,12 @@ pub fn run_to(cli: QueryArgs, writer: Box<dyn Write + Send>) -> Result<()> {
     let mut late_error = None;
     for path in &paths {
         let name = path.to_string_lossy();
-        let language = match &cli.lang {
-            Some(language) => language.clone(),
-            None => match RyiLang::from_path(&name) {
-                Some(lang) => lang.name().to_string(),
-                None => {
-                    late_error = Some(format!("{name}: no language for this extension; pass --lang"));
-                    break;
-                }
-            },
+        let language = match language_for(cli.lang.as_deref(), &name) {
+            Ok(language) => language,
+            Err(error) => {
+                late_error = Some(error);
+                break;
+            }
         };
         if !compiled.contains_key(&language) {
             let grammar = RyiLang::parse_name(&language)
@@ -73,6 +96,9 @@ pub fn run_to(cli: QueryArgs, writer: Box<dyn Write + Send>) -> Result<()> {
     // root is thread-local, so each worker reads through the caller's root.
     let io_root = sprefa_extract::request_io_root();
     for chunk in jobs.chunks(1024) {
+        if cancel.as_ref().is_some_and(|cancel| cancel.load(Ordering::Acquire)) {
+            return Err(crate::RyiExit::new(3, "query: cancelled").into());
+        }
         let results: Vec<Result<(String, Vec<sprefa_extract::TreeSitterSpannedMatch>), String>> =
             extract_pool().install(|| {
                 chunk
@@ -159,6 +185,22 @@ pub fn run_to(cli: QueryArgs, writer: Box<dyn Write + Send>) -> Result<()> {
     output.finish()
 }
 
+/// `--lang` names a grammar family: `typescript` takes each file's own grammar from its
+/// extension, so a `.tsx` file parses with tsx and its JSX is no error node.
+fn language_for(lang: Option<&str>, name: &str) -> Result<String, String> {
+    let by_path = RyiLang::from_path(name);
+    match (lang, by_path) {
+        (None, Some(found)) => Ok(found.name().to_string()),
+        (None, None) => Err(format!("{name}: no language for this extension; pass --lang")),
+        (Some(lang), Some(found @ (RyiLang::TypeScript | RyiLang::Tsx)))
+            if RyiLang::parse_name(lang) == Some(RyiLang::TypeScript) =>
+        {
+            Ok(found.name().to_string())
+        }
+        (Some(lang), _) => Ok(lang.to_string()),
+    }
+}
+
 #[derive(serde::Serialize)]
 struct CaptureRow<'a> {
     record: &'static str,
@@ -200,21 +242,25 @@ fn one_line_text(text: String) -> String {
 /// `--scmpp`: flat patterns per language, capture and CST rows per file, then one SQL statement.
 /// Without `--sqlite` the rows live in `:memory:` for the run and print to stdout;
 /// with it they land in `scmpp_row` and stdout stays empty.
+/// `plain`: rows print in the `--query` shape (`split::plain_row`).
 fn run_scmpp(
     cli: &QueryArgs,
-    file: &Path,
+    text: &str,
     paths: &[std::path::PathBuf],
     writer: Box<dyn Write + Send>,
+    cancel: Option<Arc<AtomicBool>>,
+    plain: bool,
 ) -> Result<()> {
-    let text = std::fs::read_to_string(sprefa_extract::io_path(file))
-        .map_err(|error| format!("--scmpp '{}': {error}", file.display()))?;
+    let mut lines = std::collections::HashMap::<String, Vec<u32>>::new();
+    // Each file's root node range: a capture of the whole file keeps its text for the SQL, not for stdout.
+    let mut roots = std::collections::HashMap::<String, (u64, u64)>::new();
     let mut output = crate::sqlite::Output::with_writer(cli.store.sqlite.as_deref(), writer, true)
         .map_err(|error| error.to_string())?;
     if output.database.is_none() {
         output.database = Some(crate::sqlite::Database::memory().map_err(|error| error.to_string())?);
     }
     let handle = output.database.as_ref().expect("scm++ database").connection().get_interrupt_handle();
-    crate::deadline::within(Some(handle), cli.timeout, "query", |deadline| {
+    crate::deadline::within_or_cancel(Some(handle), cli.timeout, cancel, "query", |deadline| {
         let mut compiled = std::collections::HashMap::<String, Option<hafley_scm::scmpp::Compiled>>::new();
         let mut skipped = std::collections::BTreeMap::<String, usize>::new();
         let mut store = crate::scmpp::open(output.database.as_mut().expect("scm++ database"))
@@ -225,23 +271,21 @@ fn run_scmpp(
                 return Err("scm++ passed its deadline".into());
             }
             let name = path.to_string_lossy();
-            let language = match &cli.lang {
-                Some(language) => language.clone(),
-                None => RyiLang::from_path(&name)
-                    .map(|lang| lang.name().to_string())
-                    .ok_or_else(|| format!("{name}: no language for this extension; pass --lang"))?,
-            };
+            let language = language_for(cli.lang.as_deref(), &name)?;
             let grammar = RyiLang::parse_name(&language)
                 .ok_or_else(|| format!("unknown lang '{language}'"))?
                 .tree_sitter_language();
             if !compiled.contains_key(&language) {
-                let entry = match hafley_scm::scmpp::compile(&grammar, &text) {
+                let entry = match hafley_scm::scmpp::compile(&grammar, text) {
                     Ok(found) => Some(found),
                     Err(hafley_scm::scmpp::ScmppError::Query { error, .. })
                         if error.kind == tree_sitter::QueryErrorKind::NodeType => None,
                     Err(error) => return Err(format!("query ({language}): {error}").into()),
                 };
                 if let Some(found) = &entry {
+                    for warning in &found.warnings {
+                        crate::ops::print_diagnostic(format_args!("query ({language}): {warning}"));
+                    }
                     let database = output.database.as_mut().expect("scm++ database");
                     crate::scmpp::check_sql(database, found).map_err(|error| format!("query ({language}): {error}"))?;
                 }
@@ -253,10 +297,17 @@ fn run_scmpp(
             };
             used.insert(language.clone());
             let bytes = source_bytes(path, cli.digest.as_deref())?;
+            if plain {
+                lines.insert(name.to_string(), split::line_starts(&bytes));
+            }
             let tree = hafley_scm::cst::parse(&grammar, &bytes)
                 .ok_or_else(|| format!("{name}: tree-sitter returned no tree"))?;
             let database = output.database.as_mut().expect("scm++ database");
-            crate::scmpp::write_file(database, &mut store, found, &name, &bytes, &tree)?;
+            let stop = || deadline.expired();
+            let root = tree.root_node();
+            roots.insert(name.to_string(), (root.start_byte() as u64, root.end_byte() as u64));
+            let trim = cli.store.sqlite.is_none();
+            crate::scmpp::write_file(database, &mut store, found, &name, &bytes, &tree, &stop, trim)?;
         }
         if !skipped.is_empty() {
             crate::ops::print_diagnostic(format_args!(
@@ -286,8 +337,25 @@ fn run_scmpp(
             let rows = crate::scmpp::run_sql(database, found).map_err(|error| format!("scm++ SQL: {error}"))?;
             // --sqlite keeps the rows in `scmpp_row` and prints none, like every other --sqlite verb.
             if cli.store.sqlite.is_none() {
-                for row in rows {
-                    let line = serde_json::to_string(&row).map_err(|error| format!("query output: {error}"))?;
+                for mut row in rows {
+                    let root = roots.get(row["path"].as_str().unwrap_or_default()).copied();
+                    let whole: Vec<String> = row
+                        .keys()
+                        .filter_map(|key| key.strip_suffix("__text"))
+                        .filter(|label| {
+                            let at = |suffix: &str| row.get(&format!("{label}__{suffix}")).and_then(|value| value.as_u64());
+                            root.is_some_and(|(start, end)| at("start") == Some(start) && at("end") == Some(end))
+                        })
+                        .map(|label| format!("{label}__text"))
+                        .collect();
+                    for key in whole {
+                        row.shift_remove(&key);
+                    }
+                    let line = match plain {
+                        true => serde_json::to_string(&split::plain_row(&row, &lines[row["path"].as_str().unwrap_or_default()])),
+                        false => serde_json::to_string(&row),
+                    }
+                    .map_err(|error| format!("query output: {error}"))?;
                     output.stdout_line(&line).map_err(|error| error.to_string())?;
                 }
             }

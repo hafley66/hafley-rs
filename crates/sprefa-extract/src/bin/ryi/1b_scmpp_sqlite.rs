@@ -24,6 +24,7 @@ PRIMARY KEY (file, pattern, \"match\", capture, node)) WITHOUT ROWID;";
 pub const INDEXES: &str = "\
 CREATE INDEX IF NOT EXISTS scmpp_node_sibling ON scmpp_node(file, parent, sib);
 CREATE INDEX IF NOT EXISTS scmpp_capture_node ON scmpp_capture(pattern, capture, file, node);
+CREATE INDEX IF NOT EXISTS scmpp_capture_text ON scmpp_capture(pattern, capture, file, text);
 ANALYZE scmpp_node;
 ANALYZE scmpp_capture;";
 

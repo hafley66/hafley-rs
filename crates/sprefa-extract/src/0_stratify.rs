@@ -4,6 +4,8 @@ use crate::cli::StratifyArgs;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 use sprefa_extract::{
     resolve_project, FlatFact, ResolveArms, ResolveRequest, ScipMode, ScipRecords,
@@ -33,10 +35,14 @@ struct Reach {
 }
 
 pub fn run(args: StratifyArgs) -> Result<(), crate::RyiExit> {
-    run_to(args, &mut std::io::stdout().lock())
+    run_to(args, &mut std::io::stdout().lock(), None)
 }
 
-pub fn run_to(args: StratifyArgs, out: &mut dyn Write) -> Result<(), crate::RyiExit> {
+pub fn run_to(
+    args: StratifyArgs,
+    out: &mut dyn Write,
+    cancel: Option<Arc<AtomicBool>>,
+) -> Result<(), crate::RyiExit> {
     let root = crate::inputs::root(&args.inputs);
     let mut inputs = args.inputs.clone();
     if inputs.paths.is_empty() && inputs.entry.is_empty() {
@@ -82,6 +88,10 @@ pub fn run_to(args: StratifyArgs, out: &mut dyn Write) -> Result<(), crate::RyiE
     };
     let facts = resolve_project(&request)
         .map_err(|error| crate::RyiExit::new(1, format!("ryi stratify: {error}")))?;
+    // The resolve pass takes no flag; a request cancelled during it stops before the plan.
+    if cancel.is_some_and(|cancel| cancel.load(Ordering::Acquire)) {
+        return Err(crate::RyiExit::new(3, "stratify: cancelled"));
+    }
     let mut edges = Vec::new();
     let mut file_set = BTreeSet::new();
     for path in &paths {

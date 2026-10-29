@@ -8,6 +8,8 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
 
 use rusqlite::Connection;
 #[cfg(feature = "graph")]
@@ -670,10 +672,12 @@ impl Arm<'_> {
         &self,
         connection: &Connection,
         secs: u64,
+        cancel: Option<Arc<AtomicBool>>,
         root: Option<PathBuf>,
         source_root: Option<PathBuf>,
     ) -> Result<Vec<FlatFact>, Box<dyn std::error::Error>> {
-        crate::deadline::within(Some(connection.get_interrupt_handle()), Some(secs), "graph", |deadline| {
+        let handle = Some(connection.get_interrupt_handle());
+        crate::deadline::within_or_cancel(handle, Some(secs), cancel, "graph", |deadline| {
             let mut lines = Lines {
                 root,
                 source_root,
@@ -691,6 +695,7 @@ fn ask_at(
     cli: &GraphArgs,
     arm: &Arm<'_>,
     sqlite: Option<&Path>,
+    cancel: Option<Arc<AtomicBool>>,
 ) -> Result<(String, Vec<FlatFact>), Box<dyn std::error::Error>> {
     let (snapshot, rows) = reader.with_revision(
         revision,
@@ -704,6 +709,7 @@ fn ask_at(
             let rows = arm.ask_within(
                 database.connection(),
                 cli.timeout,
+                cancel.clone(),
                 Some(scratch.to_path_buf()),
                 Some(scratch.to_path_buf()),
             )?;
@@ -766,12 +772,13 @@ fn changed_paths(before: (&str, &[FlatFact]), after: (&str, &[FlatFact])) -> Vec
 }
 
 pub fn run(cli: GraphArgs) -> Result<(), Box<dyn std::error::Error>> {
-    run_to(cli, &mut std::io::stdout().lock())
+    run_to(cli, &mut std::io::stdout().lock(), None)
 }
 
 pub fn run_to(
     cli: GraphArgs,
     output: &mut dyn std::io::Write,
+    cancel: Option<Arc<AtomicBool>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     sprefa_extract::slow::require_checker_flags(
         "ryi graph",
@@ -855,13 +862,13 @@ pub fn run_to(
             })
             .collect::<Result<_, _>>()?;
         let mut reader = crate::revision::RevisionReader::open(&root)?;
-        let (sha, before) = ask_at(&mut reader, revision, &selected, &cli, &arm, None)?;
+        let (sha, before) = ask_at(&mut reader, revision, &selected, &cli, &arm, None, cancel.clone())?;
         match compare {
             Some(other) => {
                 if !matches!(arm, Arm::CallPath(_) | Arm::TypePath(_) | Arm::FlowPath(_, _)) {
                     return Err("--rev BASE..TARGET requires --call-path, --type-path or --flow-path".into());
                 }
-                let (other_sha, after) = ask_at(&mut reader, other, &selected, &cli, &arm, None)?;
+                let (other_sha, after) = ask_at(&mut reader, other, &selected, &cli, &arm, None, cancel.clone())?;
                 if before
                     .iter()
                     .chain(&after)
@@ -886,7 +893,7 @@ pub fn run_to(
             walk::walk_rows(&arm, &cli, &paths, anchor)?
         } else {
             let database = load_store(&paths, &arm, &cli, None, cli.store.sqlite.as_deref())?;
-            let rows = arm.ask_within(database.connection(), cli.timeout, cli.inputs.root.clone(), None)?;
+            let rows = arm.ask_within(database.connection(), cli.timeout, cancel, cli.inputs.root.clone(), None)?;
             database.close()?;
             rows
         }
@@ -1000,6 +1007,7 @@ mod tests {
     fn walk(edges: &[PlaneEdge], seed: &str) -> Vec<(String, u32, Vec<u64>)> {
         let open = Deadline {
             at: Some(Instant::now() + Duration::from_secs(60)),
+            ..Deadline::default()
         };
         first_discovery(edges, named_starts(edges, seed), &open)
             .unwrap()
@@ -1051,7 +1059,7 @@ mod tests {
     #[test]
     fn a_passed_deadline_stops_the_walk() {
         let edges = [edge(1, "a", "b")];
-        let past = Deadline { at: Some(Instant::now()) };
+        let past = Deadline { at: Some(Instant::now()), ..Deadline::default() };
         assert!(first_discovery(&edges, named_starts(&edges, "a"), &past).is_err());
     }
 
@@ -1081,7 +1089,7 @@ mod tests {
             &plane_edges(database.connection(), "flow").unwrap(),
             "flow",
             |_| Ok(BTreeSet::from([("blake3:a".to_string(), Some("1:2".to_string()))])),
-            &Deadline { at: Some(Instant::now() + Duration::from_secs(60)) },
+            &Deadline { at: Some(Instant::now() + Duration::from_secs(60)), ..Deadline::default() },
         ).unwrap();
         assert_eq!(
             serde_json::to_value(rows).unwrap(),

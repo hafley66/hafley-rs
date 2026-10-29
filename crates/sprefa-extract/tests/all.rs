@@ -1,6 +1,10 @@
 //! Every integration test in one binary: cargo links once, not per file.
 //! Run one: cargo nextest run -p sprefa-extract -E 'test(/type_ladder/)'
 
+#[cfg(feature = "cli")]
+#[path = "221_query_stops_inside_matching.rs"]
+mod t_221_query_stops_inside_matching;
+
 #[path = "214_rust_written_receivers.rs"]
 mod t_214_rust_written_receivers;
 
@@ -26,6 +30,8 @@ mod t_207_dogfood_callers;
 #[cfg(feature = "cli")]
 #[path = "support/0_daemon_guard.rs"]
 mod daemon_guard;
+#[path = "support/0b_host_cargo.rs"]
+mod host_cargo;
 #[cfg(feature = "cli")]
 #[path = "support/1b_command.rs"]
 mod command_support;
@@ -558,6 +564,21 @@ mod v5_parity {
     #[cfg(feature = "cli")]
     #[path = "211_hooks_query.rs"]
     mod hooks_query;
+    #[cfg(feature = "cli")]
+    #[path = "219_query_lang_family.rs"]
+    mod query_lang_family;
+    #[cfg(feature = "cli")]
+    #[path = "220_ts_default_seats.rs"]
+    mod ts_default_seats;
+    #[cfg(feature = "cli")]
+    #[path = "222_scmpp_sibling_split.rs"]
+    mod scmpp_sibling_split;
+    #[cfg(feature = "cli")]
+    #[path = "223_scmpp_store_trim.rs"]
+    mod scmpp_store_trim;
+    #[cfg(feature = "cli")]
+    #[path = "224_scmpp_growth_bench.rs"]
+    mod scmpp_growth_bench;
 }
 
 #[test]

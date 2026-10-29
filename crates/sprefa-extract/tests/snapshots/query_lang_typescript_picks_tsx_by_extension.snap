@@ -1,0 +1,111 @@
+---
+source: tests/219_query_lang_family.rs
+expression: table
+---
+[
+  {
+    "lang": "",
+    "rows": [
+      {
+        "end_line": 2,
+        "fn": "useThing",
+        "line": 2,
+        "path": "0_plain.ts"
+      },
+      {
+        "end_line": 2,
+        "fn": "useState",
+        "line": 2,
+        "path": "1_panel.tsx"
+      },
+      {
+        "end_line": 3,
+        "fn": "setN",
+        "line": 3,
+        "path": "1_panel.tsx"
+      },
+      {
+        "end_line": 3,
+        "fn": "useLabel",
+        "line": 3,
+        "path": "1_panel.tsx"
+      },
+      {
+        "end_line": 7,
+        "fn": "useAfter",
+        "line": 7,
+        "path": "1_panel.tsx"
+      }
+    ]
+  },
+  {
+    "lang": "--lang typescript",
+    "rows": [
+      {
+        "end_line": 2,
+        "fn": "useThing",
+        "line": 2,
+        "path": "0_plain.ts"
+      },
+      {
+        "end_line": 2,
+        "fn": "useState",
+        "line": 2,
+        "path": "1_panel.tsx"
+      },
+      {
+        "end_line": 3,
+        "fn": "setN",
+        "line": 3,
+        "path": "1_panel.tsx"
+      },
+      {
+        "end_line": 3,
+        "fn": "useLabel",
+        "line": 3,
+        "path": "1_panel.tsx"
+      },
+      {
+        "end_line": 7,
+        "fn": "useAfter",
+        "line": 7,
+        "path": "1_panel.tsx"
+      }
+    ]
+  },
+  {
+    "lang": "--lang tsx",
+    "rows": [
+      {
+        "end_line": 2,
+        "fn": "useThing",
+        "line": 2,
+        "path": "0_plain.ts"
+      },
+      {
+        "end_line": 2,
+        "fn": "useState",
+        "line": 2,
+        "path": "1_panel.tsx"
+      },
+      {
+        "end_line": 3,
+        "fn": "setN",
+        "line": 3,
+        "path": "1_panel.tsx"
+      },
+      {
+        "end_line": 3,
+        "fn": "useLabel",
+        "line": 3,
+        "path": "1_panel.tsx"
+      },
+      {
+        "end_line": 7,
+        "fn": "useAfter",
+        "line": 7,
+        "path": "1_panel.tsx"
+      }
+    ]
+  }
+]

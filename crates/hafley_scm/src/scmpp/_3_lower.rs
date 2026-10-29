@@ -176,6 +176,7 @@ fn referenced(level: &Level, depth: u8, out: &mut Vec<Box<str>>) {
             Cond::TextEq(a, b) | Cond::Same(a, b) => out.extend([a, b]),
             Cond::TextMatch(a, _) | Cond::Contains(a, _) => out.push(a),
             Cond::Not(inner) => cond_refs(inner, out),
+            Cond::SiblingOrder(..) | Cond::PinnedTextEq(..) => {}
         }
     }
     fn level_refs<'c>(level: &'c Level, out: &mut Vec<&'c CapRef>) {
@@ -190,7 +191,8 @@ fn referenced(level: &Level, depth: u8, out: &mut Vec<Box<str>>) {
     let mut refs = Vec::new();
     level_refs(level, &mut refs);
     for at in refs {
-        if at.level == depth && !out.contains(&at.name) {
+        // `@__root` is the level's own root row, joined already.
+        if at.level == depth && at.name.as_ref() != ROOT && !out.contains(&at.name) {
             out.push(at.name.clone());
         }
     }
@@ -211,6 +213,10 @@ struct Lower<'a> {
     select: Vec<Col>,
     /// Root aliases of the exported levels, outermost first: the row order.
     order: Vec<String>,
+    /// Captures a `PinnedTextEq` names, joined by whichever level owns their pattern.
+    pinned: Vec<(u16, Box<str>)>,
+    /// `WITH` entries the statement opens with.
+    ctes: Vec<String>,
 }
 
 /// One statement over `scmpp_capture` / `scmpp_node`: integer joins and preorder ranges
@@ -229,6 +235,8 @@ pub fn lower(
         next: 0,
         select: Vec::new(),
         order: Vec::new(),
+        pinned: Vec::new(),
+        ctes: Vec::new(),
     };
     let mut body = Body::default();
     lower.level(plan, &mut Vec::new(), &mut body, true);
@@ -245,12 +253,19 @@ pub fn lower(
     .collect::<Vec<_>>()
     .join(",\n  ");
     let lists = lower.select.iter().filter(|col| col.json).map(|col| col.key.as_str().into()).collect();
-    (format!("SELECT {columns}\nFROM {from}\nWHERE {wh}\nORDER BY {order}"), lists)
+    let with = match lower.ctes.is_empty() {
+        true => String::new(),
+        false => format!("WITH {}\n", lower.ctes.join(",\n")),
+    };
+    (format!("{with}SELECT {columns}\nFROM {from}\nWHERE {wh}\nORDER BY {order}"), lists)
 }
 
 impl Lower<'_> {
     fn alias(&self, at: &CapRef, chain: &[u16]) -> String {
-        cap(chain[at.level as usize], &at.name)
+        match at.name.as_ref() {
+            ROOT => root(chain[at.level as usize]),
+            name => cap(chain[at.level as usize], name),
+        }
     }
 
     /// Joins the level's root and captures into `body`; `export` adds its columns to the SELECT.
@@ -280,9 +295,22 @@ impl Lower<'_> {
             names.extend(self.patterns[pattern as usize].captures.iter().cloned());
         }
         referenced(level, depth, &mut names);
+        fn pins(cond: &Cond, out: &mut Vec<(u16, Box<str>)>) {
+            match cond {
+                Cond::PinnedTextEq(a, b) => out.extend([a.clone(), b.clone()]),
+                Cond::Not(inner) => pins(inner, out),
+                _ => {}
+            }
+        }
+        level.conds.iter().for_each(|cond| pins(cond, &mut self.pinned));
+        for (owner, name) in &self.pinned {
+            if *owner == pattern && !names.contains(name) {
+                names.push(name.clone());
+            }
+        }
         for name in &names {
             let joined = level.conds.iter().any(|cond| matches!(cond, Cond::Same(inner, _) if inner.level == depth && inner.name == *name));
-            self.capture(pattern, name, body, export && !joined);
+            self.capture(pattern, name, body, export && !joined, false);
         }
         for cond in &level.conds {
             body.wh.push(self.cond(cond, chain));
@@ -294,7 +322,8 @@ impl Lower<'_> {
     }
 
     /// Left-joins one capture of the level's match; `select` adds its columns.
-    fn capture(&mut self, pattern: u16, name: &str, body: &mut Body, select: bool) {
+    /// `absent`: the level itself may be missing (an `optional:` target), so every capture joins LEFT.
+    fn capture(&mut self, pattern: u16, name: &str, body: &mut Body, select: bool, absent: bool) {
         let (r, alias) = (root(pattern), cap(pattern, name));
         if select {
             let col = |expr: String, suffix: &str| Col {
@@ -309,8 +338,10 @@ impl Lower<'_> {
                 "text",
             ));
         }
+        // A capture every match carries joins inner, so the planner may start from it.
+        let left = absent || self.patterns[pattern as usize].optional.iter().any(|seen| seen.as_ref() == name);
         body.from.push(Join {
-            left: true,
+            left,
             table: CAPTURE.into(),
             on: vec![
                 format!("{alias}.file = {r}.file"),
@@ -349,6 +380,14 @@ impl Lower<'_> {
                 let (a, b) = (self.alias(a, chain), self.alias(b, chain));
                 format!("{a}.file = {b}.file AND {a}.node = {b}.node")
             }
+            Cond::PinnedTextEq((pa, a), (pb, b)) => format!("{}.text = {}.text", cap(*pa, a), cap(*pb, b)),
+            Cond::SiblingOrder(before, after) => {
+                let sib = |pattern: u16| {
+                    let r = root(pattern);
+                    format!("(SELECT n.sib FROM {NODE} AS n WHERE n.file = {r}.file AND n.pre = {r}.node)")
+                };
+                format!("{} < {}", sib(*before), sib(*after))
+            }
             // An absent optional capture makes the inner test NULL; the `not-` form holds then.
             Cond::Not(inner) => format!("NOT COALESCE(({}), 0)", self.cond(inner, chain)),
         }
@@ -383,20 +422,25 @@ impl Lower<'_> {
         let from = self.alias(&rel.from, chain);
         if let Walk::NthChild(index) = rel.walk {
             let n = self.fresh();
-            let (me, before) = (format!("\"m{n}\""), format!("\"b{n}\""));
-            let (of_me, of_before) = match rel.target.as_deref() {
-                Some(of) => (
-                    format!("\n  AND {}", self.node_is(of, &me)),
-                    format!("\n  AND {}", self.node_is(of, &before)),
+            let me = format!("\"m{n}\"");
+            let found = match rel.target.as_deref() {
+                // A named child's `sib` is its index among the named children: one row, no count.
+                None => format!(
+                    "EXISTS (SELECT 1 FROM {NODE} AS {me}\n  WHERE {me}.file = {from}.file AND {me}.pre = {from}.node AND {me}.sib = {})",
+                    index - 1
                 ),
-                None => Default::default(),
+                // Rank among the siblings that match `of`, computed once for the statement.
+                Some(of) => {
+                    let (ranked, node) = (format!("nth{n}"), format!("\"q{n}\""));
+                    let matches = self.node_is(of, &node);
+                    self.ctes.push(format!(
+                        "{ranked} AS MATERIALIZED (SELECT {node}.file AS file, {node}.pre AS pre, \
+                         row_number() OVER (PARTITION BY {node}.file, {node}.parent ORDER BY {node}.sib) AS rank\n  \
+                         FROM {NODE} AS {node} WHERE {node}.sib IS NOT NULL AND {matches})"
+                    ));
+                    format!("EXISTS (SELECT 1 FROM {ranked} WHERE {ranked}.file = {from}.file AND {ranked}.pre = {from}.node AND {ranked}.rank = {index})")
+                }
             };
-            // Position among the named siblings that match `of`: the count of such siblings before it, plus one.
-            let found = format!(
-                "EXISTS (SELECT 1 FROM {NODE} AS {me}\n  WHERE {me}.file = {from}.file AND {me}.pre = {from}.node AND {me}.sib IS NOT NULL{of_me}\n  \
-                 AND (SELECT count(*) FROM {NODE} AS {before}\n  WHERE {before}.file = {me}.file AND {before}.parent = {me}.parent AND {before}.sib < {me}.sib{of_before}) = {})",
-                index - 1
-            );
             body.wh.push(if rel.negated {
                 format!("NOT {found}")
             } else {
@@ -484,7 +528,7 @@ impl Lower<'_> {
         });
         self.order.push(r);
         for name in own_captures(target, self.patterns) {
-            self.capture(pattern, name, body, true);
+            self.capture(pattern, name, body, true, true);
         }
     }
 

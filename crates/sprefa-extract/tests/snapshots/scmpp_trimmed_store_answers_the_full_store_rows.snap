@@ -1,0 +1,69 @@
+---
+source: tests/223_scmpp_store_trim.rs
+expression: table
+---
+[
+  {
+    "case": "descendant",
+    "rows": 4,
+    "same_rows": true,
+    "full_nodes": 211,
+    "trimmed_nodes": 10
+  },
+  {
+    "case": "ancestor_field",
+    "rows": 1,
+    "same_rows": true,
+    "full_nodes": 211,
+    "trimmed_nodes": 13
+  },
+  {
+    "case": "ancestor_stop",
+    "rows": 3,
+    "same_rows": true,
+    "full_nodes": 211,
+    "trimmed_nodes": 15
+  },
+  {
+    "case": "parent_field",
+    "rows": 4,
+    "same_rows": true,
+    "full_nodes": 211,
+    "trimmed_nodes": 35
+  },
+  {
+    "case": "precedes",
+    "rows": 1,
+    "same_rows": true,
+    "full_nodes": 211,
+    "trimmed_nodes": 3
+  },
+  {
+    "case": "nth_child",
+    "rows": 1,
+    "same_rows": true,
+    "full_nodes": 211,
+    "trimmed_nodes": 1
+  },
+  {
+    "case": "nth_child_of",
+    "rows": 2,
+    "same_rows": true,
+    "full_nodes": 211,
+    "trimmed_nodes": 2
+  },
+  {
+    "case": "sibling_split",
+    "rows": 1,
+    "same_rows": true,
+    "full_nodes": 211,
+    "trimmed_nodes": 10
+  },
+  {
+    "case": "hooks",
+    "rows": 2,
+    "same_rows": true,
+    "full_nodes": 211,
+    "trimmed_nodes": 5
+  }
+]

@@ -111,7 +111,7 @@ pub(super) fn walk_rows(
             dst_start: Some(edge.to.start),
         })
         .collect();
-    let walked = Deadline { at: None };
+    let walked = Deadline::default();
     let mut lines = Lines {
         root: cli.inputs.root.clone(),
         source_root: None,

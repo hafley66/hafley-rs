@@ -1,8 +1,10 @@
 //! scm++ store rows, engine neutral: dictionaries, one preorder node walk per file, capture rows.
 //! `Rows` is the seam a row writer implements; the SQLite writer is `1b_scmpp_sqlite.rs`.
-use hafley_scm::scmpp::{Compiled, ROOT};
+use hafley_scm::scmpp::{Compiled, Level, Walk, ROOT};
 use rustc_hash::{FxHashMap, FxHashSet};
-use tree_sitter::{QueryCursor, StreamingIterator, Tree};
+use std::ops::ControlFlow;
+
+use tree_sitter::{QueryCursor, QueryCursorOptions, QueryCursorState, StreamingIterator, Tree};
 
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -94,6 +96,22 @@ pub fn reads_nodes(compiled: &Compiled) -> bool {
     !compiled.plan.rels.is_empty()
 }
 
+/// Node rows a plan's walks read beyond the captured nodes themselves.
+#[derive(Default)]
+struct Reads {
+    /// `has-ancestor? ... field:` reads the target's child on the path down to the capture.
+    ancestors: bool,
+}
+
+fn reads(level: &Level, out: &mut Reads) {
+    for rel in &level.rels {
+        out.ancestors |= rel.walk == Walk::Ancestor && !rel.neighbor && rel.field.is_some();
+        for inner in rel.target.iter().chain(rel.stop.iter()) {
+            reads(inner, out);
+        }
+    }
+}
+
 /// A capture held until the walk numbers its node.
 struct Pending {
     pattern: i64,
@@ -136,6 +154,8 @@ impl Store {
         path: &str,
         src: &[u8],
         tree: &Tree,
+        stop: &dyn Fn() -> bool,
+        trim: bool,
     ) -> Result<()> {
         self.seed(compiled, rows)?;
         let file = self.path.id(Dict::Path, path, rows)?;
@@ -152,7 +172,18 @@ impl Store {
                 .position(|name| *name == ROOT)
                 .expect("flat pattern root") as u32;
             let mut cursor = QueryCursor::new();
-            let mut matches = cursor.matches(&pattern.query, tree.root_node(), src);
+            // Tree-sitter calls back while it advances, so a pattern stuck inside one
+            // file still sees the deadline and the cancel flag.
+            let mut progress = |_: &QueryCursorState| {
+                if stop() {
+                    ControlFlow::Break(())
+                } else {
+                    ControlFlow::Continue(())
+                }
+            };
+            let options = QueryCursorOptions::new().progress_callback(&mut progress);
+            let mut matches =
+                cursor.matches_with_options(&pattern.query, tree.root_node(), src, options);
             while let Some(found) = matches.next() {
                 if !found.captures().iter().any(|capture| capture.index == root) {
                     continue;
@@ -178,6 +209,9 @@ impl Store {
                 ordinal += 1;
             }
             drop(matches);
+            if stop() {
+                return Err(format!("scm++ level {}: stopped while matching", pattern.id).into());
+            }
             if cursor.did_exceed_match_limit() {
                 return Err(format!(
                     "scm++ level {}: tree-sitter match limit exceeded",
@@ -195,7 +229,30 @@ impl Store {
                 pre_of.insert(id, pre);
             }
         }, &mut nodes)?;
+        // `trim`: the store is this run's own, so only the nodes the SQL reads land in it.
+        let keep = (trim && !nodes.is_empty()).then(|| {
+            let mut needs = Reads::default();
+            reads(&compiled.plan, &mut needs);
+            let mut keep = vec![false; nodes.len()];
+            for &pre in pre_of.values() {
+                keep[pre as usize] = true;
+            }
+            let captured: Vec<i64> = pre_of.values().copied().collect();
+            if needs.ancestors {
+                for &pre in &captured {
+                    let mut at = nodes[pre as usize].parent;
+                    while at >= 0 && !keep[at as usize] {
+                        keep[at as usize] = true;
+                        at = nodes[at as usize].parent;
+                    }
+                }
+            }
+            keep
+        });
         for row in &nodes {
+            if keep.as_ref().is_some_and(|keep| !keep[row.pre as usize]) {
+                continue;
+            }
             let _row = tracing::trace_span!("scmpp_cst_row").entered();
             rows.node(row)?;
         }

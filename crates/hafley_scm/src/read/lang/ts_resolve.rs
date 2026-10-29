@@ -361,6 +361,7 @@ pub fn ts_module_facts_from_parsed(parsed: &oxc_parser::ParserReturn<'_>) -> Mod
         facts.requested_modules.insert(module.to_string());
     }
     typescript_module_forms(&parsed.program, &mut facts);
+    super::ts_export_seats::seat_local_exports(&parsed.program, &mut facts);
     let mut runtime = RuntimeModuleRequests::default();
     runtime.visit_program(&parsed.program);
     facts.requested_modules.extend(runtime.modules);
@@ -716,7 +717,7 @@ fn export_name(name: &oxc_syntax::module_record::ExportExportName<'_>) -> Option
     }
 }
 
-fn to_local_span(span: oxc_span::Span) -> Span {
+pub(super) fn to_local_span(span: oxc_span::Span) -> Span {
     Span {
         start: span.start,
         len: span.end - span.start,

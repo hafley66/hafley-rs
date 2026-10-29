@@ -18,6 +18,7 @@ const RELATIONS: [&str; 6] = [
 struct Ctx<'a> {
     lang: &'a Language,
     patterns: Vec<FlatPattern>,
+    warnings: Vec<String>,
 }
 
 /// Enclosing capture tables, outermost first; index = `CapRef.level`.
@@ -27,6 +28,7 @@ pub fn compile(lang: &Language, text: &str) -> Result<Compiled, ScmppError> {
     let mut ctx = Ctx {
         lang,
         patterns: Vec::new(),
+        warnings: Vec::new(),
     };
     let plan = level(&mut ctx, text, 0, &[])?;
     super::_3_lower::exports(&plan, &ctx.patterns)?;
@@ -39,6 +41,7 @@ pub fn compile(lang: &Language, text: &str) -> Result<Compiled, ScmppError> {
         captures,
         fields,
         lists,
+        warnings: ctx.warnings,
     })
 }
 
@@ -114,6 +117,7 @@ fn level(ctx: &mut Ctx, text: &str, base: usize, outer: Scope) -> Result<Level, 
         }
     }
     let mut kept = String::new();
+    let mut kept_preds = Vec::new();
     let mut relations = Vec::new();
     for pred in &split.preds {
         let captured = |name: &str| {
@@ -142,6 +146,7 @@ fn level(ctx: &mut Ctx, text: &str, base: usize, outer: Scope) -> Result<Level, 
             {
                 kept.push(' ');
                 kept.push_str(&pred.text);
+                kept_preds.push((pred, names));
                 continue;
             }
             let cond = match (bare, pred.args.as_slice()) {
@@ -194,7 +199,15 @@ fn level(ctx: &mut Ctx, text: &str, base: usize, outer: Scope) -> Result<Level, 
         }
     }
     let pattern = ctx.patterns.len() as u16;
-    let flat = format!("({} @{ROOT}{kept})", split.root);
+    let shape = super::_2a_siblings::shape(&split.root, base)?;
+    let lowering = match &shape {
+        Some(shape) => split_plan(ctx, pattern, shape, &kept_preds, conds.is_empty() && relations.is_empty())?,
+        None => None,
+    };
+    let flat = match (&lowering, &shape) {
+        (Some(plan), Some(shape)) => format!("(({}) {} @{ROOT}{})", shape.kind, shape.tail, plan.root_preds),
+        _ => format!("({} @{ROOT}{kept})", split.root),
+    };
     let query = {
         #[cfg(feature = "shared")]
         let _span = tracing::trace_span!("scmpp_query_new").entered();
@@ -211,10 +224,18 @@ fn level(ctx: &mut Ctx, text: &str, base: usize, outer: Scope) -> Result<Level, 
         .filter(|name| **name != ROOT)
         .map(|name| (*name).into())
         .collect();
+    let optional = query
+        .capture_names()
+        .iter()
+        .zip(query.capture_quantifiers(0))
+        .filter(|(_, quantifier)| matches!(quantifier, tree_sitter::CaptureQuantifier::Zero | tree_sitter::CaptureQuantifier::ZeroOrOne | tree_sitter::CaptureQuantifier::ZeroOrMore))
+        .map(|(name, _)| (*name).into())
+        .collect();
     ctx.patterns.push(FlatPattern {
         id: pattern,
         text: flat,
         captures,
+        optional,
         query,
     });
     let mut inner = outer.to_vec();
@@ -223,11 +244,141 @@ fn level(ctx: &mut Ctx, text: &str, base: usize, outer: Scope) -> Result<Level, 
     for (pred, negated, bare) in relations {
         rels.push(relation(ctx, pred, negated, bare, &mine, outer, &inner)?);
     }
+    // A split child is `has? @__root (child) stopBy: neighbor rows: each`, and each
+    // child's root comes after the one before it among the siblings, as in tree-sitter.
+    // The children see the root's own captures only; theirs moved down a level.
+    if let Some(plan) = lowering {
+        let mut beside = outer.to_vec();
+        beside.push(ctx.patterns[pattern as usize].captures.clone());
+        let mut owner: Vec<(Box<str>, u16)> =
+            ctx.patterns[pattern as usize].captures.iter().map(|name| (name.clone(), pattern)).collect();
+        let mut previous: Option<u16> = None;
+        for (field, text) in plan.children {
+            let target = level(ctx, &text, base, &beside)?;
+            owners(&target, &ctx.patterns, &mut owner);
+            if let Some(before) = previous {
+                conds.push(Cond::SiblingOrder(before, target.pattern));
+            }
+            previous = Some(target.pattern);
+            rels.push(Rel {
+                from: CapRef {
+                    level: depth,
+                    name: ROOT.into(),
+                },
+                walk: Walk::Descendant,
+                neighbor: true,
+                stop: None,
+                field: field.map(Into::into),
+                rows: Rows::Each,
+                optional: false,
+                negated: false,
+                target: Some(Box::new(target)),
+            });
+        }
+        let at = |name: &str| {
+            let (name, pattern) = owner.iter().find(|(seen, _)| seen.as_ref() == name).expect("split capture has an owner");
+            (*pattern, name.clone())
+        };
+        for (negated, a, b) in plan.pinned {
+            let cond = Cond::PinnedTextEq(at(&a), at(&b));
+            conds.push(if negated { Cond::Not(Box::new(cond)) } else { cond });
+        }
+    }
     Ok(Level {
         pattern,
         rels,
         conds,
     })
+}
+
+/// A level root split into one level per child.
+struct SplitPlan {
+    /// Kept text predicates over the root's own captures, as flat-pattern text.
+    root_preds: String,
+    /// `(field, child text with the predicates it holds alone)`, in sibling order.
+    children: Vec<(Option<String>, String)>,
+    /// Two-capture `#eq?` / `#not-eq?` across children: `(negated, a, b)`.
+    pinned: Vec<(bool, Box<str>, Box<str>)>,
+}
+
+/// A node somewhere inside `text` has 3+ unanchored sibling children.
+fn holds_siblings(text: &str) -> bool {
+    super::_2a_siblings::shape(text, 0).ok().flatten().is_some_and(|shape| {
+        shape.unanchored() >= 3 || shape.children.iter().any(|child| holds_siblings(&child.text))
+    })
+}
+
+/// Where each capture of a split level's subtree lives: its own pattern, then its split children's.
+fn owners(level: &Level, patterns: &[FlatPattern], out: &mut Vec<(Box<str>, u16)>) {
+    out.extend(patterns[level.pattern as usize].captures.iter().map(|name| (name.clone(), level.pattern)));
+    for rel in level.rels.iter().filter(|rel| rel.rows == Rows::Each && !rel.negated && !rel.optional) {
+        if let Some(target) = &rel.target {
+            owners(target, patterns, out);
+        }
+    }
+}
+
+/// Splits a root with 3+ unanchored sibling children, or one holding such a node below it, into
+/// one level per child; warns either way. `free`: the level has no relation and no cross-level condition.
+fn split_plan(
+    ctx: &mut Ctx,
+    pattern: u16,
+    shape: &super::_2a_siblings::Shape,
+    kept: &[(&Pred, Vec<&str>)],
+    free: bool,
+) -> Result<Option<SplitPlan>, ScmppError> {
+    let siblings = shape.unanchored() >= 3;
+    let nested = shape.children.iter().any(|child| holds_siblings(&child.text));
+    if !siblings && !nested {
+        return Ok(None);
+    }
+    let home = |names: &[&str]| {
+        shape.children.iter().position(|child| {
+            names.iter().all(|name| child.captures.iter().any(|seen| seen.as_ref() == *name))
+        })
+    };
+    let at_root = |name: &str| !shape.children.iter().any(|child| child.captures.iter().any(|seen| seen.as_ref() == name));
+    let mut plan = SplitPlan {
+        root_preds: String::new(),
+        children: shape.children.iter().map(|child| (child.field.clone(), child.text.clone())).collect(),
+        pinned: Vec::new(),
+    };
+    let mut child_preds: Vec<Vec<&str>> = vec![Vec::new(); shape.children.len()];
+    let mut placed = free && shape.splittable();
+    for (pred, names) in kept {
+        if names.iter().all(|name| at_root(name)) {
+            plan.root_preds.push(' ');
+            plan.root_preds.push_str(&pred.text);
+        } else if let Some(index) = home(names) {
+            child_preds[index].push(&pred.text);
+        } else {
+            match (pred.op.as_str(), pred.args.as_slice()) {
+                (op @ ("eq?" | "not-eq?"), [Arg::Capture(a), Arg::Capture(b)]) => {
+                    plan.pinned.push((op == "not-eq?", a.as_str().into(), b.as_str().into()))
+                }
+                _ => placed = false,
+            }
+        }
+    }
+    let shape_text = if siblings {
+        format!("has {} unanchored sibling children", shape.unanchored())
+    } else {
+        "holds a node with 3+ unanchored sibling children".to_string()
+    };
+    ctx.warnings.push(format!(
+        "scm++ level {pattern}: `({} ...)` {shape_text}; tree-sitter tries every ordered pick of them, so its cost grows combinatorially in the matching children{}",
+        shape.kind,
+        if placed { "; split into one parent edge per child" } else { "" },
+    ));
+    if !placed {
+        return Ok(None);
+    }
+    for ((_, text), preds) in plan.children.iter_mut().zip(child_preds) {
+        if !preds.is_empty() {
+            *text = format!("({text} {})", preds.join(" "));
+        }
+    }
+    Ok(Some(plan))
 }
 
 /// `kind+` positional targets become one alternation level; supertypes expand inside tree-sitter.

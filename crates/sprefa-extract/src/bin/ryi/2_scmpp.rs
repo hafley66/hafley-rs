@@ -65,7 +65,8 @@ pub fn check_sql(db: &mut Database, compiled: &Compiled) -> Result<()> {
     Ok(())
 }
 
-/// One file's capture rows, and its node rows when the plan reads nodes.
+/// One file's capture rows, and its node rows when the plan reads nodes; `stop` ends matching early,
+/// `trim` writes only the node rows the plan's SQL reads.
 pub fn write_file(
     db: &mut Database,
     store: &mut Store,
@@ -73,11 +74,13 @@ pub fn write_file(
     path: &str,
     src: &[u8],
     tree: &Tree,
+    stop: &dyn Fn() -> bool,
+    trim: bool,
 ) -> Result<()> {
     db.flush()?;
     let mut rows = SqliteRows::new(db.connection());
     store
-        .write_file(&mut rows, compiled, path, src, tree)
+        .write_file(&mut rows, compiled, path, src, tree, stop, trim)
         .map_err(|error| format!("{path}: {error}"))?;
     let written = rows.finish()?;
     db.rows += written;

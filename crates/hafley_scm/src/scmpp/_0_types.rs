@@ -9,6 +9,8 @@ pub struct Compiled {
     pub fields: Vec<Box<str>>,
     /// Result columns that hold a JSON array (`rows: list`), in SELECT order.
     pub lists: Vec<Box<str>>,
+    /// Compile-time notes for the caller's stderr, one line each.
+    pub warnings: Vec<String>,
 }
 
 pub struct FlatPattern {
@@ -16,6 +18,8 @@ pub struct FlatPattern {
     /// Plain tree-sitter query; the level root is captured as `@__root`.
     pub text: String,
     pub captures: Vec<Box<str>>,
+    /// Captures a match can lack (`?`, `*`, an alternation branch): their joins stay LEFT.
+    pub optional: Vec<Box<str>>,
     pub query: tree_sitter::Query,
 }
 
@@ -71,6 +75,10 @@ pub enum Cond {
     Contains(CapRef, Vec<Box<str>>),
     /// Inner capture and enclosing capture of one name: the same node.
     Same(CapRef, CapRef),
+    /// Two split sibling levels, by pattern id: the first's root comes earlier among its siblings (`sib`).
+    SiblingOrder(u16, u16),
+    /// Text equality of two captures named by `(pattern id, capture)`: captures of split sibling levels.
+    PinnedTextEq((u16, Box<str>), (u16, Box<str>)),
     Not(Box<Cond>),
 }
 

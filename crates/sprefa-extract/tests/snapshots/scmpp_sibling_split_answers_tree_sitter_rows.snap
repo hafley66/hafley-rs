@@ -1,0 +1,131 @@
+---
+source: tests/222_scmpp_sibling_split.rs
+expression: table
+---
+[
+  {
+    "case": "0_pairs.scm",
+    "warning": [
+      "query (typescript): scm++ level 0: `(object ...)` has 3 unanchored sibling children; tree-sitter tries every ordered pick of them, so its cost grows combinatorially in the matching children; split into one parent edge per child"
+    ],
+    "scmpp_same_as_tree_sitter": true,
+    "query_same_as_tree_sitter": true,
+    "rows": 20
+  },
+  {
+    "case": "10_plus_last.scm",
+    "warning": [],
+    "scmpp_same_as_tree_sitter": true,
+    "query_same_as_tree_sitter": true,
+    "rows": 72
+  },
+  {
+    "case": "11_plus_first.scm",
+    "warning": [
+      "query (typescript): scm++ level 0: `(arguments ...)` has 3 unanchored sibling children; tree-sitter tries every ordered pick of them, so its cost grows combinatorially in the matching children; split into one parent edge per child"
+    ],
+    "scmpp_same_as_tree_sitter": true,
+    "query_same_as_tree_sitter": true,
+    "rows": 224
+  },
+  {
+    "case": "12_plus_wildcard.scm",
+    "warning": [
+      "query (typescript): scm++ level 0: `(arguments ...)` has 3 unanchored sibling children; tree-sitter tries every ordered pick of them, so its cost grows combinatorially in the matching children; split into one parent edge per child"
+    ],
+    "scmpp_same_as_tree_sitter": true,
+    "query_same_as_tree_sitter": true,
+    "rows": 224
+  },
+  {
+    "case": "13_plus_inner_capture.scm",
+    "warning": [
+      "query (typescript): scm++ level 0: `(arguments ...)` has 3 unanchored sibling children; tree-sitter tries every ordered pick of them, so its cost grows combinatorially in the matching children"
+    ],
+    "scmpp_same_as_tree_sitter": true,
+    "query_same_as_tree_sitter": true,
+    "rows": 224
+  },
+  {
+    "case": "1_arguments.scm",
+    "warning": [
+      "query (typescript): scm++ level 0: `(arguments ...)` has 3 unanchored sibling children; tree-sitter tries every ordered pick of them, so its cost grows combinatorially in the matching children; split into one parent edge per child"
+    ],
+    "scmpp_same_as_tree_sitter": true,
+    "query_same_as_tree_sitter": true,
+    "rows": 224
+  },
+  {
+    "case": "2_kept_predicate.scm",
+    "warning": [
+      "query (typescript): scm++ level 0: `(object ...)` has 3 unanchored sibling children; tree-sitter tries every ordered pick of them, so its cost grows combinatorially in the matching children; split into one parent edge per child"
+    ],
+    "scmpp_same_as_tree_sitter": true,
+    "query_same_as_tree_sitter": true,
+    "rows": 3
+  },
+  {
+    "case": "3_field_children.scm",
+    "warning": [
+      "query (typescript): scm++ level 0: `(for_statement ...)` has 3 unanchored sibling children; tree-sitter tries every ordered pick of them, so its cost grows combinatorially in the matching children; split into one parent edge per child"
+    ],
+    "scmpp_same_as_tree_sitter": true,
+    "query_same_as_tree_sitter": true,
+    "rows": 1
+  },
+  {
+    "case": "4_anchored.scm",
+    "warning": [],
+    "scmpp_same_as_tree_sitter": true,
+    "query_same_as_tree_sitter": true,
+    "rows": 12
+  },
+  {
+    "case": "5_quantified.scm",
+    "warning": [
+      "query (typescript): scm++ level 0: `(arguments ...)` has 3 unanchored sibling children; tree-sitter tries every ordered pick of them, so its cost grows combinatorially in the matching children; split into one parent edge per child"
+    ],
+    "scmpp_same_as_tree_sitter": true,
+    "query_same_as_tree_sitter": true,
+    "rows": 224
+  },
+  {
+    "case": "6_cross_not_eq.scm",
+    "warning": [
+      "query (typescript): scm++ level 0: `(object ...)` has 3 unanchored sibling children; tree-sitter tries every ordered pick of them, so its cost grows combinatorially in the matching children; split into one parent edge per child"
+    ],
+    "scmpp_same_as_tree_sitter": true,
+    "query_same_as_tree_sitter": true,
+    "rows": 20
+  },
+  {
+    "case": "7_cross_eq.scm",
+    "warning": [
+      "query (typescript): scm++ level 0: `(object ...)` has 3 unanchored sibling children; tree-sitter tries every ordered pick of them, so its cost grows combinatorially in the matching children; split into one parent edge per child"
+    ],
+    "scmpp_same_as_tree_sitter": true,
+    "query_same_as_tree_sitter": true,
+    "rows": 6
+  },
+  {
+    "case": "8_nested.scm",
+    "warning": [
+      "query (typescript): scm++ level 0: `(variable_declarator ...)` holds a node with 3+ unanchored sibling children; tree-sitter tries every ordered pick of them, so its cost grows combinatorially in the matching children; split into one parent edge per child",
+      "query (typescript): scm++ level 2: `(object ...)` has 3 unanchored sibling children; tree-sitter tries every ordered pick of them, so its cost grows combinatorially in the matching children; split into one parent edge per child"
+    ],
+    "scmpp_same_as_tree_sitter": true,
+    "query_same_as_tree_sitter": true,
+    "rows": 20
+  },
+  {
+    "case": "9_nested_cross_eq.scm",
+    "warning": [
+      "query (typescript): scm++ level 0: `(lexical_declaration ...)` holds a node with 3+ unanchored sibling children; tree-sitter tries every ordered pick of them, so its cost grows combinatorially in the matching children; split into one parent edge per child",
+      "query (typescript): scm++ level 1: `(variable_declarator ...)` holds a node with 3+ unanchored sibling children; tree-sitter tries every ordered pick of them, so its cost grows combinatorially in the matching children; split into one parent edge per child",
+      "query (typescript): scm++ level 2: `(object ...)` has 3 unanchored sibling children; tree-sitter tries every ordered pick of them, so its cost grows combinatorially in the matching children; split into one parent edge per child"
+    ],
+    "scmpp_same_as_tree_sitter": true,
+    "query_same_as_tree_sitter": true,
+    "rows": 6
+  }
+]

@@ -33,12 +33,13 @@ pub fn run(directory: &str, case: impl Fn(&Value) -> Value) {
         .env("DL_TRAIL", "0")
         .env("RUST_LOG", "off")
         .env("INSTA_UPDATE", "no");
+    // Compile-time homes are this host's only when the binary was built here.
     for (key, value) in [
         ("CARGO_HOME", option_env!("CARGO_HOME")),
         ("RUSTUP_HOME", option_env!("RUSTUP_HOME")),
         ("CARGO_TARGET_DIR", option_env!("CARGO_TARGET_DIR")),
     ] {
-        if let Some(value) = value {
+        if let Some(value) = value.filter(|_| crate::host_cargo::built_here()) {
             command.env(key, value);
         }
     }

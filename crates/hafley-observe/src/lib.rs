@@ -36,6 +36,8 @@ pub mod tracy;
 pub mod allocation;
 #[path = "13_memcap.rs"]
 pub mod memcap;
+#[path = "14_growth_bench.rs"]
+pub mod growth_bench;
 
 extern crate self as oh;
 
@@ -45,7 +47,7 @@ pub use _1_init::{init, init_with_sinks, init_with_writer, startup};
 pub use _2_otlp::shutdown;
 pub use _3_chrome::{chrome_layer, finish_trace, flush_trace, trace_path, TRACE_PATH_VARIABLE};
 pub use _4_counts::{
-    assert_growth, assert_growth_at_most, assert_growth_sized, growth_between, observed_growth,
+    assert_growth, assert_growth_at_most, assert_growth_sized, counted, growth_between, observed_growth,
     observed_growth_sized, CountRecorder,
     EventStats, EventSums, FieldStats, Growth, SpanCounts,
 };

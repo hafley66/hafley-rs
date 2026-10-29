@@ -45,6 +45,27 @@ impl CountRecorder {
     }
 }
 
+/// Spans `work` opens on this thread, whatever other threads register meanwhile.
+pub fn counted(work: impl FnOnce()) -> SpanCounts {
+    use tracing_subscriber::prelude::*;
+    static GLOBAL: std::sync::Once = std::sync::Once::new();
+    // A thread that registers a callsite reads the dispatchers alive at that moment; one that
+    // missed this thread's subscriber would cache "never". A global default interested in every
+    // callsite (`FilterFn` answers "sometimes") and enabled for none is always among them.
+    GLOBAL.call_once(|| {
+        let interested = tracing_subscriber::registry().with(tracing_subscriber::filter::filter_fn(|_| false));
+        // A host that set its own default keeps it.
+        let _ = tracing::subscriber::set_global_default(interested);
+    });
+    let (recorder, layer) = CountRecorder::new();
+    let subscriber = tracing_subscriber::registry().with(layer);
+    tracing::subscriber::with_default(subscriber, || {
+        tracing::callsite::rebuild_interest_cache();
+        work()
+    });
+    recorder.counts()
+}
+
 /// Events under one ancestor span, numeric fields summed. `events` counts them.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct EventSums {

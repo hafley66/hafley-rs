@@ -171,6 +171,8 @@ pub mod typespec;
 #[cfg(feature = "typescript")]
 pub mod ts_checker;
 #[cfg(feature = "typescript")]
+mod ts_export_seats;
+#[cfg(feature = "typescript")]
 #[path = "0_ts7_lsp_session.rs"]
 pub mod ts7_lsp_session;
 #[cfg(feature = "ts-checker")]

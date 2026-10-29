@@ -5,17 +5,10 @@
 #[path = "../src/bin/ryi/2_scmpp.rs"]
 pub(crate) mod scmpp;
 #[path = "../src/bin/ryi/0_sqlite.rs"]
-mod sqlite;
+pub(crate) mod sqlite;
 
-use hafley_observe::{assert_growth_sized, CountRecorder, Growth, SpanCounts};
-use tracing_subscriber::prelude::*;
+use hafley_observe::{assert_growth_sized, counted, Growth, SpanCounts};
 
-fn counted(work: impl FnOnce()) -> SpanCounts {
-    let (recorder, layer) = CountRecorder::new();
-    let subscriber = tracing_subscriber::registry().with(layer);
-    tracing::subscriber::with_default(subscriber, work);
-    recorder.counts()
-}
 
 fn rust() -> tree_sitter::Language {
     sprefa_extract::RyiLang::parse_name("rust")
@@ -73,7 +66,7 @@ fn store_and_query(functions: usize) -> (SpanCounts, usize) {
     let counts = counted(|| {
         let mut db = sqlite::Database::memory().unwrap();
         let mut store = scmpp::open(&mut db).unwrap();
-        scmpp::write_file(&mut db, &mut store, &compiled, "growth.rs", text.as_bytes(), &tree).unwrap();
+        scmpp::write_file(&mut db, &mut store, &compiled, "growth.rs", text.as_bytes(), &tree, &|| false, false).unwrap();
         found = scmpp::run_sql(&mut db, &compiled).unwrap().len();
     });
     (counts, found)

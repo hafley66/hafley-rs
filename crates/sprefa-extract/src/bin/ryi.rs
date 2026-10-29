@@ -719,9 +719,9 @@ fn run_verb(
         Some(Cmd::Trail(args)) => print_trail(args.runs, &mut writer),
         Some(Cmd::Watch(args)) => watch::run_to(args, writer, cancelled),
         Some(Cmd::Diff(args)) => or_exit_2(diff::run_to(args, &mut writer)),
-        Some(Cmd::Graph(args)) => or_exit_2(graph::run_to(args, &mut writer)),
-        Some(Cmd::Stratify(args)) => or_exit_2(stratify::run_to(args, &mut writer)),
-        Some(Cmd::Query(args)) => or_exit_2(query::run_to(args, writer)),
+        Some(Cmd::Graph(args)) => or_exit_2(graph::run_to(args, &mut writer, cancelled)),
+        Some(Cmd::Stratify(args)) => or_exit_2(stratify::run_to(args, &mut writer, cancelled)),
+        Some(Cmd::Query(args)) => or_exit_2(query::run_to(args, writer, cancelled)),
         Some(Cmd::Move(args)) => or_exit_2(source_move::run(args, home.as_deref())),
         Some(Cmd::Cleave(args)) => or_exit_2(cleave::run(args, home.as_deref())),
         Some(Cmd::Rename(args)) => source_rename::run(args, home.as_deref())

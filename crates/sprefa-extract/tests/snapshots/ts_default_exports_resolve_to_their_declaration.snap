@@ -1,0 +1,31 @@
+---
+source: tests/220_ts_default_seats.rs
+expression: "rows.join(\"\\n\")"
+---
+call 1_wrapped.tsx:<module>@84 -> 5_lib.ts:memo@7
+call 1_wrapped.tsx:<module>@89 -> 1_wrapped.tsx:Inner@33
+call 4_main.ts:main@232 -> 0_plain.tsx:Plain@0
+call 4_main.ts:main@243 -> 1_wrapped.tsx:Inner@33
+call 4_main.ts:main@256 -> 0_plain.tsx:Plain@0
+call 4_main.ts:main@267 -> 5_lib.ts:helper@72
+call 4_main.ts:main@279 -> 3_list.ts:one@0
+call 4_main.ts:main@288 -> 3_list.ts:two@37
+call 4_main.ts:main@298 -> 6_const_memo.tsx:MemoCard@112
+call 4_main.ts:main@312 -> 6_const_memo.tsx:MemoPlain@148
+call 6_const_memo.tsx:MemoCard@123 -> 5_lib.ts:memo@7
+call 6_const_memo.tsx:MemoCard@128 -> 6_const_memo.tsx:Card@64
+call 6_const_memo.tsx:MemoPlain@160 -> 5_lib.ts:memo@7
+call 6_const_memo.tsx:MemoPlain@165 -> 0_plain.tsx:Plain@0
+import 1_wrapped.tsx memo as memo -> 5_lib.ts:memo local hops=1
+import 2_reexport.ts default as Plain -> 0_plain.tsx:Plain default hops=1
+import 2_reexport.ts helper as helper -> 5_lib.ts:helper local hops=1
+import 4_main.ts MemoCard as MemoCard -> 6_const_memo.tsx:MemoCard local hops=1
+import 4_main.ts MemoPlain as MemoPlain -> 6_const_memo.tsx:MemoPlain local hops=1
+import 4_main.ts default as Again -> 0_plain.tsx:Plain indirect hops=2
+import 4_main.ts default as Plain -> 0_plain.tsx:Plain default hops=1
+import 4_main.ts default as Wrapped -> 1_wrapped.tsx:Inner default hops=1
+import 4_main.ts deux as deux -> 3_list.ts:two local hops=1
+import 4_main.ts helper as helper -> 5_lib.ts:helper indirect hops=2
+import 4_main.ts one as one -> 3_list.ts:one local hops=1
+import 6_const_memo.tsx default as Plain -> 0_plain.tsx:Plain default hops=1
+import 6_const_memo.tsx memo as memo -> 5_lib.ts:memo local hops=1

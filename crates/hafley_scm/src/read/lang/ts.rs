@@ -2529,7 +2529,8 @@ fn var_call_defs(
         let has_body = match &declarator.init {
             Some(ts::Expression::ArrowFunctionExpression(_)) => true,
             Some(ts::Expression::FunctionExpression(func)) => func.body.is_some(),
-            _ => false,
+            Some(init) => wraps_callable(init),
+            None => false,
         };
         if !has_body {
             continue;
@@ -2542,6 +2543,24 @@ fn var_call_defs(
             CallKind::Free,
         );
     }
+}
+
+/// `wrap(f)`, `wrap(() => ..)`, `connect(a)(f)`: a call handed something callable, so the
+/// binding is itself called (`memo`, `forwardRef`). Its def owns the calls in the initializer.
+fn wraps_callable(init: &ts::Expression) -> bool {
+    let ts::Expression::CallExpression(call) = init.get_inner_expression() else {
+        return false;
+    };
+    call.arguments.iter().any(|argument| {
+        matches!(
+            argument.as_expression().map(|argument| argument.get_inner_expression()),
+            Some(
+                ts::Expression::Identifier(_)
+                    | ts::Expression::ArrowFunctionExpression(_)
+                    | ts::Expression::FunctionExpression(_)
+            )
+        )
+    })
 }
 
 /// Lambda defs (anonymous callables): one per inline arrow / function

@@ -25,7 +25,7 @@ fn run_example(root: &str, entry: &str, out: &Path) -> String {
         "before\n<!-- ryi:typegraph-d2:start -->\n<!-- ryi:typegraph-d2:end -->\nafter\n",
     )
     .expect("markdown template");
-    let output = Command::new(env!("CARGO"))
+    let output = crate::host_cargo::cargo()
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .args([
             "run",
@@ -292,7 +292,7 @@ path = "fixture.rs"
 #[test]
 fn an_unknown_entrypoint_exits_nonzero() {
     let out = scratch("missing");
-    let output = Command::new(env!("CARGO"))
+    let output = crate::host_cargo::cargo()
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .args([
             "run",

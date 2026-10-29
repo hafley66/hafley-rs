@@ -1,6 +1,6 @@
 // Generated for ryii from the Ryi HTTP operations and @daemon options.
 use std::sync::{Arc, Mutex};
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 use axum::body::{Body, Bytes};
@@ -64,7 +64,14 @@ fn operation_error_response(error: OpError, diagnostics: &crate::ops::Diagnostic
     response
 }
 
-async fn jsonl_response(items: Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send>, diagnostics: crate::ops::Diagnostics) -> Response {
+/// A streaming request's cancel flag: set when the handler future or the response body holding it drops.
+struct OpGuard(Arc<AtomicBool>);
+
+impl Drop for OpGuard {
+    fn drop(&mut self) { self.0.store(true, Ordering::Release); }
+}
+
+async fn jsonl_response(items: Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send>, diagnostics: crate::ops::Diagnostics, guard: OpGuard) -> Response {
     let (tx, mut rx) = tokio::sync::mpsc::channel::<(Option<OpError>, Bytes)>(64);
     tokio::task::spawn_blocking(move || {
         let mut batch = Vec::with_capacity(64 * 1024);
@@ -109,6 +116,8 @@ async fn jsonl_response(items: Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send
         if headers.is_empty() { return None; }
         Some((Ok(Frame::trailers(headers)), (None, rx, diagnostics, exit, true)))
     });
+    // The body owns the guard from here: a client that disconnects drops it.
+    let stream = stream.map(move |frame| { let _ = &guard; frame });
     (StatusCode::OK, [(CONTENT_TYPE, "application/x-ndjson"), (axum::http::header::TRAILER, "x-ryi-stderr, x-ryi-exit-code")], Body::new(StreamBody::new(stream))).into_response()
 }
 
@@ -130,8 +139,10 @@ macro_rules! stream_handler {
             tracing::Span::current().record("request_root", &tracing::field::display(root.display()));
             let args: $args = match request.decode() { Ok(args) => args, Err(error) => return bad_request(error) };
             let diagnostics = Arc::new(Mutex::new(Vec::new()));
-            let items = crate::ops::with_request_context(root, Some(diagnostics.clone()), || crate::ops::$op(&args));
-            jsonl_response(items, diagnostics).await
+            let guard = OpGuard(Arc::new(AtomicBool::new(false)));
+            let cancel = guard.0.clone();
+            let items = crate::ops::with_request_context(root, Some(diagnostics.clone()), || crate::ops::with_request_cancel(cancel, || crate::ops::$op(&args)));
+            jsonl_response(items, diagnostics, guard).await
         }
     };
 }
@@ -187,8 +198,10 @@ async fn extract(headers: HeaderMap, body: Body) -> Response {
 
     let diagnostics = Arc::new(Mutex::new(Vec::new()));
     let captured = diagnostics.clone();
-    let out = tokio::task::spawn_blocking(move || crate::ops::with_request_context(root, Some(captured), || crate::ops::with_request_input(input, || crate::ops::extract(&args)))).await;
-    match out { Ok(out) => jsonl_response(out, diagnostics).await, Err(error) => error_response(OpError(error.to_string(), 1)) }
+    let guard = OpGuard(Arc::new(AtomicBool::new(false)));
+    let cancel = guard.0.clone();
+    let out = tokio::task::spawn_blocking(move || crate::ops::with_request_context(root, Some(captured), || crate::ops::with_request_cancel(cancel, || crate::ops::with_request_input(input, || crate::ops::extract(&args))))).await;
+    match out { Ok(out) => jsonl_response(out, diagnostics, guard).await, Err(error) => error_response(OpError(error.to_string(), 1)) }
 }
 
 async fn fast(headers: HeaderMap, body: Body) -> Response {
@@ -222,8 +235,10 @@ async fn fast(headers: HeaderMap, body: Body) -> Response {
 
     let diagnostics = Arc::new(Mutex::new(Vec::new()));
     let captured = diagnostics.clone();
-    let out = tokio::task::spawn_blocking(move || crate::ops::with_request_context(root, Some(captured), || crate::ops::with_request_input(input, || crate::ops::fast(&args)))).await;
-    match out { Ok(out) => jsonl_response(out, diagnostics).await, Err(error) => error_response(OpError(error.to_string(), 1)) }
+    let guard = OpGuard(Arc::new(AtomicBool::new(false)));
+    let cancel = guard.0.clone();
+    let out = tokio::task::spawn_blocking(move || crate::ops::with_request_context(root, Some(captured), || crate::ops::with_request_cancel(cancel, || crate::ops::with_request_input(input, || crate::ops::fast(&args))))).await;
+    match out { Ok(out) => jsonl_response(out, diagnostics, guard).await, Err(error) => error_response(OpError(error.to_string(), 1)) }
 }
 
 async fn slow(headers: HeaderMap, body: Body) -> Response {
@@ -257,8 +272,10 @@ async fn slow(headers: HeaderMap, body: Body) -> Response {
 
     let diagnostics = Arc::new(Mutex::new(Vec::new()));
     let captured = diagnostics.clone();
-    let out = tokio::task::spawn_blocking(move || crate::ops::with_request_context(root, Some(captured), || crate::ops::with_request_input(input, || crate::ops::slow(&args)))).await;
-    match out { Ok(out) => jsonl_response(out, diagnostics).await, Err(error) => error_response(OpError(error.to_string(), 1)) }
+    let guard = OpGuard(Arc::new(AtomicBool::new(false)));
+    let cancel = guard.0.clone();
+    let out = tokio::task::spawn_blocking(move || crate::ops::with_request_context(root, Some(captured), || crate::ops::with_request_cancel(cancel, || crate::ops::with_request_input(input, || crate::ops::slow(&args))))).await;
+    match out { Ok(out) => jsonl_response(out, diagnostics, guard).await, Err(error) => error_response(OpError(error.to_string(), 1)) }
 }
 
 async fn scip(headers: HeaderMap, body: Body) -> Response {
@@ -292,8 +309,10 @@ async fn scip(headers: HeaderMap, body: Body) -> Response {
 
     let diagnostics = Arc::new(Mutex::new(Vec::new()));
     let captured = diagnostics.clone();
-    let out = tokio::task::spawn_blocking(move || crate::ops::with_request_context(root, Some(captured), || crate::ops::with_request_input(input, || crate::ops::scip(&args)))).await;
-    match out { Ok(out) => jsonl_response(out, diagnostics).await, Err(error) => error_response(OpError(error.to_string(), 1)) }
+    let guard = OpGuard(Arc::new(AtomicBool::new(false)));
+    let cancel = guard.0.clone();
+    let out = tokio::task::spawn_blocking(move || crate::ops::with_request_context(root, Some(captured), || crate::ops::with_request_cancel(cancel, || crate::ops::with_request_input(input, || crate::ops::scip(&args))))).await;
+    match out { Ok(out) => jsonl_response(out, diagnostics, guard).await, Err(error) => error_response(OpError(error.to_string(), 1)) }
 }
 
 async fn graph(headers: HeaderMap, body: Body) -> Response {
@@ -327,8 +346,10 @@ async fn graph(headers: HeaderMap, body: Body) -> Response {
 
     let diagnostics = Arc::new(Mutex::new(Vec::new()));
     let captured = diagnostics.clone();
-    let out = tokio::task::spawn_blocking(move || crate::ops::with_request_context(root, Some(captured), || crate::ops::with_request_input(input, || crate::ops::graph(&args)))).await;
-    match out { Ok(out) => jsonl_response(out, diagnostics).await, Err(error) => error_response(OpError(error.to_string(), 1)) }
+    let guard = OpGuard(Arc::new(AtomicBool::new(false)));
+    let cancel = guard.0.clone();
+    let out = tokio::task::spawn_blocking(move || crate::ops::with_request_context(root, Some(captured), || crate::ops::with_request_cancel(cancel, || crate::ops::with_request_input(input, || crate::ops::graph(&args))))).await;
+    match out { Ok(out) => jsonl_response(out, diagnostics, guard).await, Err(error) => error_response(OpError(error.to_string(), 1)) }
 }
 
 async fn cleave(headers: HeaderMap, body: Body) -> Response {
@@ -467,8 +488,10 @@ async fn query(headers: HeaderMap, body: Body) -> Response {
 
     let diagnostics = Arc::new(Mutex::new(Vec::new()));
     let captured = diagnostics.clone();
-    let out = tokio::task::spawn_blocking(move || crate::ops::with_request_context(root, Some(captured), || crate::ops::with_request_input(input, || crate::ops::query(&args)))).await;
-    match out { Ok(out) => jsonl_response(out, diagnostics).await, Err(error) => error_response(OpError(error.to_string(), 1)) }
+    let guard = OpGuard(Arc::new(AtomicBool::new(false)));
+    let cancel = guard.0.clone();
+    let out = tokio::task::spawn_blocking(move || crate::ops::with_request_context(root, Some(captured), || crate::ops::with_request_cancel(cancel, || crate::ops::with_request_input(input, || crate::ops::query(&args))))).await;
+    match out { Ok(out) => jsonl_response(out, diagnostics, guard).await, Err(error) => error_response(OpError(error.to_string(), 1)) }
 }
 
 async fn region(headers: HeaderMap, body: Body) -> Response {
@@ -572,8 +595,10 @@ async fn stratify(headers: HeaderMap, body: Body) -> Response {
 
     let diagnostics = Arc::new(Mutex::new(Vec::new()));
     let captured = diagnostics.clone();
-    let out = tokio::task::spawn_blocking(move || crate::ops::with_request_context(root, Some(captured), || crate::ops::with_request_input(input, || crate::ops::stratify(&args)))).await;
-    match out { Ok(out) => jsonl_response(out, diagnostics).await, Err(error) => error_response(OpError(error.to_string(), 1)) }
+    let guard = OpGuard(Arc::new(AtomicBool::new(false)));
+    let cancel = guard.0.clone();
+    let out = tokio::task::spawn_blocking(move || crate::ops::with_request_context(root, Some(captured), || crate::ops::with_request_cancel(cancel, || crate::ops::with_request_input(input, || crate::ops::stratify(&args))))).await;
+    match out { Ok(out) => jsonl_response(out, diagnostics, guard).await, Err(error) => error_response(OpError(error.to_string(), 1)) }
 }
 
 #[derive(Clone)]

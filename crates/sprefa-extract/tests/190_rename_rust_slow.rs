@@ -70,7 +70,7 @@ fn rename_in(fixture: &Fixture, file: &str, declaration: &str, old: &str, new: &
         output.status.code(),
         String::from_utf8_lossy(&output.stderr)
     );
-    let check = Command::new(env!("CARGO"))
+    let check = crate::host_cargo::cargo()
         .args(["check", "--quiet", "--offline"])
         .current_dir(&fixture.root)
         .env("CARGO_TARGET_DIR", fixture.root.join("target"))

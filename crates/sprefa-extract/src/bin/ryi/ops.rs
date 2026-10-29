@@ -90,6 +90,7 @@ thread_local! {
     static REQUEST_ROOT: RefCell<Option<PathBuf>> = const { RefCell::new(None) };
     static REQUEST_DIAGNOSTICS: RefCell<Option<Diagnostics>> = const { RefCell::new(None) };
     static REQUEST_INPUT: RefCell<Option<Arc<tempfile::NamedTempFile>>> = const { RefCell::new(None) };
+    static REQUEST_CANCEL: RefCell<Option<Arc<AtomicBool>>> = const { RefCell::new(None) };
 }
 
 pub(crate) type Diagnostics = Arc<Mutex<Vec<u8>>>;
@@ -144,6 +145,15 @@ pub(crate) fn with_request_input<T>(
     let guard = RequestInputGuard(REQUEST_INPUT.with(|slot| slot.replace(input)));
     let result = run();
     drop(guard);
+    result
+}
+
+/// The daemon request's cancel flag for the operation `run` starts; its guard sets it when
+/// the handler future or the response body drops.
+pub(crate) fn with_request_cancel<T>(cancel: Arc<AtomicBool>, run: impl FnOnce() -> T) -> T {
+    let previous = REQUEST_CANCEL.with(|slot| slot.replace(Some(cancel)));
+    let result = run();
+    REQUEST_CANCEL.with(|slot| *slot.borrow_mut() = previous);
     result
 }
 
@@ -216,7 +226,9 @@ impl Drop for Rows {
 
 fn produce(ryi: Ryi) -> Rows {
     let (tx, rx) = mpsc::sync_channel(64);
-    let cancelled = Arc::new(AtomicBool::new(false));
+    let cancelled = REQUEST_CANCEL
+        .with(|slot| slot.borrow().clone())
+        .unwrap_or_else(|| Arc::new(AtomicBool::new(false)));
     let operation_cancelled = Arc::clone(&cancelled);
     let request_root = request_root();
     let diagnostics = REQUEST_DIAGNOSTICS.with(|slot| slot.borrow().clone());
