@@ -128,3 +128,25 @@ edit verify          |--update(A) open--diagnostics--dispose--|   (nested in A's
 3. Route `ryii --resolve` slow and `graph --slow` to it; delete `ts-checker`, node tier, LSP session, tsgo_rows,
    `ScipTypescript`.
 4. Edit arms onto `Snapshot::update` + `diagnostics`; delete their LSP paths.
+
+## 7. Memory: tsc vs the calling pattern (measured 2026-10-30)
+
+`bench/scripts/11_ts71_memory.mjs`, typescript 7.1.0-beta, TS 5.9 `src/compiler/tsconfig.json` (222 files):
+
+| phase | server RSS |
+| --- | --- |
+| `tsc --noEmit --incremental false` (full check, separate process) | 322 MB peak, 0.51 s |
+| API spawn -> snapshot open | 13 -> 154 MB |
+| AST fetch, 77 corpus files | 242 MB |
+| `getSymbolAtPosition` on 364577 identifiers | 844 MB |
+| same pass again | 881 MB |
+| snapshot dispose, +3 s idle | 881 MB |
+| new snapshot, full pass again | 887 -> 903 MB |
+| `GODEBUG=madvdontneed=1`, same sequence | 808 -> 966 MB |
+
+- The checker's own state for the whole program: ~322 MB.
+- The per-identifier sweep adds ~600 MB over the open snapshot; that is the calling pattern.
+- Dispose does not lower RSS; the next snapshot's full pass reuses it (+6 to +22 MB). Freed
+  Go heap stays resident and is reused; RSS is the high-water mark, not a leak.
+- Cap: demand-driven sites only (section 2), and restart the server past `max_rss_mb`
+  (spawn + open = ~140 ms here) instead of waiting for dispose to return memory.
