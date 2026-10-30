@@ -4,7 +4,7 @@
 
 /// sprefa-extract's package version, the `ryi` every fact and trace names.
 /// Pinned to sprefa-extract/Cargo.toml by tests/111_cli_identity.rs.
-pub const RYI_VERSION: &str = "0.2.5";
+pub const RYI_VERSION: &str = "0.2.6";
 
 #[path = "0_request_root.rs"]
 mod request_root;
