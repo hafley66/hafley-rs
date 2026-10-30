@@ -82,6 +82,61 @@ Critics question its arena model that "never frees" outside freeable regions.
 - Not yet measured: the same experiment against `tsrs --api` (running the downloaded binary needs
   user approval in this environment).
 
+## 6. Round-trip cost: the real limit of the API (other tools' numbers)
+
+| source | finding |
+| --- | --- |
+| TypeScript #65051 (jsii over aws-cdk-lib, open) | 698k requests, 34.5 s wall, server checker work ~6 s; handler 1.6-5 µs per call vs 26 µs round trip. Proposed `getMembersOfType(type, filter)` and `getSymbolDocumentations(symbols[])` cut it to 304k requests / 29.4 s. Dependent requests cannot be batched. |
+| TypeScript PR #64266 (Wes Wigham, back to draft 2026-10-28) | server-side "smart batch requests" for every method, client auto-grouping; not merged. |
+| typescript-eslint PR #12803 (open, experimental `EXPERIMENTAL_backend: 'tsgo'`) | per-file bulk prefetch of `getTypeAtLocation` after ~10% of a file is queried singly; one contextual-type batch per file; 8192 files `recommendedTypeChecked`: 58.49 s / 3921 MB classic vs 100.63 s / 7349 MB native. Author attributes the gap to call count. |
+| zinfer #200 | plans to leave ts-morph after 7.1 stabilises; per-lookup IPC flagged as the cost. |
+
+For ryi: one request per demanded site is the cost driver, not the checker. Per file: one
+`getSymbolAtPosition(file, positions[])`, one `getTypeAtPosition(file, positions[])`; contextual
+types (literal sites) are one call each until a bulk method exists.
+
+## 7. Memory reports elsewhere
+
+| source | report |
+| --- | --- |
+| typescript-go #985 (closed) | LSP up to ~20 GB on a large monorepo, crashes above ~5 GB |
+| typescript-go #2780 | pnpm monorepo, one edit -> ~35 GB |
+| typescript-go #2910 (closed) | ~55 GB RAM/swap, macOS |
+| typescript-go #3032 (closed, not planned) | `tsgo --lsp` OOM on large projects |
+| tsrs #655 (fixed by #656, 2026-10-22) | tsrs `resolveModuleName` grew 9 -> 210 MB over 60k calls, `dispose()` freed nothing; the Go server stayed ~18 MB |
+
+## 8. node_modules `.d.ts` for the fast tier: library already in the lock
+
+`oxc_resolver` 11.24.3 (pinned in `hafley_scm/Cargo.toml:29`) has
+`Resolver::resolve_dts(containing_file, specifier) -> Result<Resolution, ResolveError>`,
+aiming at `ts.resolveModuleName` with `moduleResolution: "bundler"`:
+
+- `exports` with the `types` condition always added (then `types`/`typings`/`main` are ignored)
+- `types`/`typings`/`main` directory entry, `index` fallback
+- `@types/<name>` fallback, scoped names mangled (`@babel/core` -> `@types/babel__core`)
+- `.js` -> `.ts`/`.tsx`/`.d.ts` sibling substitution, `.mjs`/`.cjs` -> `.d.mts`/`.d.cts`
+- tsconfig `paths`/`baseUrl`
+- gap: `typesVersions` takes the first range regardless of version (oxc-resolver #1421;
+  fix PR #1422 adds a `types_versions` option, merge state not confirmed)
+
+Today `ts_resolve.rs` uses `Resolver::resolve` with `condition_names = ["source", "node", "import"]`,
+`main_fields = ["module", "main"]`, skips `node_modules` in its walk, and gives corpus-external
+bindings no row (`ts_resolve.rs:115-131`, `:61`, `:1134`). The option adds a second lookup through
+`resolve_dts` for bare specifiers that resolve outside the corpus, and TSI over the `.d.ts` it returns.
+
+## 9. Mapped-key remapping (RTK Query hooks)
+
+- RTK Query hooks are named `use` + endpoint name + `Query`/`Mutation`/`InfiniteQuery`
+  (`getPosts` -> `useGetPostsQuery`); endpoint names come from the OpenAPI `operationId`
+  (`operationIdTransformer`).
+- TypeScript #61094: go-to-definition on a key produced by a template-literal `as` clause does
+  not reach the original property in VS Code (reported on 5.7.3). TypeScript #47813 (closed):
+  with key remapping, definitions are lost but references remain.
+- So `getSymbolAtPosition` on `useGetPostsQuery` is not expected to land on the `getPosts`
+  endpoint declaration; the inside-out trace needs the mapped type's key type (template literal
+  over `keyof`) and the literal `"getPosts"`, i.e. `getTypeAtPosition` + union/literal members,
+  not symbol identity. Needs a fixture against 7.1 to confirm.
+
 ## Sources
 
 - https://devblogs.microsoft.com/typescript/announcing-typescript-7-1-beta/
@@ -95,3 +150,10 @@ Critics question its arena model that "never frees" outside freeable regions.
 - https://github.com/oxc-project/tsrs (docs/NODE_API.md, docs/CHECKER.md)
 - https://www.infoq.com/news/2026/10/cloudflare-tsrs-ai-typescript/
 - https://blog.authon.dev/tsrs-vs-tsgo-typescript-rust-port-vs-go
+- https://github.com/microsoft/TypeScript/issues/65051, https://github.com/microsoft/TypeScript/pull/64266
+- https://github.com/typescript-eslint/typescript-eslint/pull/12803, https://github.com/toiroakr/zinfer/issues/200
+- https://github.com/microsoft/typescript-go/issues/985, /2780, /2910, /3032
+- https://github.com/oxc-project/tsrs/issues/655
+- https://docs.rs/crate/oxc_resolver/latest/source/src/dts_resolver.rs, https://github.com/oxc-project/oxc-resolver/issues/1421, https://github.com/oxc-project/oxc-resolver/pull/1422
+- https://redux.js.org/toolkit/rtk-query/usage/code-generation, https://redux-toolkit.js.org/rtk-query/api/created-api/hooks
+- https://github.com/microsoft/TypeScript/issues/61094, https://github.com/microsoft/TypeScript/issues/47813
