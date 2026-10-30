@@ -137,6 +137,24 @@ bindings no row (`ts_resolve.rs:115-131`, `:61`, `:1134`). The option adds a sec
   over `keyof`) and the literal `"getPosts"`, i.e. `getTypeAtPosition` + union/literal members,
   not symbol identity. Needs a fixture against 7.1 to confirm.
 
+## 10. Measured: tsgo 7.1.0-beta vs tsrs 0.20.1-ts7.1.0-beta (same client script)
+
+`bench/scripts/11_ts71_memory.mjs` with `tsserverPath` = tsrs binary, TS 5.9 `src/compiler`:
+
+| phase | tsgo RSS | tsrs RSS | tsgo ms | tsrs ms |
+| --- | --- | --- | --- | --- |
+| snapshot open | 154 | 105 | 77 | 89 |
+| symbols, 364577 identifiers | 844 | 625 | 3967 | 2628 |
+| same symbols again | 881 | 599 | 3280 | 2241 |
+| types, every identifier | 881 | 626 | 2652 | 1427 |
+| dispose snapshot 1 | 881 | 504 | | |
+| snapshot 2, same three passes | 903 | 739 | | |
+| dispose snapshot 2 | 903 | 612 | | |
+| plain `--noEmit` check, peak / wall | 322 MB / 0.51 s | 151 MB / 0.16 s | | |
+
+tsrs returns memory on dispose (-122 MB, -127 MB) but each snapshot cycle still nets about
++108 MB (504 -> 612). tsgo holds its high-water mark and reuses it (+22 MB on cycle 2).
+
 ## Sources
 
 - https://devblogs.microsoft.com/typescript/announcing-typescript-7-1-beta/
