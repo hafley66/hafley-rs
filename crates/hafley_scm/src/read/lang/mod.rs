@@ -224,7 +224,7 @@ pub use source_facts::{
     SOURCE_FACT_PROTOCOL,
 };
 pub use source_query::{
-    query_source, query_tree_sitter, build_tree_sitter_query, query_tree_sitter_spans, query_tree_sitter_spans_with, SourceQuery, SourceQueryError,
+    query_source, query_tree_sitter, build_tree_sitter_query, query_tree_sitter_spans, query_tree_sitter_spans_with, query_tree_sitter_spans_many, SourceQuery, SourceQueryError,
     SourceQueryOutput, TreeSitterQuery, TreeSitterQueryMatch, TreeSitterSpannedCapture,
     TreeSitterSpannedMatch,
 };

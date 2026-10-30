@@ -113,6 +113,56 @@ source: tests/support/2_fixture_runner.rs
     },
     "markdown_inline_rows": 2,
     "markdown_rows": 1,
+    "multi": {
+      "exit_code": 0,
+      "stdout": [
+        {
+          "end_line": 15,
+          "line": 15,
+          "name": "trim",
+          "path": "sample.rs",
+          "query": "(function_item name: (identifier) @name)"
+        },
+        {
+          "end_line": 19,
+          "line": 19,
+          "name": "make_engine",
+          "path": "sample.rs",
+          "query": "(function_item name: (identifier) @name)"
+        },
+        {
+          "end_line": 26,
+          "line": 26,
+          "name": "mode",
+          "path": "sample.rs",
+          "query": "(function_item name: (identifier) @name)"
+        },
+        {
+          "end_line": 32,
+          "line": 32,
+          "name": "apply",
+          "path": "sample.rs",
+          "query": "(function_item name: (identifier) @name)"
+        },
+        {
+          "end_line": 4,
+          "line": 4,
+          "path": "sample.rs",
+          "query": "structs.scm",
+          "struct": "Engine"
+        }
+      ],
+      "stderr": ""
+    },
+    "multi_query_label": "(function_item name: (identifier) @name)",
+    "multi_rows": 5,
+    "multi_scm_label": "structs.scm",
+    "no_pattern": {
+      "exit_code": 2,
+      "stdout": [],
+      "stderr": "query: pass --query TEXT, --scm FILE or --scmpp FILE\n"
+    },
+    "no_pattern_stderr": "query: pass --query TEXT, --scm FILE or --scmpp FILE\n",
     "oid_check": {
       "exit_code": 0,
       "stdout": "2720337778786789385f705007ab46bdc9626f0e\n",

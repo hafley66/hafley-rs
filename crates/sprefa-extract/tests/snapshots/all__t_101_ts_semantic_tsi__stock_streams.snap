@@ -99,7 +99,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
         "run": 0,
         "mode": "syntax",
         "tool": "ryi",
-        "version": "0.2.4",
+        "version": "0.2.5",
         "scope": [
           "blake3:5bb3ce0722005ae43f3a40f0817fe3b0649672c779530978f6e3dd374b666195"
         ]
@@ -3980,7 +3980,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
         "run": 0,
         "mode": "syntax",
         "tool": "ryi",
-        "version": "0.2.4",
+        "version": "0.2.5",
         "scope": [
           "blake3:3f40f6c54efa99beefc429c06747e0a35bf4663068d22247c4020da768b26630"
         ]

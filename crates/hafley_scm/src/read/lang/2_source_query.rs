@@ -141,6 +141,18 @@ pub fn query_tree_sitter_spans_with(
     query: &hafley_scm::QueryExt,
     parser: &mut TreeParser,
 ) -> Result<Vec<TreeSitterSpannedMatch>, String> {
+    let mut found = query_tree_sitter_spans_many(content, language, &[Some(query)], parser)?;
+    Ok(found.pop().flatten().unwrap_or_default())
+}
+
+/// One parse, every prebuilt query over the same tree, results in `queries`
+/// order. A `None` query (its grammar lacks a node type) answers `None`.
+pub fn query_tree_sitter_spans_many(
+    content: &[u8],
+    language: &tree_sitter::Language,
+    queries: &[Option<&hafley_scm::QueryExt>],
+    parser: &mut TreeParser,
+) -> Result<Vec<Option<Vec<TreeSitterSpannedMatch>>>, String> {
     std::str::from_utf8(content)
         .map_err(|error| format!("query input is not valid UTF-8: {error}"))?;
     parser
@@ -149,12 +161,18 @@ pub fn query_tree_sitter_spans_with(
     let tree = parser
         .parse(content, None)
         .ok_or_else(|| "query parse failed: source tree was not produced".to_string())?;
-    let mut arena = hafley_scm::MatchArena::default();
-    // The fresh-cursor default this facade always ran with; the engine's
-    // limit check cannot fire at u32::MAX.
-    hafley_scm::run(query, "", content, &tree, u32::MAX, &mut arena)
-        .map_err(|error| one_line_text(query_error_text(&error)))?;
-    project_match_arena(query, &arena, content)
+    queries
+        .iter()
+        .map(|query| {
+            let Some(query) = query else { return Ok(None) };
+            let mut arena = hafley_scm::MatchArena::default();
+            // The fresh-cursor default this facade always ran with; the engine's
+            // limit check cannot fire at u32::MAX.
+            hafley_scm::run(query, "", content, &tree, u32::MAX, &mut arena)
+                .map_err(|error| one_line_text(query_error_text(&error)))?;
+            project_match_arena(query, &arena, content).map(Some)
+        })
+        .collect()
 }
 
 /// Every language the `Source` roster can parse, through the one name table

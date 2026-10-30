@@ -5,7 +5,8 @@
     "unknown_lang_and_invalid_query_are_exit_two",
     "digest_door_reads_the_staged_blob",
     "bad_digest_is_exit_two_naming_the_git_door",
-    "md_md_inline_and_html_grammars_query"
+    "md_md_inline_and_html_grammars_query",
+    "query_and_scm_patterns_share_one_parse_per_file"
   ],
   "steps": [
     {"action": "command", "arguments": ["query", "--lang", "rust", "--query", "(function_item name: (identifier) @name) @item", "$fixtures/rust/sample.rs"], "capture": "plain"},
@@ -20,6 +21,15 @@
     {"action": "claim", "name": "predicate_line", "kind": "json_scalar", "cell": "predicate.stdout", "line_contains": "\"name\":\"shift\"", "pointer": "line", "expect": 7},
     {"action": "claim", "name": "predicate_end", "kind": "json_scalar", "cell": "predicate.stdout", "line_contains": "\"name\":\"shift\"", "pointer": "end_line", "expect": 12},
     {"action": "claim", "name": "predicate_item", "kind": "json_contains", "cell": "predicate.stdout", "line_contains": "\"name\":\"shift\"", "pointer": "item", "text": "function shift(p: Point, d: Dir): Vec2 {", "expect": true},
+
+    {"action": "write", "path": "$work/multi/structs.scm", "text": "(struct_item name: (type_identifier) @struct)\n"},
+    {"action": "copy", "path": "$work/multi/sample.rs", "source": "$fixtures/rust/sample.rs"},
+    {"action": "command", "arguments": ["query", "--query", "(function_item name: (identifier) @name)", "--scm", "structs.scm", "sample.rs"], "cwd": "$work/multi", "capture": "multi"},
+    {"action": "claim", "name": "multi_rows", "kind": "line_count", "cell": "multi.stdout", "line_prefix": "{", "expect": 5},
+    {"action": "claim", "name": "multi_scm_label", "kind": "json_scalar", "cell": "multi.stdout", "line_contains": "\"struct\":\"Engine\"", "pointer": "query", "expect": "structs.scm"},
+    {"action": "claim", "name": "multi_query_label", "kind": "json_scalar", "cell": "multi.stdout", "line_contains": "\"name\":\"trim\"", "pointer": "query", "expect": "(function_item name: (identifier) @name)"},
+    {"action": "command", "arguments": ["query", "sample.rs"], "cwd": "$work/multi", "success": false, "expect_exit_code": 2, "capture": "no_pattern"},
+    {"action": "claim", "name": "no_pattern_stderr", "kind": "text_equals", "cell": "no_pattern.stderr", "text": "query: pass --query TEXT, --scm FILE or --scmpp FILE\n"},
 
     {"action": "command", "arguments": ["query", "--lang", "klingon", "--query", "(identifier) @name", "$fixtures/rust/sample.rs"], "success": false, "expect_exit_code": 2, "capture": "unknown_lang"},
     {"action": "claim", "name": "unknown_lang_stderr", "kind": "text_equals", "cell": "unknown_lang.stderr", "text": "unknown lang 'klingon'\n"},

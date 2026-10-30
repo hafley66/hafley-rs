@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use rayon::prelude::*;
-use sprefa_extract::{content_id_of, extract_pool, query_tree_sitter_spans_with, RyiLang};
+use sprefa_extract::{content_id_of, extract_pool, query_tree_sitter_spans_many, RyiLang};
 
 type Result<T, E = Box<dyn std::error::Error>> = std::result::Result<T, E>;
 
@@ -31,34 +31,57 @@ pub fn run_to(
     if paths.is_empty() {
         return Err("query: no inputs; pass files, directories, globs, - or --entry".into());
     }
-    let query = match (&cli.query, &cli.scmpp) {
-        (Some(query), None) => query.clone(),
-        (None, Some(file)) => {
+    // Every `--query` text, then every `--scm` file; `label` names a pattern in rows.
+    let mut patterns: Vec<Pattern> = cli
+        .query
+        .iter()
+        .map(|text| Pattern { label: text.clone(), text: text.clone() })
+        .collect();
+    for file in &cli.scm {
+        let text = std::fs::read_to_string(sprefa_extract::io_path(file))
+            .map_err(|error| format!("--scm '{}': {error}", file.display()))?;
+        patterns.push(Pattern { label: file.to_string_lossy().into_owned(), text });
+    }
+    match (&cli.scmpp, patterns.is_empty()) {
+        (Some(file), true) => {
             let text = std::fs::read_to_string(sprefa_extract::io_path(file))
                 .map_err(|error| format!("--scmpp '{}': {error}", file.display()))?;
             return run_scmpp(&cli, &text, &paths, writer, cancel, false);
         }
-        (Some(_), Some(_)) => return Err("query: pass --query or --scmpp, not both".into()),
-        (None, None) => return Err("query: pass --query TEXT or --scmpp FILE".into()),
-    };
+        (Some(_), false) => return Err("query: pass --query/--scm or --scmpp, not both".into()),
+        (None, true) => return Err("query: pass --query TEXT, --scm FILE or --scmpp FILE".into()),
+        (None, false) => {}
+    }
+    // One pattern keeps the historical row shape; several name their source per row.
+    let labelled = patterns.len() > 1;
     // 3+ unanchored siblings: the scm++ split answers the same rows without tree-sitter's
     // combinatorial walk; `--sqlite` keeps the capture-row store, so it stays on the flat engine.
     if cli.store.sqlite.is_none() {
         let first = paths.first().map(|path| language_for(cli.lang.as_deref(), &path.to_string_lossy()));
         if let Some(Ok(language)) = first {
             if let Some(grammar) = RyiLang::parse_name(&language) {
-                if split::splits(&query, &grammar.tree_sitter_language()) {
-                    return run_scmpp(&cli, &query, &paths, writer, cancel, true);
+                let grammar = grammar.tree_sitter_language();
+                if let Some(pattern) = patterns.iter().find(|pattern| split::splits(&pattern.text, &grammar)) {
+                    if labelled {
+                        return Err(format!(
+                            "query: {} needs the scm++ split (3+ unanchored siblings); run it alone",
+                            pattern.label
+                        )
+                        .into());
+                    }
+                    return run_scmpp(&cli, &pattern.text, &paths, writer, cancel, true);
                 }
             }
         }
     }
     let mut output = crate::sqlite::Output::with_writer(cli.store.sqlite.as_deref(), writer, true)
         .map_err(|error| error.to_string())?;
-    // One compiled query per language, built once; `None` marks a grammar that
-    // lacks one of the query's node types.
-    let mut compiled =
-        std::collections::HashMap::<String, Option<(tree_sitter::Language, hafley_scm::QueryExt)>>::new();
+    // Every pattern compiled once per language; a `None` pattern is one whose
+    // node types that grammar lacks. A file every pattern misses is skipped.
+    let mut compiled = std::collections::HashMap::<
+        String,
+        (tree_sitter::Language, Vec<Option<hafley_scm::QueryExt>>),
+    >::new();
     let mut skipped = std::collections::BTreeMap::<String, usize>::new();
     let mut jobs = Vec::<(&std::path::PathBuf, String)>::with_capacity(paths.len());
     // A file with no language ends the stream where it sits: the files before
@@ -77,15 +100,21 @@ pub fn run_to(
             let grammar = RyiLang::parse_name(&language)
                 .ok_or_else(|| format!("unknown lang '{language}'"))?
                 .tree_sitter_language();
-            let entry = match hafley_scm::build(&grammar, &query) {
-                Ok(built) => Some((grammar, built)),
-                Err(hafley_scm::QueryExtError::Parse(error))
-                    if error.kind == tree_sitter::QueryErrorKind::NodeType => None,
-                Err(error) => return Err(format!("query ({language}): {error}").into()),
-            };
-            compiled.insert(language.clone(), entry);
+            let mut built = Vec::with_capacity(patterns.len());
+            for pattern in &patterns {
+                built.push(match hafley_scm::build(&grammar, &pattern.text) {
+                    Ok(found) => Some(found),
+                    Err(hafley_scm::QueryExtError::Parse(error))
+                        if error.kind == tree_sitter::QueryErrorKind::NodeType => None,
+                    Err(error) if labelled => {
+                        return Err(format!("query ({language}) {}: {error}", pattern.label).into())
+                    }
+                    Err(error) => return Err(format!("query ({language}): {error}").into()),
+                });
+            }
+            compiled.insert(language.clone(), (grammar, built));
         }
-        if compiled[&language].is_none() {
+        if compiled[&language].1.iter().all(Option::is_none) {
             *skipped.entry(language).or_default() += 1;
             continue;
         }
@@ -99,75 +128,86 @@ pub fn run_to(
         if cancel.as_ref().is_some_and(|cancel| cancel.load(Ordering::Acquire)) {
             return Err(crate::RyiExit::new(3, "query: cancelled").into());
         }
-        let results: Vec<Result<(String, Vec<sprefa_extract::TreeSitterSpannedMatch>), String>> =
+        type Found = Vec<Option<Vec<sprefa_extract::TreeSitterSpannedMatch>>>;
+        let results: Vec<Result<(String, Found), String>> =
             extract_pool().install(|| {
                 chunk
                     .par_iter()
                     .map_init(tree_sitter::Parser::new, |parser, (path, language)| {
-                        let (grammar, built) = compiled[language].as_ref().expect("compiled language");
+                        let (grammar, built) = &compiled[language];
                         let read = || source_bytes(path, cli.digest.as_deref());
                         let bytes = match &io_root {
                             Some(root) => sprefa_extract::with_io_root(root.clone(), read),
                             None => read(),
                         }?;
-                        let matches = query_tree_sitter_spans_with(&bytes, grammar, built, parser)?;
+                        let queries = built.iter().map(Option::as_ref).collect::<Vec<_>>();
+                        // One parse per file; every pattern runs over that tree.
+                        let matches = query_tree_sitter_spans_many(&bytes, grammar, &queries, parser)?;
                         Ok((content_id_of(&bytes).to_string(), matches))
                     })
                     .collect()
             });
         for ((path, _), result) in chunk.iter().zip(results) {
             let name = path.to_string_lossy();
-            let (content_id, matches) = result?;
+            let (content_id, per_pattern) = result?;
             if let Some(database) = &mut output.database {
                 database
                     .source(&name, content_id)
                     .map_err(|error| error.to_string())?;
-                for found in &matches {
-                    for capture in &found.captures {
-                        // Typed and `record`-first: the binder batches rows
-                        // across files instead of one insert per file.
-                        database
-                            .bind_row(&CaptureRow {
-                                record: "capture",
-                                query: &query,
-                                capture: &capture.label,
-                                text: &capture.text,
-                                start: capture.start,
-                                end: capture.end,
-                                match_start: found.start,
-                                match_end: found.end,
-                            })
-                            .map_err(|error| error.to_string())?;
-                    }
-                }
-                continue;
             }
-            for found in matches {
-                let mut row = std::collections::BTreeMap::<String, serde_json::Value>::new();
-                row.insert("path".into(), name.as_ref().into());
-                // A capture with one node is its text; a capture bound to several nodes
-                // (`*`, `+`, or a repeated name) is an array of their texts in document order.
-                let mut nodes = std::collections::BTreeMap::<String, Vec<(u32, String)>>::new();
-                for capture in found.captures {
-                    nodes.entry(capture.label).or_default().push((capture.start, capture.text));
+            for (pattern, matches) in patterns.iter().zip(per_pattern) {
+                let Some(matches) = matches else { continue };
+                if let Some(database) = &mut output.database {
+                    for found in &matches {
+                        for capture in &found.captures {
+                            // Typed and `record`-first: the binder batches rows
+                            // across files instead of one insert per file.
+                            database
+                                .bind_row(&CaptureRow {
+                                    record: "capture",
+                                    query: &pattern.text,
+                                    capture: &capture.label,
+                                    text: &capture.text,
+                                    start: capture.start,
+                                    end: capture.end,
+                                    match_start: found.start,
+                                    match_end: found.end,
+                                })
+                                .map_err(|error| error.to_string())?;
+                        }
+                    }
+                    continue;
                 }
-                for (label, mut texts) in nodes {
-                    let value = if texts.len() == 1 {
-                        texts.pop().expect("one node").1.into()
-                    } else {
-                        texts.sort_by_key(|(start, _)| *start);
-                        texts.into_iter().map(|(_, text)| text).collect::<Vec<_>>().into()
-                    };
-                    row.insert(label, value);
+                for found in matches {
+                    let mut row = std::collections::BTreeMap::<String, serde_json::Value>::new();
+                    row.insert("path".into(), name.as_ref().into());
+                    if labelled {
+                        row.insert("query".into(), pattern.label.as_str().into());
+                    }
+                    // A capture with one node is its text; a capture bound to several nodes
+                    // (`*`, `+`, or a repeated name) is an array of their texts in document order.
+                    let mut nodes = std::collections::BTreeMap::<String, Vec<(u32, String)>>::new();
+                    for capture in found.captures {
+                        nodes.entry(capture.label).or_default().push((capture.start, capture.text));
+                    }
+                    for (label, mut texts) in nodes {
+                        let value = if texts.len() == 1 {
+                            texts.pop().expect("one node").1.into()
+                        } else {
+                            texts.sort_by_key(|(start, _)| *start);
+                            texts.into_iter().map(|(_, text)| text).collect::<Vec<_>>().into()
+                        };
+                        row.insert(label, value);
+                    }
+                    row.insert("line".into(), found.line.into());
+                    row.insert("end_line".into(), found.end_line.into());
+                    output
+                        .line(
+                            &serde_json::to_string(&row)
+                                .map_err(|error| format!("query output: {error}"))?,
+                        )
+                        .map_err(|error| error.to_string())?;
                 }
-                row.insert("line".into(), found.line.into());
-                row.insert("end_line".into(), found.end_line.into());
-                output
-                    .line(
-                        &serde_json::to_string(&row)
-                            .map_err(|error| format!("query output: {error}"))?,
-                    )
-                    .map_err(|error| error.to_string())?;
             }
         }
     }
@@ -183,6 +223,13 @@ pub fn run_to(
         ));
     }
     output.finish()
+}
+
+/// One query source: `label` names it in rows (the `--scm` path, or the
+/// query text itself), `text` is what compiles.
+struct Pattern {
+    label: String,
+    text: String,
 }
 
 /// `--lang` names a grammar family: `typescript` takes each file's own grammar from its

@@ -290,9 +290,14 @@ pub struct QueryArgs {
   #[doc = "Language name (default: from each file's extension)"]
   #[arg(long)]
   pub lang: Option<String>,
-  #[doc = "Tree-sitter query text"]
+  #[doc = "Tree-sitter query text; repeatable"]
   #[arg(long)]
-  pub query: Option<String>,
+  #[serde(default)]
+  pub query: Vec<String>,
+  #[doc = "Tree-sitter query file; repeatable"]
+  #[arg(long, value_name = "FILE")]
+  #[serde(default)]
+  pub scm: Vec<PathBuf>,
   #[doc = "scm++ query file: nested relations lowered to SQL over capture and CST rows"]
   #[arg(long, value_name = "FILE")]
   pub scmpp: Option<PathBuf>,

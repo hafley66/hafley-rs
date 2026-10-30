@@ -356,7 +356,7 @@
         "paths": [
           "$work/type_ladder/src/_1_none.rs"
         ],
-        "query": "(function_item name: (identifier) @name)"
+        "query": ["(function_item name: (identifier) @name)"]
       },
       "slot": "main",
       "root": "$work/type_ladder",
@@ -392,7 +392,7 @@
         "paths": [
           "tests/fixtures/type_ladder/src/_1_none.rs"
         ],
-        "query": "(function_item name: (identifier) @name)"
+        "query": ["(function_item name: (identifier) @name)"]
       },
       "slot": "main",
       "root": "$manifest",

@@ -74,7 +74,7 @@ Usage: ryi query [OPTIONS] [PATH]...
 Run a tree-sitter query over files
 e.g. ryi query --query '(function_item name: (identifier) @n)' src/
 Input: --entry <FILE> --depth <N> --root <DIR>
-Flags: --pattern <GLOB> --lang <LANG> --query <QUERY> --scmpp <FILE> --digest <DIGEST> --sqlite <PATH> --timeout <SECS>
+Flags: --pattern <GLOB> --lang <LANG> --query <QUERY> --scm <FILE> --scmpp <FILE> --digest <DIGEST> --sqlite <PATH> --timeout <SECS>
 stderr:
 === graph (exit 0) ===
 stdout:

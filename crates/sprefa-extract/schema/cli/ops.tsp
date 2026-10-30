@@ -239,8 +239,11 @@ op query(
   /** Language name (default: from each file's extension) */
   lang?: string,
 
-  /** Tree-sitter query text */
-  query?: string,
+  /** Tree-sitter query text; repeatable */
+  query?: string[],
+
+  /** Tree-sitter query file; repeatable */
+  @valueName("FILE") scm?: path[],
 
   /** scm++ query file: nested relations lowered to SQL over capture and CST rows */
   @valueName("FILE") scmpp?: path,

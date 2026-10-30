@@ -79,7 +79,7 @@
           "$work/first.rs",
           "$work/second.txt"
         ],
-        "query": "(function_item name: (identifier) @name)"
+        "query": ["(function_item name: (identifier) @name)"]
       },
       "root": "$work",
       "scratch": "$work",

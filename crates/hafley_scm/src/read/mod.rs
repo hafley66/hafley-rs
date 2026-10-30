@@ -4,7 +4,7 @@
 
 /// sprefa-extract's package version, the `ryi` every fact and trace names.
 /// Pinned to sprefa-extract/Cargo.toml by tests/111_cli_identity.rs.
-pub const RYI_VERSION: &str = "0.2.4";
+pub const RYI_VERSION: &str = "0.2.5";
 
 #[path = "0_request_root.rs"]
 mod request_root;
@@ -98,7 +98,7 @@ pub use lang::RustSource;
 pub use lang::{
     dl6_db_path, find_owned_region, open_dl6_readonly, open_readonly, owned_region_markers,
     propose_owned_region, query_source, query_source_facts, query_tree_sitter,
-    build_tree_sitter_query, query_tree_sitter_spans, query_tree_sitter_spans_with, scm_edges, scm_facts, source_for, sources, ByteRange, FactError,
+    build_tree_sitter_query, query_tree_sitter_spans, query_tree_sitter_spans_with, query_tree_sitter_spans_many, scm_edges, scm_facts, source_for, sources, ByteRange, FactError,
     FactSet, GitBlobFact, OwnedRegion, OwnedRegionError, OwnedRegionProposal, RyiLang, ScmEdge,
     SourceCaptureFact, SourceMatchFact, SourcePlace, SourceQuery, SourceQueryError,
     SourceQueryFact, SourceQueryFacts, SourceQueryOutput, SourceReplacementFact,
