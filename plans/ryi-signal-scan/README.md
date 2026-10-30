@@ -67,3 +67,22 @@ Next cut: merge the 8 patterns into one `Query` so one cursor pass per file.
 | libc malloc/free (`tiny_*`, `free_tiny`, `_szone_free`) | 2430 |
 
 Per extra pattern: (58.19 - 26.21) / 8 = 4.0 s user, one cursor walk of every tree.
+
+## After the three fixes (release, vscode `src`, median of 3)
+
+| run | before real / user | after real / user | max RSS after |
+| --- | --- | --- | --- |
+| trivial `(debugger_statement)` | 4.17 / 26.21 | 2.33 / 18.44 | 215 MB |
+| 8 signal `.scm` | 7.87 / 58.19 | 2.61 / 19.69 | 212 MB |
+| 20 `heavy/*.scm`, 6581760 rows | 33.98 / 125.43 | 4.93 / 37.50 | 874 MB |
+
+Output byte-identical to `fb1d1fa7` for the 8-signal and 20-heavy sets (`cmp`).
+
+| fix | where | measured step |
+| --- | --- | --- |
+| patterns merged into one query per language, rows mapped back by pattern index | `src/0_query.rs` `Merged` | 8 signal 7.87 -> 3.18 s |
+| workers pull files from one counter, render JSONL, writer only reorders; replaces 1024-file chunks | `src/0_query.rs` `run_to` | (same build as above) |
+| one write + flush per file; query runs `streaming`, which flushed per row (6.58M write syscalls) | `Output::stdout_block` | 20 heavy 14.25 -> 6.93 s |
+| tree-sitter C allocator -> mimalloc (`tree_sitter::set_allocator`); Rust global allocator unchanged | `src/bin/ryi.rs` `main` | trivial 3.04 -> 2.33 s, heavy 6.93 -> 4.93 s |
+
+Remaining profile of the trivial run: tree-sitter parse/lex (`ts_parser_parse`, `ts_lex`, `ts_stack_*`).

@@ -27,6 +27,9 @@ tree-sitter = "0.27"
 tree-sitter-kotlin-sg = { version = "0.4", optional = true }
 
 [dependencies]
+# tree-sitter's C allocations (parse stacks, subtrees, query cursors) route
+# through mimalloc; the Rust global allocator stays the system one.
+libmimalloc-sys = { version = "0.1.49", features = ["extended"], optional = true }
 ryi-proto = { path = "../ryi-proto", optional = true }
 # The newline scan behind the per-document line table. Already unified in the
 # workspace lock through regex/aho-corasick, so this pins no new copy.
@@ -309,7 +312,7 @@ read = [
     "shared", "rust", "typescript", "go", "kotlin", "python", "prolog", "markdown",
     "data", "fallback", "gdscript", "commonlisp", "typespec",
 ]
-cli = ["shared", "dep:ryi-proto", "hafley_scm/cli", "dep:clap", "dep:axum", "dep:axum-extra", "dep:tokio", "dep:tokio-util", "dep:futures-util", "dep:fs4", "dep:daemonize", "dep:base64", "dep:http-body-util", "dep:http-body", "dep:tracing-subscriber", "dep:hafley-observe", "dep:libc", "dep:tempfile", "rust-checker"]
+cli = ["shared", "dep:ryi-proto", "hafley_scm/cli", "dep:clap", "dep:axum", "dep:axum-extra", "dep:tokio", "dep:tokio-util", "dep:futures-util", "dep:fs4", "dep:daemonize", "dep:base64", "dep:http-body-util", "dep:http-body", "dep:tracing-subscriber", "dep:hafley-observe", "dep:libc", "dep:tempfile", "dep:libmimalloc-sys", "rust-checker"]
 profile-alloc = ["hafley-observe/span-alloc", "hafley-observe/rusage"]
 # The rust checker tier: rust-analyzer as a library. Part of `cli` (user-set
 # 2026-09-28); it pulls the whole rust-analyzer crate graph (380s cold build).

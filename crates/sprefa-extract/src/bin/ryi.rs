@@ -374,6 +374,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
     hafley_observe::memcap::spawn("ryii");
+    // Parse workers allocate and free subtrees from every thread; the system
+    // allocator's tiny-zone lock serialized them. Set before any parser exists.
+    unsafe {
+        tree_sitter::set_allocator(Some(tree_sitter::Allocator {
+            malloc: libmimalloc_sys::mi_malloc,
+            calloc: libmimalloc_sys::mi_calloc,
+            realloc: libmimalloc_sys::mi_realloc,
+            free: libmimalloc_sys::mi_free,
+        }));
+    }
     if std::env::args_os().nth(1).as_deref() == Some(std::ffi::OsStr::new("--daemon")) {
         hafley_scm::read::cache::RETAIN_PROJECT_EXTRACTIONS
             .store(true, std::sync::atomic::Ordering::Relaxed);

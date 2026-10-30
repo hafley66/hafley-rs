@@ -7,8 +7,7 @@ use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-use rayon::prelude::*;
-use sprefa_extract::{content_id_of, extract_pool, query_tree_sitter_spans_many, RyiLang};
+use sprefa_extract::{content_id_of, extract_pool, query_tree_sitter_spans_with, RyiLang};
 
 type Result<T, E = Box<dyn std::error::Error>> = std::result::Result<T, E>;
 
@@ -76,12 +75,10 @@ pub fn run_to(
     }
     let mut output = crate::sqlite::Output::with_writer(cli.store.sqlite.as_deref(), writer, true)
         .map_err(|error| error.to_string())?;
-    // Every pattern compiled once per language; a `None` pattern is one whose
-    // node types that grammar lacks. A file every pattern misses is skipped.
-    let mut compiled = std::collections::HashMap::<
-        String,
-        (tree_sitter::Language, Vec<Option<hafley_scm::QueryExt>>),
-    >::new();
+    // Per language, every pattern that grammar accepts merges into one query:
+    // one cursor walk per file answers them all. `owners` maps a merged
+    // pattern index back to its source: (first merged index, pattern).
+    let mut compiled = std::collections::HashMap::<String, Option<Merged>>::new();
     let mut skipped = std::collections::BTreeMap::<String, usize>::new();
     let mut jobs = Vec::<(&std::path::PathBuf, String)>::with_capacity(paths.len());
     // A file with no language ends the stream where it sits: the files before
@@ -100,117 +97,154 @@ pub fn run_to(
             let grammar = RyiLang::parse_name(&language)
                 .ok_or_else(|| format!("unknown lang '{language}'"))?
                 .tree_sitter_language();
-            let mut built = Vec::with_capacity(patterns.len());
-            for pattern in &patterns {
-                built.push(match hafley_scm::build(&grammar, &pattern.text) {
-                    Ok(found) => Some(found),
+            let mut text = String::new();
+            let mut owners = Vec::new();
+            let mut count = 0u32;
+            for (index, pattern) in patterns.iter().enumerate() {
+                match hafley_scm::build(&grammar, &pattern.text) {
+                    Ok(found) => {
+                        owners.push((count, index));
+                        count += found.user.pattern_count() as u32;
+                        text.push_str(&pattern.text);
+                        text.push('\n');
+                    }
                     Err(hafley_scm::QueryExtError::Parse(error))
-                        if error.kind == tree_sitter::QueryErrorKind::NodeType => None,
+                        if error.kind == tree_sitter::QueryErrorKind::NodeType => {}
                     Err(error) if labelled => {
                         return Err(format!("query ({language}) {}: {error}", pattern.label).into())
                     }
                     Err(error) => return Err(format!("query ({language}): {error}").into()),
-                });
+                }
             }
-            compiled.insert(language.clone(), (grammar, built));
+            let entry = match owners.is_empty() {
+                true => None,
+                false => Some(Merged {
+                    query: hafley_scm::build(&grammar, &text)
+                        .map_err(|error| format!("query ({language}): merged patterns: {error}"))?,
+                    grammar,
+                    owners,
+                }),
+            };
+            compiled.insert(language.clone(), entry);
         }
-        if compiled[&language].1.iter().all(Option::is_none) {
+        if compiled[&language].is_none() {
             *skipped.entry(language).or_default() += 1;
             continue;
         }
         jobs.push((path, language));
     }
-    // Read, parse and match fan out on the extraction pool, one parser per
-    // worker; rows are written in input order, a chunk at a time. The request
-    // root is thread-local, so each worker reads through the caller's root.
+    // Workers pull file indexes in order from one counter, so a slow file never
+    // holds a batch; each worker reads, parses, matches and renders its rows.
+    // This thread only restores input order and writes. The request root is
+    // thread-local, so each worker reads through the caller's root.
     let io_root = sprefa_extract::request_io_root();
-    for chunk in jobs.chunks(1024) {
-        if cancel.as_ref().is_some_and(|cancel| cancel.load(Ordering::Acquire)) {
-            return Err(crate::RyiExit::new(3, "query: cancelled").into());
-        }
-        type Found = Vec<Option<Vec<sprefa_extract::TreeSitterSpannedMatch>>>;
-        let results: Vec<Result<(String, Found), String>> =
-            extract_pool().install(|| {
-                chunk
-                    .par_iter()
-                    .map_init(tree_sitter::Parser::new, |parser, (path, language)| {
-                        let (grammar, built) = &compiled[language];
-                        let read = || source_bytes(path, cli.digest.as_deref());
-                        let bytes = match &io_root {
-                            Some(root) => sprefa_extract::with_io_root(root.clone(), read),
-                            None => read(),
-                        }?;
-                        let queries = built.iter().map(Option::as_ref).collect::<Vec<_>>();
-                        // One parse per file; every pattern runs over that tree.
-                        let matches = query_tree_sitter_spans_many(&bytes, grammar, &queries, parser)?;
-                        Ok((content_id_of(&bytes).to_string(), matches))
-                    })
-                    .collect()
-            });
-        for ((path, _), result) in chunk.iter().zip(results) {
-            let name = path.to_string_lossy();
-            let (content_id, per_pattern) = result?;
-            if let Some(database) = &mut output.database {
-                database
-                    .source(&name, content_id)
-                    .map_err(|error| error.to_string())?;
+    let stdout = output.database.is_none();
+    let next = std::sync::atomic::AtomicUsize::new(0);
+    let stop = AtomicBool::new(false);
+    let work = |parser: &mut tree_sitter::Parser, index: usize| -> Result<Done, String> {
+        let (path, language) = &jobs[index];
+        let _file = tracing::debug_span!(target: "sprefa_extract::query", "query.file", index).entered();
+        let merged = compiled[language].as_ref().expect("compiled language");
+        let read = || source_bytes(path, cli.digest.as_deref());
+        let bytes = tracing::debug_span!(target: "sprefa_extract::query", "query.read").in_scope(|| match &io_root {
+            Some(root) => sprefa_extract::with_io_root(root.clone(), read),
+            None => read(),
+        })?;
+        let mut matches = query_tree_sitter_spans_with(&bytes, &merged.grammar, &merged.query, parser)?;
+        // Rows group by source pattern in argument order, document order within.
+        let owner = |pattern: u32| {
+            merged.owners[merged.owners.partition_point(|(first, _)| *first <= pattern) - 1].1
+        };
+        matches.sort_by_key(|found| owner(found.pattern));
+        let rows = matches.into_iter().map(|found| (owner(found.pattern), found)).collect::<Vec<_>>();
+        let _render = tracing::debug_span!(target: "sprefa_extract::query", "query.render").entered();
+        let lines = match stdout {
+            true => {
+                let name = path.to_string_lossy();
+                let mut block = String::new();
+                for (pattern, found) in rows {
+                    block.push_str(&render_row(&name, labelled.then_some(&patterns[pattern].label), found)?);
+                    block.push('\n');
+                }
+                Rendered::Lines(block)
             }
-            for (pattern, matches) in patterns.iter().zip(per_pattern) {
-                let Some(matches) = matches else { continue };
-                if let Some(database) = &mut output.database {
-                    for found in &matches {
-                        for capture in &found.captures {
-                            // Typed and `record`-first: the binder batches rows
-                            // across files instead of one insert per file.
+            false => Rendered::Rows(rows),
+        };
+        Ok(Done { content_id: content_id_of(&bytes).to_string(), rendered: lines })
+    };
+    let (sender, receiver) = std::sync::mpsc::sync_channel::<(usize, Result<Done, String>)>(256);
+    std::thread::scope(|scope| -> Result<()> {
+        scope.spawn(|| {
+            let sender = sender;
+            extract_pool().broadcast(|_| {
+                let mut parser = tree_sitter::Parser::new();
+                loop {
+                    let index = next.fetch_add(1, Ordering::Relaxed);
+                    if index >= jobs.len() || stop.load(Ordering::Relaxed) {
+                        break;
+                    }
+                    if sender.send((index, work(&mut parser, index))).is_err() {
+                        break;
+                    }
+                }
+            });
+        });
+        let written = (|| -> Result<()> {
+            let mut pending = std::collections::BTreeMap::new();
+            let mut want = 0;
+            loop {
+                let received = tracing::debug_span!(target: "sprefa_extract::query", "query.wait")
+                    .in_scope(|| receiver.recv());
+                let Ok((index, result)) = received else { break };
+                if cancel.as_ref().is_some_and(|cancel| cancel.load(Ordering::Acquire)) {
+                    return Err(crate::RyiExit::new(3, "query: cancelled").into());
+                }
+                pending.insert(index, result);
+                while let Some(result) = pending.remove(&want) {
+                    want += 1;
+                    let _write = tracing::debug_span!(target: "sprefa_extract::query", "query.write").entered();
+                    let name = jobs[want - 1].0.to_string_lossy();
+                    let done = result?;
+                    match done.rendered {
+                        Rendered::Lines(block) => {
+                            if !block.is_empty() {
+                                output.stdout_block(block.as_bytes()).map_err(|error| error.to_string())?;
+                            }
+                        }
+                        Rendered::Rows(rows) => {
+                            let database = output.database.as_mut().expect("sqlite output");
                             database
-                                .bind_row(&CaptureRow {
-                                    record: "capture",
-                                    query: &pattern.text,
-                                    capture: &capture.label,
-                                    text: &capture.text,
-                                    start: capture.start,
-                                    end: capture.end,
-                                    match_start: found.start,
-                                    match_end: found.end,
-                                })
+                                .source(&name, done.content_id)
                                 .map_err(|error| error.to_string())?;
+                            for (pattern, found) in &rows {
+                                for capture in &found.captures {
+                                    // Typed and `record`-first: the binder batches rows
+                                    // across files instead of one insert per file.
+                                    database
+                                        .bind_row(&CaptureRow {
+                                            record: "capture",
+                                            query: &patterns[*pattern].text,
+                                            capture: &capture.label,
+                                            text: &capture.text,
+                                            start: capture.start,
+                                            end: capture.end,
+                                            match_start: found.start,
+                                            match_end: found.end,
+                                        })
+                                        .map_err(|error| error.to_string())?;
+                                }
+                            }
                         }
                     }
-                    continue;
-                }
-                for found in matches {
-                    let mut row = std::collections::BTreeMap::<String, serde_json::Value>::new();
-                    row.insert("path".into(), name.as_ref().into());
-                    if labelled {
-                        row.insert("query".into(), pattern.label.as_str().into());
-                    }
-                    // A capture with one node is its text; a capture bound to several nodes
-                    // (`*`, `+`, or a repeated name) is an array of their texts in document order.
-                    let mut nodes = std::collections::BTreeMap::<String, Vec<(u32, String)>>::new();
-                    for capture in found.captures {
-                        nodes.entry(capture.label).or_default().push((capture.start, capture.text));
-                    }
-                    for (label, mut texts) in nodes {
-                        let value = if texts.len() == 1 {
-                            texts.pop().expect("one node").1.into()
-                        } else {
-                            texts.sort_by_key(|(start, _)| *start);
-                            texts.into_iter().map(|(_, text)| text).collect::<Vec<_>>().into()
-                        };
-                        row.insert(label, value);
-                    }
-                    row.insert("line".into(), found.line.into());
-                    row.insert("end_line".into(), found.end_line.into());
-                    output
-                        .line(
-                            &serde_json::to_string(&row)
-                                .map_err(|error| format!("query output: {error}"))?,
-                        )
-                        .map_err(|error| error.to_string())?;
                 }
             }
-        }
-    }
+            Ok(())
+        })();
+        // An early return stops the workers: they see `stop` or a closed channel.
+        stop.store(true, Ordering::Relaxed);
+        drop(receiver);
+        written
+    })?;
     if let Some(error) = late_error {
         return Err(error.into());
     }
@@ -223,6 +257,59 @@ pub fn run_to(
         ));
     }
     output.finish()
+}
+
+/// Every pattern a language accepts, merged into one query; `owners` holds
+/// (first merged pattern index, source pattern) in ascending order.
+struct Merged {
+    grammar: tree_sitter::Language,
+    query: hafley_scm::QueryExt,
+    owners: Vec<(u32, usize)>,
+}
+
+/// One file's answer: stdout lines rendered by the worker, or capture rows
+/// tagged with their source pattern for the SQLite store.
+struct Done {
+    content_id: String,
+    rendered: Rendered,
+}
+
+enum Rendered {
+    /// The file's JSONL rows, each ending in `\n`.
+    Lines(String),
+    Rows(Vec<(usize, sprefa_extract::TreeSitterSpannedMatch)>),
+}
+
+/// One `--query` row: path, the source label when several patterns ran, each
+/// capture's text, and the match's lines.
+fn render_row(
+    name: &str,
+    label: Option<&String>,
+    found: sprefa_extract::TreeSitterSpannedMatch,
+) -> Result<String, String> {
+    let mut row = std::collections::BTreeMap::<String, serde_json::Value>::new();
+    row.insert("path".into(), name.into());
+    if let Some(label) = label {
+        row.insert("query".into(), label.as_str().into());
+    }
+    // A capture with one node is its text; a capture bound to several nodes
+    // (`*`, `+`, or a repeated name) is an array of their texts in document order.
+    let mut nodes = std::collections::BTreeMap::<String, Vec<(u32, String)>>::new();
+    for capture in found.captures {
+        nodes.entry(capture.label).or_default().push((capture.start, capture.text));
+    }
+    for (label, mut texts) in nodes {
+        let value = if texts.len() == 1 {
+            texts.pop().expect("one node").1.into()
+        } else {
+            texts.sort_by_key(|(start, _)| *start);
+            texts.into_iter().map(|(_, text)| text).collect::<Vec<_>>().into()
+        };
+        row.insert(label, value);
+    }
+    row.insert("line".into(), found.line.into());
+    row.insert("end_line".into(), found.end_line.into());
+    serde_json::to_string(&row).map_err(|error| format!("query output: {error}"))
 }
 
 /// One query source: `label` names it in rows (the `--scm` path, or the

@@ -532,6 +532,21 @@ impl Output {
     pub fn stdout_line(&mut self, line: &str) -> Result<()> {
         self.write_stdout(line.as_bytes())
     }
+    /// Whole JSONL lines, each ending in `\n`: one write and, when streaming,
+    /// one flush for the run instead of one per line.
+    pub fn stdout_block(&mut self, block: &[u8]) -> Result<()> {
+        if !self.line_tables.is_empty() || self.line_offsets.is_some() || self.line_root.is_some() {
+            for line in block.split(|byte| *byte == b'\n').filter(|line| !line.is_empty()) {
+                self.write_stdout(line)?;
+            }
+            return Ok(());
+        }
+        self.stdout.write_all(block)?;
+        if self.streaming {
+            self.stdout.flush()?;
+        }
+        Ok(())
+    }
     pub fn clear_source(&mut self) -> Result<()> {
         if let Some(db) = &mut self.database {
             db.clear_source()?;
