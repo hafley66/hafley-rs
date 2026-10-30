@@ -40,7 +40,8 @@ def run(out_dir, command, stdin_bytes):
             ["ps", "-o", "rss=,time=", "-p", str(child.pid)], capture_output=True, text=True
         )
         fields = probe.stdout.split()
-        if len(fields) == 2:
+        # A probe racing the exit reads a zombie: RSS 0 and a reset CPU clock.
+        if len(fields) == 2 and int(fields[0]) > 0:
             samples.append((time.monotonic() - start, int(fields[0]) / 1024, cpu_seconds(fields[1])))
         time.sleep(SAMPLE_SECONDS)
     wall = time.monotonic() - start

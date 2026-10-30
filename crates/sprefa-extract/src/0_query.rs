@@ -25,7 +25,8 @@ pub fn run_to(
     let paths = match &cli.digest {
         Some(_) if cli.inputs.paths.len() == 1 => vec![cli.inputs.paths[0].clone()],
         Some(_) => return Err("--digest names one blob; pass exactly one input".into()),
-        None => crate::inputs::expand(&cli.inputs)?,
+        None => tracing::debug_span!(target: "sprefa_extract::query", "query.expand")
+            .in_scope(|| crate::inputs::expand(&cli.inputs))?,
     };
     if paths.is_empty() {
         return Err("query: no inputs; pass files, directories, globs, - or --entry".into());
@@ -94,36 +95,36 @@ pub fn run_to(
             }
         };
         if !compiled.contains_key(&language) {
+            let _compile =
+                tracing::debug_span!(target: "sprefa_extract::query", "query.compile", language).entered();
             let grammar = RyiLang::parse_name(&language)
                 .ok_or_else(|| format!("unknown lang '{language}'"))?
                 .tree_sitter_language();
-            let mut text = String::new();
-            let mut owners = Vec::new();
-            let mut count = 0u32;
-            for (index, pattern) in patterns.iter().enumerate() {
-                match hafley_scm::build(&grammar, &pattern.text) {
-                    Ok(found) => {
-                        owners.push((count, index));
-                        count += found.user.pattern_count() as u32;
-                        text.push_str(&pattern.text);
-                        text.push('\n');
+            // All patterns at once first; only a failure compiles them one by one,
+            // to drop the ones this grammar lacks node types for and to name a bad one.
+            let entry = match Merged::build(&grammar, &patterns, (0..patterns.len()).collect()) {
+                Ok(merged) => Some(merged),
+                Err(_) => {
+                    let mut kept = Vec::new();
+                    for (index, pattern) in patterns.iter().enumerate() {
+                        match hafley_scm::build(&grammar, &pattern.text) {
+                            Ok(_) => kept.push(index),
+                            Err(hafley_scm::QueryExtError::Parse(error))
+                                if error.kind == tree_sitter::QueryErrorKind::NodeType => {}
+                            Err(error) if labelled => {
+                                return Err(format!("query ({language}) {}: {error}", pattern.label).into())
+                            }
+                            Err(error) => return Err(format!("query ({language}): {error}").into()),
+                        }
                     }
-                    Err(hafley_scm::QueryExtError::Parse(error))
-                        if error.kind == tree_sitter::QueryErrorKind::NodeType => {}
-                    Err(error) if labelled => {
-                        return Err(format!("query ({language}) {}: {error}", pattern.label).into())
+                    match kept.is_empty() {
+                        true => None,
+                        false => Some(
+                            Merged::build(&grammar, &patterns, kept)
+                                .map_err(|error| format!("query ({language}): merged patterns: {error}"))?,
+                        ),
                     }
-                    Err(error) => return Err(format!("query ({language}): {error}").into()),
                 }
-            }
-            let entry = match owners.is_empty() {
-                true => None,
-                false => Some(Merged {
-                    query: hafley_scm::build(&grammar, &text)
-                        .map_err(|error| format!("query ({language}): merged patterns: {error}"))?,
-                    grammar,
-                    owners,
-                }),
             };
             compiled.insert(language.clone(), entry);
         }
@@ -152,19 +153,17 @@ pub fn run_to(
         })?;
         let mut matches = query_tree_sitter_spans_with(&bytes, &merged.grammar, &merged.query, parser)?;
         // Rows group by source pattern in argument order, document order within.
-        let owner = |pattern: u32| {
-            merged.owners[merged.owners.partition_point(|(first, _)| *first <= pattern) - 1].1
-        };
-        matches.sort_by_key(|found| owner(found.pattern));
-        let rows = matches.into_iter().map(|found| (owner(found.pattern), found)).collect::<Vec<_>>();
+        let owner = |found: &sprefa_extract::TreeSitterSpannedMatch| merged.owner[found.pattern as usize];
+        matches.sort_by_key(owner);
+        let rows = matches.into_iter().map(|found| (owner(&found), found)).collect::<Vec<_>>();
         let _render = tracing::debug_span!(target: "sprefa_extract::query", "query.render").entered();
         let lines = match stdout {
             true => {
                 let name = path.to_string_lossy();
-                let mut block = String::new();
-                for (pattern, found) in rows {
-                    block.push_str(&render_row(&name, labelled.then_some(&patterns[pattern].label), found)?);
-                    block.push('\n');
+                let mut block = Vec::new();
+                for (pattern, found) in &rows {
+                    render_row(&mut block, &name, labelled.then_some(patterns[*pattern].label.as_str()), found)
+                        .map_err(|error| format!("query output: {error}"))?;
                 }
                 Rendered::Lines(block)
             }
@@ -208,7 +207,7 @@ pub fn run_to(
                     match done.rendered {
                         Rendered::Lines(block) => {
                             if !block.is_empty() {
-                                output.stdout_block(block.as_bytes()).map_err(|error| error.to_string())?;
+                                output.stdout_block(&block).map_err(|error| error.to_string())?;
                             }
                         }
                         Rendered::Rows(rows) => {
@@ -259,12 +258,38 @@ pub fn run_to(
     output.finish()
 }
 
-/// Every pattern a language accepts, merged into one query; `owners` holds
-/// (first merged pattern index, source pattern) in ascending order.
+/// The kept patterns of one language, merged into one query; `owner[p]` is
+/// the source pattern of merged pattern `p`.
 struct Merged {
     grammar: tree_sitter::Language,
     query: hafley_scm::QueryExt,
-    owners: Vec<(u32, usize)>,
+    owner: Vec<usize>,
+}
+
+impl Merged {
+    /// One query from `kept` patterns' texts; a merged pattern's start byte
+    /// names the source text it came from.
+    fn build(
+        grammar: &tree_sitter::Language,
+        patterns: &[Pattern],
+        kept: Vec<usize>,
+    ) -> Result<Self, hafley_scm::QueryExtError> {
+        let mut text = String::new();
+        let mut starts = Vec::with_capacity(kept.len());
+        for index in kept {
+            starts.push((text.len(), index));
+            text.push_str(&patterns[index].text);
+            text.push('\n');
+        }
+        let query = hafley_scm::build(grammar, &text)?;
+        let owner = (0..query.user.pattern_count())
+            .map(|pattern| {
+                let byte = query.user.start_byte_for_pattern(pattern);
+                starts[starts.partition_point(|(start, _)| *start <= byte) - 1].1
+            })
+            .collect();
+        Ok(Self { grammar: grammar.clone(), query, owner })
+    }
 }
 
 /// One file's answer: stdout lines rendered by the worker, or capture rows
@@ -276,40 +301,72 @@ struct Done {
 
 enum Rendered {
     /// The file's JSONL rows, each ending in `\n`.
-    Lines(String),
+    Lines(Vec<u8>),
     Rows(Vec<(usize, sprefa_extract::TreeSitterSpannedMatch)>),
 }
 
-/// One `--query` row: path, the source label when several patterns ran, each
-/// capture's text, and the match's lines.
+/// One `--query` row appended to `block` with its newline: path, the source
+/// label when several patterns ran, each capture's text, and the match's
+/// lines, keys sorted. `line`/`end_line` win over a capture of that name, a
+/// capture wins over `path`/`query`.
 fn render_row(
+    block: &mut Vec<u8>,
     name: &str,
-    label: Option<&String>,
-    found: sprefa_extract::TreeSitterSpannedMatch,
-) -> Result<String, String> {
-    let mut row = std::collections::BTreeMap::<String, serde_json::Value>::new();
-    row.insert("path".into(), name.into());
+    label: Option<&str>,
+    found: &sprefa_extract::TreeSitterSpannedMatch,
+) -> serde_json::Result<()> {
+    enum Cell<'a> {
+        Text(&'a str),
+        Texts(Vec<(u32, &'a str)>),
+        Number(u32),
+    }
+    let mut row = std::collections::BTreeMap::<&str, Cell>::new();
+    row.insert("path", Cell::Text(name));
     if let Some(label) = label {
-        row.insert("query".into(), label.as_str().into());
+        row.insert("query", Cell::Text(label));
     }
     // A capture with one node is its text; a capture bound to several nodes
     // (`*`, `+`, or a repeated name) is an array of their texts in document order.
-    let mut nodes = std::collections::BTreeMap::<String, Vec<(u32, String)>>::new();
-    for capture in found.captures {
-        nodes.entry(capture.label).or_default().push((capture.start, capture.text));
+    let mut captures = std::collections::BTreeMap::<&str, Vec<(u32, &str)>>::new();
+    for capture in &found.captures {
+        captures.entry(capture.label.as_str()).or_default().push((capture.start, capture.text.as_str()));
     }
-    for (label, mut texts) in nodes {
-        let value = if texts.len() == 1 {
-            texts.pop().expect("one node").1.into()
-        } else {
-            texts.sort_by_key(|(start, _)| *start);
-            texts.into_iter().map(|(_, text)| text).collect::<Vec<_>>().into()
+    for (label, mut texts) in captures {
+        let cell = match texts.len() {
+            1 => Cell::Text(texts[0].1),
+            _ => {
+                texts.sort_by_key(|(start, _)| *start);
+                Cell::Texts(texts)
+            }
         };
-        row.insert(label, value);
+        row.insert(label, cell);
     }
-    row.insert("line".into(), found.line.into());
-    row.insert("end_line".into(), found.end_line.into());
-    serde_json::to_string(&row).map_err(|error| format!("query output: {error}"))
+    row.insert("line", Cell::Number(found.line));
+    row.insert("end_line", Cell::Number(found.end_line));
+    block.push(b'{');
+    for (index, (key, cell)) in row.iter().enumerate() {
+        if index > 0 {
+            block.push(b',');
+        }
+        serde_json::to_writer(&mut *block, key)?;
+        block.push(b':');
+        match cell {
+            Cell::Text(text) => serde_json::to_writer(&mut *block, text)?,
+            Cell::Number(number) => serde_json::to_writer(&mut *block, number)?,
+            Cell::Texts(texts) => {
+                block.push(b'[');
+                for (position, (_, text)) in texts.iter().enumerate() {
+                    if position > 0 {
+                        block.push(b',');
+                    }
+                    serde_json::to_writer(&mut *block, text)?;
+                }
+                block.push(b']');
+            }
+        }
+    }
+    block.extend_from_slice(b"}\n");
+    Ok(())
 }
 
 /// One query source: `label` names it in rows (the `--scm` path, or the

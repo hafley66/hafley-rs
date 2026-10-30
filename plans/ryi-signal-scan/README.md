@@ -86,3 +86,23 @@ Output byte-identical to `fb1d1fa7` for the 8-signal and 20-heavy sets (`cmp`).
 | tree-sitter C allocator -> mimalloc (`tree_sitter::set_allocator`); Rust global allocator unchanged | `src/bin/ryi.rs` `main` | trivial 3.04 -> 2.33 s, heavy 6.93 -> 4.93 s |
 
 Remaining profile of the trivial run: tree-sitter parse/lex (`ts_parser_parse`, `ts_lex`, `ts_stack_*`).
+
+## Round 2: profile-driven (release, vscode `src`, median of 3)
+
+| run | 0.2.5 real / user | now real / user |
+| --- | --- | --- |
+| trivial | 2.33 / 18.44 | 1.98 / 18.31 |
+| 8 signal `.scm` | 2.61 / 19.69 | 2.10 / 19.49 |
+| 20 `heavy/*.scm` | 4.93 / 37.50 | 3.64 / 31.25 |
+
+Output byte-identical (`cmp`) for the 8-signal and 20-heavy sets.
+
+| change | span it moved |
+| --- | --- |
+| rows render straight into the file's byte buffer (borrowed `&str` cells), no `BTreeMap<String, serde_json::Value>` per row | `query.render` 14.577 -> 6.094 s CPU |
+| one merged compile per language; per-pattern compiles only on failure; pattern -> source by start byte | `query.compile` 2 x ~190 ms -> 2 x 80 ms |
+| input expansion: one `metadata` per token, dedupe on `(dev, ino)` stat'd on the pool (was `is_dir` + `exists` + `canonicalize` serially) | `query.expand` 35 ms; first file span 0.70 s -> 0.36 s |
+
+Chart + span table: `profile-heavy/profile.html` (CPU cores and RSS from `ps` every 20 ms,
+per-span thread concurrency in 50 ms buckets). Rerun:
+`python3 crates/sprefa-extract/bench/scripts/10_query_profile.py OUT ryii query --scm ... - < paths.txt`.

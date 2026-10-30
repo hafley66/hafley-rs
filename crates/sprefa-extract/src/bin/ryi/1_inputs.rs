@@ -47,9 +47,11 @@ pub fn expand(inputs: &Inputs) -> Result<Vec<PathBuf>, String> {
     let mut files = Vec::new();
     for token in &tokens {
         let path = token;
-        if sprefa_extract::io_path(path).is_dir() {
+        // One stat per token answers both "directory?" and "exists?".
+        let kind = std::fs::metadata(sprefa_extract::io_path(path)).ok().map(|meta| meta.is_dir());
+        if kind == Some(true) {
             files.extend(walk(path, &inputs.patterns)?);
-        } else if sprefa_extract::io_path(path).exists() {
+        } else if kind.is_some() {
             files.push(path.clone());
         } else if is_glob(&token.to_string_lossy()) {
             let (base, rest) = split_glob(&token.to_string_lossy());
@@ -78,14 +80,42 @@ pub fn expand(inputs: &Inputs) -> Result<Vec<PathBuf>, String> {
         files = sprefa_extract::reach_files(&root, &universe, &inputs.entry, inputs.depth)
             .map_err(|error| error.to_string())?;
     }
-    let mut seen = HashSet::new();
-    files.retain(|path| {
-        seen.insert(
-            std::fs::canonicalize(sprefa_extract::io_path(path))
-                .unwrap_or_else(|_| sprefa_extract::io_path(path)),
-        )
+    // A file named twice keeps its first spelling: the same (device, inode)
+    // is the same file under any spelling or symlink. The stats run on the
+    // extraction pool; the request root is thread-local, so each one reads
+    // through the caller's root.
+    let io_root = sprefa_extract::request_io_root();
+    let keys: Vec<FileKey> = sprefa_extract::extract_pool().install(|| {
+        use rayon::prelude::*;
+        files
+            .par_iter()
+            .map(|path| {
+                let stat = || std::fs::metadata(sprefa_extract::io_path(path));
+                let meta = match &io_root {
+                    Some(root) => sprefa_extract::with_io_root(root.clone(), stat),
+                    None => stat(),
+                };
+                match meta {
+                    Ok(meta) => {
+                        use std::os::unix::fs::MetadataExt;
+                        FileKey::Inode(meta.dev(), meta.ino())
+                    }
+                    Err(_) => FileKey::Path(sprefa_extract::io_path(path)),
+                }
+            })
+            .collect()
     });
+    let mut seen = HashSet::new();
+    let mut keys = keys.into_iter();
+    files.retain(|_| seen.insert(keys.next().expect("one key per file")));
     Ok(files)
+}
+
+/// What makes two inputs the same file.
+#[derive(Hash, PartialEq, Eq)]
+enum FileKey {
+    Inode(u64, u64),
+    Path(PathBuf),
 }
 
 /// The corpus root a whole-project verb runs over: `--root`, else the one
