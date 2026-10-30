@@ -1,0 +1,12 @@
+; `.$()` reads whose ancestor is a computed Signal(() => ...)
+((call_expression
+   function: (member_expression property: (property_identifier) @read)
+   arguments: (arguments) @none) @site
+ (#eq? @read "$")
+ (#eq? @none "()")
+ (#has-ancestor? @site
+   ((call_expression
+      function: (identifier) @ctor
+      arguments: (arguments (arrow_function) @body)) @computed
+    (#eq? @ctor "Signal"))
+   rows: each))
