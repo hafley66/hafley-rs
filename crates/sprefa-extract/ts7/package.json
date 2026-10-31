@@ -2,7 +2,6 @@
   "name": "sprefa-extract-ts7",
   "private": true,
   "devDependencies": {
-    "typescript": "7.0.2",
-    "tsrs": "0.20.1-ts7.1.0-beta"
+    "typescript": "7.0.2"
   }
 }

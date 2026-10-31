@@ -17,7 +17,7 @@ use std::path::{Path, PathBuf};
 
 use sprefa_extract::{
     scip_import_sites, verify_import_refs, ImportRef, ImportRefKind, MoveCx, Rehome, ScipIndex,
-    ScipSource, Span, TsSource, MISSED_BY_IMPL, UNKNOWN_TO_SCIP,
+    Span, TsSource, MISSED_BY_IMPL, UNKNOWN_TO_SCIP,
 };
 
 const MOVED: &str = "src/util.ts";

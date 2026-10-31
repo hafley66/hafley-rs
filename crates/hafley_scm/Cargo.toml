@@ -27,6 +27,14 @@ oxc_span = { version = "0.151", optional = true }
 oxc_syntax = { version = "0.151", optional = true }
 oxc_semantic = { version = "0.151", optional = true }
 oxc_resolver = { version = "11.24.3", optional = true }
+# The TS slow tier: tsrs (Rust port of TypeScript 7.1, Apache-2.0) serves the
+# TypeScript 7.1 API in-process (`tsrs_api::Session`). Not on crates.io; pinned by rev.
+tsrs_api = { git = "https://github.com/oxc-project/tsrs", rev = "e18fb617ee516917342dcda27063ab67acc79e49", optional = true }
+tsrs_vfs = { git = "https://github.com/oxc-project/tsrs", rev = "e18fb617ee516917342dcda27063ab67acc79e49", optional = true }
+tsrs_api_codec = { git = "https://github.com/oxc-project/tsrs", rev = "e18fb617ee516917342dcda27063ab67acc79e49", optional = true }
+tsrs_ast = { git = "https://github.com/oxc-project/tsrs", rev = "e18fb617ee516917342dcda27063ab67acc79e49", optional = true }
+tsrs_scanner = { git = "https://github.com/oxc-project/tsrs", rev = "e18fb617ee516917342dcda27063ab67acc79e49", optional = true }
+tsrs_core = { git = "https://github.com/oxc-project/tsrs", rev = "e18fb617ee516917342dcda27063ab67acc79e49", optional = true }
 tree-sitter-go = { version = "0.25", optional = true }
 tree-sitter-python = { version = "0.25", optional = true }
 tree-sitter-kotlin-sg = { version = "0.4", optional = true }
@@ -100,6 +108,7 @@ typescript = [
     "shared", "dep:lsp-server", "dep:lsp-types", "dep:url",
     "dep:oxc_allocator", "dep:oxc_parser", "dep:oxc_ast", "dep:oxc_ast_visit", "dep:oxc_span",
     "dep:oxc_syntax", "dep:oxc_semantic", "dep:oxc_resolver",
+    "dep:tsrs_api", "dep:tsrs_vfs", "dep:tsrs_api_codec", "dep:tsrs_ast", "dep:tsrs_scanner", "dep:tsrs_core",
     "dep:tree-sitter-typescript", "dep:tree-sitter-javascript",
 ]
 go = ["shared", "dep:tree-sitter-go", "dep:gomod-parser"]

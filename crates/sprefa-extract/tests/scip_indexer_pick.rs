@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use sprefa_extract::{
-    canonical_pick, detect, detect_picked, ensure_index_picked, pick_cache_dir, IndexBudget,
+    detect, detect_picked, ensure_index_picked, pick_cache_dir, IndexBudget,
 };
 
 // PATH is a process global; every test here that moves it holds this lock.

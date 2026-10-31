@@ -1,5 +1,5 @@
 ---
-source: crates/sprefa-extract/tests/support/2_fixture_runner.rs
+source: tests/support/2_fixture_runner.rs
 ---
 {
   "00_index_callers": {
@@ -24,14 +24,6 @@ source: crates/sprefa-extract/tests/support/2_fixture_runner.rs
     "refused": {
       "exit_code": 2
     }
-  },
-  "02_ts_decline": {
-    "declined": {
-      "success": false,
-      "stdout": ""
-    },
-    "no_output": "",
-    "tier_named": true
   },
   "03_rust_owned": {
     "owned": {

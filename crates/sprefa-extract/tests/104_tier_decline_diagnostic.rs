@@ -75,38 +75,6 @@ fn ts_args() -> Vec<&'static str> {
     ]
 }
 
-/// The hand-use case of 2026-09-03: `--ts-checker` with `node` off PATH used to
-/// emit a plain syntax stream and say nothing about the tier it was asked for.
-#[test]
-fn ts_tier_off_path_is_a_diagnostic() {
-    let empty = empty_dir("no_node");
-    let facts = facts(&ts_args(), Some(&empty), None);
-    let declined = of_record(&facts, "diagnostic");
-    assert_eq!(
-        declined.len(),
-        1,
-        "one declined tier, one row: {declined:?}"
-    );
-    assert_eq!(declined[0]["run"], 0, "a decline is the syntax run's news");
-    assert_eq!(word(declined[0], "relation"), "tier.tsrs");
-    let detail = word(declined[0], "detail");
-    assert!(
-        detail.contains("node"),
-        "the reason names the driver: {detail}"
-    );
-
-    let semantic: Vec<&Value> = of_record(&facts, "run")
-        .into_iter()
-        .filter(|run| run["mode"] == "semantic")
-        .collect();
-    assert!(
-        semantic.is_empty(),
-        "a declined tier mints no run: {semantic:?}"
-    );
-}
-
-/// The rust twin. A root with no `Cargo.toml` above it is the cheapest decline
-/// the tier can be forced into; without the feature it declines before that.
 #[test]
 fn rust_tier_off_is_a_diagnostic() {
     let root = empty_dir("no_cargo");
@@ -167,8 +135,11 @@ fn no_witness_emits_no_diagnostic() {
 /// row without a decoder change and hands it back.
 #[test]
 fn the_declined_stream_survives_the_reverse_door() {
-    let empty = empty_dir("no_node_ingest");
-    let stream: Vec<String> = facts(&ts_args(), Some(&empty), None)
+    // The TS tier runs in-process and has nothing to take away; the Rust tier
+    // declines on a root with no cargo workspace.
+    let root = empty_dir("no_cargo_ingest");
+    let args = ["--witness", "--resolve", "--arms", "type", "--root", root.to_str().expect("utf8 path"), "--rust-checker", RUST_PROBE];
+    let stream: Vec<String> = facts(&args, None, None)
         .iter()
         .map(|row| serde_json::to_string(row).expect("a row re-serializes"))
         .collect();
@@ -177,7 +148,7 @@ fn the_declined_stream_survives_the_reverse_door() {
     let landed = facts(&["ingest", raw.to_str().expect("utf8 path")], None, None);
     let declined = of_record(&landed, "diagnostic");
     assert_eq!(declined.len(), 1, "the door kept the decline: {declined:?}");
-    assert_eq!(word(declined[0], "relation"), "tier.tsrs");
+    assert_eq!(word(declined[0], "relation"), "tier.rust-analyzer");
 }
 
 /// A `typescript` the driver can load, the way `tests/98_resolve_witness.rs`

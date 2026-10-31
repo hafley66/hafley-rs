@@ -1588,9 +1588,9 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(facts))"
       },
       {
         "span": [
-          "$CRATE/ts7/node_modules/@tsrs/darwin-arm64/lib.es5.d.ts",
-          73657,
-          73664
+          "bundled:///libs/lib.es5.d.ts",
+          118469,
+          118472
         ]
       }
     ]
