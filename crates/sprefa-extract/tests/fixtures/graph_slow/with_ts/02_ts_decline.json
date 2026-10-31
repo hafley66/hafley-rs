@@ -24,7 +24,7 @@
       ],
       "cwd": "$work",
       "environment": {
-        "SPREFA_TSGO": "$work/absent/tsgo"
+        "SPREFA_NODE": "$work/absent/node"
       },
       "unasserted_exit": true,
       "assert_success": false,
@@ -36,7 +36,7 @@
       "name": "tier_named",
       "kind": "contains",
       "cell": "declined.stderr",
-      "text": "ryi slow: tier.tsgo declined"
+      "text": "ryi slow: tier.tsrs declined"
     },
     {
       "action": "claim",

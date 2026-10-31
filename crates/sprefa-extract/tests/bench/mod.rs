@@ -1231,7 +1231,7 @@ pub fn run(lang: &str, tier: Tier) -> Run {
             "ratchet rust checker: built without the rust-checker feature; run `just extract-ratchet`",
         ),
         ("ts5", Tier::Checker) => assert!(
-            cfg!(feature = "ts-checker"),
+            cfg!(feature = "typescript"),
             "ratchet ts5 checker: built without the ts-checker feature; run `just extract-ratchet`",
         ),
         ("go", Tier::Checker) => assert!(

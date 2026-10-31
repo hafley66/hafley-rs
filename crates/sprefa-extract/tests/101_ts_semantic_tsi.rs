@@ -1,5 +1,5 @@
-//! Stock tsgo semantic rows and demand-scoped coverage.
-#![cfg(feature = "ts-checker")]
+//! TS 7.1 (tsrs) semantic rows and demand-scoped coverage.
+#![cfg(feature = "typescript")]
 use serde_json::Value;
 use std::collections::BTreeSet;
 use std::process::Command;
@@ -83,7 +83,7 @@ fn stock_streams_preserve_coverage_and_declared_ids() {
         if file == "probe.ts" && witness {
             assert!(rows
                 .iter()
-                .any(|row| row["record"] == "run" && row["tool"] == "tsgo"));
+                .any(|row| row["record"] == "run" && row["tool"] == "tsrs"));
             for relation in ["tsi.subtype", "tsi.equivalent"] {
                 assert!(!rows
                     .iter()
@@ -135,8 +135,7 @@ fn stock_streams_preserve_coverage_and_declared_ids() {
 }
 
 #[test]
-fn stock_pairs_identity_and_bases_share_one_unopened_lsp_process() {
-    use sprefa_extract::lang::ts7_lsp_session::TS_SESSIONS;
+fn stock_pairs_identity_and_bases_answer_the_same_rows_twice() {
     use sprefa_extract::lang::ts_checker::{answer, TsDemand, TsSite};
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures/tsi")
@@ -172,32 +171,13 @@ fn stock_pairs_identity_and_bases_share_one_unopened_lsp_process() {
         .unwrap()
     };
     let first = run();
-    let pid = {
-        let sessions = TS_SESSIONS.get().unwrap().lock().unwrap();
-        let session = &sessions[&root];
-        assert!(session.opened.is_empty(), "the checker sends no didOpen");
-        session.lsp.child.id()
-    };
     let second = run();
-    {
-        let sessions = TS_SESSIONS.get().unwrap().lock().unwrap();
-        let session = &sessions[&root];
-        assert_eq!(
-            session.lsp.child.id(),
-            pid,
-            "one process per root across requests"
-        );
-        assert!(
-            session.opened.is_empty(),
-            "the hosted API leaves LSP documents unopened"
-        );
-    }
     assert_eq!(
         first.tsi, second.tsi,
         "snapshot handles cannot change run-local rows"
     );
     assert_eq!(first.coverage, second.coverage);
-    assert_eq!(first.version, "7.0.2");
+    assert_eq!(first.version, "tsrs 0.20.1-ts7.1.0-beta");
     assert_eq!(first.files_answered, 1);
     let relation = |name: &str| {
         first

@@ -135,7 +135,6 @@ rust-checker = [
     "dep:ra_ap_project_model",
     "dep:ra_ap_vfs",
 ]
-ts-checker = ["shared", "typescript"]
 go-checker = ["shared", "go"]
 
 [dev-dependencies]

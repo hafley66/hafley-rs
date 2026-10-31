@@ -173,7 +173,7 @@ pub fn evaluate(_case: &Value) -> Value {
         runs,
         vec![
             (0, "syntax".to_string(), "ryi".to_string()),
-            (1, "semantic".to_string(), "tsgo".to_string()),
+            (1, "semantic".to_string(), "tsrs".to_string()),
         ],
         "one run per tier that ran"
     );

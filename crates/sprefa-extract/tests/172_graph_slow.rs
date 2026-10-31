@@ -2,7 +2,7 @@
 
 #[test]
 fn whole_output() {
-    let directory = if cfg!(feature = "ts-checker") {
+    let directory = if cfg!(feature = "typescript") {
         "graph_slow/with_ts"
     } else {
         "graph_slow/without_ts"

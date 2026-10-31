@@ -88,17 +88,11 @@ fn ts_tier_off_path_is_a_diagnostic() {
         "one declined tier, one row: {declined:?}"
     );
     assert_eq!(declined[0]["run"], 0, "a decline is the syntax run's news");
-    assert_eq!(word(declined[0], "relation"), "tier.tsgo");
+    assert_eq!(word(declined[0], "relation"), "tier.tsrs");
     let detail = word(declined[0], "detail");
-    #[cfg(feature = "ts-checker")]
     assert!(
-        detail.contains("tsgo"),
+        detail.contains("node"),
         "the reason names the driver: {detail}"
-    );
-    #[cfg(not(feature = "ts-checker"))]
-    assert!(
-        detail.contains("--features ts-checker"),
-        "the reason names the missing build: {detail}"
     );
 
     let semantic: Vec<&Value> = of_record(&facts, "run")
@@ -183,18 +177,18 @@ fn the_declined_stream_survives_the_reverse_door() {
     let landed = facts(&["ingest", raw.to_str().expect("utf8 path")], None, None);
     let declined = of_record(&landed, "diagnostic");
     assert_eq!(declined.len(), 1, "the door kept the decline: {declined:?}");
-    assert_eq!(word(declined[0], "relation"), "tier.tsgo");
+    assert_eq!(word(declined[0], "relation"), "tier.tsrs");
 }
 
 /// A `typescript` the driver can load, the way `tests/98_resolve_witness.rs`
 /// finds one: a checkout's `lib/typescript.js` is the built compiler.
-#[cfg(feature = "ts-checker")]
+#[cfg(feature = "typescript")]
 fn typescript() -> String {
     crate::stock_tsgo::executable()
 }
 
 /// The other direction: a tier that LOADED is a semantic run, never a decline.
-#[cfg(feature = "ts-checker")]
+#[cfg(feature = "typescript")]
 #[test]
 fn a_loaded_tier_files_no_decline() {
     let facts = facts(&ts_args(), None, Some(typescript()));
@@ -216,5 +210,5 @@ fn a_loaded_tier_files_no_decline() {
         .filter(|run| run["mode"] == "semantic")
         .map(|run| word(run, "tool"))
         .collect();
-    assert_eq!(semantic, vec!["tsgo".to_string()], "the tier answered");
+    assert_eq!(semantic, vec!["tsrs".to_string()], "the tier answered");
 }

@@ -569,7 +569,7 @@ fn resolve_project_inputs(
                 .ok()
                 .expect("fresh project checker tier (ts)"),
             Err(detail) => declines.push(TierDecline {
-                tool: "tsgo",
+                tool: "tsrs",
                 detail,
             }),
         }
@@ -964,7 +964,7 @@ pub struct CheckerTier {
 pub static CHECKER_TIERS: &[CheckerTier] = &[
     CheckerTier {
         language: "ts",
-        tool: "tsgo",
+        tool: "tsrs",
     },
     CheckerTier {
         language: "rust",
@@ -1210,14 +1210,11 @@ fn load_ts_checker(
         return Err("no .ts, .tsx, .mts or .cts path in the supplied file set".to_string());
     }
     let files: Vec<_> = files.into_iter().map(|(path, absolute)| {
-        #[cfg(feature = "ts-checker")]
         let demand = {
             let input = inputs.iter().find(|input| input.path == path).expect("checker file is a project input");
             let text = std::fs::read_to_string(&absolute).map_err(|error| error.to_string())?;
-            crate::read::lang::tsgo_rows::demand(&text, &absolute, &input.output, cx.witness)
+            crate::read::lang::ts71_rows::demand(&text, &absolute, &input.output, cx.witness)
         };
-        #[cfg(not(feature = "ts-checker"))]
-        let demand = crate::read::lang::ts_checker::TsDemand::default();
         Ok((path, absolute, demand))
     }).collect::<Result<_, String>>()?;
     let answers = match crate::read::lang::ts_checker::answer(&root, &files, cx.witness) {

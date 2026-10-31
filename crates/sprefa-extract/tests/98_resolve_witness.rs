@@ -6,7 +6,7 @@
 //! runs as code in `support/27_resolve_witness.rs` before the freeze.
 //! SABOTAGE RECEIPT (base sha 8e050ed82): `--witness --resolve` was a clap
 //! conflict, rc=2, and `ProjectEdge` carried no `witnesses` field.
-#![cfg(feature = "ts-checker")]
+#![cfg(feature = "typescript")]
 #![cfg(feature = "cli")]
 
 #[test]

@@ -296,7 +296,7 @@ pub fn resolve_project_with_raw<E>(
 ) -> Result<Vec<FlatFact>, ResolveWithRawError<E>> {
     // Resolve reports an unavailable optional tier through its decline stream.
     // Slow entry points enforce their checker requirement separately.
-    if !cfg!(feature = "ts-checker") {
+    if !cfg!(feature = "typescript") {
         return crate::resolve_project_with_raw(request, push_raw);
     }
     let mut references = References::default();

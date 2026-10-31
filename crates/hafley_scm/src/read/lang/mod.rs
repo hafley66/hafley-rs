@@ -175,9 +175,9 @@ mod ts_export_seats;
 #[cfg(feature = "typescript")]
 #[path = "0_ts7_lsp_session.rs"]
 pub mod ts7_lsp_session;
-#[cfg(feature = "ts-checker")]
-#[path = "1_tsgo_rows.rs"]
-pub mod tsgo_rows;
+#[cfg(feature = "typescript")]
+#[path = "1_ts71_rows.rs"]
+pub mod ts71_rows;
 #[cfg(feature = "typescript")]
 pub mod ts_lib;
 #[cfg(feature = "typescript")]

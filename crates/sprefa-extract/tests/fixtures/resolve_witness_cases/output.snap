@@ -99,8 +99,8 @@ source: tests/support/2_fixture_runner.rs
         "record": "run",
         "run": 1,
         "mode": "semantic",
-        "tool": "tsgo",
-        "version": "7.0.2",
+        "tool": "tsrs",
+        "version": "tsrs 0.20.1-ts7.1.0-beta",
         "scope": [
           "blake3:fffe734c0904ac463f9ae8a215a7bac318c4bdfa9001c43d99e77a301ba70387",
           "blake3:f5893e9ff4e080e4a0bfa8e116f64c8d2fda633b6f314f53707325cfd3bd6b88"
@@ -242,109 +242,109 @@ source: tests/support/2_fixture_runner.rs
         "record": "diagnostic",
         "run": 1,
         "relation": "ts.mapped",
-        "detail": "stock type API exposes computed properties but no mapped key/constraint/template decomposition; no rows produced"
+        "detail": "mapped key/constraint/template decomposition is not requested by this tier; no rows produced"
       },
       {
         "record": "diagnostic",
         "run": 1,
         "relation": "ts.readonly",
-        "detail": "stock property symbol responses carry no declaration readonly modifier; no rows produced"
+        "detail": "readonly modifiers are not requested by this tier; no rows produced"
       },
       {
         "record": "diagnostic",
         "run": 1,
         "relation": "tsi.assignable",
-        "detail": "stock per-pair assignability for requested site pairs only"
+        "detail": "isTypeAssignableTo for requested site pairs only"
       },
       {
         "record": "diagnostic",
         "run": 1,
         "relation": "tsi.callable",
-        "detail": "stock API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
+        "detail": "TS 7.1 API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
       },
       {
         "record": "diagnostic",
         "run": 1,
         "relation": "tsi.conforms",
-        "detail": "stock getBaseTypes for requested class and interface types only; implements clauses and structural conformance are not enumerated"
+        "detail": "getBaseTypes for requested class and interface types only; implements clauses and structural conformance are not enumerated"
       },
       {
         "record": "diagnostic",
         "run": 1,
         "relation": "tsi.denotes",
-        "detail": "stock API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
+        "detail": "TS 7.1 API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
       },
       {
         "record": "diagnostic",
         "run": 1,
         "relation": "tsi.edge",
-        "detail": "stock API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
+        "detail": "TS 7.1 API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
       },
       {
         "record": "diagnostic",
         "run": 1,
         "relation": "tsi.equivalent",
-        "detail": "stock tsgo exposes no identical or comparable API; no rows produced"
+        "detail": "the TS 7.1 API exposes no identical or comparable query; no rows produced"
       },
       {
         "record": "diagnostic",
         "run": 1,
         "relation": "tsi.has_type",
-        "detail": "stock getTypesAtPositions for requested spans only; type-reference token queries can return any; application structure comes from returned type handles"
+        "detail": "getTypeAtPosition for requested spans only; a type-reference token answers the written type node around it"
       },
       {
         "record": "diagnostic",
         "run": 1,
         "relation": "tsi.input",
-        "detail": "stock API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
+        "detail": "TS 7.1 API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
       },
       {
         "record": "diagnostic",
         "run": 1,
         "relation": "tsi.name",
-        "detail": "stock API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
+        "detail": "TS 7.1 API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
       },
       {
         "record": "diagnostic",
         "run": 1,
         "relation": "tsi.origin",
-        "detail": "stock API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
+        "detail": "TS 7.1 API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
       },
       {
         "record": "diagnostic",
         "run": 1,
         "relation": "tsi.output",
-        "detail": "stock API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
+        "detail": "TS 7.1 API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
       },
       {
         "record": "diagnostic",
         "run": 1,
         "relation": "tsi.primitive",
-        "detail": "stock API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
+        "detail": "TS 7.1 API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
       },
       {
         "record": "diagnostic",
         "run": 1,
         "relation": "tsi.product",
-        "detail": "stock API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
+        "detail": "TS 7.1 API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
       },
       {
         "record": "diagnostic",
         "run": 1,
         "relation": "tsi.subtype",
-        "detail": "stock tsgo exposes no subtype or strict_subtype API; no rows produced"
+        "detail": "the TS 7.1 API exposes no subtype or strict_subtype query; no rows produced"
       },
       {
         "record": "diagnostic",
         "run": 1,
         "relation": "tsi.symbol",
-        "detail": "stock API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
+        "detail": "TS 7.1 API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
       },
       {
         "record": "diagnostic",
         "run": 1,
         "relation": "tsi.type",
-        "detail": "stock API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
+        "detail": "TS 7.1 API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
       },
       {
         "record": "fact",
@@ -1336,7 +1336,7 @@ source: tests/support/2_fixture_runner.rs
             ]
           },
           {
-            "id": 10
+            "id": 4
           }
         ]
       },
@@ -1349,7 +1349,7 @@ source: tests/support/2_fixture_runner.rs
             "id": 9
           },
           {
-            "id": 10
+            "id": 4
           }
         ]
       },
@@ -1493,19 +1493,6 @@ source: tests/support/2_fixture_runner.rs
       {
         "record": "fact",
         "fact": 88,
-        "relation": "tsi.denotes",
-        "args": [
-          {
-            "id": 9
-          },
-          {
-            "id": 4
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 89,
         "relation": "tsi.has_type",
         "args": [
           {
@@ -1517,6 +1504,23 @@ source: tests/support/2_fixture_runner.rs
           },
           {
             "id": 10
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 89,
+        "relation": "tsi.has_type",
+        "args": [
+          {
+            "span": [
+              "blake3:f5893e9ff4e080e4a0bfa8e116f64c8d2fda633b6f314f53707325cfd3bd6b88",
+              24,
+              29
+            ]
+          },
+          {
+            "id": 1
           }
         ]
       },
@@ -1536,23 +1540,6 @@ source: tests/support/2_fixture_runner.rs
       {
         "record": "fact",
         "fact": 90,
-        "relation": "tsi.has_type",
-        "args": [
-          {
-            "span": [
-              "blake3:f5893e9ff4e080e4a0bfa8e116f64c8d2fda633b6f314f53707325cfd3bd6b88",
-              24,
-              29
-            ]
-          },
-          {
-            "id": 1
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 91,
         "relation": "tsi.origin",
         "args": [
           {
@@ -1572,7 +1559,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 92,
+        "fact": 91,
         "relation": "tsi.has_type",
         "args": [
           {
@@ -1589,7 +1576,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 93,
+        "fact": 92,
         "relation": "tsi.has_type",
         "args": [
           {
@@ -1606,7 +1593,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 94,
+        "fact": 93,
         "relation": "tsi.origin",
         "args": [
           {
@@ -1626,7 +1613,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 95,
+        "fact": 94,
         "relation": "tsi.has_type",
         "args": [
           {
@@ -2312,12 +2299,6 @@ source: tests/support/2_fixture_runner.rs
         "method": "checker_walk"
       },
       {
-        "record": "witness",
-        "fact": 95,
-        "run": 1,
-        "method": "checker_walk"
-      },
-      {
         "record": "call_site",
         "callee": "base.greet",
         "path": "tests/fixtures/tsi/agree.ts",
@@ -2356,8 +2337,8 @@ source: tests/support/2_fixture_runner.rs
         "record": "run",
         "run": 1,
         "mode": "semantic",
-        "tool": "tsgo",
-        "version": "7.0.2",
+        "tool": "tsrs",
+        "version": "tsrs 0.20.1-ts7.1.0-beta",
         "scope": [
           "blake3:7c8c132fc92dfb71bd6b2bfd1b039dcfbdfa3ad6fc625c4638293df6fb8704d7",
           "blake3:3c6d30a6d0dbccfbbe4ad37879d15a8db7e5f7f7f5a1eec810fc4f89d209a5a5"
@@ -2487,97 +2468,97 @@ source: tests/support/2_fixture_runner.rs
         "record": "diagnostic",
         "run": 1,
         "relation": "ts.mapped",
-        "detail": "stock type API exposes computed properties but no mapped key/constraint/template decomposition; no rows produced"
+        "detail": "mapped key/constraint/template decomposition is not requested by this tier; no rows produced"
       },
       {
         "record": "diagnostic",
         "run": 1,
         "relation": "ts.readonly",
-        "detail": "stock property symbol responses carry no declaration readonly modifier; no rows produced"
+        "detail": "readonly modifiers are not requested by this tier; no rows produced"
       },
       {
         "record": "diagnostic",
         "run": 1,
         "relation": "tsi.assignable",
-        "detail": "stock per-pair assignability for requested site pairs only"
+        "detail": "isTypeAssignableTo for requested site pairs only"
       },
       {
         "record": "diagnostic",
         "run": 1,
         "relation": "tsi.callable",
-        "detail": "stock API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
+        "detail": "TS 7.1 API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
       },
       {
         "record": "diagnostic",
         "run": 1,
         "relation": "tsi.conforms",
-        "detail": "stock getBaseTypes for requested class and interface types only; implements clauses and structural conformance are not enumerated"
+        "detail": "getBaseTypes for requested class and interface types only; implements clauses and structural conformance are not enumerated"
       },
       {
         "record": "diagnostic",
         "run": 1,
         "relation": "tsi.denotes",
-        "detail": "stock API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
+        "detail": "TS 7.1 API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
       },
       {
         "record": "diagnostic",
         "run": 1,
         "relation": "tsi.equivalent",
-        "detail": "stock tsgo exposes no identical or comparable API; no rows produced"
+        "detail": "the TS 7.1 API exposes no identical or comparable query; no rows produced"
       },
       {
         "record": "diagnostic",
         "run": 1,
         "relation": "tsi.has_type",
-        "detail": "stock getTypesAtPositions for requested spans only; type-reference token queries can return any; application structure comes from returned type handles"
+        "detail": "getTypeAtPosition for requested spans only; a type-reference token answers the written type node around it"
       },
       {
         "record": "diagnostic",
         "run": 1,
         "relation": "tsi.name",
-        "detail": "stock API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
+        "detail": "TS 7.1 API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
       },
       {
         "record": "diagnostic",
         "run": 1,
         "relation": "tsi.origin",
-        "detail": "stock API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
+        "detail": "TS 7.1 API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
       },
       {
         "record": "diagnostic",
         "run": 1,
         "relation": "tsi.output",
-        "detail": "stock API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
+        "detail": "TS 7.1 API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
       },
       {
         "record": "diagnostic",
         "run": 1,
         "relation": "tsi.primitive",
-        "detail": "stock API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
+        "detail": "TS 7.1 API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
       },
       {
         "record": "diagnostic",
         "run": 1,
         "relation": "tsi.product",
-        "detail": "stock API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
+        "detail": "TS 7.1 API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
       },
       {
         "record": "diagnostic",
         "run": 1,
         "relation": "tsi.subtype",
-        "detail": "stock tsgo exposes no subtype or strict_subtype API; no rows produced"
+        "detail": "the TS 7.1 API exposes no subtype or strict_subtype query; no rows produced"
       },
       {
         "record": "diagnostic",
         "run": 1,
         "relation": "tsi.symbol",
-        "detail": "stock API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
+        "detail": "TS 7.1 API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
       },
       {
         "record": "diagnostic",
         "run": 1,
         "relation": "tsi.type",
-        "detail": "stock API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
+        "detail": "TS 7.1 API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
       },
       {
         "record": "fact",

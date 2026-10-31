@@ -1,5 +1,6 @@
 ---
 source: tests/101_ts_semantic_tsi.rs
+assertion_line: 214
 expression: "(first.tsi, first.coverage)"
 ---
 [
@@ -384,39 +385,6 @@ expression: "(first.tsi, first.coverage)"
     },
     {
       "fact": 0,
-      "relation": "tsi.type",
-      "args": [
-        {
-          "id": 9
-        }
-      ]
-    },
-    {
-      "fact": 0,
-      "relation": "tsi.name",
-      "args": [
-        {
-          "id": 9
-        },
-        {
-          "text": "any"
-        }
-      ]
-    },
-    {
-      "fact": 0,
-      "relation": "tsi.primitive",
-      "args": [
-        {
-          "id": 9
-        },
-        {
-          "atom": "any"
-        }
-      ]
-    },
-    {
-      "fact": 0,
       "relation": "tsi.has_type",
       "args": [
         {
@@ -427,19 +395,7 @@ expression: "(first.tsi, first.coverage)"
           ]
         },
         {
-          "id": 9
-        }
-      ]
-    },
-    {
-      "fact": 0,
-      "relation": "tsi.denotes",
-      "args": [
-        {
-          "id": 6
-        },
-        {
-          "id": 9
+          "id": 0
         }
       ]
     },
@@ -468,77 +424,77 @@ expression: "(first.tsi, first.coverage)"
     [
       "ts.mapped",
       false,
-      "stock type API exposes computed properties but no mapped key/constraint/template decomposition; no rows produced"
+      "mapped key/constraint/template decomposition is not requested by this tier; no rows produced"
     ],
     [
       "ts.readonly",
       false,
-      "stock property symbol responses carry no declaration readonly modifier; no rows produced"
+      "readonly modifiers are not requested by this tier; no rows produced"
     ],
     [
       "tsi.assignable",
       false,
-      "stock per-pair assignability for requested site pairs only"
+      "isTypeAssignableTo for requested site pairs only"
     ],
     [
       "tsi.conforms",
       false,
-      "stock getBaseTypes for requested class and interface types only; implements clauses and structural conformance are not enumerated"
+      "getBaseTypes for requested class and interface types only; implements clauses and structural conformance are not enumerated"
     ],
     [
       "tsi.denotes",
       false,
-      "stock API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
+      "TS 7.1 API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
     ],
     [
       "tsi.edge",
       false,
-      "stock API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
+      "TS 7.1 API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
     ],
     [
       "tsi.equivalent",
       false,
-      "stock tsgo exposes no identical or comparable API; no rows produced"
+      "the TS 7.1 API exposes no identical or comparable query; no rows produced"
     ],
     [
       "tsi.has_type",
       false,
-      "stock getTypesAtPositions for requested spans only; type-reference token queries can return any; application structure comes from returned type handles"
+      "getTypeAtPosition for requested spans only; a type-reference token answers the written type node around it"
     ],
     [
       "tsi.name",
       false,
-      "stock API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
+      "TS 7.1 API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
     ],
     [
       "tsi.origin",
       false,
-      "stock API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
+      "TS 7.1 API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
     ],
     [
       "tsi.primitive",
       false,
-      "stock API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
+      "TS 7.1 API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
     ],
     [
       "tsi.product",
       false,
-      "stock API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
+      "TS 7.1 API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
     ],
     [
       "tsi.subtype",
       false,
-      "stock tsgo exposes no subtype or strict_subtype API; no rows produced"
+      "the TS 7.1 API exposes no subtype or strict_subtype query; no rows produced"
     ],
     [
       "tsi.symbol",
       false,
-      "stock API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
+      "TS 7.1 API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
     ],
     [
       "tsi.type",
       false,
-      "stock API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
+      "TS 7.1 API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
     ]
   ]
 ]

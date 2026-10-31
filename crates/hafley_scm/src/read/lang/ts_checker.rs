@@ -39,8 +39,7 @@ type Bound = super::CheckerBound;
 /// Why the tier could not run. Every one falls back to the syntax leg.
 #[derive(Debug)]
 pub enum TsCheckerError {
-    NotBuilt,
-    /// The native tsgo executable could not be launched.
+    /// node, the tsrs package or its binary could not be found.
     NoDriver(String),
     /// The driver ran and failed; the string is its last stderr line.
     Failed(String),
@@ -50,13 +49,9 @@ pub enum TsCheckerError {
 impl std::fmt::Display for TsCheckerError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::NotBuilt => write!(
-                f,
-                "the ts checker tier needs --features ts-checker; falling back to the syntax leg"
-            ),
-            Self::NoDriver(detail) => write!(f, "no tsgo executable: {detail}"),
-            Self::Failed(detail) => write!(f, "tsgo failed: {detail}"),
-            Self::Budget(secs) => write!(f, "tsgo exceeded {secs}s"),
+            Self::NoDriver(detail) => write!(f, "no TS 7.1 driver: {detail}"),
+            Self::Failed(detail) => write!(f, "TS 7.1 API failed: {detail}"),
+            Self::Budget(secs) => write!(f, "TS 7.1 API exceeded {secs}s"),
         }
     }
 }
@@ -213,24 +208,12 @@ impl crate::read::tsi::SemanticRows for TsCheckerIndex {
     }
 }
 
-/// The declaration identifier's offset picks between several defs of one name
-/// in one file; a lone def of the name binds without it.
-/// Run the checker over `root` and answer every reference in `files`
-/// (supplied path, absolute path).
-#[cfg(not(feature = "ts-checker"))]
-pub fn answer(
-    _root: &Path,
-    _files: &[(String, PathBuf, TsDemand)],
-    _tsi: bool,
-) -> Result<TsCheckerAnswers, TsCheckerError> {
-    Err(TsCheckerError::NotBuilt)
-}
-
-#[cfg(feature = "ts-checker")]
+/// Run the TypeScript 7.1 API over `root` and answer every reference in `files`
+/// (supplied path, absolute path, demand).
 pub fn answer(
     root: &Path,
     files: &[(String, PathBuf, TsDemand)],
     tsi: bool,
 ) -> Result<TsCheckerAnswers, TsCheckerError> {
-    super::tsgo_rows::answer(root, files, tsi).map_err(TsCheckerError::Failed)
+    super::ts71_rows::ask(root, files, tsi).map_err(TsCheckerError::Failed)
 }

@@ -74,14 +74,14 @@ pub fn slow_project_with_raw<E>(
 
 /// A missing TypeScript checker is an error, never an empty slow result.
 pub fn require_ts_checker(files: &[PathBuf]) -> Result<(), ProjectError> {
-    if !cfg!(feature = "ts-checker")
+    if !cfg!(feature = "typescript")
         && files.iter().any(|path| {
             crate::read::lang::source_for(&path.to_string_lossy())
                 .is_some_and(|source| source.name() == "ts")
         })
     {
         return Err(ProjectError::CheckerUnavailable(
-            "ryi slow: TypeScript requires cargo feature ts-checker".to_string(),
+            "ryi slow: TypeScript requires cargo feature typescript".to_string(),
         ));
     }
     Ok(())
@@ -97,7 +97,7 @@ pub fn require_checker_flags(
 ) -> Result<(), ProjectError> {
     let missing: Vec<&str> = [
         ("rust", rust_checker, cfg!(feature = "rust-checker")),
-        ("ts", ts_checker, cfg!(feature = "ts-checker")),
+        ("ts", ts_checker, cfg!(feature = "typescript")),
         ("go", go_checker, cfg!(feature = "go-checker")),
     ]
     .into_iter()
@@ -678,7 +678,7 @@ fn checker_facts(files: &[PathBuf], root: &Path, imports: bool) -> Result<Vec<Fl
         .collect();
     let compiled = |lang: &str| match lang {
         "rust" => cfg!(feature = "rust-checker"),
-        "ts" => cfg!(feature = "ts-checker"),
+        "ts" => cfg!(feature = "typescript"),
         "go" => cfg!(feature = "go-checker"),
         _ => false,
     };

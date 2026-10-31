@@ -18,7 +18,7 @@
 //! still fail their own case, reading `ts.interface(_)` and
 //! `ts.mapped(_, _, _, _)`: `tsi.origin` is the naming table, so a native row
 //! without the shared rows beside it carries no name.
-#![cfg(all(feature = "ts-checker", feature = "rust-checker"))]
+#![cfg(all(feature = "typescript", feature = "rust-checker"))]
 
 #[test]
 fn whole_output() {

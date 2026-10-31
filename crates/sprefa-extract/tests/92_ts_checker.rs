@@ -1,4 +1,4 @@
-#![cfg(feature = "ts-checker")]
+#![cfg(feature = "typescript")]
 
 #[test]
 fn whole_output() {
