@@ -21,6 +21,9 @@ pub fn evaluate(case: &Value) -> Value {
             let index = ScipIndex { documents:vec![ScipDocument { relative_path:step["path"].as_str().unwrap().into(), occurrences, symbols:infos, ..ScipDocument::default() }], symbols:symbols.table(), ..ScipIndex::default() };
             return json!(flatten_scip(&index, &|_| Some(step["source"].as_str().unwrap().as_bytes().to_vec())).iter().map(|row| serde_json::to_string(row).unwrap()).collect::<Vec<_>>().join("\n"));
         }
+        if step["api"] == "scip_index" {
+            return crate::fixture_runner::editing_api(step);
+        }
         let text = std::fs::read_to_string(step["path"].as_str().unwrap()).unwrap();
         match step["api"].as_str().unwrap() {
             "golden" => {

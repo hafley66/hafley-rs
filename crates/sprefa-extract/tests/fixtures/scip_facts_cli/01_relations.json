@@ -23,6 +23,13 @@
       "cwd": "$work"
     },
     {
+      "action": "api",
+      "name": "ts_index0",
+      "api": "scip_index",
+      "root": "$work/tests/fixtures/scip_rel",
+      "into": "$work/ts0.scip"
+    },
+    {
       "action": "run",
       "name": "raw",
       "arguments": [
@@ -30,7 +37,8 @@
         "--raw",
         "--root",
         "tests/fixtures/scip_rel",
-        "--scip-build",
+        "--scip-index",
+        "$work/ts0.scip",
         "tests/fixtures/scip_rel/animal.ts"
       ],
       "cwd": "$work",
@@ -57,7 +65,8 @@
         "scip_relationship",
         "--root",
         "tests/fixtures/scip_rel",
-        "--scip-build",
+        "--scip-index",
+        "$work/ts0.scip",
         "tests/fixtures/scip_rel/animal.ts"
       ],
       "cwd": "$work",
@@ -76,7 +85,8 @@
         "scip_metadata,scip_document",
         "--root",
         "tests/fixtures/scip_rel",
-        "--scip-build",
+        "--scip-index",
+        "$work/ts0.scip",
         "tests/fixtures/scip_rel/animal.ts"
       ],
       "cwd": "$work",

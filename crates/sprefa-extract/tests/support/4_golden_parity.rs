@@ -7,7 +7,7 @@ use sprefa_extract::{
     definition_of, dispatch, flatten, join_documents, site_occurrence, CallEdgeKind, CallF,
     ContentId, FamilyMask, FamilyTag, FileSet, FlatFact, GoSource, IndexBag, KotlinSource,
     ManifestMap, NodeRef, ProjectCx, ProjectDigest, ProjectEdge, PythonSource, Resolve, RustSource,
-    RyiOutput, ScipGo, ScipJava, ScipRust, ScipSource, ScipTypescript, Span, TsSource, TypeF,
+    RyiOutput, ScipGo, ScipJava, ScipRust, ScipSource, Span, TsSource, TypeF,
     ZERO_CONTENT_ID,
 };
 
@@ -286,11 +286,12 @@ fn ratchet(case: &Value) -> Value {
     }
     rels.sort();
     let reader = |p: &str| std::fs::read(fixture_root.join(p)).ok();
-    let indexer: &dyn ScipSource = match case["indexer"].as_str().unwrap() {
-        "typescript" => &ScipTypescript,
-        "go" => &ScipGo,
-        "rust" => &ScipRust,
-        "java" => &ScipJava,
+    // TypeScript has no indexer in ryi; the test builds its index directly.
+    let indexer: Option<&dyn ScipSource> = match case["indexer"].as_str().unwrap() {
+        "typescript" => None,
+        "go" => Some(&ScipGo),
+        "rust" => Some(&ScipRust),
+        "java" => Some(&ScipJava),
         _ => panic!("unknown indexer"),
     };
     let index_path = if case["committed_index"].as_bool().unwrap() {
@@ -298,9 +299,12 @@ fn ratchet(case: &Value) -> Value {
         assert!(path.is_file(), "committed SCIP fixture is missing");
         path
     } else {
-        indexer.build(&fixture_root).expect("real indexer build")
+        match indexer {
+            Some(indexer) => indexer.build(&fixture_root).expect("real indexer build"),
+            None => crate::stock_tsgo::scip_typescript(&fixture_root),
+        }
     };
-    let scip_index = indexer.load(&index_path).expect("scip load");
+    let scip_index = sprefa_extract::scip_decode::load_index(&index_path).expect("scip load");
     let joined = join_documents(&scip_index, &reader);
     assert!(
         joined.iter().all(Option::is_some),

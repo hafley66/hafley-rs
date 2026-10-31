@@ -58,60 +58,6 @@ fn object_literal_property(symbol: &str) -> bool {
         && head.trim_end_matches(|ch: char| ch.is_ascii_digit()).len() < head.len()
 }
 
-#[test]
-fn the_typescript_definitions_agree_with_scip_typescript() {
-    let scm = scm_definitions();
-    let scip = scip_definitions();
-    let scm_keys: BTreeSet<Key> = scm.keys().cloned().collect();
-    let scip_keys: BTreeSet<Key> = scip.keys().cloned().collect();
-    let both = &scm_keys & &scip_keys;
-    let scm_only: Vec<Key> = (&scm_keys - &scip_keys).into_iter().collect();
-    let scip_only: Vec<Key> = (&scip_keys - &scm_keys).into_iter().collect();
-
-    let mut causes: BTreeMap<&str, Vec<String>> = BTreeMap::new();
-    for key in &scip_only {
-        let symbol = &scip[key];
-        causes.entry(cause(symbol, key)).or_default().push(format!(
-            "{} {}-{} {:?} {symbol}",
-            key.0, key.2, key.3, key.1
-        ));
-    }
-    let listing = causes
-        .iter()
-        .map(|(cause, rows)| {
-            format!(
-                "  {} scip-only: {cause}\n    {}",
-                rows.len(),
-                rows.join("\n    ")
-            )
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
-    // @eprintln-ok: the judge prints its split, the way the lab REPORT does.
-    eprintln!("ryi fast vs scip-typescript over {ROOT}");
-    eprintln!(
-        "  both {} scm-only {} scip-only {}",
-        both.len(),
-        scm_only.len(),
-        scip_only.len()
-    );
-    eprintln!("{listing}");
-
-    assert!(
-        scm_only.is_empty(),
-        "every fast scm definition is a scip definition at the same span; these are not:\n{scm_only:#?}"
-    );
-    assert!(
-        !causes.contains_key("unclassified"),
-        "every scip-only row carries a named cause:\n{listing}"
-    );
-    assert_eq!(
-        (both.len(), scm_only.len(), scip_only.len()),
-        (BOTH, SCM_ONLY, SCIP_ONLY),
-        "the pinned split moved:\n{listing}"
-    );
-}
-
 fn scm_definitions() -> BTreeMap<Key, String> {
     let files = ts_files();
     let mut args: Vec<String> = vec!["fast".to_string()];

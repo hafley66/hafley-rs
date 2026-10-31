@@ -6,12 +6,21 @@
   ],
   "steps": [
     {
+      "action": "api",
+      "name": "ts_index0",
+      "api": "scip_index",
+      "root": "tests/fixtures/scip_rel",
+      "into": "$work/ts0.scip"
+    },
+    {
       "action": "run",
       "name": "scip",
       "arguments": [
         "scip",
         "--scip-cache",
         "$work/cache",
+        "--scip-index",
+        "$work/ts0.scip",
         "tests/fixtures/scip_rel"
       ],
       "success": true,

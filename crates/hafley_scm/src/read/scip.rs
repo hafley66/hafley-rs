@@ -2,15 +2,10 @@
 //! trait + diet types live in `crate::read::types`, re-exported through
 //! `crate::read::seams`; this module is the `wire.rs`-style logic half).
 //!
-//! Commit 4c-i lands `ScipTypescript`:
-//! - `build`: subprocess `scip-typescript index` over a directory (v5's argv,
-//!   `src/scip_setup.rs` INDEXERS). HERMETIC: the index lands in a fresh temp
-//!   dir, and when the root has no tsconfig.json the sources are copied to a
-//!   temp workdir first — the indexer's `--infer-tsconfig` WRITES a tsconfig,
-//!   and the source dir must never be mutated (fixtures are committed).
-//! - `load`: prost decode of index.scip into the diet `ScipIndex` (v5
-//!   `src/scip_import.rs::load`, re-runtimed: rust-protobuf -> prost, see the
-//!   Cargo.toml dep note).
+//! `load`: prost decode of index.scip into the diet `ScipIndex` (v5
+//! `src/scip_import.rs::load`, re-runtimed: rust-protobuf -> prost, see the
+//! Cargo.toml dep note); indexer-agnostic, it reads any language's index.
+//! TypeScript has no indexer here: the TS 7.1 tier answers TS.
 //!
 //! Commit 4d-ii-go lands `ScipGo`: same seam, v5's go argv (`scip-go --output
 //! {out}`, verbatim on scip-go 0.2.7), PATH-first with a version-pinned `go
@@ -72,22 +67,12 @@ fn attempt(
     }
 }
 
-/// scip-typescript 0.4.0 (the ledger ORACLE entry's version). `build` probes
-/// PATH first (v5's `dl index` convention), then falls back to the
-/// version-pinned npx form so a machine without the global install still runs
-/// the same indexer release.
-pub struct ScipTypescript;
-
 /// rust-analyzer's `scip` subcommand (v5's rust INDEXERS row,
 /// src/scip_setup.rs:52-58). PATH ONLY: the indexer ships with the toolchain
 /// (`rustup component add rust-analyzer`); there is no npx fallback. The
 /// indexer resolves through cargo metadata, so `root` must be a Cargo project
 /// and every indexed file must be crate-reachable.
 pub struct ScipRust;
-
-/// The source extensions scip-typescript (and `TsSource`) covers; the staging
-/// copy preserves these, directory structure included.
-const TS_EXTS: &[&str] = &["ts", "tsx", "mts", "cts", "js", "jsx", "mjs", "cjs"];
 
 /// The root-only Rust staging set used for a plain directory or self-contained
 /// Cargo root. Repository snapshots carry every non-ignored source byte,
@@ -115,20 +100,6 @@ const JAVA_EXTRA_NAMES: &[&str] = &[
     "pom.xml",
     "gradle.properties",
 ];
-
-impl ScipSource for ScipTypescript {
-    fn indexer(&self) -> &'static str {
-        "scip-typescript"
-    }
-
-    fn build(&self, root: &Path) -> Result<PathBuf, ScipError> {
-        build_indexer(&TS_SPEC, root)
-    }
-
-    fn load(&self, index_path: &Path) -> Result<ScipIndex, ScipError> {
-        load_index(index_path)
-    }
-}
 
 impl ScipSource for ScipRust {
     fn indexer(&self) -> &'static str {
@@ -268,17 +239,6 @@ pub struct IndexerSpec {
     pub fallback: Fallback,
     pub staging: Staging,
 }
-
-pub static TS_SPEC: IndexerSpec = IndexerSpec {
-    bin: "scip-typescript",
-    args: &["index", "--infer-tsconfig", "--output", "{out}"],
-    fallback: Fallback::Npx("@sourcegraph/scip-typescript@0.4.0"),
-    staging: Staging::Conditional {
-        marker: "tsconfig.json",
-        exts: TS_EXTS,
-        extra_names: &[],
-    },
-};
 
 pub static RUST_SPEC: IndexerSpec = IndexerSpec {
     bin: "rust-analyzer",

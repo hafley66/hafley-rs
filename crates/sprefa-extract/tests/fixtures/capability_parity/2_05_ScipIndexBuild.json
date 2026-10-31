@@ -1,13 +1,21 @@
 {
   "steps": [
     {
+      "action": "api",
+      "name": "ts_index0",
+      "api": "scip_index",
+      "root": "tests/fixtures/capability_parity/inputs/2_scip",
+      "into": "$work/ts0.scip"
+    },
+    {
       "action": "run",
       "name": "cli",
       "arguments": [
         "--resolve",
         "--root",
         "tests/fixtures/capability_parity/inputs/2_scip",
-        "--scip-build",
+        "--scip-index",
+        "$work/ts0.scip",
         "tests/fixtures/capability_parity/inputs/2_scip/alpha.ts",
         "tests/fixtures/capability_parity/inputs/2_scip/beta.ts",
         "tests/fixtures/capability_parity/inputs/2_scip/delta.ts",

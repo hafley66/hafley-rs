@@ -2,6 +2,9 @@ use serde_json::{json, Value};
 
 pub fn evaluate(case: &Value) -> Value {
     crate::fixture_runner::commands(case, |step| {
+        if step["api"] == "scip_index" {
+            return crate::fixture_runner::editing_api(step);
+        }
         assert_eq!(step["api"], "indexer_roster");
         json!(sprefa_extract::INDEXERS.iter().map(|indexer| {
             assert_eq!(indexer.source.indexer(),indexer.bin);

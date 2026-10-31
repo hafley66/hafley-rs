@@ -11,6 +11,8 @@ use std::process::Command;
 
 const SCIP_REL_ROOT: &str = "tests/fixtures/scip_rel";
 const SCIP_REL_SOURCE: &str = "tests/fixtures/scip_rel/animal.ts";
+/// The committed index of the same `animal.ts` (ryi builds no TypeScript index).
+const SCIP_REL_INDEX: &str = "tests/fixtures/scip_relationship/fixture.scip";
 
 fn run(args: &[&str]) -> String {
     let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
@@ -29,7 +31,7 @@ fn run(args: &[&str]) -> String {
 fn scip_rel_facts(extra: &[&str]) -> String {
     let mut args = vec!["scip", "--raw"];
     args.extend_from_slice(extra);
-    args.extend_from_slice(&["--root", SCIP_REL_ROOT, "--scip-build", SCIP_REL_SOURCE]);
+    args.extend_from_slice(&["--root", SCIP_REL_ROOT, "--scip-index", SCIP_REL_INDEX, SCIP_REL_SOURCE]);
     run(&args)
 }
 

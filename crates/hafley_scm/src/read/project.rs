@@ -37,7 +37,7 @@ use crate::read::lang::{
     RustSource, TsSource,
 };
 use crate::read::rows::{FamilyBundle, Node};
-use crate::read::scip::{ScipGo, ScipRust, ScipTypescript};
+use crate::read::scip::{ScipGo, ScipRust};
 use crate::read::scip_ensure::IndexBudget;
 use crate::read::scip_rows::ScipRecords;
 use crate::read::seams::{
@@ -1455,8 +1455,7 @@ fn scip_family_from_path(
 ) -> Result<Vec<FlatFact>, ProjectError> {
     // The decode is indexer-agnostic (one prost decode serves every indexer),
     // so any roster entry loads any index, including a merged multi-language one.
-    let index = ScipTypescript
-        .load(&crate::read::io_path(index_path))
+    let index = crate::read::scip_decode::load_index(&crate::read::io_path(index_path))
         .map_err(ProjectError::Scip)?;
     let slug = match request.slug {
         Some(slug) => slug.to_string(),
@@ -2258,10 +2257,8 @@ fn load_scip(
             let Some(_) = request.project_root else {
                 return Err(ProjectError::ScipNeedsRoot);
             };
-            // `load` is indexer-agnostic (one prost decode serves every
-            // indexer), so any roster entry decodes any index.
-            return ScipTypescript
-                .load(&crate::read::io_path(path))
+            // The decode is indexer-agnostic: one prost decode reads any index.
+            return crate::read::scip_decode::load_index(&crate::read::io_path(path))
                 .map(Some)
                 .map_err(ProjectError::Scip);
         }
@@ -2329,11 +2326,13 @@ fn scip_source_for(inputs: &[ProjectInput]) -> Result<&'static dyn ScipSource, P
     languages.sort_unstable();
     languages.dedup();
     match languages.as_slice() {
-        ["ts"] => Ok(&ScipTypescript),
+        ["ts"] => Err(ProjectError::ScipIndexerUnavailable(
+            "ts has no SCIP indexer; the TS 7.1 tier (--ts-checker, ryi slow) answers TypeScript".to_string(),
+        )),
         ["go"] => Ok(&ScipGo),
         ["rust"] => Ok(&ScipRust),
         [one] => Err(ProjectError::ScipIndexerUnavailable(format!(
-            "{one} has no indexer in the roster (ts, go and rust do)"
+            "{one} has no indexer in the roster (go and rust do)"
         ))),
         [] => Err(ProjectError::ScipIndexerUnavailable(
             "no supplied path matched a source".to_string(),

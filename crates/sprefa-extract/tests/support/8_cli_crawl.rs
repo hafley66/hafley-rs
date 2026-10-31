@@ -4,11 +4,10 @@ pub fn evaluate(case: &Value) -> Value {
     crate::fixture_runner::commands(case, |step| {
         let result = match step["api"].as_str().unwrap() {
             "indexer_argv" => {
-                use sprefa_extract::scip::{GO_SPEC, PYTHON_SPEC, TS_SPEC};
+                use sprefa_extract::scip::{GO_SPEC, PYTHON_SPEC};
                 assert_eq!(GO_SPEC.args.last(), Some(&"./..."));
-                assert!(TS_SPEC.args.contains(&"index"));
                 assert!(PYTHON_SPEC.args.contains(&"."));
-                json!({"go":GO_SPEC.args,"ts":TS_SPEC.args,"python":PYTHON_SPEC.args})
+                json!({"go":GO_SPEC.args,"python":PYTHON_SPEC.args})
             }
             "last_error_line" => json!(sprefa_extract::scip_ensure::last_error_line(step["text"].as_str().unwrap())),
             "rust_build" => {

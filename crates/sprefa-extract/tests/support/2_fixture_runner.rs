@@ -917,9 +917,10 @@ pub fn editing_api(step: &Value) -> Value {
             serde_json::json!({"path":step["path"],"needle":needle,"hits":hits})
         }
         "scip_index" => {
-            let root = Path::new(step["root"].as_str().unwrap());
+            // A relative root names a committed fixture under the crate.
+            let root = &Path::new(env!("CARGO_MANIFEST_DIR")).join(step["root"].as_str().unwrap());
             let index = if step["language"] == "rust" { sprefa_extract::ScipRust.build(root) }
-                else { sprefa_extract::ScipTypescript.build(root) }.unwrap();
+                else { Ok(crate::stock_tsgo::scip_typescript(root)) }.unwrap();
             let target = Path::new(step["into"].as_str().unwrap());
             std::fs::copy(index, target).unwrap();
             serde_json::json!({"index":target.to_str().unwrap(),"is_file":target.is_file()})

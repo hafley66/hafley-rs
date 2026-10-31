@@ -1,6 +1,13 @@
 {
   "steps": [
     {
+      "action": "api",
+      "name": "ts_index0",
+      "api": "scip_index",
+      "root": "tests/fixtures/scip_rel",
+      "into": "$work/ts0.scip"
+    },
+    {
       "action": "run",
       "name": "cli",
       "arguments": [
@@ -8,7 +15,8 @@
         "--raw",
         "--root",
         "tests/fixtures/scip_rel",
-        "--scip-build",
+        "--scip-index",
+        "$work/ts0.scip",
         "tests/fixtures/scip_rel/animal.ts"
       ],
       "expect_exit_code": 0,

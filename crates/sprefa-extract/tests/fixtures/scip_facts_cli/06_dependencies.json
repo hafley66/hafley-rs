@@ -23,6 +23,13 @@
       "cwd": "$work"
     },
     {
+      "action": "api",
+      "name": "ts_index0",
+      "api": "scip_index",
+      "root": "$work/tests/fixtures/ts",
+      "into": "$work/ts0.scip"
+    },
+    {
       "action": "run",
       "name": "raw",
       "arguments": [
@@ -30,7 +37,8 @@
         "--raw",
         "--root",
         "tests/fixtures/ts",
-        "--scip-build",
+        "--scip-index",
+        "$work/ts0.scip",
         "tests/fixtures/ts/scip/alpha.ts"
       ],
       "cwd": "$work",
@@ -55,7 +63,8 @@
         "--scip-deps",
         "--root",
         "tests/fixtures/ts",
-        "--scip-build",
+        "--scip-index",
+        "$work/ts0.scip",
         "tests/fixtures/ts/scip/alpha.ts"
       ],
       "cwd": "$work",

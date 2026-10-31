@@ -56,8 +56,9 @@ fn scip_family() -> String {
         .arg("scip")
         .arg("--scip-cache")
         .arg(&cache)
+        .arg("--scip-index")
+        .arg(FIXTURE)
         .arg(ROOT)
-        .env("SPREFA_SCIP_INDEX", FIXTURE)
         .output()
         .expect("extract binary runs");
     assert!(

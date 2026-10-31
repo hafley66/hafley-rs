@@ -3245,12 +3245,6 @@ source: tests/support/2_fixture_runner.rs
         "{out}",
         "./..."
       ],
-      "ts": [
-        "index",
-        "--infer-tsconfig",
-        "--output",
-        "{out}"
-      ],
       "python": [
         "index",
         ".",

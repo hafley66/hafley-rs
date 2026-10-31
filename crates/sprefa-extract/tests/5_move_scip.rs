@@ -17,7 +17,7 @@ use std::path::{Path, PathBuf};
 
 use sprefa_extract::{
     scip_import_sites, verify_import_refs, ImportRef, ImportRefKind, MoveCx, Rehome, ScipIndex,
-    ScipSource, ScipTypescript, Span, TsSource, MISSED_BY_IMPL, UNKNOWN_TO_SCIP,
+    ScipSource, Span, TsSource, MISSED_BY_IMPL, UNKNOWN_TO_SCIP,
 };
 
 const MOVED: &str = "src/util.ts";
@@ -53,8 +53,7 @@ fn open() -> MoveCx {
 }
 
 fn index() -> ScipIndex {
-    ScipTypescript
-        .load(&fixture_root().join("fixture.scip"))
+    sprefa_extract::scip_decode::load_index(&fixture_root().join("fixture.scip"))
         .expect("load committed index")
 }
 

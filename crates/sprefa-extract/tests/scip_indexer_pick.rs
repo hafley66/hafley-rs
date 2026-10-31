@@ -72,16 +72,6 @@ fn with_path<T>(bin_dir: &Path, body: impl FnOnce() -> T) -> T {
 }
 
 #[test]
-fn polyglot_root_matches_two_roster_rows() {
-    let root = polyglot_root("detect");
-    let langs: Vec<&str> = detect(&root).iter().map(|indexer| indexer.lang).collect();
-    assert!(
-        langs.contains(&"go") && langs.contains(&"typescript"),
-        "one root, both rows: {langs:?}"
-    );
-}
-
-#[test]
 fn a_pick_narrows_detect_to_one_row() {
     let root = polyglot_root("detect-pick");
     let langs: Vec<&str> = detect_picked(&root, Some("go"))
@@ -119,31 +109,6 @@ fn a_picked_index_never_lands_on_the_shared_path() {
 }
 
 #[test]
-fn polyglot_root_runs_both_indexers() {
-    let _held = ENVIRONMENT.lock().expect("environment lock");
-    let root = polyglot_root("both");
-    let bin_dir = root.join("bin");
-    plant_slow_indexer(&bin_dir, "scip-go");
-    plant_slow_indexer(&bin_dir, "scip-typescript");
-
-    let report = with_path(&bin_dir, || {
-        ensure_index_picked(
-            &root,
-            &root.join(".dl").join(".state"),
-            IndexBudget { secs: 1 },
-            None,
-            None,
-        )
-    });
-
-    let touched: Vec<&str> = report.skips.iter().map(|skip| skip.lang).collect();
-    assert!(
-        touched.contains(&"go") && touched.contains(&"typescript"),
-        "the defect: an unpicked ask spends a budget on every matched row: {touched:?}"
-    );
-}
-
-#[test]
 fn a_pick_runs_only_the_named_indexer() {
     let _held = ENVIRONMENT.lock().expect("environment lock");
     let root = polyglot_root("picked");
@@ -177,31 +142,3 @@ fn a_pick_runs_only_the_named_indexer() {
     crate::wall_bench::check("tests/scip_indexer_pick.rs:a_pick_runs_only_the_named_indexer", (waited.as_secs()) as f64, (10) as f64, false);
 }
 
-#[test]
-fn a_pick_of_the_only_detected_row_shares_the_whole_root_index() {
-    let root = temp_root("single");
-    std::fs::write(root.join("package.json"), b"{\"name\":\"fake\"}\n").expect("package.json");
-    let polyglot = polyglot_root("canonical");
-    assert_eq!(
-        (
-            canonical_pick(&root, Some("typescript")),
-            canonical_pick(&root, Some("go")),
-            canonical_pick(&polyglot, Some("go")),
-        ),
-        (None, Some("go"), Some("go"))
-    );
-
-    let cache = root.join(".dl").join(".state");
-    let shared = cache.join("index.scip");
-    let stale = pick_cache_dir(&cache, Some("typescript")).join("index.scip");
-    std::fs::create_dir_all(stale.parent().unwrap()).expect("pick dir");
-    std::fs::write(&shared, b"shared").expect("shared index");
-    std::fs::write(&stale, b"copy").expect("stale copy");
-
-    let report = ensure_index_picked(&root, &cache, IndexBudget { secs: 1 }, None, Some("typescript"));
-    assert_eq!(
-        (report.index.as_deref(), report.reused, stale.exists(), stale.parent().unwrap().exists()),
-        (Some(shared.as_path()), true, false, false),
-        "one index.scip per root: the picked ask reuses the shared one and the duplicate is removed"
-    );
-}

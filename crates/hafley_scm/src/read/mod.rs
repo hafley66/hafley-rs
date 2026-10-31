@@ -127,7 +127,7 @@ pub use reach::{reach_files, REACH_DEPTH_CAP};
 pub use rows::{Edge, FamilyBundle, Node};
 pub use scip::{
     byte_range, byte_range_cached, copy_sources, definition_of, join_documents, site_occurrence,
-    Fallback, IndexerSpec, ScipClang, ScipGo, ScipJava, ScipPython, ScipRust, ScipTypescript,
+    Fallback, IndexerSpec, ScipClang, ScipGo, ScipJava, ScipPython, ScipRust,
     Staging,
 };
 pub use scip_ensure::{

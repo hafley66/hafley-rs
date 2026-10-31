@@ -72,13 +72,6 @@ pub static INDEXERS: &[Indexer] = &[
         source: &crate::read::scip::ScipRust,
     },
     Indexer {
-        lang: "typescript",
-        markers: &["tsconfig.json", "package.json"],
-        bin: "scip-typescript",
-        install: "npm install -g @sourcegraph/scip-typescript",
-        source: &crate::read::scip::ScipTypescript,
-    },
-    Indexer {
         lang: "python",
         markers: &["pyproject.toml", "setup.py", "requirements.txt"],
         bin: "scip-python",
