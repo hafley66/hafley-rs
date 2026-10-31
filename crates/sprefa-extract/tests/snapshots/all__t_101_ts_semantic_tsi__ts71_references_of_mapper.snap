@@ -1,0 +1,16 @@
+---
+source: tests/101_ts_semantic_tsi.rs
+expression: spans
+---
+[
+  [
+    171,
+    177,
+    "Mapper"
+  ],
+  [
+    229,
+    235,
+    "Mapper"
+  ]
+]

@@ -216,3 +216,67 @@ fn stock_pairs_identity_and_bases_answer_the_same_rows_twice() {
         (first.tsi, first.coverage)
     );
 }
+
+#[test]
+fn references_and_stable_symbol_ids_come_from_the_ts71_snapshot() {
+    use sprefa_extract::lang::ts71_rows::{references, TsrsSession};
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/tsi")
+        .canonicalize()
+        .unwrap();
+    let probe = root.join("probe.ts");
+    let text = std::fs::read_to_string(&probe).unwrap();
+    let seed = text.find("Mapper<T> {").unwrap() as u32;
+    let session = TsrsSession::open(&root);
+    let found = references(&session, &[("probe.ts".into(), probe.clone())], (&probe, seed))
+        .unwrap()
+        .expect("a symbol at the seed");
+    let spans: Vec<(u32, u32, &str)> = found
+        .iter()
+        .map(|(_, start, end)| (*start, *end, &text[*start as usize..*end as usize]))
+        .collect();
+    insta::assert_json_snapshot!("ts71_references_of_mapper", spans);
+
+    let rows = stream_with_witness("tests/fixtures/tsi/probe.ts", true);
+    let mut ids: Vec<&str> = rows
+        .iter()
+        .filter(|row| row["record"] == "fact" && row["relation"] == "tsi.scip_symbol")
+        .map(|row| row["args"][1]["text"].as_str().unwrap())
+        .collect();
+    ids.sort();
+    ids.dedup();
+    insta::assert_json_snapshot!("ts71_scip_symbols_of_probe", ids);
+}
+
+/// A node handle indexes the API's encoded records, JSDoc records included:
+/// a declaration after a JSDoc comment still answers its own name.
+#[test]
+fn declarations_after_jsdoc_answer_their_own_names() {
+    use sprefa_extract::lang::ts_checker::{answer, TsDemand, TsSite};
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/tsi_jsdoc")
+        .canonicalize()
+        .unwrap();
+    let user = root.join("useDoc.ts");
+    let doc = root.join("Doc.ts");
+    let text = std::fs::read_to_string(&user).unwrap();
+    let site = |needle: &str, name: &str| {
+        let start = text.find(needle).unwrap() as u32;
+        TsSite { start, end: start + name.len() as u32, name: name.into(), call: true, type_ref: false }
+    };
+    let demand = TsDemand { sites: vec![site("documented(d", "documented"), site("Last()", "Last")], pairs: vec![] };
+    let answers = answer(
+        &root,
+        &[("useDoc.ts".into(), user.clone(), demand), ("Doc.ts".into(), doc, TsDemand::default())],
+        false,
+    )
+    .unwrap();
+    let calls: Vec<(String, String, u32)> = answers.calls["useDoc.ts"]
+        .iter()
+        .map(|reference| (reference.name.clone(), reference.dst_name.clone(), reference.dst_offset))
+        .collect();
+    assert_eq!(
+        calls,
+        vec![("documented".into(), "documented".into(), 170), ("Last".into(), "Last".into(), 249)]
+    );
+}

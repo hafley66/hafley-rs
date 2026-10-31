@@ -39,7 +39,6 @@ crates/hafley_scm/src/lang/rust/9_type_candidate_rows.rs	fn::collect	1
 crates/hafley_scm/src/lib.rs	fn::run	1
 crates/hafley_scm/src/read/2_slow.rs	fn::span_of	1
 crates/hafley_scm/src/read/cargo_metadata.rs	fn::packages	1
-crates/hafley_scm/src/read/lang/1_tsgo_rows.rs	fn::answer	1
 crates/hafley_scm/src/read/lang/7_scm_rows.rs	fn::ingest	1
 crates/hafley_scm/src/read/lang/8d_rust_checker_rename.rs	fn::rename	1
 crates/hafley_scm/src/read/lang/commonlisp/_0_source.rs	fn::parse	1
@@ -141,7 +140,7 @@ crates/hafley_scm/src/read/lang/ts.rs	fn::tsi_rows	1
 crates/hafley_scm/src/read/lang/ts.rs	fn::tsi_type_id	1
 crates/hafley_scm/src/read/lang/ts/0_df_rows.rs	fn::df_edge	1
 crates/hafley_scm/src/read/lang/ts/0_df_rows.rs	fn::df_push	1
-crates/hafley_scm/src/read/lang/ts_checker.rs	fn::answer	2
+crates/hafley_scm/src/read/lang/ts_checker.rs	fn::answer	1
 crates/hafley_scm/src/read/lang/ts_receivers.rs	fn::collect	1
 crates/hafley_scm/src/read/lang/ts_receivers.rs	fn::to_span	1
 crates/hafley_scm/src/read/tsi/ingest.rs	fn::ingest	1

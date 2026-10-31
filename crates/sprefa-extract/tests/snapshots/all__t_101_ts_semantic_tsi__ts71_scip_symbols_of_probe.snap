@@ -1,0 +1,16 @@
+---
+source: tests/101_ts_semantic_tsi.rs
+assertion_line: 248
+expression: ids
+---
+[
+  "ryi-ts71 npm . . `lib.es5.d.ts`/Partial#",
+  "ryi-ts71 npm . . `probe.ts`/Mapper#",
+  "ryi-ts71 npm . . `probe.ts`/Mapper#[T]",
+  "ryi-ts71 npm . . `probe.ts`/Query#",
+  "ryi-ts71 npm . . `probe.ts`/User#",
+  "ryi-ts71 npm . . `probe.ts`/User#[T]",
+  "ryi-ts71 npm . . `probe.ts`/User#map().",
+  "ryi-ts71 npm . . `probe.ts`/User#map().(project)",
+  "ryi-ts71 npm . . `probe.ts`/User#map().[U]"
+]

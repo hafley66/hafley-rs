@@ -237,6 +237,18 @@ expression: "(first.tsi, first.coverage)"
     },
     {
       "fact": 0,
+      "relation": "tsi.scip_symbol",
+      "args": [
+        {
+          "id": 6
+        },
+        {
+          "text": "ryi-ts71 npm . . `0_stock.ts`/Derived#"
+        }
+      ]
+    },
+    {
+      "fact": 0,
       "relation": "tsi.denotes",
       "args": [
         {
@@ -349,6 +361,18 @@ expression: "(first.tsi, first.coverage)"
         },
         {
           "text": "Base"
+        }
+      ]
+    },
+    {
+      "fact": 0,
+      "relation": "tsi.scip_symbol",
+      "args": [
+        {
+          "id": 8
+        },
+        {
+          "text": "ryi-ts71 npm . . `0_stock.ts`/Base#"
         }
       ]
     },
@@ -478,6 +502,11 @@ expression: "(first.tsi, first.coverage)"
     ],
     [
       "tsi.product",
+      false,
+      "TS 7.1 API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
+    ],
+    [
+      "tsi.scip_symbol",
       false,
       "TS 7.1 API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
     ],

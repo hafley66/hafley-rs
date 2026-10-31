@@ -217,6 +217,12 @@ source: tests/support/2_fixture_runner.rs
       {
         "record": "coverage",
         "run": 1,
+        "relation": "tsi.scip_symbol",
+        "coverage": "partial"
+      },
+      {
+        "record": "coverage",
+        "run": 1,
         "relation": "tsi.subtype",
         "coverage": "partial"
       },
@@ -331,6 +337,12 @@ source: tests/support/2_fixture_runner.rs
       {
         "record": "diagnostic",
         "run": 1,
+        "relation": "tsi.scip_symbol",
+        "detail": "TS 7.1 API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
+      },
+      {
+        "record": "diagnostic",
+        "run": 1,
         "relation": "tsi.subtype",
         "detail": "the TS 7.1 API exposes no subtype or strict_subtype query; no rows produced"
       },
@@ -353,6 +365,23 @@ source: tests/support/2_fixture_runner.rs
         "args": [
           {
             "id": 1
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 100,
+        "relation": "tsi.has_type",
+        "args": [
+          {
+            "span": [
+              "blake3:f5893e9ff4e080e4a0bfa8e116f64c8d2fda633b6f314f53707325cfd3bd6b88",
+              107,
+              124
+            ]
+          },
+          {
+            "id": 10
           }
         ]
       },
@@ -542,6 +571,19 @@ source: tests/support/2_fixture_runner.rs
       {
         "record": "fact",
         "fact": 24,
+        "relation": "tsi.scip_symbol",
+        "args": [
+          {
+            "id": 5
+          },
+          {
+            "text": "ryi-ts71 npm . . `agree.ts`/Child#"
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 25,
         "relation": "tsi.denotes",
         "args": [
           {
@@ -554,7 +596,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 25,
+        "fact": 26,
         "relation": "tsi.origin",
         "args": [
           {
@@ -574,7 +616,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 26,
+        "fact": 27,
         "relation": "tsi.type",
         "args": [
           {
@@ -584,7 +626,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 27,
+        "fact": 28,
         "relation": "tsi.name",
         "args": [
           {
@@ -597,7 +639,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 28,
+        "fact": 29,
         "relation": "tsi.product",
         "args": [
           {
@@ -607,7 +649,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 29,
+        "fact": 30,
         "relation": "tsi.product",
         "args": [
           {
@@ -617,7 +659,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 30,
+        "fact": 31,
         "relation": "tsi.edge",
         "args": [
           {
@@ -639,7 +681,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 31,
+        "fact": 32,
         "relation": "tsi.edge",
         "args": [
           {
@@ -661,7 +703,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 32,
+        "fact": 33,
         "relation": "tsi.has_type",
         "args": [
           {
@@ -678,7 +720,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 33,
+        "fact": 34,
         "relation": "tsi.symbol",
         "args": [
           {
@@ -688,7 +730,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 34,
+        "fact": 35,
         "relation": "tsi.name",
         "args": [
           {
@@ -701,7 +743,20 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 35,
+        "fact": 36,
+        "relation": "tsi.scip_symbol",
+        "args": [
+          {
+            "id": 9
+          },
+          {
+            "text": "ryi-ts71 npm . . `agree_callee.ts`/Base#"
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 37,
         "relation": "tsi.denotes",
         "args": [
           {
@@ -714,7 +769,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 36,
+        "fact": 38,
         "relation": "tsi.origin",
         "args": [
           {
@@ -734,7 +789,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 37,
+        "fact": 39,
         "relation": "tsi.type",
         "args": [
           {
@@ -744,7 +799,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 38,
+        "fact": 40,
         "relation": "tsi.name",
         "args": [
           {
@@ -757,7 +812,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 39,
+        "fact": 41,
         "relation": "tsi.primitive",
         "args": [
           {
@@ -770,7 +825,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 40,
+        "fact": 42,
         "relation": "tsi.has_type",
         "args": [
           {
@@ -787,7 +842,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 41,
+        "fact": 43,
         "relation": "tsi.type",
         "args": [
           {
@@ -797,7 +852,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 42,
+        "fact": 44,
         "relation": "tsi.name",
         "args": [
           {
@@ -810,7 +865,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 43,
+        "fact": 45,
         "relation": "tsi.product",
         "args": [
           {
@@ -820,7 +875,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 44,
+        "fact": 46,
         "relation": "tsi.callable",
         "args": [
           {
@@ -830,7 +885,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 45,
+        "fact": 47,
         "relation": "tsi.type",
         "args": [
           {
@@ -840,7 +895,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 46,
+        "fact": 48,
         "relation": "tsi.name",
         "args": [
           {
@@ -853,7 +908,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 47,
+        "fact": 49,
         "relation": "tsi.primitive",
         "args": [
           {
@@ -861,39 +916,6 @@ source: tests/support/2_fixture_runner.rs
           },
           {
             "atom": "number"
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 48,
-        "relation": "tsi.output",
-        "args": [
-          {
-            "id": 11
-          },
-          {
-            "int": 0
-          },
-          {
-            "id": 12
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 49,
-        "relation": "tsi.has_type",
-        "args": [
-          {
-            "span": [
-              "blake3:fffe734c0904ac463f9ae8a215a7bac318c4bdfa9001c43d99e77a301ba70387",
-              100,
-              103
-            ]
-          },
-          {
-            "id": 11
           }
         ]
       },
@@ -910,6 +932,39 @@ source: tests/support/2_fixture_runner.rs
       {
         "record": "fact",
         "fact": 50,
+        "relation": "tsi.output",
+        "args": [
+          {
+            "id": 11
+          },
+          {
+            "int": 0
+          },
+          {
+            "id": 12
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 51,
+        "relation": "tsi.has_type",
+        "args": [
+          {
+            "span": [
+              "blake3:fffe734c0904ac463f9ae8a215a7bac318c4bdfa9001c43d99e77a301ba70387",
+              100,
+              103
+            ]
+          },
+          {
+            "id": 11
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 52,
         "relation": "tsi.origin",
         "args": [
           {
@@ -929,7 +984,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 51,
+        "fact": 53,
         "relation": "tsi.symbol",
         "args": [
           {
@@ -939,7 +994,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 52,
+        "fact": 54,
         "relation": "tsi.name",
         "args": [
           {
@@ -952,7 +1007,20 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 53,
+        "fact": 55,
+        "relation": "tsi.scip_symbol",
+        "args": [
+          {
+            "id": 13
+          },
+          {
+            "text": "ryi-ts71 npm . . `agree.ts`/run()."
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 56,
         "relation": "tsi.denotes",
         "args": [
           {
@@ -965,7 +1033,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 54,
+        "fact": 57,
         "relation": "tsi.origin",
         "args": [
           {
@@ -985,7 +1053,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 55,
+        "fact": 58,
         "relation": "tsi.has_type",
         "args": [
           {
@@ -1002,41 +1070,8 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 56,
-        "relation": "tsi.type",
-        "args": [
-          {
-            "id": 14
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 57,
-        "relation": "tsi.name",
-        "args": [
-          {
-            "id": 14
-          },
-          {
-            "text": "() => number"
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 58,
-        "relation": "tsi.product",
-        "args": [
-          {
-            "id": 14
-          }
-        ]
-      },
-      {
-        "record": "fact",
         "fact": 59,
-        "relation": "tsi.callable",
+        "relation": "tsi.type",
         "args": [
           {
             "id": 14
@@ -1059,6 +1094,39 @@ source: tests/support/2_fixture_runner.rs
       {
         "record": "fact",
         "fact": 60,
+        "relation": "tsi.name",
+        "args": [
+          {
+            "id": 14
+          },
+          {
+            "text": "() => number"
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 61,
+        "relation": "tsi.product",
+        "args": [
+          {
+            "id": 14
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 62,
+        "relation": "tsi.callable",
+        "args": [
+          {
+            "id": 14
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 63,
         "relation": "tsi.output",
         "args": [
           {
@@ -1074,7 +1142,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 61,
+        "fact": 64,
         "relation": "tsi.has_type",
         "args": [
           {
@@ -1091,7 +1159,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 62,
+        "fact": 65,
         "relation": "tsi.symbol",
         "args": [
           {
@@ -1101,7 +1169,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 63,
+        "fact": 66,
         "relation": "tsi.name",
         "args": [
           {
@@ -1114,7 +1182,20 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 64,
+        "fact": 67,
+        "relation": "tsi.scip_symbol",
+        "args": [
+          {
+            "id": 15
+          },
+          {
+            "text": "ryi-ts71 npm . . `agree_callee.ts`/helper()."
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 68,
         "relation": "tsi.denotes",
         "args": [
           {
@@ -1127,7 +1208,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 65,
+        "fact": 69,
         "relation": "tsi.origin",
         "args": [
           {
@@ -1147,7 +1228,17 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 66,
+        "fact": 7,
+        "relation": "tsi.product",
+        "args": [
+          {
+            "id": 0
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 70,
         "relation": "tsi.type",
         "args": [
           {
@@ -1157,7 +1248,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 67,
+        "fact": 71,
         "relation": "tsi.name",
         "args": [
           {
@@ -1170,7 +1261,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 68,
+        "fact": 72,
         "relation": "tsi.product",
         "args": [
           {
@@ -1180,7 +1271,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 69,
+        "fact": 73,
         "relation": "tsi.callable",
         "args": [
           {
@@ -1190,17 +1281,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 7,
-        "relation": "tsi.product",
-        "args": [
-          {
-            "id": 0
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 70,
+        "fact": 74,
         "relation": "tsi.input",
         "args": [
           {
@@ -1216,7 +1297,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 71,
+        "fact": 75,
         "relation": "tsi.output",
         "args": [
           {
@@ -1232,7 +1313,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 72,
+        "fact": 76,
         "relation": "tsi.has_type",
         "args": [
           {
@@ -1249,67 +1330,11 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 73,
-        "relation": "tsi.origin",
-        "args": [
-          {
-            "id": 16
-          },
-          {
-            "atom": "ts"
-          },
-          {
-            "span": [
-              "blake3:fffe734c0904ac463f9ae8a215a7bac318c4bdfa9001c43d99e77a301ba70387",
-              156,
-              160
-            ]
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 74,
-        "relation": "tsi.symbol",
-        "args": [
-          {
-            "id": 17
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 75,
-        "relation": "tsi.name",
-        "args": [
-          {
-            "id": 17
-          },
-          {
-            "text": "seat"
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 76,
-        "relation": "tsi.denotes",
-        "args": [
-          {
-            "id": 17
-          },
-          {
-            "id": 16
-          }
-        ]
-      },
-      {
-        "record": "fact",
         "fact": 77,
         "relation": "tsi.origin",
         "args": [
           {
-            "id": 17
+            "id": 16
           },
           {
             "atom": "ts"
@@ -1326,30 +1351,23 @@ source: tests/support/2_fixture_runner.rs
       {
         "record": "fact",
         "fact": 78,
-        "relation": "tsi.has_type",
+        "relation": "tsi.symbol",
         "args": [
           {
-            "span": [
-              "blake3:fffe734c0904ac463f9ae8a215a7bac318c4bdfa9001c43d99e77a301ba70387",
-              167,
-              171
-            ]
-          },
-          {
-            "id": 4
+            "id": 17
           }
         ]
       },
       {
         "record": "fact",
         "fact": 79,
-        "relation": "tsi.denotes",
+        "relation": "tsi.name",
         "args": [
           {
-            "id": 9
+            "id": 17
           },
           {
-            "id": 4
+            "text": "seat"
           }
         ]
       },
@@ -1366,6 +1384,82 @@ source: tests/support/2_fixture_runner.rs
       {
         "record": "fact",
         "fact": 80,
+        "relation": "tsi.scip_symbol",
+        "args": [
+          {
+            "id": 17
+          },
+          {
+            "text": "ryi-ts71 npm . . `agree.ts`/seat()."
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 81,
+        "relation": "tsi.denotes",
+        "args": [
+          {
+            "id": 17
+          },
+          {
+            "id": 16
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 82,
+        "relation": "tsi.origin",
+        "args": [
+          {
+            "id": 17
+          },
+          {
+            "atom": "ts"
+          },
+          {
+            "span": [
+              "blake3:fffe734c0904ac463f9ae8a215a7bac318c4bdfa9001c43d99e77a301ba70387",
+              156,
+              160
+            ]
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 83,
+        "relation": "tsi.has_type",
+        "args": [
+          {
+            "span": [
+              "blake3:fffe734c0904ac463f9ae8a215a7bac318c4bdfa9001c43d99e77a301ba70387",
+              167,
+              171
+            ]
+          },
+          {
+            "id": 4
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 84,
+        "relation": "tsi.denotes",
+        "args": [
+          {
+            "id": 9
+          },
+          {
+            "id": 4
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 85,
         "relation": "tsi.has_type",
         "args": [
           {
@@ -1382,7 +1476,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 81,
+        "fact": 86,
         "relation": "tsi.has_type",
         "args": [
           {
@@ -1399,7 +1493,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 82,
+        "fact": 87,
         "relation": "tsi.symbol",
         "args": [
           {
@@ -1409,7 +1503,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 83,
+        "fact": 88,
         "relation": "tsi.name",
         "args": [
           {
@@ -1422,105 +1516,14 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 84,
-        "relation": "tsi.denotes",
-        "args": [
-          {
-            "id": 18
-          },
-          {
-            "id": 1
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 85,
-        "relation": "tsi.origin",
-        "args": [
-          {
-            "id": 18
-          },
-          {
-            "atom": "ts"
-          },
-          {
-            "span": [
-              "blake3:f5893e9ff4e080e4a0bfa8e116f64c8d2fda633b6f314f53707325cfd3bd6b88",
-              24,
-              29
-            ]
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 86,
-        "relation": "tsi.has_type",
-        "args": [
-          {
-            "span": [
-              "blake3:f5893e9ff4e080e4a0bfa8e116f64c8d2fda633b6f314f53707325cfd3bd6b88",
-              13,
-              17
-            ]
-          },
-          {
-            "id": 4
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 87,
-        "relation": "tsi.origin",
-        "args": [
-          {
-            "id": 4
-          },
-          {
-            "atom": "ts"
-          },
-          {
-            "span": [
-              "blake3:f5893e9ff4e080e4a0bfa8e116f64c8d2fda633b6f314f53707325cfd3bd6b88",
-              13,
-              17
-            ]
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 88,
-        "relation": "tsi.has_type",
-        "args": [
-          {
-            "span": [
-              "blake3:f5893e9ff4e080e4a0bfa8e116f64c8d2fda633b6f314f53707325cfd3bd6b88",
-              18,
-              72
-            ]
-          },
-          {
-            "id": 10
-          }
-        ]
-      },
-      {
-        "record": "fact",
         "fact": 89,
-        "relation": "tsi.has_type",
+        "relation": "tsi.scip_symbol",
         "args": [
           {
-            "span": [
-              "blake3:f5893e9ff4e080e4a0bfa8e116f64c8d2fda633b6f314f53707325cfd3bd6b88",
-              24,
-              29
-            ]
+            "id": 18
           },
           {
-            "id": 1
+            "text": "ryi-ts71 npm . . `agree_callee.ts`/Base#greet()."
           }
         ]
       },
@@ -1540,6 +1543,110 @@ source: tests/support/2_fixture_runner.rs
       {
         "record": "fact",
         "fact": 90,
+        "relation": "tsi.denotes",
+        "args": [
+          {
+            "id": 18
+          },
+          {
+            "id": 1
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 91,
+        "relation": "tsi.origin",
+        "args": [
+          {
+            "id": 18
+          },
+          {
+            "atom": "ts"
+          },
+          {
+            "span": [
+              "blake3:f5893e9ff4e080e4a0bfa8e116f64c8d2fda633b6f314f53707325cfd3bd6b88",
+              24,
+              29
+            ]
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 92,
+        "relation": "tsi.has_type",
+        "args": [
+          {
+            "span": [
+              "blake3:f5893e9ff4e080e4a0bfa8e116f64c8d2fda633b6f314f53707325cfd3bd6b88",
+              13,
+              17
+            ]
+          },
+          {
+            "id": 4
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 93,
+        "relation": "tsi.origin",
+        "args": [
+          {
+            "id": 4
+          },
+          {
+            "atom": "ts"
+          },
+          {
+            "span": [
+              "blake3:f5893e9ff4e080e4a0bfa8e116f64c8d2fda633b6f314f53707325cfd3bd6b88",
+              13,
+              17
+            ]
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 94,
+        "relation": "tsi.has_type",
+        "args": [
+          {
+            "span": [
+              "blake3:f5893e9ff4e080e4a0bfa8e116f64c8d2fda633b6f314f53707325cfd3bd6b88",
+              18,
+              72
+            ]
+          },
+          {
+            "id": 10
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 95,
+        "relation": "tsi.has_type",
+        "args": [
+          {
+            "span": [
+              "blake3:f5893e9ff4e080e4a0bfa8e116f64c8d2fda633b6f314f53707325cfd3bd6b88",
+              24,
+              29
+            ]
+          },
+          {
+            "id": 1
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 96,
         "relation": "tsi.origin",
         "args": [
           {
@@ -1559,7 +1666,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 91,
+        "fact": 97,
         "relation": "tsi.has_type",
         "args": [
           {
@@ -1576,7 +1683,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 92,
+        "fact": 98,
         "relation": "tsi.has_type",
         "args": [
           {
@@ -1593,7 +1700,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 93,
+        "fact": 99,
         "relation": "tsi.origin",
         "args": [
           {
@@ -1608,23 +1715,6 @@ source: tests/support/2_fixture_runner.rs
               90,
               96
             ]
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 94,
-        "relation": "tsi.has_type",
-        "args": [
-          {
-            "span": [
-              "blake3:f5893e9ff4e080e4a0bfa8e116f64c8d2fda633b6f314f53707325cfd3bd6b88",
-              107,
-              124
-            ]
-          },
-          {
-            "id": 10
           }
         ]
       },
@@ -1725,6 +1815,12 @@ source: tests/support/2_fixture_runner.rs
       {
         "record": "witness",
         "fact": 10,
+        "run": 1,
+        "method": "checker_walk"
+      },
+      {
+        "record": "witness",
+        "fact": 100,
         "run": 1,
         "method": "checker_walk"
       },
@@ -2299,6 +2395,36 @@ source: tests/support/2_fixture_runner.rs
         "method": "checker_walk"
       },
       {
+        "record": "witness",
+        "fact": 95,
+        "run": 1,
+        "method": "checker_walk"
+      },
+      {
+        "record": "witness",
+        "fact": 96,
+        "run": 1,
+        "method": "checker_walk"
+      },
+      {
+        "record": "witness",
+        "fact": 97,
+        "run": 1,
+        "method": "checker_walk"
+      },
+      {
+        "record": "witness",
+        "fact": 98,
+        "run": 1,
+        "method": "checker_walk"
+      },
+      {
+        "record": "witness",
+        "fact": 99,
+        "run": 1,
+        "method": "checker_walk"
+      },
+      {
         "record": "call_site",
         "callee": "base.greet",
         "path": "tests/fixtures/tsi/agree.ts",
@@ -2443,6 +2569,12 @@ source: tests/support/2_fixture_runner.rs
       {
         "record": "coverage",
         "run": 1,
+        "relation": "tsi.scip_symbol",
+        "coverage": "partial"
+      },
+      {
+        "record": "coverage",
+        "run": 1,
         "relation": "tsi.subtype",
         "coverage": "partial"
       },
@@ -2545,6 +2677,12 @@ source: tests/support/2_fixture_runner.rs
       {
         "record": "diagnostic",
         "run": 1,
+        "relation": "tsi.scip_symbol",
+        "detail": "TS 7.1 API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
+      },
+      {
+        "record": "diagnostic",
+        "run": 1,
         "relation": "tsi.subtype",
         "detail": "the TS 7.1 API exposes no subtype or strict_subtype query; no rows produced"
       },
@@ -2623,6 +2761,19 @@ source: tests/support/2_fixture_runner.rs
       {
         "record": "fact",
         "fact": 14,
+        "relation": "tsi.scip_symbol",
+        "args": [
+          {
+            "id": 2
+          },
+          {
+            "text": "ryi-ts71 npm . . `disagree.ts`/drive()."
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 15,
         "relation": "tsi.denotes",
         "args": [
           {
@@ -2635,7 +2786,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 15,
+        "fact": 16,
         "relation": "tsi.origin",
         "args": [
           {
@@ -2655,7 +2806,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 16,
+        "fact": 17,
         "relation": "tsi.type",
         "args": [
           {
@@ -2665,7 +2816,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 17,
+        "fact": 18,
         "relation": "tsi.name",
         "args": [
           {
@@ -2678,7 +2829,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 18,
+        "fact": 19,
         "relation": "tsi.primitive",
         "args": [
           {
@@ -2686,23 +2837,6 @@ source: tests/support/2_fixture_runner.rs
           },
           {
             "atom": "any"
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 19,
-        "relation": "tsi.has_type",
-        "args": [
-          {
-            "span": [
-              "blake3:7c8c132fc92dfb71bd6b2bfd1b039dcfbdfa3ad6fc625c4638293df6fb8704d7",
-              77,
-              163
-            ]
-          },
-          {
-            "id": 3
           }
         ]
       },
@@ -2724,6 +2858,23 @@ source: tests/support/2_fixture_runner.rs
           {
             "span": [
               "blake3:7c8c132fc92dfb71bd6b2bfd1b039dcfbdfa3ad6fc625c4638293df6fb8704d7",
+              77,
+              163
+            ]
+          },
+          {
+            "id": 3
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 21,
+        "relation": "tsi.has_type",
+        "args": [
+          {
+            "span": [
+              "blake3:7c8c132fc92dfb71bd6b2bfd1b039dcfbdfa3ad6fc625c4638293df6fb8704d7",
               109,
               140
             ]
@@ -2735,7 +2886,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 21,
+        "fact": 22,
         "relation": "tsi.type",
         "args": [
           {
@@ -2745,7 +2896,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 22,
+        "fact": 23,
         "relation": "tsi.name",
         "args": [
           {
@@ -2758,7 +2909,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 23,
+        "fact": 24,
         "relation": "tsi.product",
         "args": [
           {
@@ -2768,7 +2919,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 24,
+        "fact": 25,
         "relation": "tsi.callable",
         "args": [
           {
@@ -2778,7 +2929,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 25,
+        "fact": 26,
         "relation": "tsi.output",
         "args": [
           {
@@ -2794,7 +2945,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 26,
+        "fact": 27,
         "relation": "tsi.has_type",
         "args": [
           {
@@ -2811,7 +2962,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 27,
+        "fact": 28,
         "relation": "tsi.symbol",
         "args": [
           {
@@ -2821,7 +2972,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 28,
+        "fact": 29,
         "relation": "tsi.name",
         "args": [
           {
@@ -2829,19 +2980,6 @@ source: tests/support/2_fixture_runner.rs
           },
           {
             "text": "render"
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 29,
-        "relation": "tsi.denotes",
-        "args": [
-          {
-            "id": 5
-          },
-          {
-            "id": 4
           }
         ]
       },
@@ -2861,6 +2999,32 @@ source: tests/support/2_fixture_runner.rs
       {
         "record": "fact",
         "fact": 30,
+        "relation": "tsi.scip_symbol",
+        "args": [
+          {
+            "id": 5
+          },
+          {
+            "text": "ryi-ts71 npm . . `disagree.ts`/drive().render()."
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 31,
+        "relation": "tsi.denotes",
+        "args": [
+          {
+            "id": 5
+          },
+          {
+            "id": 4
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 32,
         "relation": "tsi.origin",
         "args": [
           {
@@ -2880,7 +3044,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 31,
+        "fact": 33,
         "relation": "tsi.type",
         "args": [
           {
@@ -2890,7 +3054,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 32,
+        "fact": 34,
         "relation": "tsi.name",
         "args": [
           {
@@ -2903,7 +3067,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 33,
+        "fact": 35,
         "relation": "tsi.product",
         "args": [
           {
@@ -2913,7 +3077,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 34,
+        "fact": 36,
         "relation": "tsi.callable",
         "args": [
           {
@@ -2923,7 +3087,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 35,
+        "fact": 37,
         "relation": "tsi.output",
         "args": [
           {
@@ -2939,7 +3103,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 36,
+        "fact": 38,
         "relation": "tsi.has_type",
         "args": [
           {
@@ -2956,7 +3120,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 37,
+        "fact": 39,
         "relation": "tsi.origin",
         "args": [
           {
@@ -2971,29 +3135,6 @@ source: tests/support/2_fixture_runner.rs
               16,
               22
             ]
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 38,
-        "relation": "tsi.symbol",
-        "args": [
-          {
-            "id": 7
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 39,
-        "relation": "tsi.name",
-        "args": [
-          {
-            "id": 7
-          },
-          {
-            "text": "render"
           }
         ]
       },
@@ -3010,6 +3151,42 @@ source: tests/support/2_fixture_runner.rs
       {
         "record": "fact",
         "fact": 40,
+        "relation": "tsi.symbol",
+        "args": [
+          {
+            "id": 7
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 41,
+        "relation": "tsi.name",
+        "args": [
+          {
+            "id": 7
+          },
+          {
+            "text": "render"
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 42,
+        "relation": "tsi.scip_symbol",
+        "args": [
+          {
+            "id": 7
+          },
+          {
+            "text": "ryi-ts71 npm . . `disagree_callee.ts`/render()."
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 43,
         "relation": "tsi.denotes",
         "args": [
           {
@@ -3022,7 +3199,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 41,
+        "fact": 44,
         "relation": "tsi.origin",
         "args": [
           {
@@ -3042,7 +3219,7 @@ source: tests/support/2_fixture_runner.rs
       },
       {
         "record": "fact",
-        "fact": 42,
+        "fact": 45,
         "relation": "tsi.has_type",
         "args": [
           {
@@ -3378,6 +3555,24 @@ source: tests/support/2_fixture_runner.rs
       {
         "record": "witness",
         "fact": 42,
+        "run": 1,
+        "method": "checker_walk"
+      },
+      {
+        "record": "witness",
+        "fact": 43,
+        "run": 1,
+        "method": "checker_walk"
+      },
+      {
+        "record": "witness",
+        "fact": 44,
+        "run": 1,
+        "method": "checker_walk"
+      },
+      {
+        "record": "witness",
+        "fact": 45,
         "run": 1,
         "method": "checker_walk"
       },

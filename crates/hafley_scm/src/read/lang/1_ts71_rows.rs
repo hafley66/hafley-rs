@@ -210,27 +210,189 @@ pub fn demand(text: &str, path: &Path, output: &RyiOutput, tsi: bool) -> TsDeman
     }
 }
 
-/// One source file the API decoded, kept for declaration and type-node lookups.
+/// One source file as the API encoded it. A node handle's index is a record
+/// index in this encoding (JSDoc and NodeList records included), so lookups
+/// read the records; the decoded tree supplies only the text and file name.
 struct Decoded {
-    // Field order is drop order: the table points into the decoded region.
-    table: tsrs_api_codec::NodeIndexTable,
-    decoded: tsrs_api_codec::DecodedNode,
+    bytes: Vec<u8>,
+    nodes: usize,
+    count: u32,
+    text: String,
+    file_name: String,
     map: tsrs_ast::positionmap::PositionMap,
 }
 
+/// One node record: kind (`None` for a NodeList), UTF-16 pos/end, parent index.
+#[derive(Clone, Copy)]
+struct Record {
+    kind: Option<tsrs_ast::Kind>,
+    raw_kind: u32,
+    pos: u32,
+    end: u32,
+    parent: u32,
+}
+
 impl Decoded {
-    fn source(&self) -> tsrs_core::P<tsrs_ast::SourceFile> {
-        self.decoded.root().as_source_file_p()
+    fn new(bytes: Vec<u8>) -> Result<Self, String> {
+        use tsrs_api_codec::format::{HEADER_OFFSET_NODES, NODE_SIZE};
+        let decoded = tsrs_api_codec::decode_source_file(&bytes).map_err(|error| format!("getSourceFile: {error}"))?;
+        let source = decoded.root().as_source_file_p();
+        let (text, file_name) = (source.text().to_string(), source.file_name().to_string());
+        let nodes = u32::from_le_bytes(bytes[HEADER_OFFSET_NODES..HEADER_OFFSET_NODES + 4].try_into().unwrap()) as usize;
+        let count = ((bytes.len() - nodes) / NODE_SIZE) as u32;
+        let map = tsrs_ast::positionmap::compute_position_map(&text);
+        Ok(Decoded { bytes, nodes, count, text, file_name, map })
     }
 
-    /// A node's name span (or the node's own) in UTF-8 bytes, leading trivia skipped.
-    fn name_span(&self, node: tsrs_core::P<tsrs_ast::Node>) -> Option<(u32, u32, String)> {
-        let named = tsrs_ast::get_name_of_declaration(node).unwrap_or(node);
-        let text = self.source().text();
-        let start = tsrs_scanner::skip_trivia(text, self.map.utf16_to_utf8(named.pos().source_offset()?));
-        let end = self.map.utf16_to_utf8(named.end().source_offset()?);
-        Some((start, end, text.get(start as usize..end as usize)?.to_string()))
+    fn record(&self, index: u32) -> Option<Record> {
+        use tsrs_api_codec::format::{NODE_OFFSET_END, NODE_OFFSET_KIND, NODE_OFFSET_PARENT, NODE_OFFSET_POS, NODE_SIZE};
+        if index == 0 || index >= self.count {
+            return None;
+        }
+        let base = self.nodes + index as usize * NODE_SIZE;
+        let field = |offset: usize| u32::from_le_bytes(self.bytes[base + offset..base + offset + 4].try_into().unwrap());
+        let raw_kind = field(NODE_OFFSET_KIND);
+        Some(Record {
+            kind: tsrs_api_codec::decoder::kind_from_u32(raw_kind),
+            raw_kind,
+            pos: field(NODE_OFFSET_POS),
+            end: field(NODE_OFFSET_END),
+            parent: field(NODE_OFFSET_PARENT),
+        })
     }
+
+    /// Whether `ancestor` is on `index`'s parent chain.
+    fn descends(&self, mut index: u32, ancestor: u32) -> bool {
+        while let Some(record) = self.record(index) {
+            if record.parent == ancestor {
+                return true;
+            }
+            if record.parent == 0 || record.parent >= index {
+                return false;
+            }
+            index = record.parent;
+        }
+        false
+    }
+
+    /// A declaration's name record: its first direct child that is a name.
+    fn name_of(&self, index: u32) -> Option<u32> {
+        use tsrs_ast::Kind;
+        let mut child = index + 1;
+        while self.descends(child, index) {
+            let record = self.record(child)?;
+            if record.parent == index
+                && matches!(
+                    record.kind,
+                    Some(Kind::Identifier | Kind::PrivateIdentifier | Kind::StringLiteral | Kind::NumericLiteral
+                        | Kind::ComputedPropertyName | Kind::NoSubstitutionTemplateLiteral)
+                )
+            {
+                return Some(child);
+            }
+            child += 1;
+        }
+        None
+    }
+
+    /// A record's span in UTF-8 bytes, leading trivia skipped.
+    fn span(&self, index: u32) -> Option<(u32, u32, String)> {
+        let record = self.record(index)?;
+        let start = tsrs_scanner::skip_trivia(&self.text, self.map.utf16_to_utf8(record.pos));
+        let end = self.map.utf16_to_utf8(record.end);
+        Some((start, end, self.text.get(start as usize..end as usize)?.to_string()))
+    }
+
+    /// A declaration's name span (or its own when it has no name child).
+    fn name_span(&self, index: u32) -> Option<(u32, u32, String)> {
+        self.span(self.name_of(index).unwrap_or(index))
+    }
+
+    /// The record indexes from the root down to `index`, NodeLists skipped.
+    fn path_to(&self, index: u32) -> Vec<u32> {
+        let mut path = Vec::new();
+        let mut current = index;
+        while let Some(record) = self.record(current) {
+            if record.kind.is_some() {
+                path.push(current);
+            }
+            if record.parent == 0 || record.parent >= current {
+                break;
+            }
+            current = record.parent;
+        }
+        path.reverse();
+        path
+    }
+
+    /// One SCIP descriptor for a container or the declaration itself; `None`
+    /// for records that name nothing a symbol path carries.
+    fn descriptor(&self, index: u32) -> Option<String> {
+        use tsrs_ast::Kind;
+        let record = self.record(index)?;
+        let name = || self.name_of(index).and_then(|name| self.span(name)).map(|(_, _, text)| escape(&text));
+        Some(match record.kind? {
+            Kind::ModuleDeclaration => format!("{}/", name()?),
+            Kind::ClassDeclaration | Kind::InterfaceDeclaration | Kind::EnumDeclaration | Kind::TypeAliasDeclaration => {
+                format!("{}#", name()?)
+            }
+            Kind::FunctionDeclaration | Kind::MethodDeclaration | Kind::MethodSignature => format!("{}().", name()?),
+            Kind::Constructor => "`<constructor>`().".to_string(),
+            Kind::PropertyDeclaration | Kind::PropertySignature | Kind::EnumMember | Kind::VariableDeclaration
+            | Kind::GetAccessor | Kind::SetAccessor | Kind::PropertyAssignment | Kind::ShorthandPropertyAssignment => {
+                format!("{}.", name()?)
+            }
+            Kind::Parameter => format!("({})", name()?),
+            Kind::TypeParameter => format!("[{}]", name()?),
+            Kind::ClassExpression if self.name_of(index).is_some() => format!("{}#", name()?),
+            // An anonymous function or class names its place by its first byte.
+            Kind::ArrowFunction | Kind::FunctionExpression | Kind::ClassExpression => {
+                format!("`@{}`/", self.span(index)?.0)
+            }
+            _ => return None,
+        })
+    }
+
+    /// The innermost written type node (`TypeReference`, `ExpressionWithTypeArguments`)
+    /// covering a UTF-16 position.
+    fn written_type_at(&self, unit: u32) -> Option<Record> {
+        use tsrs_ast::Kind;
+        (1..self.count)
+            .filter_map(|index| self.record(index).map(|record| (index, record)))
+            .filter(|(_, record)| {
+                matches!(record.kind, Some(Kind::TypeReference | Kind::ExpressionWithTypeArguments))
+                    && record.pos <= unit
+                    && unit < record.end
+            })
+            .min_by_key(|(_, record)| record.end - record.pos)
+            .map(|(index, record)| Record { parent: index, ..record })
+    }
+}
+
+/// SCIP's identifier escape: a name outside `[A-Za-z0-9_+$-]` goes in backticks.
+fn escape(name: &str) -> String {
+    if !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || "_+$-".contains(c)) {
+        name.to_string()
+    } else {
+        format!("`{}`", name.replace('`', "``"))
+    }
+}
+
+/// The nearest package.json above `file`: (name, version, directory).
+fn npm_package_of(file: &Path, cache: &mut HashMap<PathBuf, (String, String, PathBuf)>) -> (String, String, PathBuf) {
+    for dir in file.ancestors().skip(1) {
+        if let Some(found) = cache.get(dir) {
+            return found.clone();
+        }
+        let manifest = dir.join("package.json");
+        if let Some(value) = std::fs::read(crate::read::io_path(&manifest)).ok().and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok()) {
+            let field = |key: &str| value[key].as_str().filter(|text| !text.is_empty()).unwrap_or(".").to_string();
+            let found = (field("name"), field("version"), dir.to_path_buf());
+            cache.insert(dir.to_path_buf(), found.clone());
+            return found;
+        }
+    }
+    (".".into(), ".".into(), file.parent().unwrap_or(file).to_path_buf())
 }
 
 /// One snapshot over the requested files and the source files it decoded.
@@ -238,6 +400,7 @@ struct Snapshot<'a> {
     api: &'a dyn TsApi,
     id: Value,
     files: HashMap<String, Decoded>,
+    packages: HashMap<PathBuf, (String, String, PathBuf)>,
 }
 
 impl Snapshot<'_> {
@@ -258,11 +421,7 @@ impl Snapshot<'_> {
                 Reply::Binary(bytes) => bytes,
                 Reply::Json(_) => return Err("getSourceFile: JSON answer where the encoded file was expected".into()),
             };
-            let decoded = tsrs_api_codec::decode_source_file(&bytes).map_err(|error| format!("getSourceFile: {error}"))?;
-            let source = decoded.root().as_source_file_p();
-            let table = tsrs_api_codec::build_node_index_table(source.get());
-            let map = tsrs_ast::positionmap::compute_position_map(source.text());
-            self.files.insert(path.to_string(), Decoded { table, decoded, map });
+            self.files.insert(path.to_string(), Decoded::new(bytes)?);
         }
         Ok(&self.files[path])
     }
@@ -274,50 +433,99 @@ impl Snapshot<'_> {
         let Some(parsed) = handle.as_str().and_then(tsrs_api_codec::parse_node_handle) else { return Ok(None) };
         let (path, index) = (parsed.path.to_string(), parsed.index);
         let decoded = self.decoded(project, &path)?;
-        let Some(node) = tsrs_api_codec::resolve_node_index(&decoded.table, index) else { return Ok(None) };
-        Ok(decoded
-            .name_span(node)
-            .map(|(start, end, name)| (decoded.source().file_name().to_string(), start, end, name)))
+        Ok(decoded.name_span(index).map(|(start, end, name)| (decoded.file_name.clone(), start, end, name)))
+    }
+
+    /// The symbol's stable id in SCIP grammar, from its first declaration:
+    /// `ryi-ts71 npm <package> <version> `<file>`/<descriptors>`. The same
+    /// declaration names the same text in every run.
+    fn scip_symbol(&mut self, project: &Value, symbol: &Value) -> Result<Option<String>, String> {
+        let Some(parsed) = symbol["declarations"][0].as_str().and_then(tsrs_api_codec::parse_node_handle) else {
+            return Ok(None);
+        };
+        let (path, index) = (parsed.path.to_string(), parsed.index);
+        let decoded = self.decoded(project, &path)?;
+        let descriptors: String = decoded.path_to(index).into_iter().filter_map(|step| decoded.descriptor(step)).collect();
+        if descriptors.is_empty() {
+            return Ok(None);
+        }
+        let file = PathBuf::from(&decoded.file_name);
+        let (name, version, root) = npm_package_of(&file, &mut self.packages);
+        let relative = file.strip_prefix(&root).unwrap_or(&file).to_string_lossy().replace('`', "``");
+        Ok(Some(format!("ryi-ts71 npm {name} {version} `{relative}`/{descriptors}")))
     }
 
     /// The written type node a type-reference token sits in (`Mapper<T>` in
     /// `implements Mapper<T>`); the API answers `any` at the token itself.
     fn written_type(&mut self, project: &Value, file: &str, start: u32) -> Result<Option<Value>, String> {
-        use tsrs_ast::Kind;
+        // Handle paths are the API's path keys: lowercased where the file system folds case.
+        let key = if cfg!(any(target_os = "macos", target_os = "windows")) { file.to_lowercase() } else { file.to_string() };
         let decoded = self.decoded(project, file)?;
-        let source = decoded.source();
-        let unit = decoded.map.utf8_to_utf16(start);
-        // Decoded nodes carry no parent links: descend from the root along the
-        // children covering the site; the deepest written type on that path wins.
-        let mut node = decoded.decoded.root();
-        let mut found = None;
-        loop {
-            if matches!(node.kind(), Kind::TypeReference | Kind::ExpressionWithTypeArguments) {
-                found = Some(node);
-            }
-            let mut next = None;
-            node.for_each_child(&mut |child| {
-                let covers = child.pos().source_offset().is_some_and(|pos| pos <= unit)
-                    && child.end().source_offset().is_some_and(|end| unit < end);
-                if covers {
-                    next = Some(child);
-                }
-                covers
-            });
-            match next {
-                Some(child) => node = child,
-                None => break,
-            }
-        }
-        let Some(found) = found else { return Ok(None) };
-        let location = tsrs_api_codec::node_handle(&decoded.table, source.get(), found);
-        let method = if found.kind() == Kind::TypeReference { "getTypeFromTypeNode" } else { "getTypeAtLocation" };
+        let Some(found) = decoded.written_type_at(decoded.map.utf8_to_utf16(start)) else { return Ok(None) };
+        let location = format!("{}.{}.{}", found.parent, found.raw_kind, key);
+        let method = if found.kind == Some(tsrs_ast::Kind::TypeReference) { "getTypeFromTypeNode" } else { "getTypeAtLocation" };
         let ty = self.json(project, method, json!({"location": location}))?;
         Ok((!ty.is_null()).then_some(ty))
     }
 }
 
 type Definitions = BTreeMap<(String, u32, u32), (String, u32, u32)>;
+
+/// Every reference to the symbol at `seed` (absolute path, UTF-8 byte) inside
+/// `files` (supplied path, absolute path), as (supplied path, start, end) in
+/// UTF-8 bytes, file order then source order. The seed's own declaration is
+/// one of them. `None`: no symbol at the seed.
+pub fn references(
+    api: &dyn TsApi,
+    files: &[(String, PathBuf)],
+    seed: (&Path, u32),
+) -> Result<Option<Vec<(String, u32, u32)>>, String> {
+    let created = api.json("createSnapshot", &json!({"openFiles": files.iter().map(|(_, absolute)| absolute).collect::<Vec<_>>()}))?;
+    let mut snapshot = Snapshot { api, id: created["snapshot"].clone(), files: HashMap::new(), packages: HashMap::new() };
+    let result = references_in(&mut snapshot, files, seed);
+    let released = api.json("release", &json!({"snapshot": snapshot.id}));
+    let found = result?;
+    released?;
+    Ok(found)
+}
+
+fn references_in(
+    snapshot: &mut Snapshot,
+    files: &[(String, PathBuf)],
+    (seed_file, seed_byte): (&Path, u32),
+) -> Result<Option<Vec<(String, u32, u32)>>, String> {
+    let seed_path = seed_file.to_string_lossy().into_owned();
+    let project = snapshot.api.json("getDefaultProjectForFile", &json!({"snapshot": snapshot.id, "file": seed_path}))?["id"].clone();
+    let text = std::fs::read_to_string(seed_file).map_err(|error| error.to_string())?;
+    let unit = tsrs_ast::positionmap::compute_position_map(&text).utf8_to_utf16(seed_byte);
+    let symbols = snapshot.json(&project, "getSymbolsAtPositions", json!({"file": seed_path, "positions": [unit]}))?;
+    let symbol = &symbols[0];
+    if symbol.is_null() {
+        return Ok(None);
+    }
+    let symbol = if symbol["flags"].as_u64().unwrap_or(0) & 2097152 != 0 {
+        snapshot.json(&project, "getAliasedSymbol", json!({"symbol": symbol["reference"]}))?
+    } else {
+        symbol.clone()
+    };
+    let mut found = Vec::new();
+    for (supplied, absolute) in files {
+        let file = absolute.to_string_lossy().into_owned();
+        let handles = snapshot.json(&project, "getReferencesToSymbolInFile", json!({"file": file, "symbol": symbol["reference"]}))?;
+        let mut spans = Vec::new();
+        for handle in handles.as_array().map(Vec::as_slice).unwrap_or_default() {
+            let Some(parsed) = handle.as_str().and_then(tsrs_api_codec::parse_node_handle) else { continue };
+            let (path, index) = (parsed.path.to_string(), parsed.index);
+            let decoded = snapshot.decoded(&project, &path)?;
+            if let Some((start, end, _)) = decoded.span(index) {
+                spans.push((supplied.clone(), start, end));
+            }
+        }
+        spans.sort();
+        found.extend(spans);
+    }
+    Ok(Some(found))
+}
 
 /// Answer every site in `files` from one snapshot of an in-process tsrs session:
 /// definitions always, the TSI walk when `tsi`.
@@ -337,7 +545,7 @@ pub fn ask_with(api: &dyn TsApi, files: &[(String, PathBuf, TsDemand)], tsi: boo
         .map(|(supplied, absolute, _)| (absolute.to_string_lossy().to_lowercase(), supplied.clone()))
         .collect();
     let created = api.json("createSnapshot", &json!({"openFiles": needed.iter().map(|(_, absolute, _)| absolute).collect::<Vec<_>>()}))?;
-    let mut snapshot = Snapshot { api, id: created["snapshot"].clone(), files: HashMap::new() };
+    let mut snapshot = Snapshot { api, id: created["snapshot"].clone(), files: HashMap::new(), packages: HashMap::new() };
     let result = answer_files(&mut snapshot, &needed, &corpus, tsi, &mut answers);
     // The snapshot's programs and checkers free with it, also after a failure.
     let released = api.json("release", &json!({"snapshot": snapshot.id}));
@@ -435,7 +643,7 @@ fn answer_files(
                 rows.emit("tsi.origin", vec![Arg::Id(id), Arg::Atom("ts".into()), Arg::Span(path.clone(), *start, *end)])?;
             }
             if !symbol.is_null() {
-                let symbol_id = rows.symbol(symbol)?;
+                let symbol_id = rows.symbol(snapshot, &project, symbol)?;
                 rows.emit("tsi.denotes", vec![Arg::Id(symbol_id), Arg::Id(id)])?;
                 if let Some((path, start, end)) = definitions.get(&key) {
                     rows.emit("tsi.origin", vec![Arg::Id(symbol_id), Arg::Atom("ts".into()), Arg::Span(path.clone(), *start, *end)])?;
@@ -504,7 +712,7 @@ impl Rows<'_> {
         id
     }
 
-    fn symbol(&mut self, symbol: &Value) -> Result<u32, String> {
+    fn symbol(&mut self, snapshot: &mut Snapshot, project: &Value, symbol: &Value) -> Result<u32, String> {
         let handle = symbol["reference"].to_string();
         if let Some(id) = self.symbols.get(&handle) {
             return Ok(*id);
@@ -513,6 +721,9 @@ impl Rows<'_> {
         self.symbols.insert(handle, id);
         self.emit("tsi.symbol", vec![Arg::Id(id)])?;
         self.emit("tsi.name", vec![Arg::Id(id), Arg::Text(symbol["name"].as_str().unwrap_or("").into())])?;
+        if let Some(text) = snapshot.scip_symbol(project, symbol)? {
+            self.emit("tsi.scip_symbol", vec![Arg::Id(id), Arg::Text(text)])?;
+        }
         Ok(id)
     }
 

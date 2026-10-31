@@ -256,6 +256,12 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       {
         "record": "coverage",
         "run": 1,
+        "relation": "tsi.scip_symbol",
+        "coverage": "partial"
+      },
+      {
+        "record": "coverage",
+        "run": 1,
         "relation": "tsi.subtype",
         "coverage": "partial"
       },
@@ -406,6 +412,12 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       {
         "record": "diagnostic",
         "run": 1,
+        "relation": "tsi.scip_symbol",
+        "detail": "TS 7.1 API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
+      },
+      {
+        "record": "diagnostic",
+        "run": 1,
         "relation": "tsi.subtype",
         "detail": "the TS 7.1 API exposes no subtype or strict_subtype query; no rows produced"
       },
@@ -440,6 +452,86 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       {
         "record": "fact",
         "fact": 100,
+        "relation": "tsi.denotes",
+        "args": [
+          {
+            "id": 26
+          },
+          {
+            "id": 16
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 101,
+        "relation": "tsi.origin",
+        "args": [
+          {
+            "id": 26
+          },
+          {
+            "atom": "ts"
+          },
+          {
+            "span": [
+              "blake3:5bb3ce0722005ae43f3a40f0817fe3b0649672c779530978f6e3dd374b666195",
+              423,
+              426
+            ]
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 102,
+        "relation": "tsi.has_type",
+        "args": [
+          {
+            "span": [
+              "blake3:5bb3ce0722005ae43f3a40f0817fe3b0649672c779530978f6e3dd374b666195",
+              427,
+              428
+            ]
+          },
+          {
+            "id": 17
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 103,
+        "relation": "tsi.origin",
+        "args": [
+          {
+            "id": 17
+          },
+          {
+            "atom": "ts"
+          },
+          {
+            "span": [
+              "blake3:5bb3ce0722005ae43f3a40f0817fe3b0649672c779530978f6e3dd374b666195",
+              427,
+              428
+            ]
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 104,
+        "relation": "tsi.symbol",
+        "args": [
+          {
+            "id": 27
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 105,
         "relation": "tsi.name",
         "args": [
           {
@@ -452,7 +544,20 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 101,
+        "fact": 106,
+        "relation": "tsi.scip_symbol",
+        "args": [
+          {
+            "id": 27
+          },
+          {
+            "text": "ryi-ts71 npm . . `probe.ts`/User#map().[U]"
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 107,
         "relation": "tsi.denotes",
         "args": [
           {
@@ -465,7 +570,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 102,
+        "fact": 108,
         "relation": "tsi.origin",
         "args": [
           {
@@ -485,7 +590,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 103,
+        "fact": 109,
         "relation": "tsi.has_type",
         "args": [
           {
@@ -502,7 +607,17 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 104,
+        "fact": 11,
+        "relation": "ts.interface",
+        "args": [
+          {
+            "id": 0
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 110,
         "relation": "tsi.has_type",
         "args": [
           {
@@ -519,7 +634,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 105,
+        "fact": 111,
         "relation": "tsi.has_type",
         "args": [
           {
@@ -536,7 +651,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 106,
+        "fact": 112,
         "relation": "tsi.symbol",
         "args": [
           {
@@ -546,7 +661,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 107,
+        "fact": 113,
         "relation": "tsi.name",
         "args": [
           {
@@ -559,7 +674,20 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 108,
+        "fact": 114,
+        "relation": "tsi.scip_symbol",
+        "args": [
+          {
+            "id": 28
+          },
+          {
+            "text": "ryi-ts71 npm . . `probe.ts`/User#map().(project)"
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 115,
         "relation": "tsi.denotes",
         "args": [
           {
@@ -572,7 +700,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 109,
+        "fact": 116,
         "relation": "tsi.origin",
         "args": [
           {
@@ -592,17 +720,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 11,
-        "relation": "ts.interface",
-        "args": [
-          {
-            "id": 0
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 110,
+        "fact": 117,
         "relation": "tsi.type",
         "args": [
           {
@@ -612,7 +730,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 111,
+        "fact": 118,
         "relation": "tsi.name",
         "args": [
           {
@@ -625,99 +743,11 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 112,
-        "relation": "tsi.product",
-        "args": [
-          {
-            "id": 29
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 113,
-        "relation": "tsi.type",
-        "args": [
-          {
-            "id": 30
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 114,
-        "relation": "tsi.name",
-        "args": [
-          {
-            "id": 30
-          },
-          {
-            "text": "Partial<T>"
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 115,
-        "relation": "tsi.called",
-        "args": [
-          {
-            "id": 29
-          },
-          {
-            "id": 30
-          },
-          {
-            "id": 31
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 116,
-        "relation": "tsi.type",
-        "args": [
-          {
-            "id": 32
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 117,
-        "relation": "tsi.name",
-        "args": [
-          {
-            "id": 32
-          },
-          {
-            "text": "User<number>"
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 118,
-        "relation": "tsi.product",
-        "args": [
-          {
-            "id": 32
-          }
-        ]
-      },
-      {
-        "record": "fact",
         "fact": 119,
-        "relation": "tsi.called",
+        "relation": "tsi.product",
         "args": [
           {
-            "id": 32
-          },
-          {
-            "id": 5
-          },
-          {
-            "id": 33
+            "id": 29
           }
         ]
       },
@@ -737,13 +767,101 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
         "relation": "tsi.type",
         "args": [
           {
-            "id": 34
+            "id": 30
           }
         ]
       },
       {
         "record": "fact",
         "fact": 121,
+        "relation": "tsi.name",
+        "args": [
+          {
+            "id": 30
+          },
+          {
+            "text": "Partial<T>"
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 122,
+        "relation": "tsi.called",
+        "args": [
+          {
+            "id": 29
+          },
+          {
+            "id": 30
+          },
+          {
+            "id": 31
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 123,
+        "relation": "tsi.type",
+        "args": [
+          {
+            "id": 32
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 124,
+        "relation": "tsi.name",
+        "args": [
+          {
+            "id": 32
+          },
+          {
+            "text": "User<number>"
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 125,
+        "relation": "tsi.product",
+        "args": [
+          {
+            "id": 32
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 126,
+        "relation": "tsi.called",
+        "args": [
+          {
+            "id": 32
+          },
+          {
+            "id": 5
+          },
+          {
+            "id": 33
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 127,
+        "relation": "tsi.type",
+        "args": [
+          {
+            "id": 34
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 128,
         "relation": "tsi.name",
         "args": [
           {
@@ -756,7 +874,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 122,
+        "fact": 129,
         "relation": "tsi.primitive",
         "args": [
           {
@@ -769,7 +887,20 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 123,
+        "fact": 13,
+        "relation": "tsi.name",
+        "args": [
+          {
+            "id": 1
+          },
+          {
+            "text": "T"
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 130,
         "relation": "tsi.argument",
         "args": [
           {
@@ -785,7 +916,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 124,
+        "fact": 131,
         "relation": "tsi.edge",
         "args": [
           {
@@ -807,7 +938,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 125,
+        "fact": 132,
         "relation": "tsi.edge",
         "args": [
           {
@@ -829,7 +960,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 126,
+        "fact": 133,
         "relation": "ts.optional",
         "args": [
           {
@@ -839,7 +970,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 127,
+        "fact": 134,
         "relation": "tsi.edge",
         "args": [
           {
@@ -861,7 +992,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 128,
+        "fact": 135,
         "relation": "tsi.edge",
         "args": [
           {
@@ -883,7 +1014,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 129,
+        "fact": 136,
         "relation": "tsi.type",
         "args": [
           {
@@ -893,20 +1024,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 13,
-        "relation": "tsi.name",
-        "args": [
-          {
-            "id": 1
-          },
-          {
-            "text": "T"
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 130,
+        "fact": 137,
         "relation": "tsi.name",
         "args": [
           {
@@ -919,96 +1037,11 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 131,
-        "relation": "tsi.product",
-        "args": [
-          {
-            "id": 39
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 132,
-        "relation": "tsi.callable",
-        "args": [
-          {
-            "id": 39
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 133,
-        "relation": "tsi.type",
-        "args": [
-          {
-            "id": 40
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 134,
-        "relation": "tsi.name",
-        "args": [
-          {
-            "id": 40
-          },
-          {
-            "text": "U"
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 135,
-        "relation": "tsi.parameter",
-        "args": [
-          {
-            "id": 40
-          },
-          {
-            "id": 39
-          },
-          {
-            "int": 0
-          },
-          {
-            "atom": "unspecified"
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 136,
-        "relation": "tsi.type",
-        "args": [
-          {
-            "id": 41
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 137,
-        "relation": "tsi.name",
-        "args": [
-          {
-            "id": 41
-          },
-          {
-            "text": "(element: number) => U"
-          }
-        ]
-      },
-      {
-        "record": "fact",
         "fact": 138,
         "relation": "tsi.product",
         "args": [
           {
-            "id": 41
+            "id": 39
           }
         ]
       },
@@ -1018,7 +1051,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
         "relation": "tsi.callable",
         "args": [
           {
-            "id": 41
+            "id": 39
           }
         ]
       },
@@ -1047,6 +1080,91 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       {
         "record": "fact",
         "fact": 140,
+        "relation": "tsi.type",
+        "args": [
+          {
+            "id": 40
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 141,
+        "relation": "tsi.name",
+        "args": [
+          {
+            "id": 40
+          },
+          {
+            "text": "U"
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 142,
+        "relation": "tsi.parameter",
+        "args": [
+          {
+            "id": 40
+          },
+          {
+            "id": 39
+          },
+          {
+            "int": 0
+          },
+          {
+            "atom": "unspecified"
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 143,
+        "relation": "tsi.type",
+        "args": [
+          {
+            "id": 41
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 144,
+        "relation": "tsi.name",
+        "args": [
+          {
+            "id": 41
+          },
+          {
+            "text": "(element: number) => U"
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 145,
+        "relation": "tsi.product",
+        "args": [
+          {
+            "id": 41
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 146,
+        "relation": "tsi.callable",
+        "args": [
+          {
+            "id": 41
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 147,
         "relation": "tsi.input",
         "args": [
           {
@@ -1062,7 +1180,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 141,
+        "fact": 148,
         "relation": "tsi.output",
         "args": [
           {
@@ -1078,7 +1196,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 142,
+        "fact": 149,
         "relation": "tsi.input",
         "args": [
           {
@@ -1089,115 +1207,6 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
           },
           {
             "id": 41
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 143,
-        "relation": "tsi.output",
-        "args": [
-          {
-            "id": 39
-          },
-          {
-            "int": 0
-          },
-          {
-            "id": 40
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 144,
-        "relation": "tsi.edge",
-        "args": [
-          {
-            "id": 42
-          },
-          {
-            "id": 32
-          },
-          {
-            "text": "map"
-          },
-          {
-            "id": 39
-          },
-          {
-            "int": 4
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 145,
-        "relation": "tsi.argument",
-        "args": [
-          {
-            "id": 31
-          },
-          {
-            "int": 0
-          },
-          {
-            "id": 32
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 146,
-        "relation": "tsi.type",
-        "args": [
-          {
-            "id": 43
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 147,
-        "relation": "tsi.name",
-        "args": [
-          {
-            "id": 43
-          },
-          {
-            "text": "number | undefined"
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 148,
-        "relation": "tsi.sum",
-        "args": [
-          {
-            "id": 43
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 149,
-        "relation": "tsi.edge",
-        "args": [
-          {
-            "id": 44
-          },
-          {
-            "id": 43
-          },
-          {
-            "text": "0"
-          },
-          {
-            "id": 9
-          },
-          {
-            "int": 0
           }
         ]
       },
@@ -1223,6 +1232,115 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       {
         "record": "fact",
         "fact": 150,
+        "relation": "tsi.output",
+        "args": [
+          {
+            "id": 39
+          },
+          {
+            "int": 0
+          },
+          {
+            "id": 40
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 151,
+        "relation": "tsi.edge",
+        "args": [
+          {
+            "id": 42
+          },
+          {
+            "id": 32
+          },
+          {
+            "text": "map"
+          },
+          {
+            "id": 39
+          },
+          {
+            "int": 4
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 152,
+        "relation": "tsi.argument",
+        "args": [
+          {
+            "id": 31
+          },
+          {
+            "int": 0
+          },
+          {
+            "id": 32
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 153,
+        "relation": "tsi.type",
+        "args": [
+          {
+            "id": 43
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 154,
+        "relation": "tsi.name",
+        "args": [
+          {
+            "id": 43
+          },
+          {
+            "text": "number | undefined"
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 155,
+        "relation": "tsi.sum",
+        "args": [
+          {
+            "id": 43
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 156,
+        "relation": "tsi.edge",
+        "args": [
+          {
+            "id": 44
+          },
+          {
+            "id": 43
+          },
+          {
+            "text": "0"
+          },
+          {
+            "id": 9
+          },
+          {
+            "int": 0
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 157,
         "relation": "tsi.edge",
         "args": [
           {
@@ -1244,7 +1362,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 151,
+        "fact": 158,
         "relation": "tsi.edge",
         "args": [
           {
@@ -1266,117 +1384,11 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 152,
+        "fact": 159,
         "relation": "ts.optional",
         "args": [
           {
             "id": 46
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 153,
-        "relation": "tsi.edge",
-        "args": [
-          {
-            "id": 47
-          },
-          {
-            "id": 29
-          },
-          {
-            "text": "name"
-          },
-          {
-            "id": 8
-          },
-          {
-            "int": 1
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 154,
-        "relation": "ts.optional",
-        "args": [
-          {
-            "id": 47
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 155,
-        "relation": "tsi.edge",
-        "args": [
-          {
-            "id": 48
-          },
-          {
-            "id": 29
-          },
-          {
-            "text": "label"
-          },
-          {
-            "id": 8
-          },
-          {
-            "int": 2
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 156,
-        "relation": "ts.optional",
-        "args": [
-          {
-            "id": 48
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 157,
-        "relation": "tsi.edge",
-        "args": [
-          {
-            "id": 49
-          },
-          {
-            "id": 29
-          },
-          {
-            "text": "seed"
-          },
-          {
-            "id": 43
-          },
-          {
-            "int": 3
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 158,
-        "relation": "ts.optional",
-        "args": [
-          {
-            "id": 49
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 159,
-        "relation": "tsi.type",
-        "args": [
-          {
-            "id": 50
           }
         ]
       },
@@ -1400,6 +1412,112 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       {
         "record": "fact",
         "fact": 160,
+        "relation": "tsi.edge",
+        "args": [
+          {
+            "id": 47
+          },
+          {
+            "id": 29
+          },
+          {
+            "text": "name"
+          },
+          {
+            "id": 8
+          },
+          {
+            "int": 1
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 161,
+        "relation": "ts.optional",
+        "args": [
+          {
+            "id": 47
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 162,
+        "relation": "tsi.edge",
+        "args": [
+          {
+            "id": 48
+          },
+          {
+            "id": 29
+          },
+          {
+            "text": "label"
+          },
+          {
+            "id": 8
+          },
+          {
+            "int": 2
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 163,
+        "relation": "ts.optional",
+        "args": [
+          {
+            "id": 48
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 164,
+        "relation": "tsi.edge",
+        "args": [
+          {
+            "id": 49
+          },
+          {
+            "id": 29
+          },
+          {
+            "text": "seed"
+          },
+          {
+            "id": 43
+          },
+          {
+            "int": 3
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 165,
+        "relation": "ts.optional",
+        "args": [
+          {
+            "id": 49
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 166,
+        "relation": "tsi.type",
+        "args": [
+          {
+            "id": 50
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 167,
         "relation": "tsi.name",
         "args": [
           {
@@ -1412,7 +1530,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 161,
+        "fact": 168,
         "relation": "tsi.sum",
         "args": [
           {
@@ -1422,7 +1540,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 162,
+        "fact": 169,
         "relation": "tsi.edge",
         "args": [
           {
@@ -1439,120 +1557,6 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
           },
           {
             "int": 0
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 163,
-        "relation": "tsi.edge",
-        "args": [
-          {
-            "id": 52
-          },
-          {
-            "id": 50
-          },
-          {
-            "text": "1"
-          },
-          {
-            "id": 39
-          },
-          {
-            "int": 1
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 164,
-        "relation": "tsi.edge",
-        "args": [
-          {
-            "id": 53
-          },
-          {
-            "id": 29
-          },
-          {
-            "text": "map"
-          },
-          {
-            "id": 50
-          },
-          {
-            "int": 4
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 165,
-        "relation": "ts.optional",
-        "args": [
-          {
-            "id": 53
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 166,
-        "relation": "tsi.has_type",
-        "args": [
-          {
-            "span": [
-              "blake3:5bb3ce0722005ae43f3a40f0817fe3b0649672c779530978f6e3dd374b666195",
-              511,
-              516
-            ]
-          },
-          {
-            "id": 29
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 167,
-        "relation": "tsi.origin",
-        "args": [
-          {
-            "id": 29
-          },
-          {
-            "atom": "ts"
-          },
-          {
-            "span": [
-              "blake3:5bb3ce0722005ae43f3a40f0817fe3b0649672c779530978f6e3dd374b666195",
-              511,
-              516
-            ]
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 168,
-        "relation": "tsi.symbol",
-        "args": [
-          {
-            "id": 54
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 169,
-        "relation": "tsi.name",
-        "args": [
-          {
-            "id": 54
-          },
-          {
-            "text": "Query"
           }
         ]
       },
@@ -1579,6 +1583,133 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       {
         "record": "fact",
         "fact": 170,
+        "relation": "tsi.edge",
+        "args": [
+          {
+            "id": 52
+          },
+          {
+            "id": 50
+          },
+          {
+            "text": "1"
+          },
+          {
+            "id": 39
+          },
+          {
+            "int": 1
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 171,
+        "relation": "tsi.edge",
+        "args": [
+          {
+            "id": 53
+          },
+          {
+            "id": 29
+          },
+          {
+            "text": "map"
+          },
+          {
+            "id": 50
+          },
+          {
+            "int": 4
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 172,
+        "relation": "ts.optional",
+        "args": [
+          {
+            "id": 53
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 173,
+        "relation": "tsi.has_type",
+        "args": [
+          {
+            "span": [
+              "blake3:5bb3ce0722005ae43f3a40f0817fe3b0649672c779530978f6e3dd374b666195",
+              511,
+              516
+            ]
+          },
+          {
+            "id": 29
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 174,
+        "relation": "tsi.origin",
+        "args": [
+          {
+            "id": 29
+          },
+          {
+            "atom": "ts"
+          },
+          {
+            "span": [
+              "blake3:5bb3ce0722005ae43f3a40f0817fe3b0649672c779530978f6e3dd374b666195",
+              511,
+              516
+            ]
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 175,
+        "relation": "tsi.symbol",
+        "args": [
+          {
+            "id": 54
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 176,
+        "relation": "tsi.name",
+        "args": [
+          {
+            "id": 54
+          },
+          {
+            "text": "Query"
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 177,
+        "relation": "tsi.scip_symbol",
+        "args": [
+          {
+            "id": 54
+          },
+          {
+            "text": "ryi-ts71 npm . . `probe.ts`/Query#"
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 178,
         "relation": "tsi.denotes",
         "args": [
           {
@@ -1591,7 +1722,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 171,
+        "fact": 179,
         "relation": "tsi.origin",
         "args": [
           {
@@ -1611,7 +1742,17 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 172,
+        "fact": 18,
+        "relation": "tsi.symbol",
+        "args": [
+          {
+            "id": 3
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 180,
         "relation": "tsi.has_type",
         "args": [
           {
@@ -1628,7 +1769,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 173,
+        "fact": 181,
         "relation": "tsi.symbol",
         "args": [
           {
@@ -1638,7 +1779,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 174,
+        "fact": 182,
         "relation": "tsi.name",
         "args": [
           {
@@ -1651,7 +1792,20 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 175,
+        "fact": 183,
+        "relation": "tsi.scip_symbol",
+        "args": [
+          {
+            "id": 55
+          },
+          {
+            "text": "ryi-ts71 npm . . `lib.es5.d.ts`/Partial#"
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 184,
         "relation": "tsi.denotes",
         "args": [
           {
@@ -1664,7 +1818,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 176,
+        "fact": 185,
         "relation": "tsi.origin",
         "args": [
           {
@@ -1676,15 +1830,15 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
           {
             "span": [
               "bundled:///libs/lib.es5.d.ts",
-              118469,
-              118472
+              73657,
+              73664
             ]
           }
         ]
       },
       {
         "record": "fact",
-        "fact": 177,
+        "fact": 186,
         "relation": "tsi.has_type",
         "args": [
           {
@@ -1701,7 +1855,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 178,
+        "fact": 187,
         "relation": "tsi.denotes",
         "args": [
           {
@@ -1714,7 +1868,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 179,
+        "fact": 188,
         "relation": "tsi.assignable",
         "args": [
           {
@@ -1725,16 +1879,6 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
           },
           {
             "atom": "structural"
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 18,
-        "relation": "tsi.symbol",
-        "args": [
-          {
-            "id": 3
           }
         ]
       },
@@ -1754,6 +1898,19 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       {
         "record": "fact",
         "fact": 20,
+        "relation": "tsi.scip_symbol",
+        "args": [
+          {
+            "id": 3
+          },
+          {
+            "text": "ryi-ts71 npm . . `probe.ts`/Mapper#"
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 21,
         "relation": "tsi.denotes",
         "args": [
           {
@@ -1766,7 +1923,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 21,
+        "fact": 22,
         "relation": "tsi.origin",
         "args": [
           {
@@ -1786,7 +1943,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 22,
+        "fact": 23,
         "relation": "tsi.has_type",
         "args": [
           {
@@ -1803,7 +1960,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 23,
+        "fact": 24,
         "relation": "tsi.origin",
         "args": [
           {
@@ -1823,7 +1980,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 24,
+        "fact": 25,
         "relation": "tsi.symbol",
         "args": [
           {
@@ -1833,7 +1990,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 25,
+        "fact": 26,
         "relation": "tsi.name",
         "args": [
           {
@@ -1846,7 +2003,20 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 26,
+        "fact": 27,
+        "relation": "tsi.scip_symbol",
+        "args": [
+          {
+            "id": 4
+          },
+          {
+            "text": "ryi-ts71 npm . . `probe.ts`/Mapper#[T]"
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 28,
         "relation": "tsi.denotes",
         "args": [
           {
@@ -1859,7 +2029,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 27,
+        "fact": 29,
         "relation": "tsi.origin",
         "args": [
           {
@@ -1879,7 +2049,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 28,
+        "fact": 30,
         "relation": "tsi.type",
         "args": [
           {
@@ -1889,7 +2059,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 29,
+        "fact": 31,
         "relation": "tsi.name",
         "args": [
           {
@@ -1902,7 +2072,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 30,
+        "fact": 32,
         "relation": "tsi.product",
         "args": [
           {
@@ -1912,7 +2082,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 31,
+        "fact": 33,
         "relation": "tsi.type",
         "args": [
           {
@@ -1922,7 +2092,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 32,
+        "fact": 34,
         "relation": "tsi.name",
         "args": [
           {
@@ -1935,7 +2105,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 33,
+        "fact": 35,
         "relation": "tsi.edge",
         "args": [
           {
@@ -1957,7 +2127,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 34,
+        "fact": 36,
         "relation": "tsi.type",
         "args": [
           {
@@ -1967,7 +2137,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 35,
+        "fact": 37,
         "relation": "tsi.name",
         "args": [
           {
@@ -1980,7 +2150,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 36,
+        "fact": 38,
         "relation": "tsi.sum",
         "args": [
           {
@@ -1990,7 +2160,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 37,
+        "fact": 39,
         "relation": "tsi.type",
         "args": [
           {
@@ -2000,7 +2170,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 38,
+        "fact": 40,
         "relation": "tsi.name",
         "args": [
           {
@@ -2013,7 +2183,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 39,
+        "fact": 41,
         "relation": "tsi.primitive",
         "args": [
           {
@@ -2026,7 +2196,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 40,
+        "fact": 42,
         "relation": "tsi.edge",
         "args": [
           {
@@ -2048,7 +2218,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 41,
+        "fact": 43,
         "relation": "tsi.type",
         "args": [
           {
@@ -2058,7 +2228,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 42,
+        "fact": 44,
         "relation": "tsi.name",
         "args": [
           {
@@ -2071,7 +2241,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 43,
+        "fact": 45,
         "relation": "tsi.primitive",
         "args": [
           {
@@ -2084,7 +2254,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 44,
+        "fact": 46,
         "relation": "tsi.edge",
         "args": [
           {
@@ -2106,7 +2276,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 45,
+        "fact": 47,
         "relation": "tsi.edge",
         "args": [
           {
@@ -2128,7 +2298,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 46,
+        "fact": 48,
         "relation": "ts.optional",
         "args": [
           {
@@ -2138,7 +2308,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 47,
+        "fact": 49,
         "relation": "tsi.edge",
         "args": [
           {
@@ -2160,7 +2330,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 48,
+        "fact": 50,
         "relation": "tsi.edge",
         "args": [
           {
@@ -2182,7 +2352,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 49,
+        "fact": 51,
         "relation": "tsi.type",
         "args": [
           {
@@ -2192,7 +2362,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 50,
+        "fact": 52,
         "relation": "tsi.name",
         "args": [
           {
@@ -2205,7 +2375,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 51,
+        "fact": 53,
         "relation": "tsi.product",
         "args": [
           {
@@ -2215,7 +2385,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 52,
+        "fact": 54,
         "relation": "tsi.callable",
         "args": [
           {
@@ -2225,7 +2395,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 53,
+        "fact": 55,
         "relation": "tsi.type",
         "args": [
           {
@@ -2235,7 +2405,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 54,
+        "fact": 56,
         "relation": "tsi.name",
         "args": [
           {
@@ -2248,7 +2418,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 55,
+        "fact": 57,
         "relation": "tsi.parameter",
         "args": [
           {
@@ -2267,7 +2437,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 56,
+        "fact": 58,
         "relation": "tsi.type",
         "args": [
           {
@@ -2277,7 +2447,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 57,
+        "fact": 59,
         "relation": "tsi.name",
         "args": [
           {
@@ -2290,7 +2460,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 58,
+        "fact": 60,
         "relation": "tsi.product",
         "args": [
           {
@@ -2300,7 +2470,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 59,
+        "fact": 61,
         "relation": "tsi.callable",
         "args": [
           {
@@ -2310,7 +2480,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 60,
+        "fact": 62,
         "relation": "tsi.input",
         "args": [
           {
@@ -2326,7 +2496,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 61,
+        "fact": 63,
         "relation": "tsi.output",
         "args": [
           {
@@ -2342,7 +2512,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 62,
+        "fact": 64,
         "relation": "tsi.input",
         "args": [
           {
@@ -2358,7 +2528,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 63,
+        "fact": 65,
         "relation": "tsi.output",
         "args": [
           {
@@ -2374,7 +2544,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 64,
+        "fact": 66,
         "relation": "tsi.edge",
         "args": [
           {
@@ -2396,7 +2566,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 65,
+        "fact": 67,
         "relation": "tsi.parameter",
         "args": [
           {
@@ -2415,7 +2585,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 66,
+        "fact": 68,
         "relation": "tsi.has_type",
         "args": [
           {
@@ -2432,7 +2602,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 67,
+        "fact": 69,
         "relation": "tsi.origin",
         "args": [
           {
@@ -2452,7 +2622,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 68,
+        "fact": 70,
         "relation": "tsi.symbol",
         "args": [
           {
@@ -2462,7 +2632,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 69,
+        "fact": 71,
         "relation": "tsi.name",
         "args": [
           {
@@ -2475,7 +2645,20 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 70,
+        "fact": 72,
+        "relation": "tsi.scip_symbol",
+        "args": [
+          {
+            "id": 20
+          },
+          {
+            "text": "ryi-ts71 npm . . `probe.ts`/User#"
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 73,
         "relation": "tsi.denotes",
         "args": [
           {
@@ -2488,7 +2671,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 71,
+        "fact": 74,
         "relation": "tsi.origin",
         "args": [
           {
@@ -2508,7 +2691,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 72,
+        "fact": 75,
         "relation": "tsi.has_type",
         "args": [
           {
@@ -2525,7 +2708,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 73,
+        "fact": 76,
         "relation": "tsi.origin",
         "args": [
           {
@@ -2545,7 +2728,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 74,
+        "fact": 77,
         "relation": "tsi.symbol",
         "args": [
           {
@@ -2555,7 +2738,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 75,
+        "fact": 78,
         "relation": "tsi.name",
         "args": [
           {
@@ -2568,57 +2751,14 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 76,
-        "relation": "tsi.denotes",
-        "args": [
-          {
-            "id": 21
-          },
-          {
-            "id": 6
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 77,
-        "relation": "tsi.origin",
-        "args": [
-          {
-            "id": 21
-          },
-          {
-            "atom": "ts"
-          },
-          {
-            "span": [
-              "blake3:5bb3ce0722005ae43f3a40f0817fe3b0649672c779530978f6e3dd374b666195",
-              215,
-              216
-            ]
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 78,
-        "relation": "tsi.type",
-        "args": [
-          {
-            "id": 22
-          }
-        ]
-      },
-      {
-        "record": "fact",
         "fact": 79,
-        "relation": "tsi.name",
+        "relation": "tsi.scip_symbol",
         "args": [
           {
-            "id": 22
+            "id": 21
           },
           {
-            "text": "Mapper<T>"
+            "text": "ryi-ts71 npm . . `probe.ts`/User#[T]"
           }
         ]
       },
@@ -2635,6 +2775,62 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       {
         "record": "fact",
         "fact": 80,
+        "relation": "tsi.denotes",
+        "args": [
+          {
+            "id": 21
+          },
+          {
+            "id": 6
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 81,
+        "relation": "tsi.origin",
+        "args": [
+          {
+            "id": 21
+          },
+          {
+            "atom": "ts"
+          },
+          {
+            "span": [
+              "blake3:5bb3ce0722005ae43f3a40f0817fe3b0649672c779530978f6e3dd374b666195",
+              215,
+              216
+            ]
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 82,
+        "relation": "tsi.type",
+        "args": [
+          {
+            "id": 22
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 83,
+        "relation": "tsi.name",
+        "args": [
+          {
+            "id": 22
+          },
+          {
+            "text": "Mapper<T>"
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 84,
         "relation": "tsi.product",
         "args": [
           {
@@ -2644,7 +2840,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 81,
+        "fact": 85,
         "relation": "tsi.called",
         "args": [
           {
@@ -2660,7 +2856,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 82,
+        "fact": 86,
         "relation": "tsi.argument",
         "args": [
           {
@@ -2676,7 +2872,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 83,
+        "fact": 87,
         "relation": "tsi.edge",
         "args": [
           {
@@ -2698,7 +2894,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 84,
+        "fact": 88,
         "relation": "tsi.has_type",
         "args": [
           {
@@ -2715,7 +2911,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 85,
+        "fact": 89,
         "relation": "tsi.denotes",
         "args": [
           {
@@ -2723,59 +2919,6 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
           },
           {
             "id": 22
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 86,
-        "relation": "tsi.type",
-        "args": [
-          {
-            "id": 25
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 87,
-        "relation": "tsi.name",
-        "args": [
-          {
-            "id": 25
-          },
-          {
-            "text": "any"
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 88,
-        "relation": "tsi.primitive",
-        "args": [
-          {
-            "id": 25
-          },
-          {
-            "atom": "any"
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 89,
-        "relation": "tsi.has_type",
-        "args": [
-          {
-            "span": [
-              "blake3:5bb3ce0722005ae43f3a40f0817fe3b0649672c779530978f6e3dd374b666195",
-              239,
-              497
-            ]
-          },
-          {
-            "id": 25
           }
         ]
       },
@@ -2795,6 +2938,59 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       {
         "record": "fact",
         "fact": 90,
+        "relation": "tsi.type",
+        "args": [
+          {
+            "id": 25
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 91,
+        "relation": "tsi.name",
+        "args": [
+          {
+            "id": 25
+          },
+          {
+            "text": "any"
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 92,
+        "relation": "tsi.primitive",
+        "args": [
+          {
+            "id": 25
+          },
+          {
+            "atom": "any"
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 93,
+        "relation": "tsi.has_type",
+        "args": [
+          {
+            "span": [
+              "blake3:5bb3ce0722005ae43f3a40f0817fe3b0649672c779530978f6e3dd374b666195",
+              239,
+              497
+            ]
+          },
+          {
+            "id": 25
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 94,
         "relation": "tsi.has_type",
         "args": [
           {
@@ -2811,7 +3007,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 91,
+        "fact": 95,
         "relation": "tsi.has_type",
         "args": [
           {
@@ -2828,67 +3024,11 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 92,
-        "relation": "tsi.origin",
-        "args": [
-          {
-            "id": 16
-          },
-          {
-            "atom": "ts"
-          },
-          {
-            "span": [
-              "blake3:5bb3ce0722005ae43f3a40f0817fe3b0649672c779530978f6e3dd374b666195",
-              423,
-              426
-            ]
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 93,
-        "relation": "tsi.symbol",
-        "args": [
-          {
-            "id": 26
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 94,
-        "relation": "tsi.name",
-        "args": [
-          {
-            "id": 26
-          },
-          {
-            "text": "map"
-          }
-        ]
-      },
-      {
-        "record": "fact",
-        "fact": 95,
-        "relation": "tsi.denotes",
-        "args": [
-          {
-            "id": 26
-          },
-          {
-            "id": 16
-          }
-        ]
-      },
-      {
-        "record": "fact",
         "fact": 96,
         "relation": "tsi.origin",
         "args": [
           {
-            "id": 26
+            "id": 16
           },
           {
             "atom": "ts"
@@ -2905,47 +3045,36 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       {
         "record": "fact",
         "fact": 97,
-        "relation": "tsi.has_type",
+        "relation": "tsi.symbol",
         "args": [
           {
-            "span": [
-              "blake3:5bb3ce0722005ae43f3a40f0817fe3b0649672c779530978f6e3dd374b666195",
-              427,
-              428
-            ]
-          },
-          {
-            "id": 17
+            "id": 26
           }
         ]
       },
       {
         "record": "fact",
         "fact": 98,
-        "relation": "tsi.origin",
+        "relation": "tsi.name",
         "args": [
           {
-            "id": 17
+            "id": 26
           },
           {
-            "atom": "ts"
-          },
-          {
-            "span": [
-              "blake3:5bb3ce0722005ae43f3a40f0817fe3b0649672c779530978f6e3dd374b666195",
-              427,
-              428
-            ]
+            "text": "map"
           }
         ]
       },
       {
         "record": "fact",
         "fact": 99,
-        "relation": "tsi.symbol",
+        "relation": "tsi.scip_symbol",
         "args": [
           {
-            "id": 27
+            "id": 26
+          },
+          {
+            "text": "ryi-ts71 npm . . `probe.ts`/User#map()."
           }
         ]
       },
@@ -3576,6 +3705,60 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       {
         "record": "witness",
         "fact": 18,
+        "run": 1,
+        "method": "checker_walk"
+      },
+      {
+        "record": "witness",
+        "fact": 180,
+        "run": 1,
+        "method": "checker_walk"
+      },
+      {
+        "record": "witness",
+        "fact": 181,
+        "run": 1,
+        "method": "checker_walk"
+      },
+      {
+        "record": "witness",
+        "fact": 182,
+        "run": 1,
+        "method": "checker_walk"
+      },
+      {
+        "record": "witness",
+        "fact": 183,
+        "run": 1,
+        "method": "checker_walk"
+      },
+      {
+        "record": "witness",
+        "fact": 184,
+        "run": 1,
+        "method": "checker_walk"
+      },
+      {
+        "record": "witness",
+        "fact": 185,
+        "run": 1,
+        "method": "checker_walk"
+      },
+      {
+        "record": "witness",
+        "fact": 186,
+        "run": 1,
+        "method": "checker_walk"
+      },
+      {
+        "record": "witness",
+        "fact": 187,
+        "run": 1,
+        "method": "checker_walk"
+      },
+      {
+        "record": "witness",
+        "fact": 188,
         "run": 1,
         "method": "checker_walk"
       },
@@ -4218,6 +4401,12 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       {
         "record": "coverage",
         "run": 1,
+        "relation": "tsi.scip_symbol",
+        "coverage": "partial"
+      },
+      {
+        "record": "coverage",
+        "run": 1,
         "relation": "tsi.subtype",
         "coverage": "partial"
       },
@@ -4315,6 +4504,12 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
         "record": "diagnostic",
         "run": 1,
         "relation": "tsi.product",
+        "detail": "TS 7.1 API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
+      },
+      {
+        "record": "diagnostic",
+        "run": 1,
+        "relation": "tsi.scip_symbol",
         "detail": "TS 7.1 API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
       },
       {
@@ -4439,6 +4634,19 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       {
         "record": "fact",
         "fact": 16,
+        "relation": "tsi.scip_symbol",
+        "args": [
+          {
+            "id": 4
+          },
+          {
+            "text": "ryi-ts71 npm . . `recursive.ts`/Node#"
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 17,
         "relation": "tsi.denotes",
         "args": [
           {
@@ -4451,7 +4659,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 17,
+        "fact": 18,
         "relation": "tsi.origin",
         "args": [
           {
@@ -4471,7 +4679,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 18,
+        "fact": 19,
         "relation": "tsi.has_type",
         "args": [
           {
@@ -4488,7 +4696,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 19,
+        "fact": 20,
         "relation": "tsi.origin",
         "args": [
           {
@@ -4508,7 +4716,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 20,
+        "fact": 21,
         "relation": "tsi.symbol",
         "args": [
           {
@@ -4518,7 +4726,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 21,
+        "fact": 22,
         "relation": "tsi.name",
         "args": [
           {
@@ -4531,7 +4739,20 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 22,
+        "fact": 23,
+        "relation": "tsi.scip_symbol",
+        "args": [
+          {
+            "id": 5
+          },
+          {
+            "text": "ryi-ts71 npm . . `recursive.ts`/Node#[T]"
+          }
+        ]
+      },
+      {
+        "record": "fact",
+        "fact": 24,
         "relation": "tsi.denotes",
         "args": [
           {
@@ -4544,7 +4765,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 23,
+        "fact": 25,
         "relation": "tsi.origin",
         "args": [
           {
@@ -4564,7 +4785,7 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       },
       {
         "record": "fact",
-        "fact": 24,
+        "fact": 26,
         "relation": "tsi.has_type",
         "args": [
           {
@@ -4790,6 +5011,18 @@ expression: "crate::stock_tsgo::normalize(serde_json::json!(outputs))"
       {
         "record": "witness",
         "fact": 24,
+        "run": 1,
+        "method": "checker_walk"
+      },
+      {
+        "record": "witness",
+        "fact": 25,
+        "run": 1,
+        "method": "checker_walk"
+      },
+      {
+        "record": "witness",
+        "fact": 26,
         "run": 1,
         "method": "checker_walk"
       },

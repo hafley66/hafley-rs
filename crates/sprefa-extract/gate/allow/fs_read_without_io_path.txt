@@ -3,6 +3,7 @@ crates/hafley_scm/src/lang/rust/13_tsi_syntax_rows.rs	fn::tree_tsi_rows_match_sn
 crates/hafley_scm/src/read/2_slow.rs	fn::project_index	1
 crates/hafley_scm/src/read/cargo_metadata.rs	fn::fingerprint	1
 crates/hafley_scm/src/read/lang/0_rust_workspace.rs	fn::manifest_key	1
+crates/hafley_scm/src/read/lang/1_ts71_rows.rs	fn::npm_package_of	1
 crates/hafley_scm/src/read/lang/7_scm_rows.rs	fn::file_captures	1
 crates/hafley_scm/src/read/lang/8_rust_checker_session.rs	fn::checker_workspace_loaded	1
 crates/hafley_scm/src/read/lang/8e_rust_checker_modules.rs	fn::sync	1
